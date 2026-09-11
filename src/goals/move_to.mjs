@@ -27,6 +27,11 @@ export default defineGoal({
     'Unknown/stale ground never traversed; no digging, swimming, doors or gap jumps. ' +
     'Unreachable/unexplored destinations may fail within budget.',
   announce: () => 'Heading over to take a look.',
+  compose: async (_runtime, env, args) => {
+    const navigation = await env.navigate(args);
+    if (navigation.state !== 'arrived') throw Error(navigation.reason ?? `Navigation ${navigation.state}`);
+    return { ok: true, goal: 'move_to', navigation };
+  },
   // Pure navigation holds control directly instead of a Fieldwork task.
   launch: (runtime, args, record, started) => runtime.navigate(args, record, started),
 });

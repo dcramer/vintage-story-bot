@@ -2,7 +2,7 @@ import { bridgePort, requestBridge } from '../bridge/client.mjs';
 
 export const controllerPort = () => bridgePort(process.env.VINTAGE_STORY_CONTROLLER_PORT ?? '42158');
 export async function requestController(request) {
-  try { return await requestBridge(request, { port: controllerPort(), timeoutMs: 10000 }); }
+  try { return await requestBridge(request, { port: controllerPort(), timeoutMs: 10000, requestMaxBytes: 16384 }); }
   catch (error) { throw new Error(`Controller: ${error.message} Start pnpm controller; never retry a mutation blindly.`); }
 }
 

@@ -25,9 +25,12 @@ const describe = {
   equip: a => a.item === null ? 'empty hand' : a.item ? code(a.item) : `${a.tool}${a.minTier ? ' tier ≥ ' + a.minTier : ''}`,
   dig_block: a => a.target, place_block: a => `${code(a.expectedItem)} on ${a.target}`,
   gather_sticks: a => count(a.count ?? 10, 'sticks'), move_to: a => `to ${point(a)}`,
-  forage: () => 'ripe berries to 80% satiety', eat: () => 'fresh food from inventory', collect_stick: () => 'one visible stick',
+  forage: a => a.count ? `${count(a.count, 'fresh food')} in reserve` : 'food for recovery',
+  forage_travel: a => `${count(a.count, 'fresh food')}, then ${point(a)}`,
+  eat: () => 'fresh food from inventory', collect_stick: () => 'one visible stick',
 };
-export const goalTitle = g => g?.args && typeof g.args === 'object' && !g.args.truncated ? (describe[g.kind]?.(g.args) ?? fmt(g.args)) : '';
+export const goalTitle = g => typeof g?.intent === 'string' && g.intent.trim() ? g.intent.trim()
+  : g?.args && typeof g.args === 'object' && !g.args.truncated ? (describe[g.kind]?.(g.args) ?? fmt(g.args)) : '';
 const detailKeys = ['target', 'cell', 'ground', 'item', 'food', 'recipe', 'reason', 'from', 'slot', 'face', 'operation', 'leg', 'hunger', 'reserve'];
 export function phaseDetail(progress) {
   const p = progress ?? {};
@@ -36,11 +39,12 @@ export function phaseDetail(progress) {
     return k === 'target' || k === 'cell' ? text : `${k} ${text}`;
   }).join(' · ');
 }
-export const shownProgressKeys = new Set(['phase', ...detailKeys, 'match', 'clicks', 'count', 'gained', 'wanted', 'total', 'placed', 'dug', 'failed', 'legs', 'remaining', 'layer', 'kind', 'output', 'material']);
+export const shownProgressKeys = new Set(['phase', ...detailKeys, 'match', 'clicks', 'count', 'gained', 'wanted', 'total', 'placed', 'dug', 'failed', 'legs', 'remaining', 'layer', 'kind', 'output', 'material', 'completed', 'step', 'steps', 'subgoal']);
 // One-line completion summary per goal kind; null when the skill reports no comparable numbers.
 export function completion(g) {
   const p = g.progress ?? {}, a = g.args ?? {};
   if (p.truncated) return null;
+  if (g.kind === 'goal_script' && p.steps != null) return { current: p.completed ?? 0, max: p.steps, unit: 'goals' };
   if (p.gained != null && (p.count ?? p.wanted ?? a.count) != null) return { current: p.gained, max: p.count ?? p.wanted ?? a.count, unit: 'gained' };
   if (p.total != null) return { current: (p.placed ?? p.dug ?? 0) + (p.failed ?? 0), max: p.total, unit: p.placed != null ? 'placed' : 'dug', extra: p.failed ? `${p.failed} failed` : '' };
   if (p.legs != null && p.leg != null) return { current: p.leg, max: p.legs, unit: 'leg' };
@@ -52,7 +56,7 @@ export const stateClass = s => s === 'arrived' || s === 'completed' ? 'good' : s
 export function logDetail(e) {
   const d = e.data ?? {};
   if (e.topic === 'action') return `${d.action} ${d.ok ? '' : '✗ ' + (d.error ?? d.code ?? '')} ${JSON.stringify(d.args ?? {})}`;
-  if (e.topic === 'goal') return `${d.kind} ${goalTitle(d)} ${d.state}${d.reason ? ' — ' + d.reason : ''}${d.progress?.phase ? ' · ' + d.progress.phase : ''}`;
+  if (e.topic === 'goal') return `${goalTitle(d) || d.kind} ${d.state}${d.reason ? ' — ' + d.reason : ''}${d.progress?.subgoal?.kind ? ' · ' + d.progress.subgoal.kind : ''}${d.progress?.phase ? ' · ' + d.progress.phase : ''}`;
   return JSON.stringify(d);
 }
 export const logBad = e => e.data?.ok === false || ['blocked', 'cancelled', 'failed'].includes(e.data?.state);

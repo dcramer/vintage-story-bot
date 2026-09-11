@@ -13,12 +13,14 @@ function Vital({ label, value }) {
 
 function ConnectedBot({ bot, index }) {
   const state = stateOf(bot), goal = goalOf(bot), progress = goal?.progress ?? {};
-  const activity = goal?.active ? goal.kind.replace(/_/g, ' ') : 'Idle';
-  const detail = goal?.active ? goalTitle(goal) || progress.phase?.replace(/_/g, ' ') || 'Working' : 'Standing by';
-  const phase = goal?.active && progress.phase ? `${progress.phase.replace(/_/g, ' ')}${phaseDetail(progress) ? ` · ${phaseDetail(progress)}` : ''}` : null;
+  const subgoal = progress.subgoal, detailProgress = subgoal?.progress ?? progress;
+  const activity = goal?.active ? goalTitle(goal) || goal.kind.replace(/_/g, ' ') : 'Idle';
+  const subgoalTitle = subgoal && `${subgoal.kind.replace(/_/g, ' ')}${goalTitle(subgoal) ? ` · ${goalTitle(subgoal)}` : ''}`;
+  const detail = goal?.active ? subgoalTitle ? `Now: ${subgoalTitle}` : goal.intent ? goal.kind.replace(/_/g, ' ') : goalTitle(goal) || 'Working' : 'Standing by';
+  const phase = goal?.active && detailProgress.phase ? `${detailProgress.phase.replace(/_/g, ' ')}${phaseDetail(detailProgress) ? ` · ${phaseDetail(detailProgress)}` : ''}` : null;
   return <a href={`/bots/${encodeURIComponent(bot.id)}`} class="connected-bot">
     <div class="connected-bot-head"><span class={`connected-name agent-${index % 6}`}><i />{bot.id}</span><span class="connected-state">Connected</span></div>
-    <div class="connected-activity"><span>Current activity</span><strong>{activity}</strong><p>{detail}</p>{phase && <small>{phase}</small>}</div>
+    <div class="connected-activity"><span>Goal</span><strong>{activity}</strong><p>{detail}</p>{phase && <small>{phase}</small>}</div>
     <div class="connected-vitals"><Vital label="Health" value={pct(state.vitals?.health)} /><Vital label="Food" value={pct(state.vitals?.hunger)} /></div>
     <div class="connected-position"><span>Position</span><b>{point(state.position) ?? 'Unknown'}</b><small>{ago(bot.seenAt, now.value)}</small></div>
   </a>;

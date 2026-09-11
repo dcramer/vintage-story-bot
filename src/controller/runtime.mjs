@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Cause, Deferred, Effect, Fiber } from 'effect';
 import { z } from 'zod';
 import { findTool, goals, tools } from './registry.mjs';
+import { compileGoalScript, runGoalPlan } from './goal-script.mjs';
 import { GameClient } from '../game/client.mjs';
 import { Navigation } from '../navigation/navigator.mjs';
 import { Knowledge } from '../navigation/knowledge.mjs';
@@ -53,7 +54,8 @@ export class Controller {
     if (!record) return null;
     return { id: record.id, kind: record.kind, args: record.args, state: record.kind === 'move_to' ? record.nav?.state ?? record.state : record.state,
       active: this.active === record, startedAt: record.startedAt, finishedAt: record.finishedAt,
-      reason: record.reason ?? (record.kind === 'move_to' ? record.nav?.reason : undefined), progress: record.progress, result: record.result, cleanupError: record.cleanupError };
+      intent: record.intent, reason: record.reason ?? (record.kind === 'move_to' ? record.nav?.reason : undefined),
+      progress: record.progress, result: record.result, cleanupError: record.cleanupError };
   }
   async stop(reason = 'stopped') {
     const active = this.active;
@@ -131,7 +133,8 @@ export class Controller {
   }
   launch(kind, args, work) {
     const started = Effect.runSync(Deferred.make());
-    const record = { id: randomUUID(), kind, args, state: 'starting', startedAt: Date.now() };
+    const record = { id: randomUUID(), kind, args, state: 'starting', startedAt: Date.now(),
+      ...(typeof args.intent === 'string' ? { intent: args.intent } : {}) };
     this.active = this.last = record;
     this.track(record);
     this.announce(kind, args);
@@ -266,6 +269,18 @@ export class Controller {
       record.result = yield* attempt(() => running);
       record.state = record.result.ok ? 'arrived' : 'blocked';
     });
+  }
+  runGoalScript(args, record, started) {
+    const self = this;
+    return this.runTask(async (env, { goalScript, signal }) => {
+      const plan = compileGoalScript(goalScript, goals);
+      const results = await runGoalPlan(plan, async (step, report) => {
+        const stepEnv = { ...env, report };
+        const stepArgs = { ...step.args, signal };
+        return step.goal.compose ? step.goal.compose(self, stepEnv, stepArgs, record) : step.goal.run(stepEnv, stepArgs);
+      }, env.report);
+      return { ok: true, goal: 'goal_script', intent: args.intent, steps: results };
+    }, args, record, started);
   }
 }
 

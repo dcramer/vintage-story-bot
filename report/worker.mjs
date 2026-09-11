@@ -29,6 +29,8 @@ function appendTrail(bot, stateEntry, now) {
     z: position.z, dimension: Number.isFinite(position.dimension) ? position.dimension : 0,
     goal: goal?.id ? String(goal.id).slice(0, 64) : null,
     kind: typeof goal?.kind === 'string' ? goal.kind.slice(0, 64) : null,
+    intent: typeof goal?.intent === 'string' ? goal.intent.slice(0, 240) : null,
+    subgoal: typeof progress?.subgoal?.kind === 'string' ? progress.subgoal.kind.slice(0, 64) : null,
     phase: typeof progress?.phase === 'string' ? progress.phase.slice(0, 64) : null,
   };
   const trail = bot.trail ??= [], last = trail.at(-1);

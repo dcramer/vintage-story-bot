@@ -23,8 +23,9 @@ const reduce = {
     control: s.control ? pick(s.control, ['owner', 'active']) : null, target: s.target ? pick(s.target, ['kind', 'code', 'name']) : null,
     nearbyEntities: { count: s.nearbyEntities?.length ?? 0, nearest: (s.nearbyEntities ?? []).slice(0, 6).map(e => pick(e, ['code', 'distance', 'hostile'])) } }),
   navigation: n => pick(n, ['id', 'state', 'reason', 'target', 'remainingCheckpoints', 'replans', 'cachedCells', 'lastReplan', 'evading', 'threat']),
-  goal: g => g && { ...pick(g, ['id', 'kind', 'state', 'active', 'startedAt', 'finishedAt', 'reason', 'cleanupError']),
-    args: bounded(g.args ?? null, 4096), progress: bounded(g.progress ?? null, 4096), result: bounded(g.result ?? null, 4096) },
+  goal: g => g && { ...pick(g, ['id', 'kind', 'intent', 'state', 'active', 'startedAt', 'finishedAt', 'reason', 'cleanupError']),
+    args: bounded(g.kind === 'goal_script' ? pick(g.args, ['intent']) : g.args ?? null, 4096),
+    progress: bounded(g.progress ?? null, 4096), result: bounded(g.result ?? null, 4096) },
 };
 function bounded(data, limit) {
   const text = JSON.stringify(data);

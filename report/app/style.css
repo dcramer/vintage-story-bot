@@ -169,7 +169,7 @@ section, .card { display: block; padding: 18px; }
 .connected-name i { background: currentColor; box-shadow: 0 0 10px currentColor; display: inline-block; height: 7px; width: 7px; }
 .connected-state { color: var(--good); font: 10px/1.2 "DM Mono", monospace; text-transform: uppercase; }
 .connected-activity > span, .connected-position > span { color: var(--muted); display: block; font: 10px/1.2 "DM Mono", monospace; letter-spacing: .06em; text-transform: uppercase; }
-.connected-activity strong { display: block; font-size: 17px; font-weight: 600; margin-top: 5px; text-transform: capitalize; }
+.connected-activity strong { display: block; font-size: 17px; font-weight: 600; margin-top: 5px; }
 .connected-activity p { color: var(--ink2); font-size: 13px; margin: 2px 0 0; overflow-wrap: anywhere; }
 .connected-activity small { color: var(--muted); display: block; font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
 .connected-vitals { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }

@@ -3,6 +3,13 @@ import { defineGoal } from '../controller/define.mjs';
 import { travel } from '../skills/travel.mjs';
 import { runField } from '../skills/task.mjs';
 
+const task = (env, options) => runField(env, { manageFood: false, ...options }, [], travel);
+const resolve = (runtime, { waypoint, ...args }) => {
+  const point = waypoint === undefined ? args : runtime.waypoints.get(waypoint);
+  if (!point) throw Error('Unknown waypoint; see waypoints');
+  return { ...args, x: point.x, y: point.y, z: point.z };
+};
+
 export default defineGoal({
   name: 'travel',
   schema: z.object({
@@ -20,11 +27,7 @@ export default defineGoal({
     'Walk any distance by chaining safe navigation legs with exploration detours through unknown terrain. Stops on ' +
     'no_progress after six stuck legs, damage, death or control loss. Food management as gather_sticks. Returns START; poll goal_status.',
   announce: args => args.waypoint ? `Traveling to ${args.waypoint}.` : 'Setting off on a journey.',
+  compose: (runtime, env, args) => task(env, resolve(runtime, args)),
   // Resolves a named point from controller memory before the task starts.
-  launch: (runtime, { waypoint, ...args }, record, started) => {
-    const point = waypoint === undefined ? args : runtime.waypoints.get(waypoint);
-    if (!point) throw Error('Unknown waypoint; see waypoints');
-    const run = (env, options) => runField(env, { manageFood: false, ...options }, [], travel);
-    return runtime.runTask(run, { ...args, x: point.x, y: point.y, z: point.z }, record, started);
-  },
+  launch: (runtime, args, record, started) => runtime.runTask(task, resolve(runtime, args), record, started),
 });

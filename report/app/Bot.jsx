@@ -15,9 +15,9 @@ function Sparkline({ rows }) {
 function Activity({ bot }) {
   const rows = logRows(bot).filter(e => e.topic === 'goal').reverse().slice(0, 60);
   return <div class="scroll"><table><thead><tr><th>Time</th><th>Goal</th><th>State</th><th>Phase</th></tr></thead>
-    <tbody>{rows.map(e => { const g = e.data ?? {}; return <tr key={`${e.at}|${e.seq}`}><td>{time(e.at)}</td><td>{g.kind?.replace(/_/g, ' ')} {goalTitle(g)}</td>
+    <tbody>{rows.map(e => { const g = e.data ?? {}, p = g.progress?.subgoal?.progress ?? g.progress ?? {}, subgoal = g.progress?.subgoal; return <tr key={`${e.at}|${e.seq}`}><td>{time(e.at)}</td><td>{goalTitle(g) || g.kind?.replace(/_/g, ' ')}</td>
       <td class={stateClass(g.state) === 'bad' ? 'err' : stateClass(g.state) === 'good' ? 'ok' : ''}>{g.state}{g.reason ? ' — ' + g.reason : ''}</td>
-      <td>{g.progress?.phase ? g.progress.phase.replace(/_/g, ' ') : ''}{phaseDetail(g.progress) ? ' · ' + phaseDetail(g.progress) : ''}</td></tr>; })}</tbody></table></div>;
+      <td>{subgoal?.kind ? subgoal.kind.replace(/_/g, ' ') + ' · ' : ''}{p.phase ? p.phase.replace(/_/g, ' ') : ''}{phaseDetail(p) ? ' · ' + phaseDetail(p) : ''}</td></tr>; })}</tbody></table></div>;
 }
 // The host's own live view, reached through whatever tunnel that operator registered (VINTAGE_STORY_STREAM_URL). Only web
 // origins are framed; the HLS player is mediamtx's own page, so the fleet service never touches video.

@@ -19,6 +19,8 @@ export const defineAction = definition => definition;
  * @property {boolean} [destructive]
  * @property {(args: object) => string} [announce] Server-chat line posted when the goal starts.
  * @property {(env: object, args: object) => Promise<object>} [run] Task policy run under runtime.runTask.
+ * @property {(runtime: object, env: object, args: object, record: object) => Promise<object>} [compose]
+ *   Optional task policy for goal_script; run is used when omitted.
  * @property {(runtime: object, args: object, record: object, started: object) => import('effect').Effect.Effect<any>} [launch]
  *   Custom Effect launcher for goals that bypass runTask (move_to).
  */

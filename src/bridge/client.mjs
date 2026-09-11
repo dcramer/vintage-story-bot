@@ -8,11 +8,11 @@ export function bridgePort(value = process.env.VINTAGE_STORY_BRIDGE_PORT ?? '421
 }
 
 // A lost acknowledgement can still mean the game acted. Never auto-retry.
-export function requestBridge(request, { port = bridgePort(), timeoutMs = 4000, maxBytes = 262144, signal } = {}) {
+export function requestBridge(request, { port = bridgePort(), timeoutMs = 4000, requestMaxBytes = 1024, maxBytes = 262144, signal } = {}) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new Error('Bridge request cancelled; inspect before retrying.'));
     const line = JSON.stringify(request) + '\n';
-    if (Buffer.byteLength(line) > 1024) return reject(new Error('Bridge request exceeds 1023 bytes.'));
+    if (Buffer.byteLength(line) > requestMaxBytes) return reject(new Error(`Request exceeds ${requestMaxBytes - 1} bytes.`));
     const socket = net.createConnection({ host: '127.0.0.1', port });
     let response = '';
     let bytes = 0;

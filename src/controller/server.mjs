@@ -9,6 +9,7 @@ import { Reporter } from './reporter.mjs';
 const sinks = [new Telemetry(), Reporter.fromEnv()].filter(Boolean);
 const telemetry = { publish: (...args) => sinks.forEach(sink => sink.publish(...args)), close: () => sinks.forEach(sink => sink.close()) };
 const controller = new Controller(undefined, telemetry), sockets = new Set();
+const maxRequestBytes = 16384;
 controller.eye();
 const server = net.createServer(socket => {
   sockets.add(socket); socket.on('close', () => sockets.delete(socket)); socket.on('error', () => {});
@@ -18,7 +19,9 @@ const server = net.createServer(socket => {
   socket.on('data', chunk => {
     if (handled) return;
     line += chunk;
-    if (Buffer.byteLength(line) > 1024) { socket.destroy(); return; }
+    if (Buffer.byteLength(line) > maxRequestBytes) {
+      handled = true; socket.end(JSON.stringify({ ok: false, error: `Controller request exceeds ${maxRequestBytes - 1} bytes.` }) + '\n'); return;
+    }
     if (!line.includes('\n')) return;
     handled = true;
     Promise.resolve().then(() => controller.request(JSON.parse(line.trim())))
