@@ -113,8 +113,10 @@ export class Navigation {
     let skippedAhead = false;
     if (grounded && !this.jumpAt && !this.landing) for (let ahead = this.index + 1; ahead < this.route.length; ahead++) {
       const next = this.route[ahead];
-      if (distance(p, next) > 5 || Math.abs(next.y - p.y) > .05 ||
-          !traverse(p, next, this.index === 0) || this.blocked.has(`${key(p)}>${key(next)}`)) break;
+      // Merge straight runs on slopes too: traverse() itself limits a merged
+      // segment to one rise or a two-block drop, so a stair of steps stays
+      // one checkpoint per step while a ramp becomes one segment.
+      if (distance(p, next) > 5 || !traverse(p, next, this.index === 0) || this.blocked.has(`${key(p)}>${key(next)}`)) break;
       this.index = ahead; this.edgeStart = p; skippedAhead = true;
     }
     const next = this.route[this.index];
@@ -167,7 +169,9 @@ export class Navigation {
     // Short frames near steps and sharp bends; a diagonal-to-cardinal bend is
     // ordinary walking, not a tight turn.
     const tight = horizontal(p, next) < 3 && (Math.abs(next.y - p.y) > .05 || turn > 60);
-    const durationMs = tight ? 180 : 500;
+    // Short frames while the head is still turning, so the loop sees the new
+    // facing after a fraction of a second instead of a whole idle frame.
+    const durationMs = tight || Math.abs(this.yawError) > 30 ? 180 : 500;
     // Ignore tiny pursuit corrections and ease bends while moving. For a
     // large stationary turn, request the route yaw directly: remote control
     // samples can be several seconds apart, and applying only 150ms worth of
@@ -188,7 +192,8 @@ export class Navigation {
       // direction is itself a valid traversal from here.
       const ahead = { x: p.x + Math.sin(radians) * .6, y: p.y, z: p.z + Math.cos(radians) * .6 };
       const footing = map.stand?.(Math.floor(ahead.x) + .5, Math.floor(ahead.z) + .5, p.y, w, h) ?? ahead;
-      const forward = Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 60 &&
+      const bend = Math.abs(angle(desiredYaw, state.orientation.yawDegrees));
+      const forward = bend < 60 &&
         (Math.abs(footing.y - p.y) < .05 ? map.support(ahead, w) === 9 && traverse(p, ahead, recenter) : traverse(p, footing, recenter));
       this.progressAt = now; return { yawDegrees, pitchDegrees: 15, forward, sneak: false, durationMs };
     }
