@@ -54,6 +54,8 @@ test('breakable forage is harvested beside its drop, never at maximum reach or u
   assert.equal(harvestReady(mushroom, { x: 8.9, z: 10.5 }), false);
   assert.equal(harvestReady(mushroom, { x: 9.5, z: 10.5 }), true);
   assert.equal(harvestReady(mushroom, { x: 10.2, z: 10.3 }), false);
+  // A diagonal corner overlap still occupies the native body cell.
+  assert.equal(harvestReady(mushroom, { x: 9.77, z: 11.26 }, .3), false);
 });
 
 test('food exploration uses observed local steps and does not rescan an unchanged distant cone', () => {

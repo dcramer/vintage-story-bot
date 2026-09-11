@@ -14,9 +14,10 @@ const breaksForage = object => mushroomCode(forageFoodCode(object)) || termiteCo
 export const accessibleForage = object => {
   return breaksForage(object) ? object.access?.buildOrBreak !== false : object.access?.use !== false;
 };
-export const harvestReady = (object, position) => object.withinPickingRange && (!breaksForage(object) ||
+export const harvestReady = (object, position, halfWidth = .3) => object.withinPickingRange && (!breaksForage(object) ||
   horizontal(position, object.point) <= 1.5 &&
-  (Math.floor(position.x) !== Math.floor(object.point.x) || Math.floor(position.z) !== Math.floor(object.point.z)));
+  !(position.x + halfWidth > Math.floor(object.point.x) && position.x - halfWidth < Math.floor(object.point.x) + 1 &&
+    position.z + halfWidth > Math.floor(object.point.z) && position.z - halfWidth < Math.floor(object.point.z) + 1));
 export const foodViewChanged = (view, state) => !view || horizontal(view.position, state.position) > 2 ||
   Math.abs(normalize(state.orientation.yawDegrees - view.yawDegrees + 180) - 180) > 15;
 
@@ -56,7 +57,8 @@ export class Survival {
       }
       // A single paged sweep finds both supported food families without enumerating unrelated blocks.
       const near = await field.scan(8, forageMatches, 'blocks');
-      const ready = near.find(o => ripeForage(o) && accessibleForage(o) && harvestReady(o, field.latest.position) && !field.rejected.has(o.key));
+      const ready = near.find(o => ripeForage(o) && accessibleForage(o) &&
+        harvestReady(o, field.latest.position, field.latest.body.halfWidth) && !field.rejected.has(o.key));
       if (ready) {
         await this.harvest(ready);
         continue;

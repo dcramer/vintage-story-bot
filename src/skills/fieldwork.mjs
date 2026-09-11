@@ -141,7 +141,7 @@ export class Fieldwork {
       const q = this.env.map.stand(Math.floor(object.point.x) + .5 + dx, Math.floor(object.point.z) + .5 + dz, object.point.y, w, h);
       if (!q || horizontal(p, q) < .5 || object.kind === 'item' && horizontal(q, object.point) > .8 || exclude?.(q)) continue;
       const route = findRoute(this.env.map, p, q, w, h, { partial: false });
-      if (route) candidates.push({ q, score: route.length + horizontal(q, object.point) * 2 });
+      if (route) candidates.push({ q: { ...q, arrivalRadius: .1 }, score: route.length + horizontal(q, object.point) * 2 });
     }
     return candidates.sort((a, b) => a.score - b.score)[0]?.q;
   }
