@@ -53,6 +53,11 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     if (result.reason === 'route_regressed') {
       continuation = null;
       field.penalize(leg);
+      // The regression budget belongs to one route attempt. Once that route
+      // yields, its verified recovery position becomes the next attempt's
+      // baseline; retaining the older best makes every replacement route
+      // yield on its first observation without taking a step.
+      bestRemaining = horizontal(field.latest.position, goal);
     }
     // A nearby destination can still sit behind a dense tree line, ridge or
     // cliff. After one stationary direct attempt, use the same deterministic

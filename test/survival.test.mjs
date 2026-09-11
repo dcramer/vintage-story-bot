@@ -276,6 +276,37 @@ test('travel bounds regression from its best observed destination distance', () 
   assert.equal(routeRegressed(100, 108, 8), false);
 });
 
+test('travel rebases its regression budget after yielding a failed route', async () => {
+  const state = x => ({ position: { x, y: 1, z: .5 }, condition: {}, nearbyEntities: [] });
+  const destination = { x: 100.5, z: .5 };
+  const detour = { x: 48.5, y: 1, z: .5, horizontalOnly: true, arrivalRadius: 4 };
+  let latest = state(.5), walks = 0, replacementReason;
+  const field = {
+    moved: 0,
+    get latest() { return latest; },
+    observe: async () => latest,
+    report: () => {},
+    explore: () => detour,
+    penalize: () => {},
+    walk: async (_target, yieldWhen) => {
+      walks++;
+      if (walks === 1) {
+        assert.equal(yieldWhen(state(20.5)), null);
+        latest = state(5.5);
+        assert.equal(yieldWhen(latest), 'route_regressed');
+        return { state: 'yielded', reason: 'route_regressed' };
+      }
+      replacementReason = yieldWhen(latest);
+      latest = state(100.5);
+      return { state: 'arrived', reason: 'destination_reached' };
+    },
+  };
+  const result = await travel(field, null, destination);
+  assert.equal(result.ok, true);
+  assert.equal(walks, 2);
+  assert.equal(replacementReason, null);
+});
+
 test('foliage clearance selects only a reachable body-level leaf toward the goal', () => {
   const state = { position: { x: .5, y: 1, z: .5 }, body: { height: 1.85 } };
   const object = (key, code, x, y, z, yaw, extra = {}) => ({ kind: 'block', key, code,
