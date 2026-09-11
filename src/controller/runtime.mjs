@@ -178,7 +178,7 @@ export class Controller {
         const input = {
           yawDegrees: frame?.yawDegrees ?? state.orientation.yawDegrees, pitchDegrees: frame?.pitchDegrees ?? 15,
           forward: frame?.forward ?? false, jump: frame?.jump ?? false, sprint: frame?.sprint ?? false,
-          sneak: frame?.sneak ?? false, focus: frame?.focus ?? null };
+          sneak: frame?.sneak ?? false, focus: frame?.focus ?? null, durationMs: frame?.durationMs ?? 500 };
         self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
         const batch = yield* control.step(input);
         state = batch.state;

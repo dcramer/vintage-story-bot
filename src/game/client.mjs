@@ -44,8 +44,8 @@ export class GameClient {
         allowStarvingRecovery });
       return {
         owner,
-        frame: frame => this.io({ ...frame, action: 'control_frame', owner, sequence: ++sequence, durationMs: 500 }),
-        step: frame => this.io({ ...frame, action: 'control_step', owner, sequence: ++sequence, durationMs: 500,
+        frame: frame => this.io({ ...frame, action: 'control_frame', owner, sequence: ++sequence, durationMs: frame.durationMs ?? 500 }),
+        step: frame => this.io({ ...frame, action: 'control_step', owner, sequence: ++sequence, durationMs: frame.durationMs ?? 500,
           session: this.map.session, after: this.map.cursor }).pipe(
           Effect.tap(batch => Effect.sync(() => this.map.apply(batch.terrain))),
         ),

@@ -112,6 +112,8 @@ export class Navigation {
     const following = this.route[this.index + 1];
     const turn = following ? Math.abs(angle(lookAt(next, following).yawDegrees, desiredYaw)) : 0;
     const tight = horizontal(p, next) < 3 && (Math.abs(next.y - p.y) > .05 || turn > 20);
+    const descent = next.y < p.y - .05;
+    const durationMs = tight ? 180 : 500;
     // Ignore tiny pursuit corrections; ease larger changes instead of retargeting the camera every sample.
     if (this.steeringYaw === null || now - this.steeringAt > 300) this.steeringYaw = state.orientation.yawDegrees;
     const delta = angle(desiredYaw, this.steeringYaw), dt = Math.min(.15, Math.max(.01, (now - this.steeringAt) / 1000));
@@ -124,8 +126,14 @@ export class Navigation {
       const ahead = { x: p.x + Math.sin(radians) * .6, y: p.y, z: p.z + Math.cos(radians) * .6 };
       const forward = Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 30 && Math.abs(next.y - p.y) < .05 &&
         map.support(ahead, w) === 9 && map.traverse(p, ahead, w, h, recenter);
-      this.progressAt = now; return { yawDegrees, pitchDegrees: 15, forward, sneak: tight && !this.jumpAt };
+      this.progressAt = now; return { yawDegrees, pitchDegrees: 15, forward,
+        sneak: tight && !this.jumpAt && (!descent || horizontal(p, next) > .8), durationMs };
     }
+    // Once a descending step has left its upper support, release forward and
+    // let gravity settle onto the validated lower waypoint. Continuing to hold
+    // forward while airborne can carry one bounded frame past a narrow shore.
+    if (!grounded && next.y < this.edgeStart.y - .05)
+      return { yawDegrees, pitchDegrees: 15, forward: false, jump: false, sprint: false, sneak: false, durationMs: 180 };
     if (next.y > p.y + .05 && grounded && !this.jumpAt) this.jumpAt = now;
     if (this.jumpAt && now - this.jumpAt > 2500) return this.replan(p, now, 'jump_failed');
     const food = state.vitals?.hunger;
@@ -133,10 +141,10 @@ export class Navigation {
       Math.abs(next.y - p.y) < .05 && horizontal(p, next) > 3 &&
       Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 5 &&
       food?.max > 0 && food.current / food.max >= .6;
-    return { yawDegrees, pitchDegrees: 15, forward: horizontal(p, next) > .12,
+    return { yawDegrees, pitchDegrees: 15, forward: horizontal(p, next) > .12, durationMs,
       jump: !!this.jumpAt && now - this.jumpAt < 200, sprint,
       // Sneak while lining up at a ledge, then release it so a validated
       // downward route can actually step off the supporting block.
-      sneak: tight && !this.jumpAt && next.y >= p.y - .05 };
+      sneak: tight && !this.jumpAt && (!descent || horizontal(p, next) > .8) };
   }
 }

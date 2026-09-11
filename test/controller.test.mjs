@@ -127,7 +127,12 @@ test('navigation releases sneak for a validated descent', () => {
   nav.state = 'moving'; nav.route = [{ x: 1.5, y: 0, z: .5 }]; nav.edgeStart = state.position;
   const frame = nav.tick(state, 500);
   assert.equal(frame.forward, true);
-  assert.equal(frame.sneak, false);
+  assert.equal(frame.sneak, true);
+  assert.equal(frame.durationMs, 180);
+  const edge = { ...state, position: { x: 1.1, y: 1, z: .5 } };
+  assert.equal(nav.tick(edge, 600).sneak, false);
+  const airborne = { ...edge, position: { x: 1.2, y: .8, z: .5 }, motion: { onGround: false } };
+  assert.equal(nav.tick(airborne, 700).forward, false);
 });
 
 test('navigation keeps recentering safely from partial edge support', () => {
