@@ -3,7 +3,6 @@ set -euo pipefail
 
 bot_repository="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 bot_game="$bot_repository/.runtime/linux-client"
-bot_data="$bot_repository/.runtime/bot-data"
 export DOTNET_ROOT="$bot_repository/.dotnet"
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export FONTCONFIG_FILE="$bot_game/fonts.conf"
@@ -22,19 +21,10 @@ if [[ ! -x "$DOTNET_ROOT/dotnet" || ! -f "$bot_game/Vintagestory.dll" ]]; then
     exit 1
 fi
 
-cd -- "$bot_game"
-bot_args=("--dataPath=$bot_data")
-case $# in
-    0) ;;
-    1)
-        [[ "$1" != -* && -n "$1" ]] || { echo 'Invalid server address.' >&2; exit 1; }
-        bot_args+=("--connect=$1") ;;
-    2)
-        # The game creates missing worlds; permit only an existing bot save basename.
-        [[ "$1" == '--world' && "$2" != */* && "$2" != .* && -f "$bot_data/Saves/$2.vcdbs" ]] || {
-            echo 'Expected --world <existing save basename without .vcdbs>.' >&2; exit 1;
-        }
-        bot_args+=("--openWorld=$2") ;;
-    *) echo "Usage: $0 [server-address:port | --world save-basename]" >&2; exit 1 ;;
-esac
-exec "$DOTNET_ROOT/dotnet" "$bot_game/Vintagestory.dll" "${bot_args[@]}"
+# Desktop shortcuts may not inherit the interactive shell's Node PATH.
+bot_node="$(command -v node || true)"
+if [[ -z "$bot_node" && -x "$HOME/.volta/bin/node" ]]; then
+    bot_node="$HOME/.volta/bin/node"
+fi
+[[ -n "$bot_node" ]] || { echo 'Node 22+ is required.' >&2; exit 1; }
+exec "$bot_node" "$bot_repository/scripts/launch-bot.mjs" "$bot_game" --wsl "$@"

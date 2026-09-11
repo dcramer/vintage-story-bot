@@ -3,13 +3,18 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { loadLaunchConfig, updateCharacterName } from './launch-config.mjs';
 
 // Run on the OS hosting the bot's game client, e.g. Windows Node for a Windows game.
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
-const positional = args.filter((arg) => arg !== '--dry-run');
-if (positional.length !== 1 || args.some((arg) => arg.startsWith('--') && arg !== '--dry-run')) {
-  console.error('Usage: node scripts/launch-bot.mjs <game-install-directory> [--dry-run]');
+const wsl = args.includes('--wsl');
+const positional = args.filter((arg) => arg !== '--dry-run' && arg !== '--wsl');
+const target = {};
+if (positional.length === 3 && positional[1] === '--world' && positional[2]) target.world = positional[2];
+else if (positional.length === 2 && !positional[1].startsWith('-') && positional[1]) target.server = positional[1];
+else if (positional.length !== 1 || positional[0].startsWith('--')) {
+  console.error('Usage: node scripts/launch-bot.mjs <game-install-directory> [--dry-run] [server:port | --world save-basename]');
   process.exit(1);
 }
 
@@ -21,28 +26,49 @@ if (!dataRoot) {
   console.error('APPDATA is missing; run this from a regular Windows terminal.');
   process.exit(1);
 }
-const botData = path.resolve(dataRoot, 'VintagestoryAI');
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const botData = wsl ? path.join(repository, '.runtime', 'bot-data') : path.resolve(dataRoot, 'VintagestoryAI');
+let config;
+try {
+  config = loadLaunchConfig(repository, botData, target);
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 // The mod loader scans each child directory for its modinfo.json and assembly.
-const modRoot = path.join(repository, 'mod', 'bin', 'Release');
-for (const required of [executable, path.join(modRoot, 'net10.0', 'VintageStoryAI.dll'), path.join(modRoot, 'net10.0', 'modinfo.json')]) {
+const modRoot = wsl ? path.join(botData, 'Mods') : path.join(repository, 'mod', 'bin', 'Release');
+const modDirectory = path.join(modRoot, wsl ? 'VintageStoryAI' : 'net10.0');
+for (const required of [executable, path.join(modDirectory, 'VintageStoryAI.dll'), path.join(modDirectory, 'modinfo.json')]) {
   if (!existsSync(required)) {
     console.error(`Missing ${required}. Check the game path and build the mod first.`);
     process.exit(1);
   }
 }
-const command = windows ? executable : 'dotnet';
+const dotnet = wsl ? path.join(repository, '.dotnet', 'dotnet') : 'dotnet';
+const command = windows ? executable : dotnet;
 const gameArgs = [
   ...(windows ? [] : [executable]),
   `--dataPath=${botData}`,
-  `--addModPath=${modRoot}`,
+  ...(wsl ? [] : [`--addModPath=${modRoot}`]),
+  ...(config.world ? [`--openWorld=${config.world}`] : []),
+  ...(config.server ? [`--connect=${config.server}`] : []),
+  ...(config.password ? [`--pw=${dryRun ? '[redacted]' : config.password}`] : []),
 ];
 console.log(`Bot profile: ${botData}`);
-console.log('Sign in with the bot account, join your server, then enter .aibridge on.');
+console.log('Sign in with the bot account if needed, then enter .aibridge on after joining.');
 if (dryRun) {
   console.log(JSON.stringify({ command, args: gameArgs, cwd: gameDirectory }, null, 2));
 } else {
-  const child = spawn(command, gameArgs, { cwd: gameDirectory, stdio: 'inherit', shell: false });
+  try {
+    updateCharacterName(botData, config.characterName);
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
+  const child = spawn(command, gameArgs, {
+    cwd: gameDirectory, stdio: 'inherit', shell: false,
+    env: { ...process.env, VINTAGE_STORY_SERVER_PASSWORD: '' },
+  });
   child.on('error', (error) => {
     console.error(`Cannot launch bot client: ${error.message}`);
     process.exitCode = 1;
