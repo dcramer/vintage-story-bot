@@ -9,7 +9,7 @@ const dropped = o => o.kind === 'item' && o.code === 'game:stick';
 export const stickCount = state => [...state.hotbar, ...state.backpack]
   .filter(slot => slot.code === 'game:stick').reduce((n, slot) => n + slot.quantity, 0);
 
-export async function gather(env, { count = 10, manageFood = true, ...options } = {}) {
+export async function gather(env, { count = 10, manageFood = false, ...options } = {}) {
   if (!Number.isInteger(count) || count < 1 || count > 64) throw Error('count must be 1–64');
   const field = new Fieldwork(env, options);
   const survival = manageFood ? new Survival(field) : null;
@@ -84,7 +84,7 @@ export default defineGoal({
   description:
     'Collect additional ground sticks only (default 10): scan, navigate, pick up and verify ' +
     'inventory gain. Food management defaults on: pauses below 20% satiety to forage/eat fresh ' +
-    'berries to 80% plus a reserve. Set manageFood=false for ground-stick-only runs. ' +
+    'berries to 80% plus a reserve. Off by default: set manageFood=true to let the goal pause for food. ' +
     'Optional sprint=true permits safe, well-fed straight travel. No leaf harvesting. ' +
     'Runs until count is reached or gameplay/cancellation ' +
     'interrupts; timeoutMs is optional, no default deadline. Failed routes trigger further ' +

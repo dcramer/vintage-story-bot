@@ -132,8 +132,12 @@ export class Navigation {
     if (this.jumpAt && grounded && this.airborneDuringJump && Math.abs(p.y - next.y) < .06) {
       this.jumpAt = 0; this.landing = true; this.airborneDuringJump = false;
     }
-    const recenter = advancedCheckpoint || skippedAhead || this.landing || this.index === 0 ||
-      Math.floor(p.x) === Math.floor(next.x) && Math.floor(p.z) === Math.floor(next.z);
+    // The live body is natively grounded: validate the remaining segment with
+    // the tolerant support rule (some contact, never decreasing) instead of
+    // demanding the full nine-point centre support a planned checkpoint has.
+    // Off-centre positions over block edges are normal while walking and
+    // must not read as changed terrain.
+    const recenter = true;
     if (grounded && !this.jumpAt && !traverse(p, next, recenter)) {
       this.diagnostics = { kind: 'segment_invalid', from: p, point: next, recenter,
         fromDry: typeof map.dry !== 'function' || map.dry(p, w, h),
@@ -156,7 +160,9 @@ export class Navigation {
     if (now - this.progressAt > 3000) return this.replan(p, now, 'stuck');
     const following = this.route[this.index + 1];
     const turn = following ? Math.abs(angle(lookAt(next, following).yawDegrees, desiredYaw)) : 0;
-    const tight = horizontal(p, next) < 3 && (Math.abs(next.y - p.y) > .05 || turn > 20);
+    // Short frames near steps and sharp bends; a diagonal-to-cardinal bend is
+    // ordinary walking, not a tight turn.
+    const tight = horizontal(p, next) < 3 && (Math.abs(next.y - p.y) > .05 || turn > 60);
     const descent = next.y < p.y - .05;
     const durationMs = tight ? 180 : 500;
     // Ignore tiny pursuit corrections and ease bends while moving. For a
@@ -168,17 +174,19 @@ export class Navigation {
     if (this.steeringYaw === null || now - this.steeringAt > 300) this.steeringYaw = state.orientation.yawDegrees;
     const delta = angle(desiredYaw, this.steeringYaw), dt = Math.min(.15, Math.max(.01, (now - this.steeringAt) / 1000));
     if (yawMagnitude > 30) this.steeringYaw = desiredYaw;
-    else if (Math.abs(delta) > 2) this.steeringYaw = normalize(this.steeringYaw + Math.sign(delta) * Math.min(Math.abs(delta), 120 * dt));
+    else if (Math.abs(delta) > 2) this.steeringYaw = normalize(this.steeringYaw + Math.sign(delta) * Math.min(Math.abs(delta), 240 * dt));
     this.steeringAt = now;
     const yawDegrees = this.steeringYaw;
     if (grounded && !this.jumpAt && Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) > 10) {
       // Keep walking through gentle bends only when the actual facing direction is supported.
       const radians = state.orientation.yawDegrees * Math.PI / 180;
       const ahead = { x: p.x + Math.sin(radians) * .6, y: p.y, z: p.z + Math.cos(radians) * .6 };
-      const forward = Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 30 && Math.abs(next.y - p.y) < .05 &&
+      // A player turns while walking: keep going through a bend of up to 50
+      // degrees as long as the ground in the current facing direction is safe.
+      const forward = Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 50 && Math.abs(next.y - p.y) < .05 &&
         map.support(ahead, w) === 9 && traverse(p, ahead, recenter);
       this.progressAt = now; return { yawDegrees, pitchDegrees: 15, forward,
-        sneak: tight && !this.jumpAt && (!descent || horizontal(p, next) > .8), durationMs };
+        sneak: tight && descent && !this.jumpAt && horizontal(p, next) > .8, durationMs };
     }
     // Once a descending step has left its upper support, release forward and
     // let gravity settle onto the validated lower checkpoint. Continuing to hold
@@ -198,6 +206,7 @@ export class Navigation {
       jump: !!this.jumpAt && now - this.jumpAt < 200, sprint,
       // Sneak while lining up at a ledge, then release it so a validated
       // downward route can actually step off the supporting block.
-      sneak: tight && !this.jumpAt && (!descent || horizontal(p, next) > .8) };
+      // Climbs and bends walk at full speed; only a ledge is approached sneaking.
+      sneak: tight && descent && !this.jumpAt && horizontal(p, next) > .8 };
   }
 }

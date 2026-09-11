@@ -9,7 +9,7 @@ export const schema = z.object({
   count: z.number().int().min(1).max(256).default(8),
   tool: z.string().min(1).max(64).optional().describe('Required tool class, e.g. Knife, Axe, Shovel; equips the lowest adequate tier.'),
   minTier: z.number().int().min(0).max(20).optional(),
-  manageFood: z.boolean().default(true),
+  manageFood: z.boolean().default(false),
   sprint: z.boolean().default(false),
   timeoutMs: z.number().int().min(1000).max(3600000).optional(),
 }).strict();
@@ -23,5 +23,5 @@ export default defineGoal({
     'verifying carried gain until count. Transformed blocks (reeds → harvested) count when drops appear. Searches like gather_sticks; ' +
     'no default deadline. Food management pauses for berries below 20%. Damage/death/control loss interrupt. Returns START; poll goal_status.',
   announce: args => `Off to gather ${cleanName(args.item ?? args.match)}.`,
-  run: (env, options) => runField(env, { manageFood: true, ...options }, ['inventory', 'block_actions'], harvest),
+  run: (env, options) => runField(env, { manageFood: false, ...options }, ['inventory', 'block_actions'], harvest),
 });

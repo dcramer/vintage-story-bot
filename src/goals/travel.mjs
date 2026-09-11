@@ -11,7 +11,7 @@ export default defineGoal({
     z: z.number().finite().optional(),
     waypoint: z.string().min(1).max(32).optional().describe('Named point from set_waypoint instead of coordinates.'),
     arrivalRadius: z.number().min(.5).max(8).default(1),
-    manageFood: z.boolean().default(true),
+    manageFood: z.boolean().default(false),
     sprint: z.boolean().default(false),
     timeoutMs: z.number().int().min(1000).max(3600000).optional(),
   }).strict().refine(a => a.waypoint !== undefined || a.x !== undefined && a.z !== undefined, 'Supply waypoint or x/z'),
@@ -24,7 +24,7 @@ export default defineGoal({
   launch: (runtime, { waypoint, ...args }, record, started) => {
     const point = waypoint === undefined ? args : runtime.waypoints.get(waypoint);
     if (!point) throw Error('Unknown waypoint; see waypoints');
-    const run = (env, options) => runField(env, { manageFood: true, ...options }, [], travel);
+    const run = (env, options) => runField(env, { manageFood: false, ...options }, [], travel);
     return runtime.runTask(run, { ...args, x: point.x, y: point.y, z: point.z }, record, started);
   },
 });
