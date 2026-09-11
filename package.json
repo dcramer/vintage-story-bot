@@ -10,6 +10,7 @@
   "scripts": {
     "controller": "node src/controller/server.mjs",
     "controller:dev": "node --watch src/controller/server.mjs",
+    "dashboard": "node src/operator/dashboard.mjs",
     "mcp": "node src/mcp-server.mjs",
     "test": "node --test test/*.test.mjs",
     "test:mod": "DOTNET_CLI_HOME=$PWD/.runtime/dotnet-home .dotnet/dotnet run --project test/GeometryTests.csproj",

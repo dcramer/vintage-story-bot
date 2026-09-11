@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diggy Smalls</title>
+<style>
+:root { color-scheme: light; --bg:#f4f4f2; --surface:#fcfcfb; --line:#dddcd7; --ink:#0b0b0b; --ink2:#52514e; --muted:#8a8984;
+  --good:#1baf7a; --warn:#eda100; --bad:#e34948; --accent:#2a78d6; --track:#e8e7e3; --series-1:#2a78d6; --series-2:#eb6834; }
+@media (prefers-color-scheme: dark) { :root { color-scheme: dark; --bg:#121211; --surface:#1a1a19; --line:#2e2e2b; --ink:#fff; --ink2:#c3c2b7; --muted:#7f7e78;
+  --good:#199e70; --warn:#c98500; --bad:#e66767; --accent:#3987e5; --track:#2a2a28; --series-1:#3987e5; --series-2:#d95926; } }
+* { box-sizing: border-box; }
+body { margin:0; padding:16px; background:var(--bg); color:var(--ink); font:14px/1.4 system-ui, sans-serif; }
+header { display:flex; flex-wrap:wrap; gap:8px 20px; align-items:baseline; margin-bottom:12px; }
+h1 { font-size:18px; margin:0; }
+.pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--ink2); }
+.pill::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--muted); }
+.pill.on::before { background:var(--good); } .pill.off::before { background:var(--bad); }
+main { display:grid; gap:12px; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); }
+section { background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:12px; min-width:0; }
+section.wide { grid-column: 1 / -1; }
+h2 { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--ink2); margin:0 0 8px; }
+dl { display:grid; grid-template-columns:auto 1fr; gap:3px 12px; margin:0; }
+dt { color:var(--ink2); } dd { margin:0; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.meter { display:grid; grid-template-columns:64px 1fr 72px; gap:8px; align-items:center; margin:4px 0; }
+.meter .bar { height:8px; background:var(--track); border-radius:4px; overflow:hidden; }
+.meter .bar i { display:block; height:100%; background:var(--accent); border-radius:4px; transition:width .3s; }
+.meter.warn .bar i { background:var(--warn); } .meter.bad .bar i { background:var(--bad); }
+.meter .value { text-align:right; font-variant-numeric:tabular-nums; color:var(--ink2); }
+.tags span { display:inline-block; font-size:12px; padding:1px 6px; border:1px solid var(--line); border-radius:4px; margin:2px 4px 2px 0; color:var(--ink2); }
+.tags span.bad { border-color:var(--bad); color:var(--bad); } .tags span.good { border-color:var(--good); color:var(--good); }
+.hotbar { display:grid; grid-template-columns:repeat(10, 1fr); gap:4px; }
+.hotbar div { border:1px solid var(--line); border-radius:4px; padding:4px; min-height:44px; font-size:11px; overflow:hidden; color:var(--ink2); }
+.hotbar div.active { border-color:var(--accent); color:var(--ink); }
+.hotbar b { display:block; font-size:12px; }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+td, th { text-align:left; padding:3px 6px; border-bottom:1px solid var(--line); vertical-align:top; font-variant-numeric:tabular-nums; }
+th { color:var(--ink2); font-weight:600; }
+td.ok { color:var(--good); } td.err { color:var(--bad); }
+.scroll { max-height:320px; overflow:auto; }
+.log td:last-child { color:var(--ink2); overflow-wrap:anywhere; }
+canvas { width:100%; height:96px; display:block; }
+.muted { color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Diggy Smalls</h1>
+  <span class="pill" id="link">dashboard</span>
+  <span class="pill" id="producer">controller</span>
+  <span class="pill" id="age">no data</span>
+</header>
+<main>
+  <section>
+    <h2>Vitals</h2>
+    <div id="vitals"></div>
+    <div class="tags" id="life"></div>
+  </section>
+  <section>
+    <h2>Player</h2>
+    <dl id="player"></dl>
+  </section>
+  <section>
+    <h2>Goal</h2>
+    <dl id="goal"></dl>
+  </section>
+  <section>
+    <h2>Navigation</h2>
+    <dl id="nav"></dl>
+    <h2 style="margin-top:10px">Inputs</h2>
+    <dl id="frame"></dl>
+  </section>
+  <section class="wide">
+    <h2>Health / hunger</h2>
+    <canvas id="chart"></canvas>
+  </section>
+  <section class="wide">
+    <h2>Hotbar</h2>
+    <div class="hotbar" id="hotbar"></div>
+  </section>
+  <section>
+    <h2>Seen</h2>
+    <div class="scroll"><table id="scan"><thead><tr><th>Kind</th><th>Code</th><th>Dist</th><th>Qty</th></tr></thead><tbody></tbody></table></div>
+  </section>
+  <section>
+    <h2>Log</h2>
+    <div class="scroll"><table class="log" id="log"><thead><tr><th>Time</th><th>Topic</th><th>Detail</th></tr></thead><tbody></tbody></table></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const topics = {}, history = [], maxHistory = 600;
+let lastAt = 0, logRows = [];
+const fmt = v => v == null ? '—' : typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(2))
+  : Array.isArray(v) ? JSON.stringify(v) : typeof v === 'object' ? Object.entries(v).map(([k, x]) => `${k}: ${fmt(x)}`).join(' · ') : String(v);
+const time = at => new Date(at).toLocaleTimeString([], { hour12: false });
+const short = id => id ? String(id).slice(0, 8) : '—';
+function dl(el, rows) {
+  el.replaceChildren(...rows.flatMap(([k, v]) => { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = k; dd.textContent = fmt(v); return [dt, dd]; }));
+}
+function meter(name, vital, lowAt) {
+  const pct = vital?.max ? Math.max(0, Math.min(1, vital.current / vital.max)) : null;
+  const level = pct == null ? '' : pct <= lowAt ? 'bad' : pct <= lowAt + .2 ? 'warn' : '';
+  const value = pct == null ? 'unknown' : `${vital.current.toFixed(1)} / ${vital.max.toFixed(0)}`;
+  return `<div class="meter ${level}"><span>${name}</span><div class="bar"><i style="width:${(pct ?? 0) * 100}%"></i></div><span class="value">${value}</span></div>`;
+}
+function tag(text, cls = '') { return `<span class="${cls}">${text}</span>`; }
+function renderState(s) {
+  if (!s) return;
+  $('vitals').innerHTML = meter('health', s.vitals?.health, .3) + meter('hunger', s.vitals?.hunger, .2) + meter('oxygen', s.vitals?.oxygen, .2);
+  const tags = [tag(s.life?.state ?? (s.alive ? 'alive' : 'dead'), s.alive ? 'good' : 'bad'), tag(s.controlReady ? 'control ready' : 'no control', s.controlReady ? 'good' : 'bad')];
+  if (s.paused) tags.push(tag('paused', 'bad'));
+  for (const a of s.life?.alerts ?? []) tags.push(tag(a, 'bad'));
+  if (s.condition?.onFire) tags.push(tag('on fire', 'bad'));
+  if (s.motion?.swimming) tags.push(tag('swimming')); if (s.motion?.sprinting) tags.push(tag('sprinting'));
+  if (!s.motion?.onGround) tags.push(tag('airborne')); if (s.mounted) tags.push(tag('mounted'));
+  $('life').innerHTML = tags.join('');
+  dl($('player'), [['name', s.player?.name], ['world', s.world ? `${s.world.singleplayer ? 'singleplayer' : 'multiplayer'} · ${s.world.gameMode}` : null],
+    ['position', s.position ? `${s.position.x.toFixed(1)}, ${s.position.y.toFixed(1)}, ${s.position.z.toFixed(1)}  (dim ${s.position.dimension})` : null],
+    ['yaw / pitch', s.orientation ? `${s.orientation.yawDegrees.toFixed(0)}° / ${s.orientation.pitchDegrees.toFixed(0)}°` : null],
+    ['target', s.target ? `${s.target.kind ?? ''} ${s.target.code ?? s.target.name ?? ''}`.trim() : null],
+    ['body temp', s.condition?.bodyTemperatureC == null ? null : `${s.condition.bodyTemperatureC.toFixed(1)} °C`],
+    ['stability', s.condition?.temporalStability], ['lives left', s.life?.livesRemaining], ['last damage', s.life?.lastDamageAt ? time(s.life.lastDamageAt) : 'none'],
+    ['control owner', short(s.control?.owner)], ['observed', s.observedAt ? time(s.observedAt) : null]]);
+  const slots = (s.hotbar ?? []).slice(0, 10);
+  $('hotbar').replaceChildren(...slots.map(slot => { const d = document.createElement('div'); if (slot.slot === s.activeSlot) d.className = 'active';
+    d.innerHTML = `<b>${slot.slot}</b>${slot.code ? slot.code.replace(/^game:/, '') + (slot.quantity > 1 ? ' ×' + slot.quantity : '') : '<span class="muted">empty</span>'}`; return d; }));
+}
+function renderGoal(g) {
+  dl($('goal'), !g ? [['state', 'none']] : [['kind', g.kind], ['state', g.state + (g.active ? ' (active)' : '')], ['id', short(g.id)],
+    ['started', g.startedAt ? time(g.startedAt) : null], ['finished', g.finishedAt ? time(g.finishedAt) : null],
+    ['progress', g.progress], ['reason', g.reason], ['result', g.result], ['cleanup', g.cleanupError]]);
+}
+function renderNav(n) {
+  dl($('nav'), !n || n.state === 'idle' ? [['state', 'idle']] : [['state', n.state], ['target', n.target ? `${n.target.x.toFixed(1)}, ${n.target.y.toFixed(1)}, ${n.target.z.toFixed(1)}` : null],
+    ['waypoints left', n.remainingWaypoints], ['replans', n.replans], ['cached cells', n.cachedCells], ['reason', n.reason]]);
+}
+function renderFrame(f) {
+  dl($('frame'), !f ? [['frame', 'none']] : [['yaw / pitch', `${f.yawDegrees?.toFixed(0)}° / ${f.pitchDegrees?.toFixed(0)}°`],
+    ['forward', f.forward], ['jump', f.jump], ['sprint', f.sprint], ['sequence', f.sequence]]);
+}
+function renderScan(scan) {
+  const rows = (scan?.objects ?? []).slice().sort((a, b) => a.distance - b.distance).slice(0, 40);
+  $('scan').tBodies[0].innerHTML = rows.map(o => `<tr><td>${o.kind}</td><td>${(o.code ?? '').replace(/^game:/, '')}</td><td>${fmt(o.distance)}</td><td>${o.quantity ?? ''}</td></tr>`).join('');
+}
+function logDetail(e) {
+  const d = e.data ?? {};
+  if (e.topic === 'action') return `${d.action} ${d.ok ? '' : '✗ ' + (d.error ?? d.code ?? '')} ${JSON.stringify(d.args ?? {})}`;
+  if (e.topic === 'goal') return `${d.kind} ${d.state}${d.reason ? ' — ' + d.reason : ''}${d.progress?.phase ? ' · ' + d.progress.phase : ''}`;
+  return JSON.stringify(d);
+}
+function renderLog() {
+  $('log').tBodies[0].innerHTML = logRows.slice(-200).reverse().map(e => {
+    const bad = e.data?.ok === false || ['blocked', 'cancelled'].includes(e.data?.state);
+    return `<tr><td>${time(e.at)}</td><td class="${bad ? 'err' : ''}">${e.topic}</td><td>${logDetail(e)}</td></tr>`; }).join('');
+}
+function drawChart() {
+  const c = $('chart'), ctx = c.getContext('2d'), dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  if (history.length < 2) return;
+  const css = getComputedStyle(document.documentElement);
+  const series = [['health', css.getPropertyValue('--series-1')], ['hunger', css.getPropertyValue('--series-2')]];
+  const t0 = history[0].at, t1 = history[history.length - 1].at, span = Math.max(1, t1 - t0);
+  ctx.strokeStyle = css.getPropertyValue('--line'); ctx.lineWidth = 1;
+  for (const y of [0.25, 0.5, 0.75]) { ctx.beginPath(); ctx.moveTo(0, h * y); ctx.lineTo(w, h * y); ctx.stroke(); }
+  for (const [key, color] of series) {
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); let started = false;
+    for (const p of history) { const v = p[key]; if (v == null) { started = false; continue; }
+      const x = (p.at - t0) / span * w, y = h - 4 - v * (h - 8);
+      if (started) ctx.lineTo(x, y); else ctx.moveTo(x, y); started = true; }
+    ctx.stroke();
+  }
+  ctx.font = '12px system-ui'; let x = 8;
+  for (const [key, color] of series) { ctx.fillStyle = color; ctx.fillRect(x, 8, 10, 3); ctx.fillStyle = css.getPropertyValue('--ink2'); ctx.fillText(key, x + 14, 14); x += 14 + ctx.measureText(key).width + 12; }
+  ctx.fillStyle = css.getPropertyValue('--muted'); ctx.fillText(`${Math.round(span / 1000)}s`, x, 14);
+}
+function pct(v) { return v?.max ? v.current / v.max : null; }
+function apply(entry) {
+  topics[entry.topic] = entry; lastAt = Math.max(lastAt, entry.at);
+  if (entry.log) { logRows.push(entry); if (logRows.length > 500) logRows.shift(); renderLog(); }
+  switch (entry.topic) {
+    case 'state': renderState(entry.data);
+      history.push({ at: entry.at, health: pct(entry.data?.vitals?.health), hunger: pct(entry.data?.vitals?.hunger) });
+      while (history.length > maxHistory) history.shift(); drawChart(); break;
+    case 'goal': renderGoal(entry.data); break;
+    case 'navigation': renderNav(entry.data); break;
+    case 'frame': renderFrame(entry.data); break;
+    case 'scan': renderScan(entry.data); break;
+  }
+}
+function producers(count) { const el = $('producer'); el.className = 'pill ' + (count > 0 ? 'on' : 'off'); el.textContent = count > 0 ? `controller streaming (${count})` : 'controller not connected'; }
+const source = new EventSource('/events');
+source.onopen = () => { $('link').className = 'pill on'; $('link').textContent = 'dashboard live'; };
+source.onerror = () => { $('link').className = 'pill off'; $('link').textContent = 'dashboard reconnecting'; };
+source.addEventListener('snapshot', e => {
+  const snap = JSON.parse(e.data); logRows = []; history.length = 0;
+  producers(snap.producers);
+  for (const entry of snap.log) { logRows.push(entry); }
+  renderLog();
+  for (const entry of Object.values(snap.topics)) apply({ ...entry, log: false });
+  renderGoal(snap.topics.goal?.data); renderNav(snap.topics.navigation?.data); renderFrame(snap.topics.frame?.data);
+});
+source.addEventListener('update', e => apply(JSON.parse(e.data)));
+source.addEventListener('producers', e => producers(JSON.parse(e.data).count));
+setInterval(() => { const age = lastAt ? Math.round((Date.now() - lastAt) / 1000) : null; const el = $('age');
+  el.textContent = age == null ? 'no data' : age < 2 ? 'updated now' : `updated ${age}s ago`; el.className = 'pill ' + (age == null ? '' : age < 5 ? 'on' : 'off'); }, 1000);
+renderGoal(null); renderNav(null); renderFrame(null);
+</script>
+</body>
+</html>

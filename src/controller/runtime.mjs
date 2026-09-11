@@ -12,7 +12,26 @@ export class Controller {
   active = null; last = null; closing = false;
   session = randomUUID(); history = new Map();
   gate = Effect.runSync(Effect.makeSemaphore(1));
-  constructor(send) { this.game = new GameClient(send); this.send = this.game.send; }
+  constructor(send, telemetry = null) {
+    this.game = new GameClient(send); this.telemetry = telemetry;
+    if (telemetry) {
+      const raw = this.game.send;
+      this.game.send = (request, options) => raw(request, options).then(
+        result => { this.trace(request, result); return result; },
+        error => { this.trace(request, { ok: false, error: error.message }); throw error; });
+    }
+    this.send = this.game.send;
+  }
+  // Operator telemetry only: never awaited, never affects gameplay.
+  trace(request, result) {
+    const { action, ...args } = request;
+    if (action === 'sense') { if (result.ok) this.telemetry.publish('state', result.state, { coalesce: true }); return; }
+    if (action === 'observe') { if (result.ok) this.telemetry.publish('state', result, { coalesce: true }); return; }
+    if (action === 'control_frame') { const { owner, ...frame } = args; this.telemetry.publish('frame', frame, { coalesce: true }); return; }
+    if (action === 'scan' && result.ok) { this.telemetry.publish('scan', { match: args.match, kind: args.kind, radius: args.radius, objects: result.objects }, { coalesce: true }); return; }
+    this.telemetry.publish('action', { action, args, ok: result.ok, error: result.error, code: result.code });
+  }
+  track(record, coalesce = false) { this.telemetry?.publish('goal', this.goalView(record), { coalesce }); }
   get map() { return this.game.map; }
   io(request) { return this.game.io(request); }
   view() { return this.last?.nav?.observe() ?? { state: 'idle' }; }
@@ -27,6 +46,7 @@ export class Controller {
     const active = this.active;
     if (!active) return;
     active.nav?.finish('cancelled', reason); active.state = 'cancelled'; active.reason = reason;
+    this.track(active);
     await Effect.runPromise(Fiber.interrupt(active.fiber));
   }
   async close() { this.closing = true; await this.stop('controller_shutdown'); }
@@ -75,10 +95,12 @@ export class Controller {
     const started = Effect.runSync(Deferred.make());
     const record = { id: randomUUID(), kind, state: 'starting', startedAt: Date.now() };
     this.active = this.last = record;
+    this.track(record);
     const program = Effect.scoped(work(record, started)).pipe(
       Effect.catchAllCause(cause => Effect.gen(function* () {
         const error = String(Cause.squash(cause));
         if (record.state !== 'cancelled') { record.nav?.finish('blocked', error); record.state = 'blocked'; record.reason = error; }
+        this.track(record);
         yield* Deferred.succeed(started, { ok: false, error });
       })),
       Effect.ensuring(Effect.gen(this, function* () {
@@ -86,6 +108,7 @@ export class Controller {
         if (this.active === record) this.active = null;
         record.finishedAt = Date.now();
         this.history.set(record.id, this.goalView(record));
+        this.track(record);
         while (this.history.size > 64) this.history.delete(this.history.keys().next().value);
       })),
     );
@@ -125,6 +148,7 @@ export class Controller {
       const nav = record.nav = new Navigation(self.map, initial, goal);
       if (started) {
         nav.id = record.id; record.state = 'running';
+        self.track(record);
         yield* Deferred.succeed(started, { ok: true, status: 'started', navigation: nav.observe() });
       }
       let state = initial;
@@ -145,6 +169,7 @@ export class Controller {
           break;
         }
         const frame = batch.terrain.more ? null : nav.tick(state);
+        self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
         yield* control.frame({
           yawDegrees: frame?.yawDegrees ?? state.orientation.yawDegrees, pitchDegrees: frame?.pitchDegrees ?? 15,
           forward: frame?.forward ?? false, jump: frame?.jump ?? false, sprint: frame?.sprint ?? false, focus: frame?.focus ?? null });
@@ -152,6 +177,7 @@ export class Controller {
         yield* Effect.sleep(batch.terrain.more ? '5 millis' : '50 millis');
       }
       if (started) record.state = nav.state;
+      self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
       return nav.observe();
     }));
   }
@@ -166,6 +192,7 @@ export class Controller {
         await running?.catch(() => {});
       }));
       record.state = 'running';
+      self.track(record);
       yield* Deferred.succeed(started, { ok: true, status: 'started', goal: { id: record.id, kind: record.kind } });
       const send = request => {
         if (cancellation.signal.aborted && request.action !== 'stop') return Promise.reject(new Error('Goal cancelled'));
@@ -175,7 +202,7 @@ export class Controller {
       running = policy({
         send, map: self.map, sync: () => run(self.snapshot()),
         aim: angles => run(self.aim(angles, record)), navigate: (goal, yieldWhen) => run(self.navigate(goal, record, undefined, yieldWhen)),
-        report: progress => { record.progress = progress; },
+        report: progress => { record.progress = progress; self.track(record, true); },
       }, { ...args, signal: cancellation.signal });
       record.result = yield* attempt(() => running);
       record.state = record.result.ok ? 'arrived' : 'blocked';

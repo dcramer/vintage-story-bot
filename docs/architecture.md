@@ -41,6 +41,10 @@ Loopback JSON line: `{action,...args}` → `{ok,...result}` or `{ok:false,error,
 - `stop {expectedGoal?}`: guarded cancellation of current/latest goal; no guard = global stop. Reject mismatched id. Separate stop/start deliberately avoids implicit replacement races.
 - `events` remains the mod's bounded life-event cursor API, separate from goal status. Resync after missed events. Polling never wakes an idle LLM.
 
+## Telemetry
+
+Controller → dashboard `POST /ingest` on `127.0.0.1:42159`: one long-lived chunked request of NDJSON lines `{topic,at,data,log}`; `at` is UTC ms, `log:true` appends to the dashboard event log, otherwise only the latest value per topic is kept. Fire-and-forget: bounded queue, coalesced fast topics, 2s reconnect, never awaited by gameplay and never a substitute for `goal_status`/`observe`. Topics: `controller` (info), `state` (observe/sense state), `frame` (control inputs), `navigation`, `scan`, `goal` (goal view), `action` (other game requests with `ok/error`). Dashboard consumers: `GET /state` snapshot, `GET /events` SSE (`snapshot|update|producers`). Any process may push lines to `/ingest`; the dashboard never sends game or controller requests.
+
 ## Internal mod protocol
 
 All requests use existing bounded JSON-line transport; game thread executes them. Public tools: [schemas](../src/controller/actions.mjs).
