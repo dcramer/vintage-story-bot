@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Controller } from '../src/controller/runtime.mjs';
+import { Navigation } from '../src/navigation/navigator.mjs';
 import { TerrainMemory } from '../src/navigation/terrain.mjs';
 import { findRoute } from '../src/navigation/planner.mjs';
 
@@ -35,7 +36,9 @@ function fixture(failFrame = false) {
 test('Node geometry preserves step, headroom and hole constraints', () => {
   const map = new TerrainMemory(); map.apply(terrain());
   const start = { x: .5, y: 0, z: .5 }, end = { x: 2.5, y: 0, z: .5 };
-  assert.ok(findRoute(map, start, end, .3, 1.85));
+  const direct = findRoute(map, start, end, .3, 1.85);
+  assert.ok(direct);
+  assert.equal(direct[0].x, 1.5, 'safe planning anchor is not a physical waypoint');
   map.apply({ ...terrain(), cells: [[1, 0, 0, 0, false, [[0, 0, 0, 1, 1, 1]]]] });
   assert.ok(map.traverse(start, { x: 1.5, y: 1, z: .5 }, .3, 1.85));
   map.apply({ ...terrain(), cells: [[1, 2, 0, 0, false, [[0, 0, 0, 1, 1, 1]]]] });
@@ -46,6 +49,46 @@ test('Node geometry preserves step, headroom and hole constraints', () => {
   assert.ok(findRoute(map, start, end, .3, 1.85).some(p => p.z !== .5));
   map.apply({ ...terrain(), cells: [[0, 0, 0, 0, false, null]] });
   assert.equal(map.clear(start, .3, 1.85), false);
+});
+
+test('navigation tolerates slow physical response without unbounded input', () => {
+  const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: () => true,
+    views: () => new Map() };
+  const state = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals: { hunger: { current: 1000, max: 1500 } } };
+  const nav = new Navigation(map, state, { x: 5.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
+  nav.state = 'moving'; nav.route = [{ x: 1.5, y: 0, z: .5 }]; nav.progressAt = 0; nav.lastProgress = state.position;
+  assert.equal(nav.tick(state, 2000).forward, true);
+  assert.equal(nav.replans, 0);
+  assert.equal(nav.tick(state, 3100), null);
+  assert.equal(nav.replans, 1);
+  assert.equal(nav.lastReplan, 'stalled');
+});
+
+test('navigation accepts a bounded waypoint crossing between slow samples', () => {
+  const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: () => true,
+    views: () => new Map() };
+  const initial = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals: { hunger: { current: 1000, max: 1500 } } };
+  const nav = new Navigation(map, initial, { x: 5.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
+  nav.state = 'moving'; nav.route = [{ x: 1.5, y: 0, z: .5 }]; nav.edgeStart = initial.position;
+  const sampled = { ...initial, position: { x: 3, y: 0, z: .5 } };
+  assert.equal(nav.tick(sampled, 500), null);
+  assert.equal(nav.index, 1);
+  assert.equal(nav.segments, 1);
+  assert.equal(nav.state, 'surveying');
+});
+
+test('navigation sneaks through a nearby sharp waypoint', () => {
+  const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: (_, to) => to.z === .5,
+    views: () => new Map() };
+  const state = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals: { hunger: { current: 1000, max: 1500 } } };
+  const nav = new Navigation(map, state, { x: 4.5, y: 0, z: 4.5, timeoutMs: 10000 }, 0);
+  nav.state = 'moving'; nav.route = [{ x: 1.5, y: 0, z: .5 }, { x: 1.5, y: 0, z: 1.5 }];
+  const frame = nav.tick(state, 500);
+  assert.equal(frame.forward, true);
+  assert.equal(frame.sneak, true);
 });
 
 test('shared controller excludes mutations/UI and Effect interruption releases its owner', async () => {

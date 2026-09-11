@@ -177,7 +177,8 @@ export class Controller {
         const frame = terrainMore ? null : nav.tick(state);
         const input = {
           yawDegrees: frame?.yawDegrees ?? state.orientation.yawDegrees, pitchDegrees: frame?.pitchDegrees ?? 15,
-          forward: frame?.forward ?? false, jump: frame?.jump ?? false, sprint: frame?.sprint ?? false, focus: frame?.focus ?? null };
+          forward: frame?.forward ?? false, jump: frame?.jump ?? false, sprint: frame?.sprint ?? false,
+          sneak: frame?.sneak ?? false, focus: frame?.focus ?? null };
         self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
         const batch = yield* control.step(input);
         state = batch.state;
@@ -198,7 +199,7 @@ export class Controller {
         // one game tick keeps planning time outside the heartbeat critical path.
         yield* control.frame(batch.terrain.reset ? {
           yawDegrees: state.orientation.yawDegrees, pitchDegrees: 15,
-          forward: false, jump: false, sprint: false, focus: null,
+          forward: false, jump: false, sprint: false, sneak: false, focus: null,
         } : input);
       }
       if (started) record.state = nav.state;

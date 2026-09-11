@@ -11,7 +11,16 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
   if (!center) return null;
   const costs = new Map([[key(center), 0]]), previous = new Map(), closed = new Set(), open = [{ p: center, score: 0 }];
   let frontier, best = Infinity;
-  const path = end => { const list = [end]; while (previous.has(key(end))) { end = previous.get(key(end)); list.push(end); } return list.reverse(); };
+  const path = end => {
+    const list = [end];
+    while (previous.has(key(end))) { end = previous.get(key(end)); list.push(end); }
+    list.reverse();
+    // The grid center is a planning anchor, not a mandatory physical waypoint.
+    // Slow samples can leave the player well off-center while still safely
+    // connected to the first real step.
+    if (list.length > 1 && map.traverse(start, list[1], w, h, true)) list.shift();
+    return list;
+  };
   while (open.length && closed.size < budget) {
     open.sort((a, b) => b.score - a.score);
     const at = open.pop().p, id = key(at);
