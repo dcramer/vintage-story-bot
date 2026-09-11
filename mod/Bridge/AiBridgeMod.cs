@@ -24,6 +24,7 @@ public sealed partial class AiBridgeMod : ModSystem
     private long tickListener;
     private SceneSensor sensor = null!;
     private readonly SurfaceMap surface = new(8192, 300000, 96);
+    private readonly SightingsMap sightings = new();
     private VisionSensor vision = null!;
     private long lastSenseAt;
     private LifeTracker life = new();
@@ -43,7 +44,7 @@ public sealed partial class AiBridgeMod : ModSystem
         api.Event.BlockChanged += terrainSensor.Changed;
         api.Input.InWorldAction += RetainOwnedMovement;
         sensor = new SceneSensor(api, CanControl);
-        vision = new VisionSensor(api, surface);
+        vision = new VisionSensor(api, surface, sightings);
         inventory = new InventoryAdapter(api);
         context = new ContextSensor(api);
         blockActions = new BlockActions(api);

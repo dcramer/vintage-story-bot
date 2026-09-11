@@ -3,11 +3,15 @@ import { Effect } from 'effect';
 import { requestBridge } from '../bridge/client.mjs';
 import { TerrainMemory } from '../navigation/terrain.mjs';
 import { SurfaceMemory } from '../navigation/surface.mjs';
+import { SightingsMemory } from '../navigation/sightings.mjs';
 
 // Game RPC only. Policies never construct lease owners, sequences or terrain cursors.
 export class GameClient {
   map = new TerrainMemory();
   surface = new SurfaceMemory();
+  sightings = new SightingsMemory();
+  // Attention: block code substrings the eye is currently looking for.
+  watch = [];
   constructor(send = requestBridge) { this.send = send; }
   io(request) {
     return Effect.tryPromise({
@@ -23,9 +27,14 @@ export class GameClient {
   // far-field surface, each under its own session/cursor.
   cursors() {
     return { session: this.map.session, after: this.map.cursor,
-      surfaceSession: this.surface.session, surfaceAfter: this.surface.cursor };
+      surfaceSession: this.surface.session, surfaceAfter: this.surface.cursor,
+      sightingsSession: this.sightings.session, sightingsAfter: this.sightings.cursor, watch: this.watch };
   }
-  remember(batch) { this.map.apply(batch.terrain); if (batch.surface) this.surface.apply(batch.surface); }
+  remember(batch) {
+    this.map.apply(batch.terrain);
+    if (batch.surface) this.surface.apply(batch.surface);
+    if (batch.sightings) this.sightings.apply(batch.sightings);
+  }
   sense() {
     return this.io({ action: 'sense', ...this.cursors() }).pipe(
       Effect.tap(batch => Effect.sync(() => this.remember(batch))),
@@ -36,7 +45,7 @@ export class GameClient {
       // 16,384 retained entries / 128 per page, plus headroom for live refreshes.
       for (let pages = 0; pages < 256; pages++) {
         const batch = yield* this.sense();
-        if (!batch.terrain.more && !batch.surface?.more) return batch.state;
+        if (!batch.terrain.more && !batch.surface?.more && !batch.sightings?.more) return batch.state;
       }
       return yield* Effect.fail(new Error('Terrain snapshot did not catch up'));
     });

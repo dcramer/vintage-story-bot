@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
 using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
 
@@ -48,38 +49,62 @@ public sealed class SurfaceMap(int capacity = 8192, long ttlMs = 300000, int rad
         lostThrough = Math.Max(lostThrough, oldest.Value.Sequence);
         columns.Remove(oldest.Key);
     }
+    // Attention changed: every column must be looked at again for watched
+    // blocks. Known surfaces stay known and republish only if they changed.
+    public void MarkStale()
+    {
+        foreach (var (column, value) in columns.ToArray()) if (value.Y != null) columns[column] = value with { At = 0 };
+    }
     public void Prune(double x, double z, long now)
     {
         foreach (var (column, value) in columns.ToArray())
             if (value.Y != null && (now - value.At > ttlMs || Math.Abs(column.X - x) > radius || Math.Abs(column.Z - z) > radius))
                 Invalidate(column);
     }
-    public object Read(long after, string? session, long now)
+    public object Read(long after, string? session, long now, long sweeps = 0)
     {
         bool reset = session != Session || after < lostThrough || after > sequence;
         if (reset) after = 0;
         var batch = columns.Where(p => p.Value.Sequence > after).OrderBy(p => p.Value.Sequence).Take(256).ToArray();
         long cursor = batch.Length == 0 ? sequence : batch[^1].Value.Sequence;
-        return new { session = Session, reset, cursor, more = cursor < sequence, clock = now,
+        return new { session = Session, reset, cursor, more = cursor < sequence, clock = now, sweeps,
             columns = batch.Select(p => p.Value.Y == null
                 ? new object?[] { p.Key.X, p.Key.Z, null }
                 : new object?[] { p.Key.X, p.Key.Z, Math.Round(p.Value.Y.Value, 3), p.Value.Kind, p.Value.Step, p.Value.Code, p.Value.At }).ToArray() };
     }
 }
 
-// Passive far-field vision: every tick, while a controller is listening, sample
-// surface columns inside the camera's real field of view and remember the ones
-// a sightline reaches. Nothing is learned by asking; the head has to point
-// there. Radius shrinks with darkness; nothing below the visible surface,
-// behind a ridge or in an unloaded chunk is ever reported.
-internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map)
+// Passive vision: every tick, while a controller is listening, sample surface
+// columns, entities, ground items and watched blocks inside the camera's real
+// field of view and remember what a sightline reaches. Nothing is learned by
+// asking; the head has to point there. Radius shrinks with darkness; nothing
+// below the visible surface, behind a ridge or in an unloaded chunk is ever
+// reported. Entities within 16 blocks are also reported as heard, the one
+// approximation of a sense the client does not model.
+internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, SightingsMap sightings)
 {
+    private const double HearingRange = 16;
     private readonly Queue<Column> pending = new();
     private long nextBatch, nextPrune;
     private double batchYaw = double.NaN, batchPitch;
     private Cell? batchPosition;
+    private bool sweeping;
+    // Attention: block code substrings Node is currently looking for.
+    public string[] Watch { get; private set; } = [];
+    // Completed passes over the current view; Node waits for one after turning or changing attention.
+    public long Sweeps { get; private set; }
 
-    public void Reset() { pending.Clear(); map.Clear(); nextBatch = 0; batchYaw = double.NaN; batchPosition = null; }
+    public void Reset()
+    {
+        pending.Clear(); map.Clear(); sightings.Clear(); nextBatch = 0; batchYaw = double.NaN; batchPosition = null;
+        Watch = []; Sweeps = 0; sweeping = false;
+    }
+    public void SetWatch(string[] watch)
+    {
+        if (watch.SequenceEqual(Watch)) return;
+        Watch = watch; map.MarkStale(); pending.Clear(); nextBatch = 0; sweeping = false;
+    }
+    private bool Watched(string? code) => code != null && Watch.Any(match => code.Contains(match, StringComparison.OrdinalIgnoreCase));
 
     // Absolute-aligned level of detail: every column within 16 blocks, even
     // coordinates to 32, multiples of four beyond, so views merge in Node.
@@ -114,11 +139,14 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map)
         var blocks = api.World.BlockAccessor;
         double yaw = SceneGeometry.Normalize(pos.Yaw * 180 / Math.PI), pitch = (pos.Pitch - Math.PI) * 180 / Math.PI;
         var position = new Cell((int)Math.Floor(pos.X), (int)Math.Floor(pos.Y), (int)Math.Floor(pos.Z));
-        if (now >= nextPrune) { map.Prune(eye.X, eye.Z, now); nextPrune = now + 1000; }
+        if (now >= nextPrune) { map.Prune(eye.X, eye.Z, now); sightings.Prune(now); nextPrune = now + 1000; }
         var (halfYaw, halfPitch) = HalfAngles();
         int radius = Radius(new BlockPos((int)Math.Floor(eye.X), (int)Math.Floor(eye.Y), (int)Math.Floor(eye.Z), 0));
         bool turned = double.IsNaN(batchYaw) || Math.Abs(SceneGeometry.Normalize(yaw - batchYaw + 180) - 180) > 10 ||
             Math.Abs(pitch - batchPitch) > 10 || position != batchPosition;
+        var eyePoint = new Point3(eye.X, eye.Y, eye.Z);
+        var origin = new Vec3d(eye.X, eye.Y, eye.Z);
+        SampleEntities(player, eyePoint, origin, yaw, pitch, halfYaw, halfPitch, radius, now);
         if (turned || pending.Count == 0 && now >= nextBatch)
         {
             pending.Clear();
@@ -140,11 +168,11 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map)
             foreach (var candidate in candidates.OrderBy(c => map.Fresh(c.Column, now, 2000) ? 1 : 0)
                 .ThenBy(c => c.Angle).ThenBy(c => c.Distance)) pending.Enqueue(candidate.Column);
             nextBatch = now + 250;
+            sweeping = pending.Count > 0;
         }
         var watch = Stopwatch.StartNew();
-        var origin = new Vec3d(eye.X, eye.Y, eye.Z);
-        var eyePoint = new Point3(eye.X, eye.Y, eye.Z);
         int rays = 0, inspected = 0;
+        var client = api.World as ClientMain;
         while (pending.TryDequeue(out var column))
         {
             if (++inspected > 512 || rays >= 64 || watch.ElapsedMilliseconds >= 2) { pending.Enqueue(column); break; }
@@ -198,6 +226,74 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map)
                 (at, b) => at.Equals(target) || SceneSensor.Occludes(blocks, at, b), _ => false);
             if (hit != null && !hit.Position.Equals(target)) continue;
             map.Put(column, surface, kind, Step(Math.Sqrt(Math.Pow(x + .5 - eye.X, 2) + Math.Pow(z + .5 - eye.Z, 2))), code, now);
+            // Blocks Node is looking for, on or just around the visible surface.
+            if (Watch.Length == 0) continue;
+            for (int dy = -3; dy <= 3 && rays < 64; dy++)
+            {
+                var cell = new BlockPos(x, target.Y + dy, z, 0);
+                if (blocks.GetChunkAtBlockPos(cell) == null) continue;
+                var block = blocks.GetBlock(cell);
+                if (block.Id == 0 || !Watched(block.Code?.ToString())) continue;
+                var box = (block.GetSelectionBoxes(blocks, cell) ?? []).FirstOrDefault();
+                var sample = box == null ? new Point3(x + .5, cell.Y + .5, z + .5)
+                    : SceneGeometry.BoxSamples(new(x + box.X1, cell.Y + box.Y1, z + box.Z1), new(x + box.X2, cell.Y + box.Y2, z + box.Z2)).First();
+                rays++;
+                BlockSelection? blockHit = null; EntitySelection? entitySeen = null;
+                api.World.RayTraceForSelection(origin, new Vec3d(sample.X, sample.Y, sample.Z), ref blockHit, ref entitySeen,
+                    (at, b) => at.Equals(cell) || SceneSensor.Occludes(blocks, at, b), _ => false);
+                if (blockHit != null && !blockHit.Position.Equals(cell)) continue;
+                sightings.Put(SceneSensor.BlockKey(cell, block), "block", block.Code!.ToString(), sample, "seen", new
+                {
+                    forage = ForageSensor.Observe(blocks, cell, block),
+                    access = client == null ? null : new
+                    {
+                        buildOrBreak = client.WorldMap.TestAccess(api.World.Player, cell, EnumBlockAccessFlags.BuildOrBreak) == EnumWorldAccessResponse.Granted,
+                        use = client.WorldMap.TestAccess(api.World.Player, cell, EnumBlockAccessFlags.Use) == EnumWorldAccessResponse.Granted
+                    }
+                }, now);
+            }
+        }
+        if (sweeping && pending.Count == 0) { sweeping = false; Sweeps++; }
+    }
+
+    // Entities and ground items: seen when a sightline inside the field of view
+    // reaches them, near within the eight-block awareness ring, heard within
+    // sixteen blocks otherwise (living entities only; items make no sound).
+    private void SampleEntities(Entity player, Point3 eyePoint, Vec3d origin, double yaw, double pitch,
+        double halfYaw, double halfPitch, int radius, long now)
+    {
+        int rays = 0;
+        foreach (var entity in api.World.GetEntitiesAround(origin, Math.Max(radius, (float)HearingRange), Math.Max(radius, (float)HearingRange)))
+        {
+            if (entity.EntityId == player.EntityId || entity.Pos.Dimension != 0) continue;
+            bool item = entity is EntityItem;
+            if (!item && (!entity.Alive || entity.Code == null)) continue;
+            var stack = (entity as EntityItem)?.Itemstack;
+            string? code = item ? stack?.Collectible?.Code?.ToString() : entity.Code!.ToString();
+            if (code == null) continue;
+            var box = entity.SelectionBox ?? entity.CollisionBox;
+            var point = new Point3(entity.Pos.X, entity.Pos.Y + (box == null ? 0.1 : (box.Y1 + box.Y2) / 2), entity.Pos.Z);
+            double distance = SceneGeometry.Distance(eyePoint, point);
+            string? how = null;
+            if (distance <= 8) how = "near";
+            else
+            {
+                var look = SceneGeometry.LookAt(eyePoint, point);
+                bool inView = distance <= radius && Math.Abs(SceneGeometry.Normalize(look.Yaw - yaw + 180) - 180) <= halfYaw &&
+                    Math.Abs(look.Pitch - pitch) <= halfPitch;
+                if (inView && rays < 32)
+                {
+                    rays++;
+                    BlockSelection? blockHit = null; EntitySelection? entityHit = null;
+                    api.World.RayTraceForSelection(origin, new Vec3d(point.X, point.Y, point.Z), ref blockHit, ref entityHit,
+                        (at, b) => SceneSensor.Occludes(api.World.BlockAccessor, at, b), _ => false);
+                    if (blockHit == null) how = "seen";
+                }
+                if (how == null && !item && distance <= HearingRange) how = "heard";
+            }
+            if (how == null) continue;
+            sightings.Put($"entity:{entity.EntityId}", item ? "item" : "entity", code, point, how,
+                item ? new { quantity = stack?.StackSize } : null, now);
         }
     }
 }

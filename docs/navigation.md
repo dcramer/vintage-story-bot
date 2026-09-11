@@ -8,7 +8,9 @@ How a Seraph sees the ground and moves across it. The mod only senses and applie
 | --- | --- | --- | --- | --- |
 | Near-field geometry | `sense` / `control_step` terrain deltas | 8-block disk, 3 down / 6 up | Exact collision boxes and hazard flag per cell, camera-independent, sightline-verified | ≤4 blocks every 0.5 s, rest every 1.5 s; changed cells invalidate at once |
 | Far-field surface | `sense` / `control_step` surface deltas | 8-block ring plus the client's real field of view, 64 by day down to 12 in the dark | One standing-surface sample per column: `y`, `ground|canopy|water|hazard`, block code; every column to 16, even to 32, multiples of four beyond | Streamed every tick while a controller listens, ≤2 ms/64 rays; stale after 2 s, forgotten after 5 min |
-| Objects | `scan` | 8 nearby, 64 cone | Blocks/items/entities with keys | On demand |
+| Entities and items | `sense` / `control_step` sightings deltas | Seen inside the field of view to the light-limited radius; near within 8 all around; living entities heard within 16 all around | Key, code, point, how, time; item quantity | Every tick while a controller listens, ≤32 rays; forgotten 20 s after last confirmation |
+| Watched blocks | same feed, `watch` attention list | On or within three cells of each visible surface column | Key, code, point, forage state, access | Found as the eye sweeps; forgotten after 120 s |
+| Objects on demand | `scan` | 8 nearby, 64 cone | Explicit read of the current view, paged | Used only without the feed |
 
 Rules that hold for every layer: perception is a feed of what the camera sees now, never a query; a sample exists only if a sightline from the eye reached it; absent means unknown, never air; nothing below the visible surface, behind a ridge or in an unloaded chunk is reported; stale samples expire (near-field 120 s in the mod, surface 5 min). The mod never plans or chooses where to look; Node turns the head and remembers what came into view.
 
@@ -16,7 +18,8 @@ Rules that hold for every layer: perception is a feed of what the camera sees no
 
 - `TerrainMemory` (`terrain.mjs`): cells with absolute collision boxes from the near-field deltas. Answers clearance, support, dryness and hazard distance for a body volume; `traverse` sweeps the body along a segment and is the only judge of whether a step is safe.
 - `SurfaceMemory` (`surface.mjs`): far-field columns from the vision feed keyed by world coordinates so views from different spots merge. Answers coarse neighbours, shoreline adjacency and nearest known column.
-- Both live on the game client for the controller's lifetime and reset with the mod session. `terrain` exposes the merged view to the LLM; `pois` is the only named memory.
+- `SightingsMemory` (`sightings.mjs`): entities, items and watched blocks from the feed, visible now or remembered as last seen (60 s entities/items, 5 min blocks). `Fieldwork.scan` sets the attention list, waits one sweep, and reads it; threats read `observe.nearbyEntities`, which the mod derives from the same sightings.
+- All live on the game client for the controller's lifetime and reset with the mod session. `terrain` exposes the merged surface view to the LLM; `pois` is the only named memory.
 
 ## Planning
 
@@ -35,7 +38,7 @@ Two planners, one contract: a route is a list of standing points; every point an
 
 ## Policies
 
-Default all off, as pathfinder's `Movements` flags: no swimming, digging, placing, doors, or falls over two blocks. Foliage clearance is a stall recovery in `clearance.mjs`, aimed at the real destination, never a routing primitive. Hostile avoidance (`threats.mjs`) replaces the target with a flee point while a threat is inside its radius and resumes afterwards.
+Default all off, as pathfinder's `Movements` flags: no swimming, digging, placing, doors, or falls over two blocks. Foliage clearance is a stall recovery in `clearance.mjs`, aimed at the real destination, never a routing primitive. Hostile avoidance (`threats.mjs`) replaces the target with a flee point while a seen, heard or recently seen hostile is inside its radius and resumes afterwards; a hostile behind a ridge and out of earshot is unknown, as it is to a player.
 
 ## Observability
 

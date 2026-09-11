@@ -30,8 +30,9 @@ The split is by what a player does in one act, never by convenience.
 
 | Player act (mod) | Decision (Node) |
 | --- | --- |
-| `sense`: the camera's current view as deltas, near-field geometry within 8 blocks and far-field surface in the field of view | `walk`: turn toward the destination, remember what came into view, choose a corridor, look again per leg; `findRoute`: safe standing points and segments, replans, stall handling |
+| `sense`: the camera's current view as deltas: near-field geometry within 8 blocks, far-field surface in the field of view, entities/items/watched blocks a sightline reached | `walk`: turn toward the destination, remember what came into view, choose a corridor, look again per leg; `findRoute`: safe standing points and segments, replans, stall handling |
 | `look`: turn the head | `lookAhead`: where to look, for how long, and what the landscape means |
+| `watch`: what the eye is currently looking for | `scan`: set attention, wait one sweep, choose targets from what was seen |
 | `block_action_begin`: hold click on the aimed cell until it changes or expires | `dig_block`: pick the cell, walk into range, aim, act, verify air, handle drops |
 | `aim_cell`: aim at a cell face by its selection box | `place_block`: choose a standing spot and face, select the item, verify the change |
 

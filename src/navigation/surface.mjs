@@ -9,11 +9,13 @@ const steps = [1, 2, 4];
 const directions = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 export class SurfaceMemory {
-  columns = new Map(); session = null; cursor = 0; now = 0; ttlMs = 300000; capacity = 32768;
+  columns = new Map(); session = null; cursor = 0; now = 0; sweeps = 0; ttlMs = 300000; capacity = 32768;
   apply(batch) {
     if (!batch) return 0;
     if (batch.reset || batch.session !== this.session) this.columns.clear();
     this.session = batch.session; this.cursor = batch.cursor; this.now = batch.clock;
+    // Completed passes of the mod's eye over the current view.
+    this.sweeps = batch.sweeps ?? this.sweeps;
     for (const [x, z, y, kind, step, code, at] of batch.columns ?? []) {
       const id = columnKey(x, z);
       if (y === null || y === undefined) this.columns.delete(id);

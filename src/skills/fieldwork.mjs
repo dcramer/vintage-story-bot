@@ -1,4 +1,4 @@
-import { horizontal, lookAt, normalize } from '../navigation/terrain.mjs';
+import { distance, horizontal, lookAt, normalize } from '../navigation/terrain.mjs';
 import { findRoute } from '../navigation/planner.mjs';
 import { nextLeg, planCorridor } from '../navigation/surface.mjs';
 import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.mjs';
@@ -100,17 +100,18 @@ export class Fieldwork {
     const p = this.latest.position, before = this.env.surface.columns.size;
     const look = toward ? lookAt({ ...p, y: p.y + this.latest.body.eyeHeight }, toward) : { yawDegrees: this.heading, pitchDegrees: 0 };
     await this.aim({ yawDegrees: look.yawDegrees, pitchDegrees: Math.max(-30, Math.min(30, look.pitchDegrees)) });
-    // The feed refreshes a full view in a few hundred milliseconds at normal
-    // frame rates; wait until two consecutive reads add nothing new.
-    let quiet = 0, size = this.env.surface.columns.size;
-    for (let reads = 0; reads < 8 && quiet < 2; reads++) {
-      await this.wait(200);
+    await this.settle();
+    return Math.max(0, this.env.surface.columns.size - before);
+  }
+  // Wait for the eye to finish one pass over the current view: a few hundred
+  // milliseconds at normal frame rates, a few seconds on a software renderer.
+  async settle(timeoutMs = 4000) {
+    const start = this.env.surface?.sweeps ?? 0, until = this.now() + timeoutMs;
+    for (let reads = 0; reads < 40; reads++) {
       await this.observe(true);
-      const next = this.env.surface.columns.size;
-      quiet = next === size ? quiet + 1 : 0;
-      size = next;
+      if ((this.env.surface?.sweeps ?? 0) > start || this.now() >= until) return;
+      await this.wait(150);
     }
-    return Math.max(0, size - before);
   }
   // Next bounded leg along the seen corridor toward a far goal, or null
   // when nothing visible leads there. Penalized 16x16 areas cost extra so a
@@ -125,12 +126,40 @@ export class Fieldwork {
     if (!point || horizontal(p, point) < 2) return null;
     return { x: point.x, y: point.y, z: point.z, horizontalOnly: true, arrivalRadius: Math.min(3, Math.max(1, point.step)), corridor: plan.status };
   }
+  // Whether the vision feed carries entities, items and watched blocks.
+  get attentive() { return !!this.env.sightings && !!this.latest?.capabilities?.includes('sightings'); }
+  // Look for something: set the eye's attention to the codes, wait for one
+  // pass over the current view, and read what the feed has seen. Nothing
+  // is queried; a mod without the feed falls back to the paged scan read.
   async scan(radius, match, kind = 'all') {
+    const matches = Array.isArray(match) ? match : match ? [match] : [];
+    await this.observe();
+    if (!this.attentive) return this.scanView(radius, match, kind);
+    this.env.watch?.(matches);
+    await this.settle();
+    const p = this.latest.position, eye = { ...p, y: p.y + (this.latest.body?.eyeHeight ?? 1.6) };
+    const reach = this.latest.pickingRange ?? 4.5;
+    const kinds = { all: null, blocks: 'block', items: 'item', entities: 'entity' };
+    const objects = this.env.sightings.visible(kinds[kind] ?? null)
+      .filter(s => !matches.length || matches.some(m => s.code.toLowerCase().includes(m.toLowerCase())))
+      .map(s => {
+        const far = distance(eye, s.point);
+        return { kind: s.kind, key: s.key, code: s.code, point: s.point, distance: +far.toFixed(2),
+          quantity: s.extra?.quantity ?? null, access: s.extra?.access ?? null, forage: s.extra?.forage ?? null,
+          how: s.how, source: far <= 8 ? 'nearby' : 'sight', withinPickingRange: far <= reach, look: lookAt(eye, s.point) };
+      })
+      .filter(o => o.distance <= radius)
+      .sort((a, b) => a.distance - b.distance);
+    for (const object of objects) this.seen.set(object.key, { ...object, seenAt: this.now() });
+    this.searched++;
+    this.prune();
+    return objects;
+  }
+  async scanView(radius, match, kind = 'all') {
     let cursor;
     const objects = [];
     // A scan is read-only and stationary. Guard once around the paged sweep
     // instead of spending an extra game-thread round trip on every page.
-    await this.observe();
     do {
       const filter = Array.isArray(match) ? { matches: match } : { match };
       const page = await this.env.send({ action: 'scan', kind, ...filter, radius, limit: 32, ...(cursor ? { cursor } : {}) });
