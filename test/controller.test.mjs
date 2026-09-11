@@ -51,6 +51,18 @@ test('Node geometry preserves step, headroom and hole constraints', () => {
   assert.equal(map.clear(start, .3, 1.85), false);
 });
 
+test('planner reuses an observed corridor beyond 32 blocks', () => {
+  const map = new TerrainMemory(), cells = [];
+  for (let x = -1; x <= 50; x++) for (let z = -1; z <= 1; z++) for (let y = -1; y <= 2; y++)
+    cells.push([x, y, z, 0, false, y < 0 ? [[0, 0, 0, 1, 1, 1]] : []]);
+  map.apply({ session: 'long-corridor', reset: true, cursor: 1, more: false, clock: 0, cells });
+  const start = { x: .5, y: 0, z: .5 }, end = { x: 48.5, y: 0, z: .5 };
+  const route = findRoute(map, start, end, .3, 1.85, { budget: 128 });
+  assert.ok(route);
+  assert.equal(route.at(-1).x, end.x);
+  assert.equal(route.at(-1).z, end.z);
+});
+
 test('terrain permits supported recentering off thin partial ground cover', () => {
   const map = new TerrainMemory();
   const cells = [];

@@ -36,7 +36,6 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
       if (score < best) { best = score; frontier = at; }
     }
     for (const [dx, dz] of directions) {
-      if (Math.abs(at.x + dx - start.x) > 32 || Math.abs(at.z + dz - start.z) > 32) continue;
       const next = map.stand(at.x + dx, at.z + dz, at.y, w, h);
       if (!next || blocked.has(`${id}>${key(next)}`) || !map.traverse(at, next, w, h)) continue;
       const cost = costs.get(id) + 1 + Math.abs(next.y - at.y), nextId = key(next);
