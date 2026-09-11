@@ -19,6 +19,10 @@ public sealed partial class AiBridgeMod : ModSystem
     private ICoreClientAPI api = null!;
     private CancellationTokenSource? lifetime;
     private TcpListener? listener;
+    // Control opt-in (F7). The listener itself runs from world join so observe and native-dialog handling work before opt-in.
+    private bool enabled;
+    private DialogAdapter dialogs = null!;
+    private PausedDispatcher? pausedDispatcher;
     private long tickListener;
     private SceneSensor sensor = null!;
     private LifeTracker life = new();
@@ -41,6 +45,7 @@ public sealed partial class AiBridgeMod : ModSystem
         inventory = new InventoryAdapter(api);
         context = new ContextSensor(api);
         blockActions = new BlockActions(api);
+        dialogs = new DialogAdapter(api);
         api.Event.BlockChanged += blockActions.Changed;
         api.ChatCommands.Create("aibridge")
             .WithDescription("Control the local AI bridge")
@@ -68,9 +73,17 @@ public sealed partial class AiBridgeMod : ModSystem
             return true;
         });
         tickListener = api.Event.RegisterGameTickListener(OnTick, 20);
+        pausedDispatcher = new PausedDispatcher(this);
+        api.Event.RegisterRenderer(pausedDispatcher, EnumRenderStage.Done, "aibridge-paused");
         api.Logger.Notification("[AI bridge] Registered .aibridge, F7 enable, F8 stop.");
         api.Event.LevelFinalize += OnLevelReady;
-        api.Event.LeaveWorld += StopBridge;
+        api.Event.LeaveWorld += OnLeaveWorld;
+    }
+
+    private void OnLeaveWorld()
+    {
+        StopBridge();
+        StopListener();
     }
 
     private void OnLevelReady()
@@ -86,26 +99,46 @@ public sealed partial class AiBridgeMod : ModSystem
         SampleLife();
         bool registered = api.ChatCommands.Get("aibridge") != null;
         api.Logger.Notification($"[AI bridge] World ready; command registered: {registered}");
-        api.ShowChatMessage(lifetime == null
+        string? failure = StartListener();
+        if (failure != null) api.Logger.Error($"[AI bridge] {failure}");
+        api.ShowChatMessage(!enabled
             ? "Seraph bridge ready. F7 enables bot control; F8 stops and disables it."
             : "Seraph bridge enabled. F8 stops and disables bot control.");
+    }
+
+    private string? StartListener()
+    {
+        if (lifetime != null) return null;
+        var server = new TcpListener(IPAddress.Loopback, Port);
+        try { server.Start(); }
+        catch (SocketException exception)
+        {
+            return $"Cannot open AI bridge: {exception.Message}";
+        }
+        listener = server;
+        lifetime = new CancellationTokenSource();
+        _ = ServeAsync(server, lifetime.Token);
+        return null;
+    }
+
+    private void StopListener()
+    {
+        lifetime?.Cancel();
+        listener?.Stop();
+        lifetime?.Dispose();
+        lifetime = null;
+        listener = null;
+        while (requests.TryDequeue(out var pending)) pending.Completion.TrySetCanceled();
     }
 
     private TextCommandResult StartBridge()
     {
         if (api.World?.Player?.Entity == null)
             return TextCommandResult.Error("Join your server or enter a test world first.");
-        if (lifetime != null) return TextCommandResult.Success("AI bridge is already on.");
-
-        var server = new TcpListener(IPAddress.Loopback, Port);
-        try { server.Start(); }
-        catch (SocketException exception)
-        {
-            return TextCommandResult.Error($"Cannot open AI bridge: {exception.Message}");
-        }
-        listener = server;
-        lifetime = new CancellationTokenSource();
-        _ = ServeAsync(server, lifetime.Token);
+        if (enabled) return TextCommandResult.Success("AI bridge is already on.");
+        string? failure = StartListener();
+        if (failure != null) return TextCommandResult.Error(failure);
+        enabled = true;
         return TextCommandResult.Success($"AI bridge listening on 127.0.0.1:{Port}. F8 stops it.");
     }
 
@@ -155,7 +188,7 @@ public sealed partial class AiBridgeMod : ModSystem
 
     private void OnTick(float dt)
     {
-        if (lifetime != null)
+        if (enabled)
         {
             priorWorldInteraction ??= api.Input.MouseWorldInteractAnyway;
             bool ready = CanControl();
@@ -169,25 +202,9 @@ public sealed partial class AiBridgeMod : ModSystem
         }
         SampleLife();
 
-        // Judge lease refreshes when the bridge received them, before expiring the
-        // owner on a delayed render tick. Requests cancelled by the network timeout
-        // are still discarded and cannot revive control.
-        while (requests.TryDequeue(out var pending))
-        {
-            if (pending.Cancellation.IsCancellationRequested) continue;
-            try { pending.Completion.TrySetResult(Execute(pending.Json, pending.ReceivedAt)); }
-            catch (JsonException) { pending.Completion.TrySetResult(new { ok = false, error = "Invalid JSON request." }); }
-            catch (Exception exception)
-            {
-                ReleaseControl("action_error");
-                StopMovement();
-                StopHandAction();
-                api.Logger.Error($"AI bridge request failed: {exception}");
-                pending.Completion.TrySetResult(new { ok = false, error = "Game action failed; see client log." });
-            }
-        }
+        DrainRequests();
 
-        if (lifetime != null && CanControl())
+        if (enabled && CanControl())
         {
             try
             {
@@ -238,15 +255,48 @@ public sealed partial class AiBridgeMod : ModSystem
 
     }
 
+    // Judge lease refreshes when the bridge received them, before expiring the
+    // owner on a delayed render tick. Requests cancelled by the network timeout
+    // are still discarded and cannot revive control.
+    private void DrainRequests()
+    {
+        while (requests.TryDequeue(out var pending))
+        {
+            if (pending.Cancellation.IsCancellationRequested) continue;
+            try { pending.Completion.TrySetResult(Execute(pending.Json, pending.ReceivedAt)); }
+            catch (JsonException) { pending.Completion.TrySetResult(new { ok = false, error = "Invalid JSON request." }); }
+            catch (Exception exception)
+            {
+                ReleaseControl("action_error");
+                StopMovement();
+                StopHandAction();
+                api.Logger.Error($"AI bridge request failed: {exception}");
+                pending.Completion.TrySetResult(new { ok = false, error = "Game action failed; see client log." });
+            }
+        }
+    }
+
+    // Game ticks stop while singleplayer is paused (pause menu, character creation), but the GUI still renders on
+    // the same main thread; serve observe/dialog requests from there so blocking dialogs can be handled.
+    private sealed class PausedDispatcher(AiBridgeMod mod) : IRenderer
+    {
+        public double RenderOrder => 1;
+        public int RenderRange => 0;
+        public void OnRenderFrame(float deltaTime, EnumRenderStage stage) { if (mod.api.IsGamePaused) mod.DrainRequests(); }
+        public void Dispose() { }
+    }
+
     private object Execute(string json, long? receivedAt = null)
     {
         using var document = JsonDocument.Parse(json);
         var request = document.RootElement;
         if (request.ValueKind != JsonValueKind.Object || !request.TryGetProperty("action", out var action) || action.ValueKind != JsonValueKind.String)
             return new { ok = false, error = "Expected an action string." };
-        if (lifetime == null || api.World?.Player?.Entity == null)
+        if (api.World?.Player?.Entity == null)
             return new { ok = false, error = "Bridge requires an active world." };
         string name = action.GetString()!;
+        if (!enabled && !PreOptIn.Contains(name))
+            return new { ok = false, error = "Bot control is disabled; the player enables it with F7 or .aibridge on." };
         if (Mutations.Contains(name))
         {
             if (name != "stop" && control.Active)
@@ -263,6 +313,8 @@ public sealed partial class AiBridgeMod : ModSystem
             case "environment": return context.Environment(life.Session);
             case "events": return Events(request);
             case "respawn": return Respawn(request);
+            case "ui_dialogs": return dialogs.Observe();
+            case "ui_activate": return dialogs.Activate(request);
             case "inventory": return inventory.Observe();
             case "recipes": return Recipes(request);
             case "inventory_move":
@@ -292,9 +344,11 @@ public sealed partial class AiBridgeMod : ModSystem
     }
 
     // Wire actions refused while a control lease owns the inputs; stop releases it first.
-    private static readonly HashSet<string> Mutations = ["move_to", "move", "look", "aim_cell", "select", "interact", "attack", "stop", "respawn", "craft", "inventory_move", "block_action_begin", "block_action_continue", "select_recipe"];
+    private static readonly HashSet<string> Mutations = ["move_to", "move", "look", "aim_cell", "select", "interact", "attack", "stop", "respawn", "craft", "inventory_move", "block_action_begin", "block_action_continue", "select_recipe", "ui_activate"];
+    // Served before the player opts in: own-state reads and native dialogs (which block the F7 hotkey).
+    private static readonly HashSet<string> PreOptIn = ["observe", "ui_dialogs", "ui_activate"];
 
-    private bool CanControl() => lifetime != null && api.World?.Player?.Entity?.Alive == true && !api.IsGamePaused &&
+    private bool CanControl() => enabled && api.World?.Player?.Entity?.Alive == true && !api.IsGamePaused &&
         !api.Gui.OpenedGuis.Any(dialog => dialog.IsOpened() &&
             (dialog.DialogType == EnumDialogType.Dialog || dialog.CaptureAllInputs() || dialog.DisableMouseGrab));
 
@@ -310,22 +364,19 @@ public sealed partial class AiBridgeMod : ModSystem
             api.Input.MouseWorldInteractAnyway = priorWorldInteraction.Value;
             priorWorldInteraction = null;
         }
-        lifetime?.Cancel();
-        listener?.Stop();
-        lifetime?.Dispose();
-        lifetime = null;
-        listener = null;
-        while (requests.TryDequeue(out var pending)) pending.Completion.TrySetCanceled();
+        enabled = false;
     }
 
     public override void Dispose()
     {
         StopBridge();
+        StopListener();
         if (api != null)
         {
             api.Event.UnregisterGameTickListener(tickListener);
+            if (pausedDispatcher != null) api.Event.UnregisterRenderer(pausedDispatcher, EnumRenderStage.Done);
             api.Event.LevelFinalize -= OnLevelReady;
-            api.Event.LeaveWorld -= StopBridge;
+            api.Event.LeaveWorld -= OnLeaveWorld;
             api.Event.BlockChanged -= terrainSensor.Changed;
             api.Event.BlockChanged -= blockActions.Changed;
             api.Input.InWorldAction -= RetainOwnedMovement;

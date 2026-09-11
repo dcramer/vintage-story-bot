@@ -11,7 +11,7 @@ export const root = fileURLToPath(new URL('../../', import.meta.url)).replace(/\
 export const x11Root = `${root}/.runtime/x11`;
 const stateFile = `${x11Root}/display.json`;
 export const defaultDisplay = process.env.VINTAGE_STORY_DISPLAY || ':7';
-export const defaultSize = { width: 1280, height: 720 };
+export const defaultSize = { width: 1920, height: 1080 };
 
 export function tool(name) {
   for (const dir of (process.env.PATH ?? '').split(':')) if (dir && existsSync(`${dir}/${name}`)) return `${dir}/${name}`;

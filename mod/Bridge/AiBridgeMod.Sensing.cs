@@ -22,7 +22,7 @@ public sealed partial class AiBridgeMod
         return new
         {
             ok = true,
-            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell" },
+            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs" },
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
             world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString() },
@@ -42,6 +42,7 @@ public sealed partial class AiBridgeMod
                 climbing = entity.Controls.IsClimbing, sneaking = entity.Controls.Sneak, sprinting = entity.Controls.Sprint },
             condition = context.Condition(),
             paused = api.IsGamePaused,
+            bridgeEnabled = enabled,
             mouseGrabbed = api.Input.MouseGrabbed,
             controlReady = CanControl(),
             control = control.Observe(Environment.TickCount64),
