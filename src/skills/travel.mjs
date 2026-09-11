@@ -70,19 +70,21 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     if (result.state === 'arrived' || result.state === 'yielded' || progress > 2) stalled = 0;
     else {
       stalled++;
-      if (stalled >= 3) {
-        const cleared = await clearFoliagePath(field, leg);
-        const nudged = await field.nudge(leg);
-        if (cleared || nudged > .1) {
-          // Once a cautious probe proves this corridor is physically
-          // traversable, retry it after one planner failure instead of
-          // waiting through three identical surveys for every half block.
-          stalled = nudged > .1 ? 2 : 0;
-          continuation = null;
-          localDetour = false;
-          field.report('route_cleared', { remaining: +horizontal(field.latest.position, goal).toFixed(1), legs });
-          continue;
-        }
+      // The planner has already exhausted non-mutating routes for this leg.
+      // Clear an explicitly observed leaf now; waiting through two identical
+      // 20-second surveys wastes the food window in dense forest. Keep the
+      // less constrained physical nudge behind the established stall count.
+      const cleared = await clearFoliagePath(field, leg);
+      const nudged = !cleared && stalled >= 3 ? await field.nudge(leg) : 0;
+      if (cleared || nudged > .1) {
+        // Once a cautious probe proves this corridor is physically
+        // traversable, retry it after one planner failure instead of
+        // waiting through three identical surveys for every half block.
+        stalled = nudged > .1 ? 2 : 0;
+        continuation = null;
+        localDetour = false;
+        field.report('route_cleared', { remaining: +horizontal(field.latest.position, goal).toFixed(1), legs });
+        continue;
       }
       if (stalled < 6) continue;
       // A long trip can exhaust every local alternative on a steep ridge even

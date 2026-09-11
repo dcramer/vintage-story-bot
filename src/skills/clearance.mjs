@@ -32,7 +32,7 @@ export async function clearFoliage(field, toward) {
   // A distant predator plus a leaf enclosure otherwise creates a permanent
   // deadlock: evasion has no route and clearance refuses to open one. Preserve
   // a wide no-fieldwork perimeter while allowing one quick leaf beyond it.
-  if (!threatAllowsClearance(field.latest, threat) || !field.latest.capabilities.includes('block_actions')) return false;
+  if (!threatAllowsClearance(field.latest, threat) || !field.latest.capabilities?.includes('block_actions')) return false;
   const objects = await field.scan(5, ['leaves-', 'leavesbranchy-'], 'blocks');
   const target = foliageClearCandidate(objects, field.latest, toward, field.rejected);
   if (!target) return false;
