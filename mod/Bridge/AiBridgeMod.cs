@@ -23,7 +23,9 @@ public sealed partial class AiBridgeMod : ModSystem
     private PausedDispatcher? pausedDispatcher;
     private long tickListener;
     private SceneSensor sensor = null!;
-    private SurveySensor survey = null!;
+    private readonly SurfaceMap surface = new(8192, 300000, 96);
+    private VisionSensor vision = null!;
+    private long lastSenseAt;
     private LifeTracker life = new();
     private InventoryAdapter inventory = null!;
     private ContextSensor context = null!;
@@ -41,7 +43,7 @@ public sealed partial class AiBridgeMod : ModSystem
         api.Event.BlockChanged += terrainSensor.Changed;
         api.Input.InWorldAction += RetainOwnedMovement;
         sensor = new SceneSensor(api, CanControl);
-        survey = new SurveySensor(api, CanControl);
+        vision = new VisionSensor(api, surface);
         inventory = new InventoryAdapter(api);
         context = new ContextSensor(api);
         blockActions = new BlockActions(api);
@@ -65,7 +67,7 @@ public sealed partial class AiBridgeMod : ModSystem
         worldInteractions = (api.World as ClientMain)?.clientSystems
             .OfType<SystemMouseInWorldInteractions>().FirstOrDefault();
         sensor.Reset();
-        survey.Reset();
+        vision.Reset();
         terrainSensor.Reset();
         control.Revoke("world_changed");
         life = new LifeTracker();
@@ -169,6 +171,8 @@ public sealed partial class AiBridgeMod : ModSystem
                 long now = Environment.TickCount64;
                 if (control.Active && (ManualInput() || control.Expire(now))) ReleaseControl(ManualInput() ? "manual_input" : "expired");
                 terrainSensor.Sample(now, sensorPriority);
+                // Far-field vision streams only while a controller is reading it.
+                if (now - lastSenseAt < 5000) vision.Sample(now);
                 if (control.Active) ApplyCamera(dt);
             }
             catch (Exception exception)
@@ -265,7 +269,6 @@ public sealed partial class AiBridgeMod : ModSystem
             case "observe": return Observe();
             case "sense": return Sense(request);
             case "scan": return Scan(request);
-            case "survey": return Survey(request);
             case "inspect_target": return CanControl() ? context.InspectTarget(life.Session) : new { ok = false, error = "Close menus and unpause before inspecting." };
             case "environment": return context.Environment(life.Session);
             case "events": return Events(request);
@@ -311,7 +314,7 @@ public sealed partial class AiBridgeMod : ModSystem
         ReleaseControl("bridge_off");
         terrainSensor?.Reset();
         sensor?.Reset();
-        survey?.Reset();
+        vision?.Reset();
         StopMovement();
         StopHandAction();
         if (priorWorldInteraction.HasValue)

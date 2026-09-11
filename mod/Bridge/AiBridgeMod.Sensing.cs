@@ -22,7 +22,7 @@ public sealed partial class AiBridgeMod
         return new
         {
             ok = true,
-            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_survey" },
+            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision" },
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
             world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString() },
@@ -70,8 +70,22 @@ public sealed partial class AiBridgeMod
             return new { ok = false, error = "Invalid terrain cursor." };
         string? terrainSession = request.TryGetProperty("session", out var terrainSessionField) && terrainSessionField.ValueKind == JsonValueKind.String
             ? terrainSessionField.GetString() : null;
+        if (!TrySurfaceCursor(request, out long surfaceCursor, out string? surfaceSession))
+            return new { ok = false, error = "Invalid surface cursor." };
+        lastSenseAt = Environment.TickCount64;
         return new { ok = true, state = Observe(),
-            terrain = terrain.Read(cursor, terrainSession, Environment.TickCount64) };
+            terrain = terrain.Read(cursor, terrainSession, lastSenseAt),
+            surface = surface.Read(surfaceCursor, surfaceSession, lastSenseAt) };
+    }
+
+    // Far-field vision deltas ride along with terrain deltas under their own cursor.
+    private static bool TrySurfaceCursor(JsonElement request, out long cursor, out string? session)
+    {
+        cursor = 0; session = null;
+        if (request.TryGetProperty("surfaceAfter", out var cursorField) && (!cursorField.TryGetInt64(out cursor) || cursor < 0)) return false;
+        session = request.TryGetProperty("surfaceSession", out var sessionField) && sessionField.ValueKind == JsonValueKind.String
+            ? sessionField.GetString() : null;
+        return true;
     }
 
     private object Scan(JsonElement request)
@@ -109,21 +123,6 @@ public sealed partial class AiBridgeMod
             scanCursor = scanCursorField.GetString();
         }
         return sensor.Scan(radius, limit, kind, matches, scanCursor);
-    }
-
-    private object Survey(JsonElement request)
-    {
-        int radius = 48;
-        if (request.TryGetProperty("radius", out _) && (!TryInteger(request, "radius", out radius) || radius < 8 || radius > 64))
-            return new { ok = false, error = "radius: integer 8–64." };
-        string? surveyCursor = null;
-        if (request.TryGetProperty("cursor", out var surveyCursorField))
-        {
-            if (surveyCursorField.ValueKind != JsonValueKind.String || !Guid.TryParseExact(surveyCursorField.GetString(), "N", out _))
-                return new { ok = false, error = "cursor must be a returned survey cursor." };
-            surveyCursor = surveyCursorField.GetString();
-        }
-        return survey.Survey(radius, surveyCursor);
     }
 
     private object Events(JsonElement request)

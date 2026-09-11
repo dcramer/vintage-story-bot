@@ -7,28 +7,28 @@ How a Seraph sees the ground and moves across it. The mod only senses and applie
 | Layer | Wire | Range | Content | Refresh |
 | --- | --- | --- | --- | --- |
 | Near-field geometry | `sense` / `control_step` terrain deltas | 8-block disk, 3 down / 6 up | Exact collision boxes and hazard flag per cell, camera-independent, sightline-verified | ≤4 blocks every 0.5 s, rest every 1.5 s; changed cells invalidate at once |
-| Far-field surface | `survey` | 8-block ring plus forward 120° cone to 64 | One standing-surface sample per column: `y`, `ground|canopy|water|hazard`, block code; every column to 16, even to 32, multiples of four beyond | On demand, paged, viewpoint-bound cursor |
+| Far-field surface | `sense` / `control_step` surface deltas | 8-block ring plus the client's real field of view, 64 by day down to 12 in the dark | One standing-surface sample per column: `y`, `ground|canopy|water|hazard`, block code; every column to 16, even to 32, multiples of four beyond | Streamed every tick while a controller listens, ≤2 ms/64 rays; stale after 2 s, forgotten after 5 min |
 | Objects | `scan` | 8 nearby, 64 cone | Blocks/items/entities with keys | On demand |
 
-Rules that hold for every layer: a sample exists only if a sightline from the eye reached it; absent means unknown, never air; nothing below the visible surface, behind a ridge or in an unloaded chunk is reported; stale samples expire (near-field 120 s in the mod, surface 5 min in Node). The mod never plans or chooses where to look; Node aims the camera and asks.
+Rules that hold for every layer: perception is a feed of what the camera sees now, never a query; a sample exists only if a sightline from the eye reached it; absent means unknown, never air; nothing below the visible surface, behind a ridge or in an unloaded chunk is reported; stale samples expire (near-field 120 s in the mod, surface 5 min). The mod never plans or chooses where to look; Node turns the head and remembers what came into view.
 
 ## Memory (Node, `src/navigation/`)
 
 - `TerrainMemory` (`terrain.mjs`): cells with absolute collision boxes from the near-field deltas. Answers clearance, support, dryness and hazard distance for a body volume; `traverse` sweeps the body along a segment and is the only judge of whether a step is safe.
-- `SurfaceMemory` (`surface.mjs`): surveyed columns keyed by world coordinates so views from different spots merge. Answers coarse neighbours, shoreline adjacency and nearest known column.
+- `SurfaceMemory` (`surface.mjs`): far-field columns from the vision feed keyed by world coordinates so views from different spots merge. Answers coarse neighbours, shoreline adjacency and nearest known column.
 - Both live on the game client for the controller's lifetime and reset with the mod session. `terrain` exposes the merged view to the LLM; `pois` is the only named memory.
 
 ## Planning
 
 Two planners, one contract: a route is a list of standing points; every point and every segment between them was validated against observation before the bot moves.
 
-- **Corridor** (`planCorridor`): A* over surveyed columns toward a goal. Edges: adjacent columns follow the fine limits (jump up one, drop two); coarser rings only bound average slope. Water and hazard are never nodes; canopy and shoreline cost extra; 16×16 areas that already failed on the ground are penalized by the caller. Status `success` (goal column reached), `partial` (best visible progress; walk it and resurvey), `noPath`. Output is simplified to bends and 12-block spans.
+- **Corridor** (`planCorridor`): A* over seen columns toward a goal. Edges: adjacent columns follow the fine limits (jump up one, drop two); coarser rings only bound average slope. Water and hazard are never nodes; canopy and shoreline cost extra; 16×16 areas that already failed on the ground are penalized by the caller. Status `success` (goal column reached), `partial` (best visible progress; walk it and look again), `noPath`. Output is simplified to bends and 12-block spans.
 - **Fine route** (`findRoute`): A* over standing points found in `TerrainMemory`, eight directions at real cost, jump-up-one, drop-two, one-cell gap jumps as marked escape edges, hostile-avoidance radii, edge blocking after stalls. Budget 512 nodes; partial routes end at a frontier whose next cells are unknown so the navigator can look at them.
 
 ## Walking (`Fieldwork.walk` → `Navigation`)
 
 1. Target within 12 blocks: one fine leg.
-2. Farther: aim at the target and `survey`; if no `success` corridor, also glance ±50°. Plan a corridor; hand the fine navigator the farthest waypoint within 40 blocks as a leg (`horizontalOnly`, arrival radius from the sample spacing). Arrive, resurvey from the new viewpoint, repeat (≤8 legs) until the target is within the horizon, then walk the final fine leg.
+2. Farther: turn toward the target and wait until the vision feed stops adding columns; if no `success` corridor, also glance ±50°. Plan a corridor; hand the fine navigator the farthest waypoint within 40 blocks as a leg (`horizontalOnly`, arrival radius from the sample spacing). Arrive, look again from the new viewpoint, repeat (≤8 legs) until the target is within the horizon, then walk the final fine leg.
 3. Nothing visible leads there: `blocked/no_visible_route` beyond 48 blocks (the caller's stall recovery takes over: foliage clearance, sneaking nudge, exploration legs), otherwise one direct fine leg.
 
 `Navigation.tick` runs each leg: `surveying` looks at the missing cells nearest the target for up to 2.5 s before planning; `moving` steers with bounded frames (500 ms, 180 ms near steps and bends), sneaks up to ledges, releases forward while airborne on descents, sprints only on straight level stretches with food, and replans on `stalled`, `jump_failed`, `terrain_changed`, `landing_changed`. Terminal: `arrived`, `blocked` (`no_observed_route`, `exploration_exhausted`, `deadline`, `lost_support`, replan limit), `cancelled` (damage, death, session or control change), `yielded` (caller policy such as food).
@@ -43,4 +43,4 @@ Default all off, as pathfinder's `Movements` flags: no swimming, digging, placin
 
 ## Verification
 
-Synthetic checks in a scratchpad cover the corridor planner (lake skirted, ramp taken, partial beyond the survey), the fine planner (diagonals, wall corner, pillar) and the seeing walk loop. Live gameplay is the real test: run `travel` at terrain that used to stall, watch `navigation.diagnostics` and the corridor phases, and record the outcome in the handoff.
+Synthetic checks in a scratchpad cover the corridor planner (lake skirted, ramp taken, partial beyond what was seen), the fine planner (diagonals, wall corner, pillar) and the seeing walk loop. Live gameplay is the real test: run `travel` at terrain that used to stall, watch `navigation.diagnostics` and the corridor phases, and record the outcome in the handoff.

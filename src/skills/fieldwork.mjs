@@ -91,28 +91,28 @@ export class Fieldwork {
     await this.env.aim(angles, { allowStarvingRecovery: this.recoveringFood });
     await this.observe();
   }
-  // Look toward a destination and take in the landscape, the way a player
-  // picks a line across a valley before walking it. Read-only and stationary;
-  // absent columns stay unknown, and every leg is still validated by the fine
-  // navigator against observed nearby terrain.
-  async survey(toward, radius = sightRange) {
-    if (!this.env.surface || !this.latest.capabilities.includes('surface_survey')) return 0;
-    const p = this.latest.position;
+  // Turn the head toward a point and let the mod's vision stream fill the
+  // landscape memory, the way a player takes in a valley before crossing it.
+  // Read-only and stationary; the mod reports only what the sightline reaches
+  // and Node never asks for a column it did not look at.
+  async look(toward) {
+    if (!this.seeing) return 0;
+    const p = this.latest.position, before = this.env.surface.columns.size;
     const look = toward ? lookAt({ ...p, y: p.y + this.latest.body.eyeHeight }, toward) : { yawDegrees: this.heading, pitchDegrees: 0 };
     await this.aim({ yawDegrees: look.yawDegrees, pitchDegrees: Math.max(-30, Math.min(30, look.pitchDegrees)) });
-    let cursor, columns = 0;
-    do {
-      const page = await this.env.send({ action: 'survey', radius, ...(cursor ? { cursor } : {}) });
-      if (page.code === 'survey_expired') break;
-      if (!page.ok) throw Error(page.error ?? 'Survey refused');
-      columns += this.env.surface.apply(page);
-      cursor = page.more ? page.cursor : null;
-    } while (cursor);
-    this.env.surface.prune();
-    await this.observe();
-    return columns;
+    // The feed refreshes a full view in a few hundred milliseconds at normal
+    // frame rates; wait until two consecutive reads add nothing new.
+    let quiet = 0, size = this.env.surface.columns.size;
+    for (let reads = 0; reads < 8 && quiet < 2; reads++) {
+      await this.wait(200);
+      await this.observe(true);
+      const next = this.env.surface.columns.size;
+      quiet = next === size ? quiet + 1 : 0;
+      size = next;
+    }
+    return Math.max(0, size - before);
   }
-  // Next bounded leg along the surveyed corridor toward a far goal, or null
+  // Next bounded leg along the seen corridor toward a far goal, or null
   // when nothing visible leads there. Penalized 16x16 areas cost extra so a
   // leg that already failed on the ground is not replanned identically.
   corridor(goal, { maxDistance = 40 } = {}) {
@@ -166,11 +166,11 @@ export class Fieldwork {
       .sort((a, b) => horizontal(a.point, this.latest.position) - horizontal(b.point, this.latest.position));
   }
   // Whether long-range sight is available: surface memory in the controller
-  // and a mod that can survey. Without it, walk is a single fine leg.
-  get seeing() { return !!this.env.surface && !!this.latest?.capabilities?.includes('surface_survey'); }
+  // and a mod that streams vision. Without it, walk is a single fine leg.
+  get seeing() { return !!this.env.surface && !!this.latest?.capabilities?.includes('surface_vision'); }
   // Walk toward a target the way a player does: beyond the fine navigator's
   // horizon, look at the landscape first and follow a corridor leg by leg,
-  // resurveying from each new viewpoint. Near targets are one fine leg. A far
+  // looking again from each new viewpoint. Near targets are one fine leg. A far
   // target with nothing visible leading there ends as no_visible_route so
   // the caller's stall recovery (clearance, nudges, exploration) takes over.
   async walk(target, yieldWhen) {
@@ -192,22 +192,22 @@ export class Fieldwork {
     }
     return this.leg(target, yieldWhen);
   }
-  // Survey toward the target; when the straight view shows no full corridor,
+  // Look toward the target; when the straight view shows no full corridor,
   // glance left and right as well before choosing a line.
   async lookAhead(target) {
     const p = this.latest.position;
-    const recent = this.lastSurvey && this.now() - this.lastSurvey.at < 15000 && horizontal(p, this.lastSurvey.position) < 2;
+    const recent = this.lastLook && this.now() - this.lastLook.at < 15000 && horizontal(p, this.lastLook.position) < 2;
     if (!recent) {
-      await this.survey(target);
-      this.lastSurvey = { position: p, at: this.now(), sweep: false };
+      await this.look(target);
+      this.lastLook = { position: p, at: this.now(), sweep: false };
     }
     let corridor = this.corridor(target);
-    if ((!corridor || this.corridorStatus.status !== 'success') && !this.lastSurvey.sweep) {
-      this.lastSurvey.sweep = true;
+    if ((!corridor || this.corridorStatus.status !== 'success') && !this.lastLook.sweep) {
+      this.lastLook.sweep = true;
       const direction = lookAt(p, target).yawDegrees;
       for (const offset of [-50, 50]) {
         const radians = normalize(direction + offset) * Math.PI / 180;
-        await this.survey({ x: p.x + Math.sin(radians) * 32, y: p.y, z: p.z + Math.cos(radians) * 32 });
+        await this.look({ x: p.x + Math.sin(radians) * 32, y: p.y, z: p.z + Math.cos(radians) * 32 });
       }
       corridor = this.corridor(target);
     }

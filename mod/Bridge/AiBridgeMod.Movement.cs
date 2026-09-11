@@ -59,14 +59,16 @@ public sealed partial class AiBridgeMod
     {
         var entity = api.World!.Player.Entity;
         bool includeSense = action == "control_step";
-        long stepCursor = 0;
-        string? stepSession = null;
+        long stepCursor = 0, stepSurfaceCursor = 0;
+        string? stepSession = null, stepSurfaceSession = null;
         if (includeSense)
         {
             if (request.TryGetProperty("after", out var stepCursorField) && (!stepCursorField.TryGetInt64(out stepCursor) || stepCursor < 0))
                 return new { ok = false, error = "Invalid terrain cursor." };
             stepSession = request.TryGetProperty("session", out var stepSessionField) && stepSessionField.ValueKind == JsonValueKind.String
                 ? stepSessionField.GetString() : null;
+            if (!TrySurfaceCursor(request, out stepSurfaceCursor, out stepSurfaceSession))
+                return new { ok = false, error = "Invalid surface cursor." };
         }
         if (!request.TryGetProperty("owner", out var frameOwner) || frameOwner.ValueKind != JsonValueKind.String ||
             !request.TryGetProperty("sequence", out var sequenceField) || !sequenceField.TryGetInt64(out long sequence) ||
@@ -120,8 +122,12 @@ public sealed partial class AiBridgeMod
             stopAt = frameNow + frameDuration; SetMovement(true);
         }
         if (includeSense)
+        {
+            lastSenseAt = Environment.TickCount64;
             return new { ok = true, sequence, state = Observe(),
-                terrain = terrain.Read(stepCursor, stepSession, Environment.TickCount64) };
+                terrain = terrain.Read(stepCursor, stepSession, lastSenseAt),
+                surface = surface.Read(stepSurfaceCursor, stepSurfaceSession, lastSenseAt) };
+        }
         return new { ok = true, sequence };
     }
 

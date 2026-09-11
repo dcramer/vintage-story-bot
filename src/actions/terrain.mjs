@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { z } from 'zod';
 import { defineAction } from '../controller/define.mjs';
 
@@ -10,7 +11,7 @@ export const schema = z.object({
 const columnKey = (x, z) => `${x},${z}`;
 
 // What the bot has seen of the ground: nearby observed collision geometry
-// reduced to standing surfaces, plus surveyed distant columns. Columns the
+// reduced to standing surfaces, plus distant columns from the vision feed. Columns the
 // bot never saw are absent, never guessed.
 export function terrainView(map, surface, center, radius, now = Date.now()) {
   const columns = new Map();
@@ -25,7 +26,7 @@ export function terrainView(map, surface, center, radius, now = Date.now()) {
   for (const column of surface.columns.values()) {
     if (Math.abs(column.x - center.x) > radius || Math.abs(column.z - center.z) > radius) continue;
     const id = columnKey(column.x, column.z);
-    if (!columns.has(id)) columns.set(id, { ...column, source: 'surveyed' });
+    if (!columns.has(id)) columns.set(id, { ...column, source: 'seen' });
   }
   const rows = [...columns.values()].sort((a, b) => Math.hypot(a.x + .5 - center.x, a.z + .5 - center.z) - Math.hypot(b.x + .5 - center.x, b.z + .5 - center.z));
   const counts = {};
@@ -42,12 +43,12 @@ export default defineAction({
   description:
     'Ground the bot has seen around a point (default: own position), radius ≤32. Rows [x,z,y,kind,source,ageMs]: y is the ' +
     'highest known standing surface, kind ground|canopy|water|hazard, source observed (nearby collision geometry, exact) or ' +
-    'surveyed (distant sight sample, coarser with distance). Absent columns are unknown, never air: look or survey to ' +
-    'learn them. Memory only, no game request; expires with movement and time.',
+    'seen (distant sight sample streamed as the camera moves, coarser with distance). Absent columns are unknown, never air: ' +
+    'look toward them to learn them. Memory only; expires with movement and time.',
   local: async (runtime, { x, z, radius }) => {
-    // Own position anchors the vertical window of the observed geometry.
-    const state = await runtime.send({ action: 'observe' });
-    if (!state.ok) return state;
+    // Drain pending perception deltas first so look-then-terrain reflects the
+    // current view; own position anchors the vertical window of the geometry.
+    const state = await Effect.runPromise(runtime.snapshot());
     const center = { x: Math.floor(x ?? state.position.x), z: Math.floor(z ?? state.position.z), y: state.position.y };
     return terrainView(runtime.map, runtime.surface, center, radius);
   },

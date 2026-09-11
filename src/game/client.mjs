@@ -19,9 +19,16 @@ export class GameClient {
       catch: error => error instanceof Error ? error : new Error(String(error)),
     });
   }
+  // Both perception streams ride on one request: near-field geometry and
+  // far-field surface, each under its own session/cursor.
+  cursors() {
+    return { session: this.map.session, after: this.map.cursor,
+      surfaceSession: this.surface.session, surfaceAfter: this.surface.cursor };
+  }
+  remember(batch) { this.map.apply(batch.terrain); if (batch.surface) this.surface.apply(batch.surface); }
   sense() {
-    return this.io({ action: 'sense', session: this.map.session, after: this.map.cursor }).pipe(
-      Effect.tap(batch => Effect.sync(() => this.map.apply(batch.terrain))),
+    return this.io({ action: 'sense', ...this.cursors() }).pipe(
+      Effect.tap(batch => Effect.sync(() => this.remember(batch))),
     );
   }
   snapshot() {
@@ -29,7 +36,7 @@ export class GameClient {
       // 16,384 retained entries / 128 per page, plus headroom for live refreshes.
       for (let pages = 0; pages < 256; pages++) {
         const batch = yield* this.sense();
-        if (!batch.terrain.more) return batch.state;
+        if (!batch.terrain.more && !batch.surface?.more) return batch.state;
       }
       return yield* Effect.fail(new Error('Terrain snapshot did not catch up'));
     });
@@ -48,8 +55,8 @@ export class GameClient {
         owner,
         frame: frame => this.io({ ...frame, action: 'control_frame', owner, sequence: ++sequence, durationMs: frame.durationMs ?? 500 }),
         step: frame => this.io({ ...frame, action: 'control_step', owner, sequence: ++sequence, durationMs: frame.durationMs ?? 500,
-          session: this.map.session, after: this.map.cursor }).pipe(
-          Effect.tap(batch => Effect.sync(() => this.map.apply(batch.terrain))),
+          ...this.cursors() }).pipe(
+          Effect.tap(batch => Effect.sync(() => this.remember(batch))),
         ),
       };
     });

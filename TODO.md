@@ -23,8 +23,8 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [ ] **P1 · `block_at {x,y,z}`** — code/state of one cell if observed or remembered; `unknown` otherwise, never air (`game`, `ctl`). Mineflayer `blockAt`. Source: terrain memory + last scan; no hidden-world lookup.
 - [ ] **P1 · `can_see {x,y,z}`** — sampled sightline from eye to cell (`mod`). Mineflayer `canSeeBlock`. Prerequisite for interact-range goals.
 - [ ] **P1 · `find_blocks {match,radius,limit}`** — thin alias over `scan` with `kind:blocks` and remembered sightings merged, tagged observed/remembered (`ctl`). Mineflayer `findBlocks`.
-- [~] `survey` — sight-verified landscape profile (surface y/kind per column, coarser with distance) in the forward cone; feeds `travel` corridor planning. Not live-verified.
-- [~] `terrain` — merged observed/surveyed surface view around a point; absent columns unknown. Not live-verified.
+- [~] far-field vision feed — `sense` streams sight-verified surface columns inside the real field of view as the camera moves (light-limited, coarser with distance); Node remembers them and `terrain` shows them. Not live-verified.
+- [~] `terrain` — merged observed/seen surface view around a point; absent columns unknown. Not live-verified.
 - [ ] **P2 · `ground_at {x,z}`** — one-column form of `terrain` (`ctl`). Site picking, `travel` with omitted y.
 - [ ] **P2 · entity detail** — `inspect_target` on entities: health if visible, hostile/passive class, tameable/harvestable hints (`mod`).
 
@@ -113,7 +113,7 @@ Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 ## 10. Navigation (`goto`, `setGoal`, `stop`, goals, movements, `path_update`)
 
 - [x] `move_to` — bounded route, level/±1, replan, arrivalRadius.
-- [~] `travel`, `explore` — legs + detours; not live-verified. Every `walk` beyond 12 blocks now surveys toward the target (straight, then ±50° if no full corridor) and follows a coarse corridor leg by leg (`success|partial|noPath`, pathfinder partial-path semantics) before the final fine leg; `no_visible_route` hands over to the caller's stall recovery. Corridor status is reported in goal progress. Fine planner takes diagonals. Near-field sampling widened to 8 blocks, -3/+6. See [navigation](docs/navigation.md).
+- [~] `travel`, `explore` — legs + detours; not live-verified. Every `walk` beyond 12 blocks now turns toward the target and reads the vision feed (straight, then ±50° if no full corridor) and follows a coarse corridor leg by leg (`success|partial|noPath`, pathfinder partial-path semantics) before the final fine leg; `no_visible_route` hands over to the caller's stall recovery. Corridor status is reported in goal progress. Fine planner takes diagonals. Near-field sampling widened to 8 blocks, -3/+6. See [navigation](docs/navigation.md).
 - [x] `set_poi`, `pois` — session memory.
 - [ ] **P0 · `GoalGetToBlock` / interact-range arrival** — `move_to {target:blockKey}` stops when the cell is within the player's native `pickingrange` and visible, not at a coordinate (`nav`, `ctl`). Every block goal re-implements this today.
 - [ ] **P1 · `GoalFollow` / `follow {target:entity,range}`** — track a moving entity, re-plan on movement (`nav`, `goal`). Hunting, co-op.

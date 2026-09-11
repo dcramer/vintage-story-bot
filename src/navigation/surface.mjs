@@ -1,23 +1,27 @@
 import { horizontal, normalize } from './terrain.mjs';
 
-// Long-range landscape memory: one sight-verified surface sample per column
-// from the mod's survey, coarser with distance. This is what the player saw,
-// not the world: absent columns are unknown, never air or ground.
+// Long-range landscape memory: one sight-verified surface sample per column,
+// streamed by the mod as the camera moves and coarser with distance. This is
+// what the player has seen, not the world: absent columns are unknown, never
+// air or ground. Deltas arrive beside terrain deltas under their own cursor.
 const columnKey = (x, z) => `${x},${z}`;
 const steps = [1, 2, 4];
 const directions = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 export class SurfaceMemory {
-  columns = new Map(); ttlMs = 300000; capacity = 32768;
-  apply(page, now = Date.now()) {
-    if (!page?.ok || page.dimension !== 0) return 0;
-    for (const [x, z, y, kind, step, code] of page.columns ?? [])
-      this.columns.set(columnKey(x, z), { x, z, y, kind, step, code, at: now });
-    return page.columns?.length ?? 0;
-  }
-  prune(now = Date.now()) {
-    for (const [id, column] of this.columns) if (now - column.at > this.ttlMs) this.columns.delete(id);
+  columns = new Map(); session = null; cursor = 0; now = 0; ttlMs = 300000; capacity = 32768;
+  apply(batch) {
+    if (!batch) return 0;
+    if (batch.reset || batch.session !== this.session) this.columns.clear();
+    this.session = batch.session; this.cursor = batch.cursor; this.now = batch.clock;
+    for (const [x, z, y, kind, step, code, at] of batch.columns ?? []) {
+      const id = columnKey(x, z);
+      if (y === null || y === undefined) this.columns.delete(id);
+      else this.columns.set(id, { x, z, y, kind, step, code, at: at ?? this.now });
+    }
+    for (const [id, column] of this.columns) if (this.now - column.at > this.ttlMs) this.columns.delete(id);
     while (this.columns.size > this.capacity) this.columns.delete(this.columns.keys().next().value);
+    return batch.columns?.length ?? 0;
   }
   get(x, z) { return this.columns.get(columnKey(Math.floor(x), Math.floor(z))); }
   // Nearest sampled column around a point, honouring the coarse rings.
