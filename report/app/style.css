@@ -202,6 +202,8 @@ section, .card { display: block; padding: 18px; }
 /* Individual Seraph and event-log views */
 main.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
 .wide { grid-column: 1 / -1; }
+.live-view iframe { aspect-ratio: 16 / 9; width: 100%; max-width: calc(70vh * 16 / 9); margin: 0 auto; border: 0; border-radius: 4px; background: #000; display: block; }
+.live-view h2 a { font-weight: 400; margin-left: 8px; }
 .card:hover { border-color: var(--cyan); }
 .card.stale { opacity: .62; }
 h2 { color: var(--ink2); font-size: 11px; font-weight: 600; letter-spacing: .09em; margin: 0 0 10px; text-transform: uppercase; }

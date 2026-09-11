@@ -4,6 +4,14 @@ import os from 'node:os';
 // Telemetry: latest value per topic plus a bounded log, trimmed to fleet-relevant fields, one POST per interval. Never awaited
 // by gameplay; a failed POST keeps the latest topics for the next interval and drops that batch's log lines.
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+// Public base of this host's live view; the fleet page frames `<stream>/bot/`. Only web origins, no path, credentials or query.
+function streamOrigin(value) {
+  if (!value) return null;
+  let url;
+  try { url = new URL(value); } catch { throw new Error('VINTAGE_STORY_STREAM_URL must be an absolute http(s) URL'); }
+  if (!/^https?:$/.test(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('VINTAGE_STORY_STREAM_URL must be an origin like https://diggy.stream.example.com');
+  return url.origin;
+}
 const polling = new Set(['observe', 'sense', 'inventory', 'inspect_target', 'block_action_status', 'block_action_continue', 'events', 'environment', 'recipes']);
 const pick = (source, keys) => source ? Object.fromEntries(keys.filter(k => source[k] !== undefined).map(k => [k, source[k]])) : source;
 const reduce = {
@@ -28,11 +36,11 @@ export class Reporter {
   static fromEnv(env = process.env) {
     if (!env.VINTAGE_STORY_REPORT_URL) return null;
     return new Reporter({ url: env.VINTAGE_STORY_REPORT_URL, token: env.VINTAGE_STORY_REPORT_TOKEN ?? '', id: env.VINTAGE_STORY_BOT_ID || os.hostname(),
-      intervalMs: Number(env.VINTAGE_STORY_REPORT_INTERVAL_MS) || 10000 });
+      intervalMs: Number(env.VINTAGE_STORY_REPORT_INTERVAL_MS) || 10000, stream: env.VINTAGE_STORY_STREAM_URL });
   }
-  constructor({ url, token, id, intervalMs = 10000, maxLog = 100, maxBytes = 98304, topicBytes = 16384, timeoutMs = 8000, fetch = globalThis.fetch }) {
+  constructor({ url, token, id, stream = null, intervalMs = 10000, maxLog = 100, maxBytes = 98304, topicBytes = 16384, timeoutMs = 8000, fetch = globalThis.fetch }) {
     if (!idPattern.test(id)) throw new Error('VINTAGE_STORY_BOT_ID must match ' + idPattern.source);
-    Object.assign(this, { url: new URL('/api/report', url).href, token, id, intervalMs, maxLog, maxBytes, topicBytes, timeoutMs, fetch });
+    Object.assign(this, { url: new URL('/api/report', url).href, token, id, stream: streamOrigin(stream), intervalMs, maxLog, maxBytes, topicBytes, timeoutMs, fetch });
     this.timer = setInterval(() => this.flush(), Math.max(1000, intervalMs)).unref();
   }
   publish(topic, data, { coalesce = false } = {}) {
@@ -49,7 +57,7 @@ export class Reporter {
     if (this.closed || this.inflight || (!this.latest.size && !this.log.length)) return this.inflight;
     const topics = Object.fromEntries(this.latest), log = this.log.splice(0);
     this.latest.clear();
-    const body = { bot: { id: this.id, host: os.hostname(), pid: process.pid, version: '0.1.0' }, at: Date.now(), topics, log };
+    const body = { bot: { id: this.id, host: os.hostname(), pid: process.pid, version: '0.1.0', ...(this.stream ? { stream: this.stream } : {}) }, at: Date.now(), topics, log };
     let text = JSON.stringify(body);
     if (text.length > this.maxBytes) { body.log = log.slice(-10); text = JSON.stringify(body); }
     if (text.length > this.maxBytes) { body.log = []; text = JSON.stringify(body); }

@@ -18,6 +18,16 @@ function Activity({ bot }) {
       <td class={stateClass(g.state) === 'bad' ? 'err' : stateClass(g.state) === 'good' ? 'ok' : ''}>{g.state}{g.reason ? ' — ' + g.reason : ''}</td>
       <td>{g.progress?.phase ? g.progress.phase.replace(/_/g, ' ') : ''}{phaseDetail(g.progress) ? ' · ' + phaseDetail(g.progress) : ''}</td></tr>; })}</tbody></table></div>;
 }
+// The host's own live view, reached through whatever tunnel that operator registered (VINTAGE_STORY_STREAM_URL). Only web
+// origins are framed; the HLS player is mediamtx's own page, so the fleet service never touches video.
+function Live({ stream }) {
+  if (typeof stream !== 'string' || !/^https?:\/\/[^/?#]+$/.test(stream)) return null;
+  const player = `${stream}/bot/`;
+  return <section class="wide live-view"><h2>Live view <a class="muted" href={player} target="_blank" rel="noopener">open ↗</a></h2>
+    <iframe src={player} title="Bot display" allow="autoplay; fullscreen" referrerpolicy="no-referrer" />
+    <small class="muted">HLS from this host's own tunnel, a few seconds behind. Off when the host is not streaming.</small>
+  </section>;
+}
 export function Bot({ id }) {
   const bot = bots.value[id];
   if (!bot) return <main><div class="empty">Bot "{id}" has not reported within the retention window.</div></main>;
@@ -26,6 +36,7 @@ export function Bot({ id }) {
   const hotbar = (s.hotbar ?? []).slice(0, 10);
   return <main class="grid detail">
     <div class="head wide"><b class="title">{bot.id}</b><Seen bot={bot} /><span class="muted">{bot.meta?.host}{bot.meta?.pid ? ` · pid ${bot.meta.pid}` : ''}{c?.session ? ` · session ${c.session.slice(0, 8)}` : ''}</span></div>
+    <Live stream={bot.meta?.stream} />
     <section class="wide">
       <h2>Goal</h2><GoalLine g={g} />
       <div class="body"><div><Completion g={g} />
