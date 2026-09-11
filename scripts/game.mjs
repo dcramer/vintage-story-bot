@@ -2,11 +2,11 @@
 import { writeFileSync } from 'node:fs';
 import { callUi, typeText } from '../src/operator/bot-window.mjs';
 import { displayStatus, ensureDisplay, stopDisplay } from '../src/operator/display.mjs';
-import { gameStatus, importWorld, listWorlds, startGame, stopGame } from '../src/operator/game.mjs';
+import { botProcesses, gameStatus, importWorld, listWorlds, startGame, stopGame } from '../src/operator/game.mjs';
 
 const usage = `Usage: game.mjs <command>
   start [--world NAME | --new NAME [--play-style STYLE] | --server HOST[:PORT]] [--display :N] [--size WxH] [--no-wait] [--timeout SEC]
-  stop [--force]            SIGTERM = game's own window-close path (saves); --force SIGKILLs after the timeout
+  stop [--force]            window-close request = game's own saving exit path; --force SIGKILLs after the timeout
   status | worlds | import <file.vcdbs> [NAME]
   display start|stop|status [--display :N] [--size WxH]
   screenshot [FILE.png] | click X Y | key KEY | type   (type reads one line from stdin; operator sign-in only)`;
@@ -40,7 +40,10 @@ async function run() {
     case 'import': return print(importWorld(positional[0] ?? fail(usage), positional[1]));
     case 'display':
       if (positional[0] === 'start') return print(await ensureDisplay(screen));
-      if (positional[0] === 'stop') return print(await stopDisplay());
+      if (positional[0] === 'stop') {
+        if (botProcesses().length) return fail('Stop the bot client first; killing its display would crash it without saving.');
+        return print(await stopDisplay());
+      }
       if (positional[0] === 'status') return print(await displayStatus());
       return fail(usage);
     case 'screenshot': {

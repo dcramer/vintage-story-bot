@@ -51,7 +51,7 @@ const gameArgs = [
   ...gameArguments(config, botData, { modRoot: wsl ? '' : modRoot, redact: dryRun }),
 ];
 console.log(`Bot profile: ${botData}`);
-console.log('Sign in with the bot account if needed, then enter .aibridge on after joining.');
+console.log('Sign in with the bot account if needed; the bridge listens once a world is loaded.');
 if (dryRun) {
   console.log(JSON.stringify({ command, args: gameArgs, cwd: gameDirectory }, null, 2));
 } else {

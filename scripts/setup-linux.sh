@@ -20,11 +20,6 @@ if (( ${#packages[@]} )); then
     command -v apt-get >/dev/null || { echo "Install xvfb, x11-xkb-utils, xdotool, imagemagick and bubblewrap with your package manager." >&2; exit 1; }
     ( cd "$downloads" && apt-get download "${packages[@]}" )
     for deb in "$downloads"/*.deb; do dpkg -x "$deb" "$x11"; done
-    # libnettle's package name differs between releases; other unresolved libraries are reported below.
-    if LD_LIBRARY_PATH="$x11/usr/lib/x86_64-linux-gnu" ldd "$x11/usr/bin/Xvfb" 2>/dev/null | grep -q 'libnettle.*not found'; then
-        nettle=libnettle8t64; apt-cache policy "$nettle" 2>/dev/null | grep -q Candidate || nettle=libnettle8
-        ( cd "$downloads" && apt-get download "$nettle" ) && dpkg -x "$downloads"/libnettle*.deb "$x11"
-    fi
 fi
 
 missing=()
@@ -40,4 +35,4 @@ if (( ${#missing[@]} )); then
     echo "Missing: ${missing[*]}" >&2
     exit 1
 fi
-echo "Headless prerequisites ready: $(have Xvfb && echo Xvfb) $(have xkbcomp && echo xkbcomp) $(have xdotool && echo xdotool) import$(command -v bwrap >/dev/null && echo ' bwrap')"
+echo "Headless prerequisites ready: Xvfb xkbcomp xdotool import$(command -v bwrap >/dev/null && echo ' bwrap')"

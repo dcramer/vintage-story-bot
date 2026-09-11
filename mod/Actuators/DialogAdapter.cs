@@ -12,8 +12,12 @@ public sealed class DialogAdapter(ICoreClientAPI api)
 {
     private static readonly FieldInfo Interactive = typeof(GuiComposer).GetField("interactiveElements", BindingFlags.Instance | BindingFlags.NonPublic)!;
     private static readonly FieldInfo Static = typeof(GuiComposer).GetField("staticElements", BindingFlags.Instance | BindingFlags.NonPublic)!;
-    // Native buttons that destroy data or bypass the operator's own leave/stop path.
-    private static readonly string[] Refused = ["deletebtn", "delete world"];
+    // Native buttons that destroy data, by composer key (texts are localized).
+    private static readonly HashSet<string> RefusedKeys = new(StringComparer.OrdinalIgnoreCase) { "deletebtn" };
+
+    // Open dialogs that take the player's inputs away from the world; shared with AiBridgeMod.CanControl.
+    public static bool BlocksControl(GuiDialog dialog) =>
+        dialog.DialogType == EnumDialogType.Dialog || dialog.CaptureAllInputs() || dialog.DisableMouseGrab;
 
     private IEnumerable<GuiDialog> OpenDialogs() => api.Gui.OpenedGuis.Where(dialog => dialog.IsOpened());
 
@@ -26,6 +30,7 @@ public sealed class DialogAdapter(ICoreClientAPI api)
             name = dialog.DebugName,
             type = dialog.DialogType.ToString(),
             capturesInput = dialog.CaptureAllInputs(),
+            blocksControl = BlocksControl(dialog),
             elements = Elements(dialog).Select(entry => Describe(entry.Key, entry.Element)).ToArray(),
         }).ToArray(),
     };
@@ -46,25 +51,26 @@ public sealed class DialogAdapter(ICoreClientAPI api)
         if (matches.Length != 1) return new { ok = false, error = $"Expected one button matching {elementName}; found {matches.Length}. Use ui_dialogs keys or texts." };
         var (key, element) = matches[0];
         string text = TextOf(element) ?? "";
-        if (Refused.Contains(key.ToLowerInvariant()) || Refused.Contains(text.ToLowerInvariant()))
-            return new { ok = false, error = "Refused: destructive native button." };
+        if (RefusedKeys.Contains(key)) return new { ok = false, error = "Refused: destructive native button." };
         if (element is GuiElementControl { Enabled: false } || element is GuiElementTextButton { Visible: false })
             return new { ok = false, error = "Button is disabled or hidden." };
         var bounds = element.Bounds;
         int x = (int)Math.Round(bounds.absX + bounds.OuterWidth / 2), y = (int)Math.Round(bounds.absY + bounds.OuterHeight / 2);
         if (x < 0 || y < 0 || x >= api.Render.FrameWidth || y >= api.Render.FrameHeight)
             return new { ok = false, error = "Button center is outside the window; enlarge the display." };
-        if (api.World is not ClientMain client || client.clientSystems.OfType<GuiManager>().FirstOrDefault() is not GuiManager gui)
-            return new { ok = false, error = "GUI manager unavailable." };
-        // The GUI manager is the client system that turns window mouse events into dialog input.
+        if (api.World is not ClientMain client) return new { ok = false, error = "Client unavailable." };
+        var dialog = dialogs[0];
+        if (!dialog.ShouldReceiveMouseEvents()) return new { ok = false, error = "Dialog does not accept mouse input right now." };
+        // Deliver the click to the named dialog only, as GuiManager would once it reached it, so no other open dialog can swallow it.
         client.MouseCurrentX = x;
         client.MouseCurrentY = y;
-        gui.OnMouseMove(new MouseEvent(x, y, 0, 0));
+        dialog.OnMouseMove(new MouseEvent(x, y, 0, 0));
         var down = new MouseEvent(x, y, EnumMouseButton.Left, 0);
-        gui.OnMouseDown(down);
+        dialog.OnMouseDown(down);
         var up = new MouseEvent(x, y, EnumMouseButton.Left, 0);
-        gui.OnMouseUp(up);
-        return new { ok = true, dialog = dialogName, element = key, text, x, y, handled = down.Handled || up.Handled, stillOpen = dialogs[0].IsOpened() };
+        dialog.OnMouseUp(up);
+        if (!down.Handled && !up.Handled) return new { ok = false, error = "Dialog did not handle the click at the button center.", x, y };
+        return new { ok = true, dialog = dialogName, element = key, text, x, y, stillOpen = dialog.IsOpened() };
     }
 
     // A dialog may register one composer under several names; report each element once.

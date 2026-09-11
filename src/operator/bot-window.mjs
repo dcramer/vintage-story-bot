@@ -1,18 +1,18 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, access } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { access } from 'node:fs/promises';
+import { existsSync, realpathSync } from 'node:fs';
 import { z } from 'zod';
-import { currentDisplay, root, tool, toolEnv, x11Root } from './display.mjs';
+import { currentDisplay, processArgv, readJson, root, tool, toolEnv, x11Root } from './display.mjs';
 
 const exec = promisify(execFile);
 const localMagick = `${x11Root}/usr/lib/x86_64-linux-gnu/ImageMagick-6.9.12`;
 const localImport = existsSync(`${x11Root}/usr/bin/import`) && existsSync(`${localMagick}/modules-Q16/coders/png.so`);
 
-// Managed headless display wins; WSLg defaults to :0 when MCP strips the environment.
-async function uiEnv() {
+// Display the client was started on (managed or adopted) wins; WSLg defaults to :0 when MCP strips the environment.
+export async function uiEnv() {
   const headless = await currentDisplay();
-  const display = headless?.display ?? process.env.DISPLAY ?? (existsSync('/mnt/wslg') ? ':0' : undefined);
+  const display = headless?.display ?? readJson(`${root}/.runtime/game/state.json`)?.display ?? process.env.DISPLAY ?? (existsSync('/mnt/wslg') ? ':0' : undefined);
   return {
     headless: Boolean(headless),
     env: {
@@ -31,8 +31,8 @@ export const uiTools = [
     description: 'Capture only the WSL bot window. Works in menus without the bridge. Use before menu input; never capture login secrets.' },
   { name: 'ui_click', schema: z.object({ x: z.number().int().min(0), y: z.number().int().min(0) }).strict(),
     description: 'Left-click bot menu at screenshot pixel coordinates; one targeted click, no retries. Inspect screenshot first. Not for world interaction.' },
-  { name: 'ui_key', schema: z.object({ key: z.enum(['Escape', 'Return', 'Tab', 'Up', 'Down', 'Left', 'Right', 'F7', 'F8']) }).strict(),
-    description: 'Send a key directly to the bot. Escape opens/closes menu; F7 explicitly enables bridge, F8 disables. No retries.' },
+  { name: 'ui_key', schema: z.object({ key: z.enum(['Escape', 'Return', 'Tab', 'Up', 'Down', 'Left', 'Right']) }).strict(),
+    description: 'Send a key directly to the bot. Escape opens/closes the pause menu. No retries.' },
 ];
 
 async function xdo(args, env) {
@@ -47,13 +47,24 @@ export function isBotCommand(argv, repository = root) {
     argv.includes(`--dataPath=${repository}/.runtime/bot-data`);
 }
 
+function realpath(file) {
+  try { return realpathSync(file); } catch { return file; }
+}
+
+// Any client on this profile, whichever checkout launched it (paths may reach the profile through symlinks).
+export function isBotProcess(argv, repository = root) {
+  return isBotCommand(argv, repository) || (argv.some(arg => /(^|\/)Vintagestory\.dll$/.test(arg)) &&
+    argv.some(arg => arg.startsWith('--dataPath=') && realpath(arg.slice('--dataPath='.length)) === realpath(`${repository}/.runtime/bot-data`)));
+}
+
 export function validateClick({ x, y }, { width, height }) {
   if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= width || y >= height) {
     throw new Error('Click outside bot window. Capture a fresh screenshot.');
   }
 }
 
-async function botWindow(env) {
+// The one window whose process is the bot client; rejects zero or several matches.
+export async function botWindow(env) {
   let ids;
   try { ids = (await xdo(['search', '--onlyvisible', '--name', '^Vintage Story$'], env)).split(/\s+/); }
   catch { throw new Error('No bot window or xdotool unavailable. Launch with scripts/game.mjs start; see docs/runtime.md.'); }
@@ -62,9 +73,8 @@ async function botWindow(env) {
     if (!/^\d+$/.test(id)) continue;
     try {
       const pid = await xdo(['getwindowpid', id], env);
-      if (!/^\d+$/.test(pid)) continue;
-      const argv = (await readFile(`/proc/${pid}/cmdline`, 'utf8')).split('\0');
-      if (isBotCommand(argv)) matches.push(id);
+      const argv = /^\d+$/.test(pid) ? processArgv(pid) : null;
+      if (argv && isBotProcess(argv)) matches.push(id);
     } catch { /* Window exited during discovery. */ }
   }
   if (matches.length !== 1) throw new Error(`Expected one matching bot window; found ${matches.length}. No input sent.`);
@@ -113,12 +123,18 @@ export async function callUi(name, input) {
   return { content: [{ type: 'text', text: '{"ok":true,"status":"input_sent"}' }] };
 }
 
-// Operator sign-in only: text arrives on stdin so credentials never appear in process arguments or logs.
+// Operator sign-in only: the text reaches xdotool on stdin, never as an argument, and failures never echo it.
 export async function typeText(text) {
   if (typeof text !== 'string' || !text.length || text.length > 256 || /[\r\n]/.test(text)) throw new Error('Text must be one line of at most 256 characters.');
   const ui = await uiEnv();
   const window = await botWindow(ui.env);
   await focusBot(window, ui);
-  await xdo(['type', '--window', window.id, '--delay', '30', text], ui.env);
+  const command = tool('xdotool');
+  await new Promise((resolve, reject) => {
+    const child = execFile(command, ['type', '--window', window.id, '--delay', '30', '--file', '-'], { env: ui.env, timeout: 5000 + 40 * text.length },
+      error => (error ? reject(new Error(`xdotool type failed (${error.code ?? error.signal ?? 'error'}).`)) : resolve()));
+    child.stdin.on('error', () => {});
+    child.stdin.end(text);
+  });
   return { ok: true, characters: text.length };
 }

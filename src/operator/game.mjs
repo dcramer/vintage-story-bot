@@ -1,10 +1,10 @@
 // Bot client lifecycle on the headless display: start, status, stop, saves. Operator-only; never imports gameplay code.
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { currentDisplay, ensureDisplay, listProcesses, root, tool, toolEnv } from './display.mjs';
+import { currentDisplay, ensureDisplay, listProcesses, readJson, root, toolEnv } from './display.mjs';
 import { gameArguments, loadLaunchConfig, updateCharacterName, updateWindowSettings } from './launch-config.mjs';
-import { isBotCommand } from './bot-window.mjs';
+import { botWindow, isBotProcess } from './bot-window.mjs';
 import { requestWindowClose } from './x11.mjs';
 
 export const paths = {
@@ -25,12 +25,10 @@ const phaseMarkers = [
 ];
 
 export function botProcesses() {
-  return listProcesses().filter(({ argv }) => isBotCommand(argv, root));
+  return listProcesses().filter(({ argv }) => isBotProcess(argv, root));
 }
 
-function readState() {
-  try { return JSON.parse(readFileSync(paths.state, 'utf8')); } catch { return null; }
-}
+const readState = () => readJson(paths.state);
 
 // Game log timestamps are d.M.yyyy H:mm:ss local time.
 function logLinesSince(file, since) {
@@ -53,23 +51,24 @@ function phaseFrom(lines) {
   return phase;
 }
 
-function windowId(display) {
-  const xdotool = tool('xdotool');
-  if (!xdotool || !display) return null;
-  try {
-    return execFileSync(xdotool, ['search', '--onlyvisible', '--name', '^Vintage Story$'], { env: toolEnv(display), timeout: 3000 }).toString().trim().split(/\s+/)[0] || null;
-  } catch { return null; }
+// Pid-verified bot window on the display, or null while none is mapped.
+async function windowId(display) {
+  if (!display) return null;
+  try { return (await botWindow(toolEnv(display))).id; } catch { return null; }
+}
+
+function currentPhase(state, processes) {
+  if (!processes.length) return state ? 'exited' : 'stopped';
+  return phaseFrom(logLinesSince(`${paths.botData}/Logs/client-main.log`, state ? Date.parse(state.startedAt) : 0));
 }
 
 export async function gameStatus() {
   const state = readState();
   const processes = botProcesses();
-  const display = await currentDisplay();
-  const since = state ? Date.parse(state.startedAt) : 0;
-  const phase = !processes.length ? (state ? 'exited' : 'stopped') : phaseFrom(logLinesSince(`${paths.botData}/Logs/client-main.log`, since));
+  const display = (await currentDisplay())?.display ?? state?.display ?? null;
   return {
-    phase, pids: processes.map(({ pid }) => pid), display: display?.display ?? null,
-    window: processes.length ? windowId(display?.display ?? state?.display) : null,
+    phase: currentPhase(state, processes), pids: processes.map(({ pid }) => pid), display,
+    window: processes.length ? await windowId(display) : null,
     target: state?.target ?? null, startedAt: state?.startedAt ?? null,
   };
 }
@@ -122,11 +121,9 @@ export async function startGame({ world, create, playStyle, server, display, wid
   };
   writeFileSync(paths.state, JSON.stringify(state, null, 2));
   if (!wait) return { ...state, phase: 'starting' };
-  const status = await waitFor(async () => {
-    const current = await gameStatus();
-    return settled.has(current.phase) ? current : null;
-  }, timeoutMs);
-  return status ?? { ...(await gameStatus()), timedOut: true };
+  // Poll only the phase; window discovery and display probes run once the phase settles.
+  const done = await waitFor(async () => settled.has(currentPhase(state, botProcesses())), timeoutMs);
+  return { ...(await gameStatus()), ...(done ? {} : { timedOut: true }) };
 }
 
 // A window-close request takes the game's own exit path on its main thread (saves, stops the singleplayer server).
@@ -136,19 +133,24 @@ export async function stopGame({ timeoutMs = 90_000, force = false } = {}) {
   if (!processes.length) { rmSync(paths.state, { force: true }); return { stopped: false, reason: 'not running' }; }
   const since = Date.now();
   const display = (await currentDisplay())?.display ?? readState()?.display;
-  const window = windowId(display);
+  const window = await windowId(display);
   let method = 'sigterm';
   if (window) {
-    await requestWindowClose(display, window);
+    try { await requestWindowClose(display, window); }
+    catch (error) { return { stopped: false, method: 'close_request', error: error.message, pids: processes.map(({ pid }) => pid) }; }
     method = 'close_request';
   } else {
     for (const { pid } of processes) process.kill(pid, 'SIGTERM');
   }
-  const exited = await waitFor(async () => (botProcesses().length ? null : true), timeoutMs);
-  if (!exited && force) for (const { pid } of botProcesses()) process.kill(pid, 'SIGKILL');
+  let exited = await waitFor(async () => (botProcesses().length ? null : true), timeoutMs);
+  if (!exited && force) {
+    for (const { pid } of botProcesses()) process.kill(pid, 'SIGKILL');
+    exited = await waitFor(async () => (botProcesses().length ? null : true), 5000);
+  }
   const saved = logLinesSince(`${paths.botData}/Logs/server-main.log`, since).some(line => line.includes('World saved!'));
-  rmSync(paths.state, { force: true });
-  return { stopped: Boolean(exited) || (force && !botProcesses().length), method, saved, forced: !exited && force, pids: processes.map(({ pid }) => pid) };
+  // Keep the state of a client that is still running so a later stop can still find its display.
+  if (exited) rmSync(paths.state, { force: true });
+  return { stopped: Boolean(exited), method, saved, forced: force && Boolean(exited), pids: processes.map(({ pid }) => pid) };
 }
 
 export function listWorlds() {

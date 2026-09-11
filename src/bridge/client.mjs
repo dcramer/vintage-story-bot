@@ -48,7 +48,7 @@ export function requestBridge(request, { port = bridgePort(), timeoutMs = 4000, 
       }
     });
     socket.on('error', error => finish(new Error(
-      `Cannot reach Vintage Story bridge (${error.code ?? error.message}). Launch the bot, join a world, and press F7. Run MCP on the same OS as the bot.`,
+      `Cannot reach Vintage Story bridge (${error.code ?? error.message}). Launch the bot and load a world (pnpm game start); the mod listens once the world is ready. Run MCP on the same OS as the bot.`,
     )));
     socket.on('close', () => finish(new Error('Bridge closed without a complete response. The world may be paused or unloaded.')));
   });

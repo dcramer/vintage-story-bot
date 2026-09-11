@@ -19,8 +19,6 @@ public sealed partial class AiBridgeMod : ModSystem
     private ICoreClientAPI api = null!;
     private CancellationTokenSource? lifetime;
     private TcpListener? listener;
-    // Control opt-in (F7). The listener itself runs from world join so observe and native-dialog handling work before opt-in.
-    private bool enabled;
     private DialogAdapter dialogs = null!;
     private PausedDispatcher? pausedDispatcher;
     private long tickListener;
@@ -47,35 +45,9 @@ public sealed partial class AiBridgeMod : ModSystem
         blockActions = new BlockActions(api);
         dialogs = new DialogAdapter(api);
         api.Event.BlockChanged += blockActions.Changed;
-        api.ChatCommands.Create("aibridge")
-            .WithDescription("Control the local AI bridge")
-            .HandleWith(_ => TextCommandResult.Success("Use .aibridge on to enable, or .aibridge off to stop. F7 enables; F8 stops."))
-            .BeginSubCommand("on")
-                .WithDescription("Enable control of this client's player")
-                .HandleWith(_ => StartBridge())
-            .EndSubCommand()
-            .BeginSubCommand("off")
-                .WithDescription("Stop movement and disable the bridge")
-                .HandleWith(_ => { StopBridge(); return TextCommandResult.Success("AI bridge off."); })
-            .EndSubCommand();
-
-        api.Input.RegisterHotKey("aibridgestart", "Enable AI bridge", GlKeys.F7, HotkeyType.GUIOrOtherControls);
-        api.Input.SetHotKeyHandler("aibridgestart", _ =>
-        {
-            api.ShowChatMessage(StartBridge().StatusMessage);
-            return true;
-        });
-        api.Input.RegisterHotKey("aibridgestop", "Stop AI bridge", GlKeys.F8, HotkeyType.GUIOrOtherControls);
-        api.Input.SetHotKeyHandler("aibridgestop", _ =>
-        {
-            StopBridge();
-            api.ShowChatMessage("AI bridge off.");
-            return true;
-        });
         tickListener = api.Event.RegisterGameTickListener(OnTick, 20);
         pausedDispatcher = new PausedDispatcher(this);
         api.Event.RegisterRenderer(pausedDispatcher, EnumRenderStage.Done, "aibridge-paused");
-        api.Logger.Notification("[AI bridge] Registered .aibridge, F7 enable, F8 stop.");
         api.Event.LevelFinalize += OnLevelReady;
         api.Event.LeaveWorld += OnLeaveWorld;
     }
@@ -97,13 +69,10 @@ public sealed partial class AiBridgeMod : ModSystem
         inventory = new InventoryAdapter(api);
         blockActions.Reset();
         SampleLife();
-        bool registered = api.ChatCommands.Get("aibridge") != null;
-        api.Logger.Notification($"[AI bridge] World ready; command registered: {registered}");
+        // The bridge controls this client whenever a world is loaded; there is no in-game opt-in.
         string? failure = StartListener();
         if (failure != null) api.Logger.Error($"[AI bridge] {failure}");
-        api.ShowChatMessage(!enabled
-            ? "Seraph bridge ready. F7 enables bot control; F8 stops and disables it."
-            : "Seraph bridge enabled. F8 stops and disables bot control.");
+        api.ShowChatMessage(failure ?? $"Seraph bridge listening on 127.0.0.1:{Port}.");
     }
 
     private string? StartListener()
@@ -129,17 +98,6 @@ public sealed partial class AiBridgeMod : ModSystem
         lifetime = null;
         listener = null;
         while (requests.TryDequeue(out var pending)) pending.Completion.TrySetCanceled();
-    }
-
-    private TextCommandResult StartBridge()
-    {
-        if (api.World?.Player?.Entity == null)
-            return TextCommandResult.Error("Join your server or enter a test world first.");
-        if (enabled) return TextCommandResult.Success("AI bridge is already on.");
-        string? failure = StartListener();
-        if (failure != null) return TextCommandResult.Error(failure);
-        enabled = true;
-        return TextCommandResult.Success($"AI bridge listening on 127.0.0.1:{Port}. F8 stops it.");
     }
 
     // Networking only queues requests. All game access happens in OnTick.
@@ -188,23 +146,20 @@ public sealed partial class AiBridgeMod : ModSystem
 
     private void OnTick(float dt)
     {
-        if (enabled)
+        priorWorldInteraction ??= api.Input.MouseWorldInteractAnyway;
+        bool ready = CanControl();
+        api.Input.MouseWorldInteractAnyway = ready;
+        if (ready && api.World is ClientMain client)
         {
-            priorWorldInteraction ??= api.Input.MouseWorldInteractAnyway;
-            bool ready = CanControl();
-            api.Input.MouseWorldInteractAnyway = ready;
-            if (ready && api.World is ClientMain client)
-            {
-                // Center the game's picking ray, not the OS pointer. Normal interactions/packets still apply.
-                client.MouseCurrentX = client.Width / 2;
-                client.MouseCurrentY = client.Height / 2;
-            }
+            // Center the game's picking ray, not the OS pointer. Normal interactions/packets still apply.
+            client.MouseCurrentX = client.Width / 2;
+            client.MouseCurrentY = client.Height / 2;
         }
         SampleLife();
 
         DrainRequests();
 
-        if (enabled && CanControl())
+        if (CanControl())
         {
             try
             {
@@ -295,8 +250,6 @@ public sealed partial class AiBridgeMod : ModSystem
         if (api.World?.Player?.Entity == null)
             return new { ok = false, error = "Bridge requires an active world." };
         string name = action.GetString()!;
-        if (!enabled && !PreOptIn.Contains(name))
-            return new { ok = false, error = "Bot control is disabled; the player enables it with F7 or .aibridge on." };
         if (Mutations.Contains(name))
         {
             if (name != "stop" && control.Active)
@@ -345,13 +298,10 @@ public sealed partial class AiBridgeMod : ModSystem
 
     // Wire actions refused while a control lease owns the inputs; stop releases it first.
     private static readonly HashSet<string> Mutations = ["move_to", "move", "look", "aim_cell", "select", "interact", "attack", "stop", "respawn", "craft", "inventory_move", "block_action_begin", "block_action_continue", "select_recipe", "ui_activate"];
-    // Served before the player opts in: own-state reads and native dialogs (which block the F7 hotkey).
-    private static readonly HashSet<string> PreOptIn = ["observe", "ui_dialogs", "ui_activate"];
+    private bool CanControl() => api.World?.Player?.Entity?.Alive == true && !api.IsGamePaused &&
+        !api.Gui.OpenedGuis.Any(dialog => dialog.IsOpened() && DialogAdapter.BlocksControl(dialog));
 
-    private bool CanControl() => enabled && api.World?.Player?.Entity?.Alive == true && !api.IsGamePaused &&
-        !api.Gui.OpenedGuis.Any(dialog => dialog.IsOpened() &&
-            (dialog.DialogType == EnumDialogType.Dialog || dialog.CaptureAllInputs() || dialog.DisableMouseGrab));
-
+    // Releases every owned input; runs on world exit and mod disposal.
     private void StopBridge()
     {
         ReleaseControl("bridge_off");
@@ -364,7 +314,6 @@ public sealed partial class AiBridgeMod : ModSystem
             api.Input.MouseWorldInteractAnyway = priorWorldInteraction.Value;
             priorWorldInteraction = null;
         }
-        enabled = false;
     }
 
     public override void Dispose()

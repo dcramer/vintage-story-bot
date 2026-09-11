@@ -12,6 +12,7 @@ export default defineAction({
   destructive: true,
   description:
     'Click one native dialog button by sending the GUI mouse events a real click produces at that button\'s center. ' +
-    'Exactly one open dialog and one enabled button must match; delete-world buttons are refused. Works before F7 ' +
-    'opt-in so blocking dialogs (character creation, death) can be dismissed; verify with ui_dialogs/observe afterward.',
+    'Exactly one open dialog and one enabled button must match; delete-world buttons are refused. Served while paused so ' +
+    'blocking dialogs (character creation, death) can be dismissed; leaving the world is the operator\'s stop path. ' +
+    'Verify with ui_dialogs/observe afterward.',
 });

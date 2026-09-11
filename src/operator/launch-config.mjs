@@ -14,12 +14,14 @@ export function loadLaunchConfig(repository, botData, target = {}) {
   const envFile = path.join(repository, '.env');
   if (existsSync(envFile)) loadEnvFile(envFile);
   const create = target.create ?? '';
+  if ([create, target.world, target.server].filter(Boolean).length > 1) throw new Error('Choose one of --new, --world or --server.');
+  if (target.playStyle && !create) throw new Error('--play-style applies only with --new.');
   const world = create || target.world || (target.server ? '' : process.env.VINTAGE_STORY_WORLD || '');
   const server = world ? '' : target.server ?? process.env.VINTAGE_STORY_SERVER ?? '';
   if (create && (!validWorldName(create) || existsSync(path.join(botData, 'Saves', `${create}.vcdbs`)))) {
     throw new Error('--new must name a save that does not exist yet, without .vcdbs.');
   }
-  if (create && target.playStyle && !playStyles[target.playStyle]) {
+  if (create && target.playStyle && !Object.hasOwn(playStyles, target.playStyle)) {
     throw new Error(`--play-style must be one of ${Object.keys(playStyles).join(', ')}.`);
   }
   if (!create && world && (!validWorldName(world) || !existsSync(path.join(botData, 'Saves', `${world}.vcdbs`)))) {

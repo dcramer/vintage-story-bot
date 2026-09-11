@@ -42,7 +42,6 @@ public sealed partial class AiBridgeMod
                 climbing = entity.Controls.IsClimbing, sneaking = entity.Controls.Sneak, sprinting = entity.Controls.Sprint },
             condition = context.Condition(),
             paused = api.IsGamePaused,
-            bridgeEnabled = enabled,
             mouseGrabbed = api.Input.MouseGrabbed,
             controlReady = CanControl(),
             control = control.Observe(Environment.TickCount64),

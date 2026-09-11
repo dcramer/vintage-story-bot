@@ -11,5 +11,5 @@ export default defineAction({
   idempotent: true,
   description:
     'Cancel shared goal and release owned inputs. Optional expectedGoal rejects stopping a ' +
-    'different goal. Without guard, stops globally. F8 disables the bridge. Safe to repeat.',
+    'different goal. Without guard, stops globally. Safe to repeat.',
 });

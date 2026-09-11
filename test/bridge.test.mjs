@@ -155,6 +155,6 @@ test('UI restricts bot identity, keys and click bounds without touching a displa
     assert.throws(() => validateClick(point, { width: 1280, height: 720 }));
   }
   const key = uiTools.find(tool => tool.name === 'ui_key').schema;
-  assert.equal(key.safeParse({ key: 'F7' }).success, true);
+  assert.equal(key.safeParse({ key: 'Escape' }).success, true);
   assert.equal(key.safeParse({ key: 'Alt+F4' }).success, false);
 });
