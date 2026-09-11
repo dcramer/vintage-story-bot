@@ -4,7 +4,75 @@ Seraph is a bot system for Vintage Story: client C# mod → Node controller → 
 
 - Intent: let an LLM agent play the game as an ordinary survival player, assigning goals to a bot that senses, plans and acts through the real client, and prove that against live gameplay.
 - Bots are Seraphs: one codebase, many independent instances, each a separate game account and client with its own name (`VINTAGE_STORY_BOT_ID`; the user's own bot is Diggy Smalls). Instances share nothing at runtime except the optional fleet report service ([runtime](docs/runtime.md)).
-- The name is the game's own term for a player character; a Seraph is meant to be indistinguishable from one in what the server receives.
+
+## Terms
+
+Use Vintage Story's word when one exists; otherwise these, exactly. No new synonyms.
+
+Game:
+
+- **Seraph**: the game's name for a player character; here, one bot instance, indistinguishable from a human's in what the server receives.
+- **block code**: the game's asset id for a block, item or entity (`game:loosestick-free`); searches match substrings of it.
+- **selection**: the block or entity under the crosshair; every hand action applies to it.
+- **picking range**: how far the player can reach to break, place or use (`observe.pickingRange`).
+- **hotbar / backpack**: quick-select slots (zero-based) / carried bag slots.
+- **handbook**: the in-game guide to items and recipes; `recipes` reads it.
+- **satiety**: the hunger bar; "food" in thresholds means satiety percent.
+- **temporal stability**: the player's stability meter; near zero it slowly drains health.
+- **temporal storm**: a recurring world event that spawns drifters; travel and food work postpone while it is imminent or active.
+- **hostile**: a mob on the vanilla hostile list (drifter, shiver, bowtorn, wolf, bear…).
+- **knapping**: chipping flint or stone on a 16×16 grid into a tool head.
+- **clay forming**: shaping clay layer by layer into pottery.
+- **grid crafting**: the inventory's 3×3 crafting grid; output in slot 9.
+- **pit kiln**: a pit of fuel that fires raw pottery.
+
+Seraph system:
+
+- **mod**: the C# client mod; senses and applies inputs, one act per request, and keeps safety.
+- **controller**: the one shared Node process (`:42158`); owns the mod connection, memory and goals.
+- **wire action**: a request to the mod (`sense`, `control_frame`, `block_action_begin`); only the controller sends them.
+- **action**: one public query or command (`src/actions`); runs once and returns.
+- **goal**: one public long job (`src/goals`); started, polled by id, stopped; one runs at a time.
+- **skill**: a reusable Node behavior that goals compose (`src/skills`).
+- **task**: a goal's running body (`runField`); food and threat policy run only inside one.
+- **fieldwork**: the per-task helper (`Fieldwork`): walking, scanning, memory and interruption checks.
+- **capability**: a feature flag in `observe.capabilities`; check it, never the mod version.
+- **lease**: exclusive, time-limited control of inputs by one owner id; each frame renews it.
+- **frame**: one bounded input (keys and aim for 1–500 ms) under a lease.
+- **revoke**: the mod releasing every held input (stop, damage, death, menu, manual input, F8); nothing resumes.
+- **epoch**: control counter bumped on every revoke; a lease request with an old epoch is refused.
+- **session**: id of one mod load; a change resets cursors and memory and aborts the task.
+- **control ready**: `observe.controlReady`; world loaded, no blocking dialog, inputs will apply.
+- **vitals**: health, satiety and oxygen; damage, death and low vitals are life events.
+- **eye**: the mod's sampler that casts sightlines over the current view while the controller is sensing.
+- **eye loop**: the controller reading `sense` every 250 ms, with or without a goal.
+- **sightline**: a sampled ray from the eye; nothing is known unless one reached it.
+- **field of view**: what the client's camera actually shows (its vertical FOV setting and aspect).
+- **near field**: the 8-block disk sensed in every direction with exact collision boxes (docs also: awareness).
+- **far field**: surface columns seen inside the field of view, up to 64 blocks by day, a torch's reach at night.
+- **cell**: one block position (x,y,z).
+- **column**: one (x,z) with its visible standing height and kind: ground, canopy, water or hazard.
+- **hazard**: liquid or fire; routes keep a margin from it.
+- **unknown**: never seen, unloaded or expired; never air, never safe.
+- **sighting**: an entity, item or watched block the eye confirmed, with how (`seen`, `near`, `heard`) and when.
+- **heard**: a living entity within 16 blocks with no sightline; the one non-visual sense.
+- **watch**: the eye's attention list of block code substrings.
+- **sweep**: one completed pass of the eye over the current view.
+- **standing point**: a cell where the body fits and has support.
+- **route**: standing points joined by segments, each checked against memory before moving.
+- **corridor**: a coarse route over far-field columns toward a distant target.
+- **leg**: one piece of a route handed to the fine navigator (≤40 blocks); look again after each.
+- **frontier**: a route's end where the next cells are unknown; look there next.
+- **stall**: moving without progress; triggers a replan or recovery.
+- **clearance**: breaking up to three leaf blocks to escape a stall; never part of routing.
+- **threat**: a seen, heard or recently seen hostile inside its trigger radius; the route flees until it clears.
+- **forage**: picking food from the world (berries, mushrooms, wild crops) under a safety allowlist.
+- **yield**: a task pausing travel for higher priority (food, storm), keeping its progress.
+- **reject**: skipping a target for a while after a failed approach or action (docs also: quarantine).
+- **POI**: a named remembered point (`set_poi`, `pois`); the only named memory.
+- **verify**: confirm an effect by an observed change in blocks, inventory or life, never by acknowledgement.
+- **prediction**: an effect shown by the client that the server may still undo.
+- **operator**: a human using screenshots, clicks and keys; never part of gameplay.
 
 ## What we are building
 
