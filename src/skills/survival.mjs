@@ -97,7 +97,12 @@ export class Survival {
     field.report('harvesting', { target: target.key, food: foodCode });
     try {
       if (mushroomCode(foodCode) || detail.forage.kind === 'crop') {
-        const result = await changeBlock(field, 'dig', { target: target.key, point: detail.hit, slot, expectedItem: null });
+        const result = await changeBlock(field, 'dig', {
+          target: target.key, point: detail.hit, slot, expectedItem: null,
+          // Hand-harvestable forage should change quickly. Never spend the
+          // remaining starvation window renewing one unreachable server target.
+          timeoutMs: 12000,
+        });
         if (!result.ok) { field.reject(target, 120000); return; }
       } else {
         await field.send({ action: 'interact', durationMs: 1200, expectedTarget: target.key,

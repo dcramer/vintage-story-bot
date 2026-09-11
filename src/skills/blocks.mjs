@@ -5,7 +5,7 @@ import { ownedSlots } from './inventory.mjs';
 const faces = { north: [0, 0, -1], east: [1, 0, 0], south: [0, 0, 1], west: [-1, 0, 0], up: [0, 1, 0], down: [0, -1, 0] };
 const count = (inventory, code) => ownedSlots(inventory).filter(s => s.code === code).reduce((sum, s) => sum + s.quantity, 0);
 
-export async function changeBlock(field, kind, { target, point, face, slot, expectedItem, acceptTransform = false }) {
+export async function changeBlock(field, kind, { target, point, face, slot, expectedItem, acceptTransform = false, timeoutMs = 60000 }) {
   const [, dimension, x, y, z] = target.split(':');
   const cell = { x: Number(x), y: Number(y), z: Number(z) };
   if (Number(dimension) !== field.latest.position.dimension || Object.values(cell).some(n => !Number.isSafeInteger(n)))
@@ -31,6 +31,7 @@ export async function changeBlock(field, kind, { target, point, face, slot, expe
   let operation = await field.send({ action: 'block_action_begin', id, kind, target, ...(face ? { face } : {}),
     slot: held.slot, item: held.code, expectedState: inventory.state, allowStarvingRecovery: field.recoveringFood });
   let sequence = 0;
+  const deadline = Date.now() + timeoutMs;
   while (true) {
     await field.observe();
     if (operation.state === 'cancelled' || operation.state === 'failed')
@@ -47,6 +48,10 @@ export async function changeBlock(field, kind, { target, point, face, slot, expe
         return { ok: true, goal: `${kind}_block`, target, position: operation.position,
           before: operation.before, after: operation.after, ...(kind === 'place' ? { consumed } : {}),
           verification: 'client_observed', operation: id };
+    }
+    if (Date.now() >= deadline) {
+      await field.env.send({ action: 'stop' });
+      return { ok: false, reason: 'Block action timed out without an observed change', operation };
     }
     await field.wait(200);
     operation = await field.send({ action: kind === 'dig' && operation.state === 'working' ? 'block_action_continue' : 'block_action_status',

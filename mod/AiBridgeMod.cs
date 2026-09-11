@@ -32,6 +32,7 @@ public sealed class AiBridgeMod : ModSystem
     private string? handItem;
     private long handStopAt;
     private SceneSensor sensor = null!;
+    private SystemMouseInWorldInteractions? worldInteractions;
     private LifeTracker life = new();
     private InventoryAdapter inventory = null!;
     private ContextSensor context = null!;
@@ -90,6 +91,8 @@ public sealed class AiBridgeMod : ModSystem
 
     private void OnLevelReady()
     {
+        worldInteractions = (api.World as ClientMain)?.clientSystems
+            .OfType<SystemMouseInWorldInteractions>().FirstOrDefault();
         sensor.Reset();
         terrainSensor.Reset();
         control.Revoke("world_changed");
@@ -229,6 +232,17 @@ public sealed class AiBridgeMod : ModSystem
                 StopHandAction();
             else
                 SetHandButtons();
+        }
+        // Vanilla advances block/hand interactions from its final render pass. On a
+        // software-rendered or occluded client that pass can run far below the game
+        // tick rate, leaving a normal held click unable to make progress. Drive the
+        // same vanilla interaction system from the game tick while the bridge owns a
+        // hand action; elapsed game time still determines break/use speed and the
+        // usual callbacks, access checks and multiplayer packets remain authoritative.
+        if ((blockActions.Digging || handAction != null) && api.World is ClientMain interactionClient)
+        {
+            worldInteractions ??= interactionClient.clientSystems.OfType<SystemMouseInWorldInteractions>().FirstOrDefault();
+            worldInteractions?.OnFinalizeFrame(dt);
         }
         if (movingControls != null)
         {
