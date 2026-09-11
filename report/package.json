@@ -4,12 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --ip 127.0.0.1",
-    "deploy": "wrangler deploy",
+    "build": "vite build",
+    "dev": "vite build && wrangler dev --ip 127.0.0.1",
+    "dev:ui": "vite",
+    "deploy": "vite build && wrangler deploy",
     "login": "wrangler login",
     "secret": "wrangler secret put"
   },
   "devDependencies": {
+    "@preact/preset-vite": "2.10.6",
+    "vite": "8.3.0",
     "wrangler": "4.131.1"
+  },
+  "dependencies": {
+    "@preact/signals": "2.11.2",
+    "preact": "10.29.8",
+    "preact-iso": "2.12.2"
   }
 }

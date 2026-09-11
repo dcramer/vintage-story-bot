@@ -1,9 +1,9 @@
 import { DurableObject } from 'cloudflare:workers';
-import page from './fleet.html';
 
 // Fleet state service. Bots POST /api/report batches `{bot:{id,...},topics:{[topic]:{at,data}},log:[{topic,at,data}]}`;
 // the single Fleet object keeps the latest value per bot/topic plus a bounded log, evicts bots unseen for RETENTION_HOURS,
-// and pushes updates to browser WebSockets. Secrets: REPORT_TOKEN (required for writes), VIEW_TOKEN (optional, gates reads).
+// and pushes updates to browser WebSockets. Reads (API and the static SPA in dist/, see app/) require VIEW_TOKEN when set;
+// writes require REPORT_TOKEN.
 const topicRe = /^[a-z][a-z0-9_]{0,63}$/, idRe = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const maxBody = 131072, maxLog = 200, maxMeta = 128, persistMs = 30000, sweepMs = 900000;
 
@@ -36,9 +36,9 @@ export default {
           'set-cookie': `view=${encodeURIComponent(env.VIEW_TOKEN)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000` } });
       }
     }
-    if (url.pathname === '/') return new Response(page, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
     if (url.pathname === '/api/state' || url.pathname === '/api/ws') return fleet.fetch(request);
-    return json(404, { ok: false, error: 'Unknown route' });
+    if (url.pathname.startsWith('/api/')) return json(404, { ok: false, error: 'Unknown route' });
+    return env.ASSETS.fetch(request);
   },
 };
 
