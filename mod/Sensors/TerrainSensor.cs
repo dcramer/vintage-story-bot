@@ -46,7 +46,7 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
         if (pending.Count == 0 && now >= nextBatch)
         {
             var cells = new List<Cell>();
-            // The full eight-block awareness disk, three blocks down and six up,
+            // The full eight-block surroundings disk, three blocks down and six up,
             // so a slope or ledge is observed before the player stands under it.
             // Cells within four blocks refresh twice a second, the rest every
             // 1.5 seconds; a low frame rate then still keeps the body path fresh.

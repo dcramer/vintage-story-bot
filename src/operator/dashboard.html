@@ -50,6 +50,9 @@ canvas { width:100%; height:96px; display:block; }
 @media (max-width: 720px) { .goal .body { grid-template-columns:1fr; } }
 .goal .scroll { max-height:220px; }
 .goal .meter { grid-template-columns:64px 1fr 88px; }
+.live { aspect-ratio:16/9; width:100%; max-width:calc(70vh * 16 / 9); margin:0 auto; border:0; border-radius:4px; background:#000; display:block; }
+.live-links { margin-top:6px; font-size:12px; color:var(--ink2); }
+.live-links a { color:var(--accent); }
 </style>
 </head>
 <body>
@@ -60,6 +63,11 @@ canvas { width:100%; height:96px; display:block; }
   <span class="pill" id="age">no data</span>
 </header>
 <main>
+  <section class="wide">
+    <h2>Live view</h2>
+    <iframe class="live" id="live" title="Bot display" allow="autoplay" src="about:blank"></iframe>
+    <div class="live-links" id="live-links"></div>
+  </section>
   <section class="wide goal">
     <h2>Goal</h2>
     <div class="headline"><span class="kind" id="goal-kind">no goal</span><b id="goal-title"></b><span class="tags" id="goal-tags"></span></div>
@@ -153,7 +161,7 @@ const describe = {
   build: a => a.preset ? `${a.preset.kind} of ${code(a.preset.item)} at ${point(a.preset.origin)}`
     : `${a.cells?.length ?? 0} blocks: ${[...new Set((a.cells ?? []).map(c => code(c.item)))].join(', ')}`,
   dig_area: a => a.box ? `box ${point(a.box.from)} → ${point(a.box.to)}${a.tool ? ' with ' + a.tool.toLowerCase() : ''}` : `${a.cells?.length ?? 0} cells`,
-  travel: a => a.poi ? `to poi "${a.poi}"` : `to ${point(a)}`,
+  travel: a => a.waypoint ? `to waypoint "${a.waypoint}"` : `to ${point(a)}`,
   explore: a => `${a.legs} legs${a.heading != null ? ' from heading ' + Math.round(a.heading) + '°' : ''}`,
   use_on_block: a => `${a.item === null ? 'empty hand' : a.item ? code(a.item) : 'held item'} on ${a.target}${a.sneak ? ' (sneak)' : ''}`,
   collect_item: a => `${code(a.expectedItem)} (${a.target})`,
@@ -223,7 +231,7 @@ function renderGoal(g) {
 }
 function renderNav(n) {
   dl($('nav'), !n || n.state === 'idle' ? [['state', 'idle']] : [['state', n.state], ['target', n.target ? `${n.target.x.toFixed(1)}, ${n.target.y.toFixed(1)}, ${n.target.z.toFixed(1)}` : null],
-    ['waypoints left', n.remainingWaypoints], ['replans', n.replans], ['cached cells', n.cachedCells], ['reason', n.reason]]);
+    ['checkpoints left', n.remainingCheckpoints], ['replans', n.replans], ['cached cells', n.cachedCells], ['reason', n.reason]]);
 }
 function renderFrame(f) {
   dl($('frame'), !f ? [['frame', 'none']] : [['yaw / pitch', `${f.yawDegrees?.toFixed(0)}° / ${f.pitchDegrees?.toFixed(0)}°`],
@@ -297,6 +305,14 @@ setInterval(() => { const age = lastAt ? Math.round((Date.now() - lastAt) / 1000
   el.textContent = age == null ? 'no data' : age < 2 ? 'updated now' : `updated ${age}s ago`; el.className = 'pill ' + (age == null ? '' : age < 5 ? 'on' : 'off');
   if (goal?.active) $('goal-tags').innerHTML = [tag(goal.state, stateClass(goal.state)), tag('active', 'good'), tag(elapsed(goal))].join(''); }, 1000);
 renderGoal(null); renderNav(null); renderFrame(null);
+// Live view: mediamtx (pnpm game stream start) serves its own WebRTC player next to the RTSP/HLS endpoints; the
+// dashboard only frames it on the same host it was opened from.
+{
+  const host = location.hostname || 'localhost';
+  const webrtc = `http://${host}:8889/bot/`, hls = `http://${host}:8888/bot/`, rtsp = `rtsp://${host}:8554/bot`;
+  $('live').src = webrtc;
+  $('live-links').innerHTML = `If the picture stays black, start it with <code>pnpm game stream start</code>. Open the player alone: <a href="${webrtc}" target="_blank">WebRTC</a> · <a href="${hls}" target="_blank">HLS</a> · RTSP <code>${rtsp}</code>`;
+}
 </script>
 </body>
 </html>

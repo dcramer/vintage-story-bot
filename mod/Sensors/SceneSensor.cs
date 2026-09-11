@@ -85,7 +85,7 @@ internal sealed class SceneSensor(ICoreClientAPI api, Func<bool> canControl)
 
         var found = new List<object>();
         int rays = 0, cells = 0;
-        // Yield between pages, including empty terrain; distant searches never scan a whole volume in one tick.
+        // Pause between pages, including empty terrain; distant searches never scan a whole volume in one tick.
         while (watch.ElapsedMilliseconds < 12 && rays < 128 && cells < 32768 && found.Count < limit)
         {
             if (job.Pending.Count == 0)
@@ -112,7 +112,7 @@ internal sealed class SceneSensor(ICoreClientAPI api, Func<bool> canControl)
             rays++;
             var end = new Vec3d(candidate.Point.X, candidate.Point.Y, candidate.Point.Z);
             double distance = SceneGeometry.Distance(eye, candidate.Point);
-            // Never interpret an unloaded section of the sightline as empty air.
+            // Never interpret an unloaded section of the line of sight as empty air.
             bool loaded = true;
             for (int step = 0, steps = (int)Math.Ceiling(distance * 4); step <= steps; step++)
             {

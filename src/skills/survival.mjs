@@ -1,7 +1,7 @@
 import { horizontal, normalize } from '../navigation/terrain.mjs';
 import { sightRange, temporalStormUnsafe } from './fieldwork.mjs';
 import { changeBlock } from './blocks.mjs';
-import { clearFoliagePath } from './clearance.mjs';
+import { clearLeafPath } from './leaf-clearing.mjs';
 import { collectItem } from './collect-item.mjs';
 import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, ripeForage, termiteCode } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
@@ -28,7 +28,7 @@ export const harvestReady = (object, position, halfWidth = .3) => object.withinP
     position.z + halfWidth > Math.floor(object.point.z) && position.z - halfWidth < Math.floor(object.point.z) + 1));
 export const foodViewChanged = (view, state) => !view || horizontal(view.position, state.position) > 2 ||
   Math.abs(normalize(state.orientation.yawDegrees - view.yawDegrees + 180) - 180) > 15;
-export const stalledFoodRoute = (result, before, after) => !['arrived', 'yielded'].includes(result.state) &&
+export const stuckFoodRoute = (result, before, after) => !['arrived', 'paused'].includes(result.state) &&
   horizontal(before, after) <= 2;
 export const matchingFoodDrops = (objects, foodCode, point) => objects
   .filter(object => object.kind === 'item' && object.code === foodCode &&
@@ -38,7 +38,7 @@ export const matchingFoodDrops = (objects, foodCode, point) => objects
 // Hysteresis: prepare food below 20%. A successful recovery resumes travel at
 // 60% instead of consuming that buffer while searching for a local stockpile;
 // an already well-fed forced task may also finish with an ample reserve.
-// Navigation checks yieldWhen every sensing tick; food work owns no parallel inputs.
+// Navigation checks pauseWhen every sensing tick; food work owns no parallel inputs.
 export class Survival {
   tending = false;
   reserve = 0;
@@ -47,10 +47,10 @@ export class Survival {
   surveyed = false;
   desperateSurveyed = false;
   searchTarget = null;
-  searchStalls = 0;
+  stuckSearches = 0;
   lastFarView = null;
   constructor(field) { this.field = field; }
-  yieldWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : hunger(state) < .2 ? 'food_needed' : null;
+  pauseWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : hunger(state) < .2 ? 'food_needed' : null;
   eatWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : this.reserve > 0 && hunger(state) < .8 ? 'food_available' : null;
   async tend({ force = false, toward } = {}) {
     const field = this.field;
@@ -62,7 +62,7 @@ export class Survival {
     while (this.tending) {
       await field.observe(true);
       if (temporalStormUnsafe(field.latest)) throw Error('Temporal storm active or imminent; food work postponed.');
-      if (await field.evadeThreat(target => clearFoliagePath(field, target))) {
+      if (await field.evadeThreat(target => clearLeafPath(field, target))) {
         this.surveyed = false;
         this.searchTarget = null;
         continue;
@@ -84,7 +84,7 @@ export class Survival {
       // A single paged sweep finds both supported food families without enumerating unrelated blocks.
       const near = await field.scan(8, forageMatches, 'blocks');
       const ready = near.find(o => ripeForage(o) && accessibleForage(o) &&
-        harvestReady(o, field.latest.position, field.latest.body.halfWidth) && !field.rejected.has(o.key));
+        harvestReady(o, field.latest.position, field.latest.body.halfWidth) && !field.skipped.has(o.key));
       if (ready) {
         await this.harvest(ready);
         continue;
@@ -128,9 +128,9 @@ export class Survival {
         if (destination) {
           const before = { ...field.latest.position };
           const result = await field.walk(destination, this.eatWhen);
-          if (stalledFoodRoute(result, before, field.latest.position)) {
-            field.reject(target, 120000);
-            await clearFoliagePath(field, target.point);
+          if (stuckFoodRoute(result, before, field.latest.position)) {
+            field.skip(target, 120000);
+            await clearLeafPath(field, target.point);
           }
           continue;
         }
@@ -138,33 +138,33 @@ export class Survival {
         if (horizontal(field.latest.position, target.point) > 6 || elevationDetour) {
           const before = { ...field.latest.position };
           const result = await field.walk(field.explore(target.point, foodSearchDistance, elevationDetour), this.eatWhen);
-          if (stalledFoodRoute(result, before, field.latest.position)) {
-            field.reject(target, 120000);
-            await clearFoliagePath(field, target.point);
+          if (stuckFoodRoute(result, before, field.latest.position)) {
+            field.skip(target, 120000);
+            await clearLeafPath(field, target.point);
           }
           continue;
         }
-        field.reject(target, 30000);
+        field.skip(target, 30000);
       }
       const before = { ...field.latest.position };
       const destination = this.searchTarget ?? field.explore(toward, foodSearchDistance);
       const result = await field.walk(destination, this.eatWhen);
       const progress = horizontal(before, field.latest.position);
-      this.searchTarget = !['arrived', 'yielded'].includes(result.state) && progress > 2 ? destination : null;
-      if (stalledFoodRoute(result, before, field.latest.position)) {
-        this.searchStalls++;
-        const cleared = await clearFoliagePath(field, destination);
-        // A short sneaking step makes newly opened forage corridors useful
+      this.searchTarget = !['arrived', 'paused'].includes(result.state) && progress > 2 ? destination : null;
+      if (stuckFoodRoute(result, before, field.latest.position)) {
+        this.stuckSearches++;
+        const cleared = await clearLeafPath(field, destination);
+        // A short sneaking step makes newly cleared forage gaps useful
         // immediately while still refusing threats and unsupported ledges.
         const nudged = cleared ? await field.nudge(destination) :
-          this.searchStalls >= 3 ? await field.nudge(destination) : 0;
+          this.stuckSearches >= 3 ? await field.nudge(destination) : 0;
         if (cleared || nudged > .1) {
-          this.searchStalls = nudged > .1 ? 2 : 0;
+          this.stuckSearches = nudged > .1 ? 2 : 0;
           this.surveyed = false;
           this.desperateSurveyed = false;
           this.lastFarView = null;
         }
-      } else this.searchStalls = 0;
+      } else this.stuckSearches = 0;
       // The initial panorama is retained for this recovery episode. Each moved
       // viewpoint already refreshes its 32-block forward cone above; repeating
       // a full panorama every short leg burns the starvation window on RPC.
@@ -173,19 +173,19 @@ export class Survival {
   async harvest(target) {
     const field = this.field;
     await field.observe();
-    if (await field.evadeThreat(target => clearFoliagePath(field, target))) return;
+    if (await field.evadeThreat(target => clearLeafPath(field, target))) return;
     const slot = await emptyHand(field);
     await field.aim(target.look);
     const aimed = await field.observe();
-    if (aimed.target?.key !== target.key) { field.reject(target, 5000); return; }
+    if (aimed.target?.key !== target.key) { field.skip(target, 5000); return; }
     const detail = await field.send({ action: 'inspect_target' });
-    if (detail.key !== target.key || !ripeForage(detail)) { field.reject(target); return; }
+    if (detail.key !== target.key || !ripeForage(detail)) { field.skip(target); return; }
     await field.observe();
-    if (await field.evadeThreat(target => clearFoliagePath(field, target))) return;
+    if (await field.evadeThreat(target => clearLeafPath(field, target))) return;
     const foodCode = forageFoodCode(detail);
     const needsBreaking = breaksForage(detail);
     if (needsBreaking && detail.access?.buildOrBreak === false || !needsBreaking && detail.access?.use === false) {
-      field.reject(target, 300000);
+      field.skip(target, 300000);
       field.report('harvest_inaccessible', { target: target.key, food: foodCode });
       return;
     }
@@ -202,7 +202,7 @@ export class Survival {
           // remaining starvation window renewing one unreachable server target.
           timeoutMs: 12000,
         });
-        if (!result.ok) { field.reject(target, 120000); return; }
+        if (!result.ok) { field.skip(target, 120000); return; }
       } else {
         await field.send({ action: 'interact', durationMs: 1200, expectedTarget: target.key,
           expectedState: inventory.state, expectedItem: { slot, code: null } });
@@ -216,7 +216,7 @@ export class Survival {
         if (gain > 0) {
           this.harvested += gain;
           field.seen.delete(target.key);
-          field.reject(target, 120000);
+          field.skip(target, 120000);
           return;
         }
         await field.wait(200);
@@ -237,13 +237,13 @@ export class Survival {
           if (gain > 0) {
             this.harvested += gain;
             field.seen.delete(target.key);
-            field.reject(target, 120000);
+            field.skip(target, 120000);
             return;
           }
         }
       }
-      // No blind mutation retry: quarantine the sighting, inspect other food sources.
-      field.reject(target, 120000);
+      // No blind mutation retry: skip the sighting, inspect other food sources.
+      field.skip(target, 120000);
       field.report('harvest_unverified', { target: target.key });
     } finally {
       await field.env.send({ action: 'stop' });

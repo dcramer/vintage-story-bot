@@ -11,7 +11,7 @@ using Vintagestory.Client.NoObf;
 
 namespace VintageStoryAI;
 
-// Leased movement and aiming through the normal keyboard/mouse state; manual input or danger revokes.
+// Movement and aiming under a control hold, through the normal keyboard/mouse state; manual input or danger releases it.
 public sealed partial class AiBridgeMod
 {
     private EntityControls? movingControls;
@@ -21,7 +21,7 @@ public sealed partial class AiBridgeMod
     private bool moveSprint;
     private bool moveSneak;
     private long stopAt;
-    private readonly ControlLease control = new();
+    private readonly ControlHold control = new();
     private double controlYaw, controlPitch;
     private Cell? sensorPriority;
 
@@ -251,7 +251,7 @@ public sealed partial class AiBridgeMod
 
     private void RetainOwnedMovement(EnumEntityAction action, bool on, ref EnumHandling handling)
     {
-        // Retain only leased inputs against unfocused reset; normal control packets remain active.
+        // Retain only inputs held under control against unfocused reset; normal control packets remain active.
         long now = Environment.TickCount64;
         bool moving = movingControls != null && now < stopAt;
         bool sneakOwned = action is EnumEntityAction.Sneak or EnumEntityAction.ShiftKey &&
@@ -273,7 +273,7 @@ public sealed partial class AiBridgeMod
 
     private void ReleaseControl(string reason)
     {
-        control.Revoke(reason); sensorPriority = null; StopMovement();
+        control.Release(reason); sensorPriority = null; StopMovement();
     }
 
     private void ApplyCamera(float dt)

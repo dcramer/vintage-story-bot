@@ -10,7 +10,7 @@ function Card({ bot }) {
     <Meter name="health" vital={s.vitals?.health} lowAt={.3} /><Meter name="hunger" vital={s.vitals?.hunger} lowAt={.2} />
     <StateTags s={s} n={n} />
     <Dl rows={[['position', point(s.position)],
-      ['navigation', n && n.state !== 'idle' ? `${n.state}${n.target ? ' → ' + point(n.target) : ''}${n.remainingWaypoints != null ? ' · ' + n.remainingWaypoints + ' wp' : ''}` : null],
+      ['navigation', n && n.state !== 'idle' ? `${n.state}${n.target ? ' → ' + point(n.target) : ''}${n.remainingCheckpoints != null ? ' · ' + n.remainingCheckpoints + ' checkpoints' : ''}` : null],
       ['nearby', s.nearbyEntities?.count ? s.nearbyEntities.nearest.slice(0, 3).map(e => `${code(e.code)} ${Math.round(e.distance)}`).join(', ') + (s.nearbyEntities.count > 3 ? ` +${s.nearbyEntities.count - 3}` : '') : null]]} />
   </a>;
 }

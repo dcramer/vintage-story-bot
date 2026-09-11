@@ -21,8 +21,8 @@ export class Navigation {
   get active() { return ['surveying', 'moving'].includes(this.state); }
   observe() {
     return { id: this.id, state: this.state, reason: this.reason, target: this.target,
-      remainingWaypoints: Math.max(0, this.route.length - this.index), replans: this.replans, segments: this.segments,
-      cachedCells: this.map.cells.size, lookingAt: this.lookingAt, nextWaypoint: this.nextWaypoint,
+      remainingCheckpoints: Math.max(0, this.route.length - this.index), replans: this.replans, segments: this.segments,
+      cachedCells: this.map.cells.size, lookingAt: this.lookingAt, nextCheckpoint: this.nextCheckpoint,
       desiredYaw: this.desiredYaw, yawError: this.yawError, lastReplan: this.lastReplan, diagnostics: this.diagnostics,
       evading: this.evading, threat: this.threat, threats: this.threats };
   }
@@ -34,7 +34,7 @@ export class Navigation {
   }
   replan(p, now, reason) {
     this.lastReplan = reason;
-    if (['stalled', 'jump_failed'].includes(reason)) this.blocked.add(`${key(this.edgeStart)}>${key(this.route[this.index])}`);
+    if (['stuck', 'jump_failed'].includes(reason)) this.blocked.add(`${key(this.edgeStart)}>${key(this.route[this.index])}`);
     if (++this.replans > 12) return this.finish('blocked', reason);
     this.survey(now); this.lastProgress = p; this.progressAt = now;
     return null;
@@ -86,24 +86,24 @@ export class Navigation {
       ? map.jumpTraverse(from, to, w, h)
       : map.traverse(from, to, w, h, recenter, undefined,
         typeof map.dry === 'function' && !map.dry(from, w, h));
-    const reached = waypoint => {
-      if (distance(p, waypoint) < (waypoint.recenter ? .1 : .3)) return true;
-      if (waypoint.recenter) return false;
+    const reached = checkpoint => {
+      if (distance(p, checkpoint) < (checkpoint.recenter ? .1 : .3)) return true;
+      if (checkpoint.recenter) return false;
       // A bounded frame can carry the player more than one block between slow
-      // client samples. Accept a crossed intermediate waypoint only while the
+      // client samples. Accept a crossed intermediate checkpoint only while the
       // observed position remains close to its validated route segment.
-      const dx = waypoint.x - this.edgeStart.x, dz = waypoint.z - this.edgeStart.z;
+      const dx = checkpoint.x - this.edgeStart.x, dz = checkpoint.z - this.edgeStart.z;
       const length = Math.hypot(dx, dz);
-      const lateral = length > .01 ? Math.abs((p.x - waypoint.x) * dz - (p.z - waypoint.z) * dx) / length : Infinity;
+      const lateral = length > .01 ? Math.abs((p.x - checkpoint.x) * dz - (p.z - checkpoint.z) * dx) / length : Infinity;
       const overshoot = this.target.sprint ? 4 : 2.5;
-      return horizontal(waypoint, this.target) > 1 && Math.abs(p.y - waypoint.y) < .1 &&
-        horizontal(p, waypoint) < overshoot && lateral < w + .2 && dx * dx + dz * dz > .01 &&
-        (p.x - waypoint.x) * dx + (p.z - waypoint.z) * dz >= 0 && traverse(this.edgeStart, p);
+      return horizontal(checkpoint, this.target) > 1 && Math.abs(p.y - checkpoint.y) < .1 &&
+        horizontal(p, checkpoint) < overshoot && lateral < w + .2 && dx * dx + dz * dz > .01 &&
+        (p.x - checkpoint.x) * dx + (p.z - checkpoint.z) * dz >= 0 && traverse(this.edgeStart, p);
     };
-    let advancedWaypoint = false;
+    let advancedCheckpoint = false;
     while (this.index < this.route.length && grounded && map.support(p, w) === 9 && reached(this.route[this.index])) {
       this.edgeStart = this.route[this.index++]; this.jumpAt = 0; this.landing = false; this.progressAt = now; this.lastProgress = p;
-      advancedWaypoint = true;
+      advancedCheckpoint = true;
     }
     if (this.index >= this.route.length) {
       const id = key(p); this.visits.set(id, (this.visits.get(id) ?? 0) + 1);
@@ -118,13 +118,13 @@ export class Navigation {
       this.index = ahead; this.edgeStart = p; skippedAhead = true;
     }
     const next = this.route[this.index];
-    this.nextWaypoint = next;
+    this.nextCheckpoint = next;
     if (this.evading && !next.recenter && !this.avoid.every(item => horizontal(next, item.point) >= item.minimumDistance)) {
       this.target = fleeTarget(p, threats); this.survey(now); return null;
     }
     const nextSupport = map.support(next, w), nextClear = map.clear(next, w, h);
     if (nextSupport !== 9 || !nextClear) {
-      this.diagnostics = { kind: 'waypoint_invalid', point: next, support: nextSupport, clear: nextClear,
+      this.diagnostics = { kind: 'checkpoint_invalid', point: next, support: nextSupport, clear: nextClear,
         dry: typeof map.dry !== 'function' || map.dry(next, w, h) };
       return grounded ? this.replan(p, now, 'terrain_changed') : this.finish('blocked', 'landing_changed');
     }
@@ -132,7 +132,7 @@ export class Navigation {
     if (this.jumpAt && grounded && this.airborneDuringJump && Math.abs(p.y - next.y) < .06) {
       this.jumpAt = 0; this.landing = true; this.airborneDuringJump = false;
     }
-    const recenter = advancedWaypoint || skippedAhead || this.landing || this.index === 0 ||
+    const recenter = advancedCheckpoint || skippedAhead || this.landing || this.index === 0 ||
       Math.floor(p.x) === Math.floor(next.x) && Math.floor(p.z) === Math.floor(next.z);
     if (grounded && !this.jumpAt && !traverse(p, next, recenter)) {
       this.diagnostics = { kind: 'segment_invalid', from: p, point: next, recenter,
@@ -147,13 +147,13 @@ export class Navigation {
     this.yawError = angle(desiredYaw, state.orientation.yawDegrees);
     const yawMagnitude = Math.abs(this.yawError);
     // Camera convergence is real progress on a software-rendered remote client.
-    // A motionless camera still reaches the same bounded stall timeout.
+    // A motionless camera still reaches the same bounded stuck timeout.
     if (this.lastYawError !== undefined && yawMagnitude < this.lastYawError - .5) this.progressAt = now;
     this.lastYawError = yawMagnitude;
     // Remote correction and low render rates can take several sensed frames to
-    // turn an accepted input into visible motion. Keep the bounded lease fast,
+    // turn an accepted input into visible motion. Keep the bounded control hold fast,
     // but do not discard a still-valid route after only a handful of samples.
-    if (now - this.progressAt > 3000) return this.replan(p, now, 'stalled');
+    if (now - this.progressAt > 3000) return this.replan(p, now, 'stuck');
     const following = this.route[this.index + 1];
     const turn = following ? Math.abs(angle(lookAt(next, following).yawDegrees, desiredYaw)) : 0;
     const tight = horizontal(p, next) < 3 && (Math.abs(next.y - p.y) > .05 || turn > 20);
@@ -181,7 +181,7 @@ export class Navigation {
         sneak: tight && !this.jumpAt && (!descent || horizontal(p, next) > .8), durationMs };
     }
     // Once a descending step has left its upper support, release forward and
-    // let gravity settle onto the validated lower waypoint. Continuing to hold
+    // let gravity settle onto the validated lower checkpoint. Continuing to hold
     // forward while airborne can carry one bounded frame past a narrow shore.
     if (!grounded && next.y < this.edgeStart.y - .05)
       return { yawDegrees, pitchDegrees: 15, forward: false, jump: false, sprint: false, sneak: false, durationMs: 180 };

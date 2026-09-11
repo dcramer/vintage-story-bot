@@ -9,7 +9,7 @@ const attempt = fn => Effect.tryPromise({ try: fn, catch: error => error instanc
 
 export class Controller {
   active = null; last = null; closing = false;
-  session = randomUUID(); history = new Map(); pois = new Map();
+  session = randomUUID(); history = new Map(); waypoints = new Map();
   gate = Effect.runSync(Effect.makeSemaphore(1));
   constructor(send, telemetry = null) {
     this.game = new GameClient(send); this.telemetry = telemetry;
@@ -159,7 +159,7 @@ export class Controller {
       return yield* Effect.fail(new Error('Camera did not settle'));
     }));
   }
-  navigate(goal, record, started, yieldWhen, { allowStarvingRecovery = false } = {}) {
+  navigate(goal, record, started, pauseWhen, { allowStarvingRecovery = false } = {}) {
     const self = this;
     return Effect.scoped(Effect.gen(function* () {
       const initial = yield* self.snapshot();
@@ -181,10 +181,10 @@ export class Controller {
       let state = initial;
       let terrainMore = false;
       while (nav.active) {
-        const yielding = yieldWhen?.(state);
-        // Yield only on supported ground; a food task must not take over mid-jump.
-        if (yielding && state.motion.onGround && self.map.support(state.position, state.body.halfWidth) === 9) {
-          nav.finish('yielded', yielding);
+        const pausing = pauseWhen?.(state);
+        // Pause only on supported ground; a food task must not take over mid-jump.
+        if (pausing && state.motion.onGround && self.map.support(state.position, state.body.halfWidth) === 9) {
+          nav.finish('paused', pausing);
           break;
         }
         const frame = terrainMore ? null : nav.tick(state);
@@ -203,9 +203,9 @@ export class Controller {
         if (batch.terrain.reset) nav.survey(Date.now());
         terrainMore = batch.terrain.more;
         if (!nav.active) break;
-        const nextYield = yieldWhen?.(state);
-        if (nextYield && state.motion.onGround && self.map.support(state.position, state.body.halfWidth) === 9) {
-          nav.finish('yielded', nextYield); break;
+        const nextPause = pauseWhen?.(state);
+        if (nextPause && state.motion.onGround && self.map.support(state.position, state.body.halfWidth) === 9) {
+          nav.finish('paused', nextPause); break;
         }
         // Renew immediately after the sensed step, before deterministic route
         // planning on the next iteration. Repeating the already-vetted frame for
@@ -242,7 +242,7 @@ export class Controller {
         send, map: self.map, surface: self.surface, sightings: self.sightings, watch: list => self.game.attend(list),
         sync: () => run(self.snapshot()),
         aim: (angles, safety) => run(self.aim(angles, record, safety)),
-        navigate: (goal, yieldWhen, safety) => run(self.navigate(goal, record, undefined, yieldWhen, safety)),
+        navigate: (goal, pauseWhen, safety) => run(self.navigate(goal, record, undefined, pauseWhen, safety)),
         report: progress => { record.progress = progress; self.track(record, true); },
       }, { ...args, signal: cancellation.signal });
       record.result = yield* attempt(() => running);

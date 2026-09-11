@@ -22,7 +22,7 @@ export default defineGoal({
     for (let i = 0; i < legs; i++) {
       await survival?.tend();
       field.report('exploring', { leg: i + 1, legs });
-      const result = await field.walk(field.explore(), survival?.yieldWhen);
+      const result = await field.walk(field.explore(), survival?.pauseWhen);
       results.push(result.state);
       await field.scan(64, '', 'all');
     }

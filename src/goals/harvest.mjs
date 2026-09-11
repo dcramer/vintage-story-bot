@@ -21,7 +21,7 @@ export default defineGoal({
   description:
     'Dig visible blocks whose code contains match with the requested tool, walking between them, collecting matching drops and ' +
     'verifying carried gain until count. Transformed blocks (reeds → harvested) count when drops appear. Searches like gather_sticks; ' +
-    'no default deadline. Food management yields to berries below 20%. Damage/death/control loss interrupt. Returns START; poll goal_status.',
+    'no default deadline. Food management pauses for berries below 20%. Damage/death/control loss interrupt. Returns START; poll goal_status.',
   announce: args => `Off to gather ${cleanName(args.item ?? args.match)}.`,
   run: (env, options) => runField(env, { manageFood: true, ...options }, ['inventory', 'block_actions'], harvest),
 });

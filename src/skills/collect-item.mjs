@@ -42,7 +42,7 @@ export async function collectItem(field, { target, expectedItem, radius = 8 }) {
       carriedCount(state, expectedItem) - initialCount >= wanted ? 'pickup_observed' : null);
     gained = itemCount(await field.send({ action: 'inventory' }), expectedItem) - initialCount;
     if (gained >= wanted) return success(gained);
-    if (!['arrived', 'yielded'].includes(result.state))
+    if (!['arrived', 'paused'].includes(result.state))
       return { ok: false, reason: result.reason ?? 'pickup_route_blocked', target, wanted, gained };
     drop = find(await sight());
   }

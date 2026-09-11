@@ -35,7 +35,7 @@ export class SurfaceMemory {
     return best?.column ?? null;
   }
   // Standing columns only; water and fire are never route nodes and a column
-  // beside water costs extra so corridors keep off shorelines.
+  // beside water costs extra so rough routes keep off shorelines.
   neighbors(column) {
     const result = [];
     for (const [dx, dz] of directions) for (const step of steps) {
@@ -71,10 +71,10 @@ export function edgeCost(surface, from, to, { canopyCost = 1, shoreCost = 2, slo
 // Coarse A* over surveyed columns. status: success reaches the goal column,
 // partial ends at the known column nearest the goal that still makes progress,
 // noPath when nothing visible leads anywhere. Mirrors mineflayer-pathfinder's
-// partial-path semantics: a partial corridor is worth walking, then resurvey.
-export function planCorridor(surface, start, goal, { budget = 4096, penalty = () => 0, minimumProgress = 4 } = {}) {
+// partial-path semantics: a partial rough route is worth walking, then resurvey.
+export function planRoughRoute(surface, start, goal, { budget = 4096, penalty = () => 0, minimumProgress = 4 } = {}) {
   const origin = surface.nearest(start.x, start.z, 2);
-  if (!origin) return { status: 'noPath', reason: 'origin_unknown', waypoints: [] };
+  if (!origin) return { status: 'noPath', reason: 'origin_unknown', checkpoints: [] };
   const target = surface.nearest(goal.x, goal.z, 4);
   const goalReached = column => Math.hypot(column.x + .5 - goal.x, column.z + .5 - goal.z) <= Math.max(2, column.step);
   const remaining = column => Math.hypot(column.x + .5 - goal.x, column.z + .5 - goal.z);
@@ -92,7 +92,7 @@ export function planCorridor(surface, start, goal, { budget = 4096, penalty = ()
     if (closed.has(column)) continue;
     closed.add(column);
     if (goalReached(column) || target && column === target)
-      return { status: 'success', waypoints: simplify(path(column)), cost: costs.get(column), explored: closed.size };
+      return { status: 'success', checkpoints: simplify(path(column)), cost: costs.get(column), explored: closed.size };
     const progress = remaining(origin) - remaining(column);
     if (progress >= minimumProgress) {
       const score = remaining(column) + costs.get(column) * .15;
@@ -107,11 +107,11 @@ export function planCorridor(surface, start, goal, { budget = 4096, penalty = ()
       open.push({ column: next, score: cost + remaining(next) });
     }
   }
-  if (!best) return { status: 'noPath', reason: closed.size >= budget ? 'budget' : 'no_progress', waypoints: [], explored: closed.size };
-  return { status: 'partial', waypoints: simplify(path(best)), cost: costs.get(best), explored: closed.size };
+  if (!best) return { status: 'noPath', reason: closed.size >= budget ? 'budget' : 'no_progress', checkpoints: [], explored: closed.size };
+  return { status: 'partial', checkpoints: simplify(path(best)), cost: costs.get(best), explored: closed.size };
 }
 
-// Keep bends and a waypoint at least every twelve blocks; drop collinear
+// Keep bends and a checkpoint at least every twelve blocks; drop collinear
 // samples so a leg can aim at the far end of a straight stretch.
 export function simplify(columns, maxSpan = 12, turnDegrees = 20) {
   const points = columns.map(c => ({ x: c.x + .5, y: c.y, z: c.z + .5, kind: c.kind, step: c.step }));
@@ -135,15 +135,15 @@ export function simplify(columns, maxSpan = 12, turnDegrees = 20) {
   return result;
 }
 
-// The next leg to hand the fine navigator: the farthest corridor waypoint
+// The next leg to hand the fine navigator: the farthest rough-route checkpoint
 // within reach, so short bounded legs still follow the surveyed line.
-export function nextLeg(waypoints, from, { minDistance = 6, maxDistance = 40 } = {}) {
+export function nextLeg(checkpoints, from, { minDistance = 6, maxDistance = 40 } = {}) {
   let chosen = null, along = 0;
-  for (let i = 1; i < waypoints.length; i++) {
-    along += horizontal(waypoints[i - 1], waypoints[i]);
-    const direct = horizontal(from, waypoints[i]);
+  for (let i = 1; i < checkpoints.length; i++) {
+    along += horizontal(checkpoints[i - 1], checkpoints[i]);
+    const direct = horizontal(from, checkpoints[i]);
     if (direct > maxDistance || along > maxDistance * 1.5) break;
-    if (direct >= minDistance || i === waypoints.length - 1) chosen = waypoints[i];
+    if (direct >= minDistance || i === checkpoints.length - 1) chosen = checkpoints[i];
   }
-  return chosen ?? (waypoints.length > 1 && horizontal(from, waypoints[waypoints.length - 1]) <= maxDistance ? waypoints[waypoints.length - 1] : null);
+  return chosen ?? (checkpoints.length > 1 && horizontal(from, checkpoints[checkpoints.length - 1]) <= maxDistance ? checkpoints[checkpoints.length - 1] : null);
 }

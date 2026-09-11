@@ -47,7 +47,7 @@ export function Bot({ id }) {
         ['observed', s.observedAt ? time(s.observedAt) : null]]} />
     </section>
     <section><h2>Navigation</h2>
-      <Dl rows={!n || n.state === 'idle' ? [['state', 'idle']] : [['state', n.state], ['target', point(n.target)], ['waypoints left', n.remainingWaypoints], ['replans', n.replans],
+      <Dl rows={!n || n.state === 'idle' ? [['state', 'idle']] : [['state', n.state], ['target', point(n.target)], ['checkpoints left', n.remainingCheckpoints], ['replans', n.replans],
         ['cached cells', n.cachedCells], ['last replan', n.lastReplan], ['threat', n.threat ? `${code(n.threat.code)} ${fmt(n.threat.distance)}` : null], ['reason', n.reason]]} />
       <h2 style={{ marginTop: 10 }}>Nearby</h2>
       {s.nearbyEntities?.count ? <table><tbody>{s.nearbyEntities.nearest.map((e, i) => <tr key={i}><td>{code(e.code)}</td><td>{fmt(e.distance)}</td>{e.hostile != null && <td class={e.hostile ? 'err' : ''}>{e.hostile ? 'hostile' : ''}</td>}</tr>)}

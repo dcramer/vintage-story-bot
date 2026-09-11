@@ -33,4 +33,4 @@ double EdgeHeight(Point3 end) => 3.7 + (end.Y - 3.7) * (0.62 / (end.Z + 0.62));
 Check(EdgeHeight(samples[0]) < 2 && samples.Skip(1).Any(p => EdgeHeight(p) > 2), "top sample clears ledge");
 Console.WriteLine($"{checks} geometry checks passed.");
 LifeTests.Run();
-ControlLeaseTests.Run();
+ControlHoldTests.Run();

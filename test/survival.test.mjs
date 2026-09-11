@@ -3,12 +3,12 @@ import { test } from 'node:test';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { eatingLooks, forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
 import { accessibleForage, desperateFoodSightRange, foodElevationDetourDistance, foodRecoverySatisfied,
-  foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, matchingFoodDrops, stalledFoodRoute,
+  foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, matchingFoodDrops, stuckFoodRoute,
   wideFoodSurveyNeeded } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat, nearestUnclearedThreat, threatClearDistance,
   threatClearRadius, threatStartDistance, threatStartRadius, threatVerticalRange } from '../src/skills/threats.mjs';
 import { elevationDetourDistance, routeRegressed, travel } from '../src/skills/travel.mjs';
-import { foliageBlock, foliageClearCandidate, threatAllowsClearance } from '../src/skills/clearance.mjs';
+import { leafBlock, leafClearCandidate, threatAllowsLeafClearing } from '../src/skills/leaf-clearing.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
   freshness: { state: 'fresh', freshHoursLeft: 100 } });
@@ -115,11 +115,11 @@ test('food exploration uses observed local steps and does not rescan an unchange
   assert.equal(foodElevationDetourDistance(20), foodSearchDistance);
 });
 
-test('food leads survive productive partial routes but quarantine stalled ones', () => {
+test('food leads survive productive partial routes but skip stuck ones', () => {
   const blocked = { state: 'blocked' };
-  assert.equal(stalledFoodRoute(blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
-  assert.equal(stalledFoodRoute(blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
-  assert.equal(stalledFoodRoute({ state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
+  assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
+  assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
+  assert.equal(stuckFoodRoute({ state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
 });
 
 test('threat avoidance is explicit, proximity-bounded and points away', () => {
@@ -168,7 +168,7 @@ test('stationary fieldwork accepts a blocked flee leg once the hostile is gone',
   assert.ok(destination.x > 32 && destination.sprint && destination.emergency);
 });
 
-test('stationary evasion invokes its supplied deterministic clearance hook', async () => {
+test('stationary evasion invokes its supplied deterministic unstick hook', async () => {
   const wolf = { code: 'game:wolf-male', point: { x: -4.5, y: 1, z: .5 } };
   const state = { position: { x: .5, y: 1, z: .5 }, nearbyEntities: [wolf] };
   const field = new Fieldwork({});
@@ -182,16 +182,16 @@ test('stationary evasion invokes its supplied deterministic clearance hook', asy
   assert.equal(cleared, 1);
 });
 
-test('stationary evasion yields its explicit flee leg as soon as the perimeter clears', async () => {
+test('stationary evasion pauses its explicit flee leg as soon as the perimeter clears', async () => {
   const wolf = { code: 'game:wolf-male', point: { x: -4.5, y: 1, z: .5 } };
   const state = { position: { x: .5, y: 1, z: .5 }, nearbyEntities: [wolf] };
   const field = new Fieldwork({});
   field.latest = state;
-  field.walk = async (_, yieldWhen) => {
-    assert.equal(yieldWhen(state), null);
-    assert.equal(yieldWhen({ ...state, nearbyEntities: [] }), 'threat_cleared');
+  field.walk = async (_, pauseWhen) => {
+    assert.equal(pauseWhen(state), null);
+    assert.equal(pauseWhen({ ...state, nearbyEntities: [] }), 'threat_cleared');
     field.latest = { ...state, nearbyEntities: [] };
-    return { state: 'yielded' };
+    return { state: 'paused' };
   };
   assert.equal(await field.evadeThreat(), true);
 });
@@ -392,7 +392,7 @@ test('travel bounds regression from its best observed destination distance', () 
   assert.equal(routeRegressed(100, 108, 8), false);
 });
 
-test('travel rebases its regression budget after yielding a failed route', async () => {
+test('travel rebases its regression budget after pausing a failed route', async () => {
   const state = x => ({ position: { x, y: 1, z: .5 }, condition: {}, nearbyEntities: [] });
   const destination = { x: 100.5, z: .5 };
   const detour = { x: 48.5, y: 1, z: .5, horizontalOnly: true, arrivalRadius: 4 };
@@ -404,15 +404,15 @@ test('travel rebases its regression budget after yielding a failed route', async
     report: () => {},
     explore: () => detour,
     penalize: () => {},
-    walk: async (_target, yieldWhen) => {
+    walk: async (_target, pauseWhen) => {
       walks++;
       if (walks === 1) {
-        assert.equal(yieldWhen(state(20.5)), null);
+        assert.equal(pauseWhen(state(20.5)), null);
         latest = state(5.5);
-        assert.equal(yieldWhen(latest), 'route_regressed');
-        return { state: 'yielded', reason: 'route_regressed' };
+        assert.equal(pauseWhen(latest), 'route_regressed');
+        return { state: 'paused', reason: 'route_regressed' };
       }
-      replacementReason = yieldWhen(latest);
+      replacementReason = pauseWhen(latest);
       latest = state(100.5);
       return { state: 'arrived', reason: 'destination_reached' };
     },
@@ -423,25 +423,25 @@ test('travel rebases its regression budget after yielding a failed route', async
   assert.equal(replacementReason, null);
 });
 
-test('foliage clearance selects only a reachable body-level leaf toward the goal', () => {
+test('leaf clearing selects only a reachable body-level leaf toward the goal', () => {
   const state = { position: { x: .5, y: 1, z: .5 }, body: { height: 1.85 } };
   const object = (key, code, x, y, z, yaw, extra = {}) => ({ kind: 'block', key, code,
     point: { x, y, z }, look: { yawDegrees: yaw }, withinPickingRange: true,
     access: { buildOrBreak: true }, ...extra });
   const forward = object('forward', 'game:leaves-grown-oak', .5, 2, 2.5, 0);
   const side = object('side', 'game:leavesbranchy-grown-oak', 2.5, 2, .5, 90);
-  assert.equal(foliageBlock(forward), true);
-  assert.equal(foliageBlock(object('log', 'game:log-grown-oak-ud', .5, 2, 2.5, 0)), false);
-  assert.equal(foliageClearCandidate([side, forward], state, { x: .5, z: 10.5 }), forward);
+  assert.equal(leafBlock(forward), true);
+  assert.equal(leafBlock(object('log', 'game:log-grown-oak-ud', .5, 2, 2.5, 0)), false);
+  assert.equal(leafClearCandidate([side, forward], state, { x: .5, z: 10.5 }), forward);
   const nearSide = object('near-side', 'game:leaves-grown-oak', 1.5, 2, .5, 90);
-  assert.equal(foliageClearCandidate([forward, nearSide], state, { x: .5, z: 10.5 }), forward);
+  assert.equal(leafClearCandidate([forward, nearSide], state, { x: .5, z: 10.5 }), forward);
   const farForward = object('far-forward', 'game:leaves-grown-oak', .5, 2, 4.5, 0);
-  assert.equal(foliageClearCandidate([farForward, nearSide], state, { x: .5, z: 10.5 }), nearSide);
-  assert.equal(foliageClearCandidate([forward, side], state, { x: .5, z: 10.5 }, new Set(['forward'])), side);
+  assert.equal(leafClearCandidate([farForward, nearSide], state, { x: .5, z: 10.5 }), nearSide);
+  assert.equal(leafClearCandidate([forward, side], state, { x: .5, z: 10.5 }, new Set(['forward'])), side);
   const behind = object('behind', 'game:leaves-grown-oak', .5, 2, -.5, 180);
-  assert.equal(foliageClearCandidate([behind], state, { x: .5, z: 10.5 }), null);
-  assert.equal(foliageClearCandidate([behind, forward], state, { x: .5, z: 10.5 }), forward);
-  assert.equal(foliageClearCandidate([{ ...forward, withinPickingRange: false }], state, { x: .5, z: 10.5 }), null);
-  assert.equal(threatAllowsClearance(state, { point: { x: 12.5, z: .5 } }), true);
-  assert.equal(threatAllowsClearance(state, { point: { x: 12.49, z: .5 } }), false);
+  assert.equal(leafClearCandidate([behind], state, { x: .5, z: 10.5 }), null);
+  assert.equal(leafClearCandidate([behind, forward], state, { x: .5, z: 10.5 }), forward);
+  assert.equal(leafClearCandidate([{ ...forward, withinPickingRange: false }], state, { x: .5, z: 10.5 }), null);
+  assert.equal(threatAllowsLeafClearing(state, { point: { x: 12.5, z: .5 } }), true);
+  assert.equal(threatAllowsLeafClearing(state, { point: { x: 12.49, z: .5 } }), false);
 });

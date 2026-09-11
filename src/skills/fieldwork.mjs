@@ -1,6 +1,6 @@
 import { distance, horizontal, lookAt, normalize } from '../navigation/terrain.mjs';
 import { findRoute } from '../navigation/planner.mjs';
-import { nextLeg, planCorridor } from '../navigation/surface.mjs';
+import { nextLeg, planRoughRoute } from '../navigation/surface.mjs';
 import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.mjs';
 
 export const area = p => `${Math.floor(p.x / 16)},${Math.floor(p.z / 16)}`;
@@ -22,7 +22,7 @@ export const explorationDistance = (distance, offset) => distance *
 export const explorationReach = (towardDistance, maxDistance, minDistance = 0) =>
   Math.min(maxDistance, Math.max(minDistance, towardDistance));
 
-// Shared session guard, observed-resource memory and travel; no transport/lease ownership.
+// Shared session guard, observed-resource memory and travel; no transport/control ownership.
 export class Fieldwork {
   initial = null;
   latest = null;
@@ -33,7 +33,7 @@ export class Fieldwork {
   foodRecoveryAuthorized = false;
   visits = new Map();
   seen = new Map();
-  rejected = new Map();
+  skipped = new Map();
   constructor(env, { signal, timeoutMs, sprint = false, wait = ms => new Promise(r => setTimeout(r, ms)), now = Date.now } = {}) {
     this.env = env;
     this.signal = signal;
@@ -75,10 +75,10 @@ export class Fieldwork {
     this.check();
     return this.guard(sync ? await this.env.sync() : await this.send({ action: 'observe' }));
   }
-  async start(capabilities = []) {
+  async start(features = []) {
     this.initial = await this.observe(true);
     if (!this.initial.motion.onGround) throw Error('Start grounded');
-    for (const feature of ['nearby_awareness', ...capabilities])
+    for (const feature of ['nearby_awareness', ...features])
       if (!this.initial.capabilities.includes(feature)) throw Error(`Update mod: ${feature} required`);
     this.heading = this.initial.orientation.yawDegrees;
     this.visits.set(area(this.initial.position), 1);
@@ -93,7 +93,7 @@ export class Fieldwork {
   }
   // Turn the head toward a point and let the mod's vision stream fill the
   // landscape memory, the way a player takes in a valley before crossing it.
-  // Read-only and stationary; the mod reports only what the sightline reaches
+  // Read-only and stationary; the mod reports only what a line of sight reaches
   // and Node never asks for a column it did not look at.
   async look(toward) {
     if (!this.seeing) return 0;
@@ -113,18 +113,18 @@ export class Fieldwork {
       await this.wait(150);
     }
   }
-  // Next bounded leg along the seen corridor toward a far goal, or null
+  // Next bounded leg along the seen rough route toward a far goal, or null
   // when nothing visible leads there. Penalized 16x16 areas cost extra so a
   // leg that already failed on the ground is not replanned identically.
-  corridor(goal, { maxDistance = 40 } = {}) {
+  roughRoute(goal, { maxDistance = 40 } = {}) {
     if (!this.env.surface) return null;
     const p = this.latest.position;
-    const plan = planCorridor(this.env.surface, p, goal, { penalty: column => (this.visits.get(area(column)) ?? 0) * 6 });
-    const point = plan.waypoints.length ? nextLeg(plan.waypoints, p, { maxDistance }) : null;
-    this.corridorStatus = { status: plan.status, reason: plan.reason, waypoints: plan.waypoints.length, explored: plan.explored,
-      end: plan.waypoints.at(-1) ? { x: plan.waypoints.at(-1).x, z: plan.waypoints.at(-1).z } : null };
+    const plan = planRoughRoute(this.env.surface, p, goal, { penalty: column => (this.visits.get(area(column)) ?? 0) * 6 });
+    const point = plan.checkpoints.length ? nextLeg(plan.checkpoints, p, { maxDistance }) : null;
+    this.roughRouteStatus = { status: plan.status, reason: plan.reason, checkpoints: plan.checkpoints.length, explored: plan.explored,
+      end: plan.checkpoints.at(-1) ? { x: plan.checkpoints.at(-1).x, z: plan.checkpoints.at(-1).z } : null };
     if (!point || horizontal(p, point) < 2) return null;
-    return { x: point.x, y: point.y, z: point.z, horizontalOnly: true, arrivalRadius: Math.min(3, Math.max(1, point.step)), corridor: plan.status };
+    return { x: point.x, y: point.y, z: point.z, horizontalOnly: true, arrivalRadius: Math.min(3, Math.max(1, point.step)), roughRoute: plan.status };
   }
   // Whether the vision feed carries entities, items and watched blocks.
   get attentive() { return !!this.env.sightings && !!this.latest?.capabilities?.includes('sightings'); }
@@ -177,10 +177,10 @@ export class Fieldwork {
   prune() {
     for (const [id, object] of this.seen) if (this.now() - object.seenAt > 120000) this.seen.delete(id);
     while (this.seen.size > 1024) this.seen.delete(this.seen.keys().next().value);
-    for (const [id, until] of this.rejected) if (until <= this.now()) this.rejected.delete(id);
-    while (this.rejected.size > 1024) this.rejected.delete(this.rejected.keys().next().value);
+    for (const [id, until] of this.skipped) if (until <= this.now()) this.skipped.delete(id);
+    while (this.skipped.size > 1024) this.skipped.delete(this.skipped.keys().next().value);
   }
-  reject(object, ms = 30000) { this.rejected.set(object.key, this.now() + ms); }
+  skip(object, ms = 30000) { this.skipped.set(object.key, this.now() + ms); }
   penalize(target, amount = 1) {
     this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + amount);
   }
@@ -191,37 +191,37 @@ export class Fieldwork {
   }
   targets(predicate) {
     this.prune();
-    return [...this.seen.values()].filter(o => predicate(o) && !this.rejected.has(o.key))
+    return [...this.seen.values()].filter(o => predicate(o) && !this.skipped.has(o.key))
       .sort((a, b) => horizontal(a.point, this.latest.position) - horizontal(b.point, this.latest.position));
   }
   // Whether long-range sight is available: surface memory in the controller
   // and a mod that streams vision. Without it, walk is a single fine leg.
   get seeing() { return !!this.env.surface && !!this.latest?.capabilities?.includes('surface_vision'); }
   // Walk toward a target the way a player does: beyond the fine navigator's
-  // horizon, look at the landscape first and follow a corridor leg by leg,
+  // horizon, look at the landscape first and follow a rough route leg by leg,
   // looking again from each new viewpoint. Near targets are one fine leg. A far
   // target with nothing visible leading there ends as no_visible_route so
-  // the caller's stall recovery (clearance, nudges, exploration) takes over.
-  async walk(target, yieldWhen) {
+  // the caller's stuck recovery (leaf clearing, nudges, exploration) takes over.
+  async walk(target, pauseWhen) {
     await this.observe();
     // Fleeing never pauses to look around; the flee target is already mapped.
-    if (!this.seeing || target.leg || nearestThreat(this.latest)) return this.leg(target, yieldWhen);
+    if (!this.seeing || target.leg || nearestThreat(this.latest)) return this.leg(target, pauseWhen);
     for (let legs = 0; legs < 8; legs++) {
       const p = this.latest.position, remaining = horizontal(p, target);
-      if (remaining <= sightHorizon) return this.leg(target, yieldWhen);
-      const corridor = await this.lookAhead(target);
-      if (!corridor) {
-        if (remaining <= navigationReach) return this.leg(target, yieldWhen);
+      if (remaining <= sightHorizon) return this.leg(target, pauseWhen);
+      const roughRoute = await this.lookAhead(target);
+      if (!roughRoute) {
+        if (remaining <= navigationReach) return this.leg(target, pauseWhen);
         this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + 1);
-        this.report('rerouting', { reason: 'no_visible_route', corridor: this.corridorStatus });
-        return { state: 'blocked', reason: 'no_visible_route', corridor: this.corridorStatus };
+        this.report('rerouting', { reason: 'no_visible_route', roughRoute: this.roughRouteStatus });
+        return { state: 'blocked', reason: 'no_visible_route', roughRoute: this.roughRouteStatus };
       }
-      const result = await this.leg({ ...corridor, leg: true }, yieldWhen);
+      const result = await this.leg({ ...roughRoute, leg: true }, pauseWhen);
       if (result.state !== 'arrived') return result;
     }
-    return this.leg(target, yieldWhen);
+    return this.leg(target, pauseWhen);
   }
-  // Look toward the target; when the straight view shows no full corridor,
+  // Look toward the target; when the straight view shows no full rough route,
   // glance left and right as well before choosing a line.
   async lookAhead(target) {
     const p = this.latest.position;
@@ -230,20 +230,20 @@ export class Fieldwork {
       await this.look(target);
       this.lastLook = { position: p, at: this.now(), sweep: false };
     }
-    let corridor = this.corridor(target);
-    if ((!corridor || this.corridorStatus.status !== 'success') && !this.lastLook.sweep) {
+    let roughRoute = this.roughRoute(target);
+    if ((!roughRoute || this.roughRouteStatus.status !== 'success') && !this.lastLook.sweep) {
       this.lastLook.sweep = true;
       const direction = lookAt(p, target).yawDegrees;
       for (const offset of [-50, 50]) {
         const radians = normalize(direction + offset) * Math.PI / 180;
         await this.look({ x: p.x + Math.sin(radians) * 32, y: p.y, z: p.z + Math.cos(radians) * 32 });
       }
-      corridor = this.corridor(target);
+      roughRoute = this.roughRoute(target);
     }
-    this.report(corridor ? 'corridor' : 'no_corridor', { corridor: this.corridorStatus, ...(corridor ? { leg: { x: corridor.x, y: corridor.y, z: corridor.z } } : {}) });
-    return corridor;
+    this.report(roughRoute ? 'rough_route' : 'no_rough_route', { roughRoute: this.roughRouteStatus, ...(roughRoute ? { leg: { x: roughRoute.x, y: roughRoute.y, z: roughRoute.z } } : {}) });
+    return roughRoute;
   }
-  async leg(target, yieldWhen) {
+  async leg(target, pauseWhen) {
     const before = await this.observe();
     this.report('walking', { target });
     // Software-rendered remote clients commonly need about three seconds per
@@ -257,14 +257,14 @@ export class Fieldwork {
       sprint: target.sprint ?? (this.sprint || emergencyFoodSearch),
       ...(emergencyFoodSearch ? { emergency: true } : {}) }, state => {
       this.guard(state);
-      return yieldWhen?.(state);
+      return pauseWhen?.(state);
     }, { allowStarvingRecovery: this.recoveringFood });
     const after = await this.observe(true);
     this.moved += horizontal(before.position, after.position);
     this.visits.set(area(after.position), (this.visits.get(area(after.position)) ?? 0) + 1);
     if (result.state === 'arrived' && area(target) !== area(after.position))
       this.penalize(target);
-    else if (!['arrived', 'yielded'].includes(result.state))
+    else if (!['arrived', 'paused'].includes(result.state))
       // A failed exploration leg is evidence about that destination, even if
       // the player never left the current 16x16 area. Penalize it so the next
       // deterministic attempt tries a different heading instead of replaying
@@ -272,9 +272,9 @@ export class Fieldwork {
       this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + 1);
     while (this.visits.size > 4096) this.visits.delete(this.visits.keys().next().value);
     if (result.state === 'cancelled') throw Error(`Navigation interrupted: ${result.reason}`);
-    if (result.state !== 'arrived' && result.state !== 'yielded') this.report('rerouting', { reason: result.reason });
+    if (result.state !== 'arrived' && result.state !== 'paused') this.report('rerouting', { reason: result.reason });
     if (horizontal(before.position, after.position) > 1) this.heading = lookAt(before.position, after.position).yawDegrees;
-    else if (result.state !== 'yielded') this.heading = normalize(this.heading + 90);
+    else if (result.state !== 'paused') this.heading = normalize(this.heading + 90);
     return result;
   }
   async nudge(target, durationMs = 400) {
@@ -286,8 +286,8 @@ export class Fieldwork {
     try {
       // Sneak prevents stepping off an unsupported edge. This is deliberately
       // shorter than one normal movement frame and never jumps or sprints; it
-      // only enters a nearby corridor after the route planner and foliage
-      // recovery have repeatedly failed from the same grounded position.
+      // only enters a nearby opening after the route planner and leaf
+      // clearing have repeatedly failed from the same grounded position.
       await this.send({ action: 'move', durationMs, direction: 'forward', jump: false, sprint: false, sneak: true });
       await this.wait(durationMs + 150);
     } finally {
@@ -300,7 +300,7 @@ export class Fieldwork {
     if (progress > .1) this.heading = lookAt(before.position, after.position).yawDegrees;
     return progress;
   }
-  async evadeThreat(clearStall) {
+  async evadeThreat(unstick) {
     let fled = false;
     while (true) {
       this.check();
@@ -310,8 +310,8 @@ export class Fieldwork {
       this.report('evading', { threat: threat.code, distance: +horizontal(this.latest.position, threat.point).toFixed(1), target });
       const before = { ...this.latest.position };
       const result = await this.walk(target, state => nearestUnclearedThreat(state) ? null : 'threat_cleared');
-      if (!['arrived', 'yielded'].includes(result.state) && horizontal(before, this.latest.position) <= 2)
-        await clearStall?.(target);
+      if (!['arrived', 'paused'].includes(result.state) && horizontal(before, this.latest.position) <= 2)
+        await unstick?.(target);
       fled = true;
     }
   }

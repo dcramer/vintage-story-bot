@@ -1,6 +1,6 @@
 namespace VintageStoryAI;
 
-public sealed class ControlLease
+public sealed class ControlHold
 {
     private const int HeartbeatMs = 2000;
     public string? Owner { get; private set; }
@@ -26,11 +26,11 @@ public sealed class ControlLease
         Sequence = sequence; Until = now + HeartbeatMs;
         return true;
     }
-    public void Revoke(string reason) { Owner = null; Until = 0; Epoch++; Reason = reason; StarvingRecovery = false; }
+    public void Release(string reason) { Owner = null; Until = 0; Epoch++; Reason = reason; StarvingRecovery = false; }
     public bool Expire(long now)
     {
         if (!Active || now < Until) return false;
-        Revoke("expired"); return true;
+        Release("expired"); return true;
     }
     public object Observe(long now) => new { owner = Owner, epoch = Epoch, sequence = Sequence, reason = Reason,
         remainingMs = Math.Max(0, Until - now) };

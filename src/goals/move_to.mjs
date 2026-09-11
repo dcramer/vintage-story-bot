@@ -27,6 +27,6 @@ export default defineGoal({
     'Unknown/stale ground never traversed; no digging, swimming, doors or gap jumps. ' +
     'Unreachable/unexplored destinations may fail within budget.',
   announce: () => 'Heading over to take a look.',
-  // Pure navigation owns the control lease directly instead of a Fieldwork task.
+  // Pure navigation holds control directly instead of a Fieldwork task.
   launch: (runtime, args, record, started) => runtime.navigate(args, record, started),
 });

@@ -38,7 +38,7 @@ test('Node geometry preserves step, headroom and hole constraints', () => {
   const start = { x: .5, y: 0, z: .5 }, end = { x: 2.5, y: 0, z: .5 };
   const direct = findRoute(map, start, end, .3, 1.85);
   assert.ok(direct);
-  assert.equal(direct[0].x, 1.5, 'safe planning anchor is not a physical waypoint');
+  assert.equal(direct[0].x, 1.5, 'safe planning anchor is not a physical checkpoint');
   map.apply({ ...terrain(), cells: [[1, 0, 0, 0, false, [[0, 0, 0, 1, 1, 1]]]] });
   assert.ok(map.traverse(start, { x: 1.5, y: 1, z: .5 }, .3, 1.85));
   map.apply({ ...terrain(), cells: [[1, 2, 0, 0, false, [[0, 0, 0, 1, 1, 1]]]] });
@@ -89,11 +89,11 @@ test('navigation holds a validated gap jump until airborne', () => {
   assert.equal(nav.airborneDuringJump, true);
 });
 
-test('planner reuses an observed corridor beyond 32 blocks', () => {
+test('planner reuses an observed route beyond 32 blocks', () => {
   const map = new TerrainMemory(), cells = [];
   for (let x = -1; x <= 50; x++) for (let z = -1; z <= 1; z++) for (let y = -1; y <= 2; y++)
     cells.push([x, y, z, 0, false, y < 0 ? [[0, 0, 0, 1, 1, 1]] : []]);
-  map.apply({ session: 'long-corridor', reset: true, cursor: 1, more: false, clock: 0, cells });
+  map.apply({ session: 'long-route', reset: true, cursor: 1, more: false, clock: 0, cells });
   const start = { x: .5, y: 0, z: .5 }, end = { x: 48.5, y: 0, z: .5 };
   const route = findRoute(map, start, end, .3, 1.85, { budget: 128 });
   assert.ok(route);
@@ -171,7 +171,7 @@ test('evasion permits a mandatory short recenter before increasing clearance', (
   const nav = new Navigation(map, state, { x: -5.5, y: 1, z: .5, timeoutMs: 10000 }, 0);
   const frame = nav.tick(state, 1);
   assert.equal(nav.state, 'moving');
-  assert.equal(nav.nextWaypoint.recenter, true);
+  assert.equal(nav.nextCheckpoint.recenter, true);
   assert.equal(frame.forward, true);
 });
 
@@ -245,7 +245,7 @@ test('navigation tolerates slow physical response without unbounded input', () =
   assert.equal(nav.replans, 0);
   assert.equal(nav.tick(state, 3100), null);
   assert.equal(nav.replans, 1);
-  assert.equal(nav.lastReplan, 'stalled');
+  assert.equal(nav.lastReplan, 'stuck');
 });
 
 test('navigation counts camera convergence as bounded progress', () => {
@@ -263,7 +263,7 @@ test('navigation counts camera convergence as bounded progress', () => {
   assert.equal(nav.progressAt, 4000);
 });
 
-test('navigation accepts a bounded waypoint crossing between slow samples', () => {
+test('navigation accepts a bounded checkpoint crossing between slow samples', () => {
   const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: () => true,
     views: () => new Map() };
   const initial = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
@@ -292,7 +292,7 @@ test('navigation preserves recentering when look-ahead advances the route index'
   assert.equal(nav.replans, 0);
 });
 
-test('navigation preserves recentering after crossing an intermediate waypoint', () => {
+test('navigation preserves recentering after crossing an intermediate checkpoint', () => {
   const map = { cells: new Map(), support: () => 9, clear: () => true, dry: () => true,
     traverse: (_from, _to, _w, _h, recenter) => recenter, views: () => new Map() };
   const initial = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
@@ -308,7 +308,7 @@ test('navigation preserves recentering after crossing an intermediate waypoint',
   assert.equal(nav.replans, 0);
 });
 
-test('navigation sneaks through a nearby sharp waypoint', () => {
+test('navigation sneaks through a nearby sharp checkpoint', () => {
   const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: (_, to) => to.z === .5,
     views: () => new Map() };
   const state = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
@@ -350,7 +350,7 @@ test('navigation keeps recentering safely from partial edge support', () => {
   assert.deepEqual(traversals, [true, true]);
 });
 
-test('navigation does not cross or loosely finish a precise recenter waypoint', () => {
+test('navigation does not cross or loosely finish a precise recenter checkpoint', () => {
   const map = { cells: new Map(), support: p => p.z > .4 && p.z < .6 ? 9 : 3, clear: () => true,
     dry: () => true, traverse: () => true, views: () => new Map() };
   const initial = { position: { x: .5, y: 0, z: .15 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },

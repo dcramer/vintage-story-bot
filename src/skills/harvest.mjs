@@ -33,21 +33,21 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     await survival?.tend();
     field.report('searching');
     // Drops first: dug items lie nearby and vanish over time.
-    const visibleDrops = (await field.scan(8, item.slice(0, 64), 'items')).filter(o => drops(o) && !field.rejected.has(o.key));
+    const visibleDrops = (await field.scan(8, item.slice(0, 64), 'items')).filter(o => drops(o) && !field.skipped.has(o.key));
     for (const drop of visibleDrops.sort((a, b) => horizontal(a.point, field.latest.position) - horizontal(b.point, field.latest.position))) {
       field.report('collecting', { target: drop.key });
       try {
         const result = await collectItem(field, { target: drop.key, expectedItem: drop.code, radius: 8 });
-        if (!result.ok) field.reject(drop, 20000);
+        if (!result.ok) field.skip(drop, 20000);
       } catch (error) {
         if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
-        field.reject(drop, 20000);
+        field.skip(drop, 20000);
       }
       field.seen.delete(drop.key);
       if (await refresh() >= count) break;
     }
     if (gained() >= count) continue;
-    const near = (await field.scan(8, match.slice(0, 64), 'blocks')).filter(o => blocks(o) && o.withinPickingRange && !field.rejected.has(o.key));
+    const near = (await field.scan(8, match.slice(0, 64), 'blocks')).filter(o => blocks(o) && o.withinPickingRange && !field.skipped.has(o.key));
     const ready = near.sort((a, b) => (lowest ? a.point.y - b.point.y : 0) ||
       horizontal(a.point, field.latest.position) - horizontal(b.point, field.latest.position))[0];
     if (ready) {
@@ -61,7 +61,7 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
         result = { ok: false, reason: error.message };
       }
       field.seen.delete(ready.key);
-      field.reject(ready, result.ok ? 120000 : 30000);
+      field.skip(ready, result.ok ? 120000 : 30000);
       if (result.ok) dug++;
       else field.report('dig_failed', { target: ready.key, reason: result.reason });
       continue;
@@ -71,18 +71,18 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     if (target) {
       const destination = field.approach(target, q => Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z));
       if (destination) {
-        const result = await field.walk(destination, survival?.yieldWhen);
-        if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 15000);
+        const result = await field.walk(destination, survival?.pauseWhen);
+        if (!['arrived', 'paused'].includes(result.state)) field.skip(target, 15000);
         continue;
       }
       if (horizontal(field.latest.position, target.point) > 6) {
-        const result = await field.walk(field.explore(target.point), survival?.yieldWhen);
-        if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 15000);
+        const result = await field.walk(field.explore(target.point), survival?.pauseWhen);
+        if (!['arrived', 'paused'].includes(result.state)) field.skip(target, 15000);
         continue;
       }
-      field.reject(target, 15000);
+      field.skip(target, 15000);
     }
     const unvisited = o => blocks(o) && !field.visits.has(area(o.point));
-    await field.walk(field.explore(field.targets(unvisited)[0]?.point), survival?.yieldWhen);
+    await field.walk(field.explore(field.targets(unvisited)[0]?.point), survival?.pauseWhen);
   }
 }

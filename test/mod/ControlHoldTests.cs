@@ -1,26 +1,26 @@
 using VintageStoryAI;
 using System.Text.Json;
 
-static class ControlLeaseTests
+static class ControlHoldTests
 {
     public static void Run()
     {
         void Check(bool value, string name) { if (!value) throw new Exception(name); }
-        var lease = new ControlLease();
-        Check(lease.Begin("a", 0, 100), "acquire");
-        Check(!lease.StarvingRecovery, "ordinary lease safety");
-        Check(!lease.Begin("b", 0, 101), "exclusive owner");
-        Check(!lease.Frame("b", 1, 101, 101, 400), "foreign frame");
-        Check(lease.Frame("a", 1, 101, 101, 400), "owned frame");
-        Check(!lease.Frame("a", 1, 102, 102, 400), "duplicate frame");
-        Check(!lease.Frame("a", 2, 2101, 2101, 400), "late frame cannot resurrect owner");
-        Check(lease.Frame("a", 2, 2100, 2200, 180), "timely short frame survives a delayed replan");
-        Check(lease.Expire(4200) && !lease.Active, "tick releases expired owner");
-        Check(!lease.Begin("b", 0, 1001), "stale acquisition epoch");
-        Check(lease.Begin("b", lease.Epoch, 1001, true) && lease.StarvingRecovery, "scoped starving recovery acquisition");
-        lease.Revoke("manual_input");
-        Check(!lease.StarvingRecovery, "revocation clears recovery scope");
-        Check(!lease.Frame("b", 2, 1002, 1002, 400), "revoked frame cannot resume");
+        var hold = new ControlHold();
+        Check(hold.Begin("a", 0, 100), "acquire");
+        Check(!hold.StarvingRecovery, "ordinary control hold safety");
+        Check(!hold.Begin("b", 0, 101), "exclusive owner");
+        Check(!hold.Frame("b", 1, 101, 101, 400), "foreign frame");
+        Check(hold.Frame("a", 1, 101, 101, 400), "owned frame");
+        Check(!hold.Frame("a", 1, 102, 102, 400), "duplicate frame");
+        Check(!hold.Frame("a", 2, 2101, 2101, 400), "late frame cannot resurrect owner");
+        Check(hold.Frame("a", 2, 2100, 2200, 180), "timely short frame survives a delayed replan");
+        Check(hold.Expire(4200) && !hold.Active, "tick releases expired owner");
+        Check(!hold.Begin("b", 0, 1001), "stale acquisition epoch");
+        Check(hold.Begin("b", hold.Epoch, 1001, true) && hold.StarvingRecovery, "scoped starving recovery acquisition");
+        hold.Release("manual_input");
+        Check(!hold.StarvingRecovery, "release clears recovery scope");
+        Check(!hold.Frame("b", 2, 1002, 1002, 400), "released frame cannot resume");
         var map = new TerrainMap();
         map.Put(new(1, 2, 3), [], false, 0);
         Check(map.Fresh(new(1, 2, 3), 1), "observed air");

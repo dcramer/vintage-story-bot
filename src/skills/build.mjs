@@ -18,8 +18,8 @@ async function standNear(field, survival, cell, force = false) {
   if (!force && distance(await eye(field), center(cell)) <= reach) return true;
   const destination = field.approach({ point: center(cell), kind: 'block' }, q => sameColumn(q, cell) && Math.abs(q.y - cell.y) < 2.5);
   if (!destination) return false;
-  const result = await field.walk(destination, survival?.yieldWhen);
-  return ['arrived', 'yielded'].includes(result.state);
+  const result = await field.walk(destination, survival?.pauseWhen);
+  return ['arrived', 'paused'].includes(result.state);
 }
 
 function known(field, cell) {

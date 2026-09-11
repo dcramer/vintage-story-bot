@@ -39,7 +39,7 @@ export function findRoute(map, start, goal, w, h,
     const list = [end];
     while (previous.has(key(end))) { end = previous.get(key(end)); list.push(end); }
     list.reverse();
-    // The grid center is a planning anchor, not a mandatory physical waypoint.
+    // The grid center is a planning anchor, not a mandatory physical checkpoint.
     // Slow samples can leave the player well off-center while still safely
     // connected to the first real step.
     if (!recentering && list.length > 1 && (list[1].jumpGap

@@ -15,7 +15,7 @@ export default defineAction({
   schema,
   readOnly: true,
   description:
-    '360-degree nearby awareness to 8 blocks; forward 120x90-degree sight to radius (max 64). ' +
+    '360-degree surroundings to 8 blocks; forward 120x90-degree sight to radius (max 64). ' +
     'Sampled occlusion, not pixels; walls/unloaded terrain block sight. Defaults radius 8, limit ' +
     '16, kind all. match filters one substring; matches accepts 1–4 alternative substrings. Page with ' +
     'returned cursor and identical args while more; expires after 30s, ' +

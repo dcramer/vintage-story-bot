@@ -30,7 +30,7 @@ export async function gather(env, { count = 10, manageFood = true, ...options } 
       field.report('searching');
       const objects = await field.scan(8, 'stick');
       if (!objects.some(o => loose(o) && o.withinPickingRange)) await field.scan(sightRange, 'stick');
-      const ready = objects.find(o => loose(o) && o.withinPickingRange && !field.rejected.has(o.key));
+      const ready = objects.find(o => loose(o) && o.withinPickingRange && !field.skipped.has(o.key));
       if (ready) {
         field.report('pickup', { target: ready.key });
         await field.aim(ready.look);
@@ -41,9 +41,9 @@ export async function gather(env, { count = 10, manageFood = true, ...options } 
           await field.wait(500);
           const after = await field.observe();
           if (stickCount(after) > before) field.seen.delete(ready.key);
-          else field.reject(ready);
+          else field.skip(ready);
           field.report('verified', { target: ready.key });
-        } else field.reject(ready, 5000);
+        } else field.skip(ready, 5000);
       }
       await field.observe(true);
       if (gained() >= count) continue;
@@ -51,21 +51,21 @@ export async function gather(env, { count = 10, manageFood = true, ...options } 
       if (target) {
         const destination = field.approach(target);
         if (destination) {
-          const result = await field.walk(destination, survival?.yieldWhen);
-          if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 15000);
+          const result = await field.walk(destination, survival?.pauseWhen);
+          if (!['arrived', 'paused'].includes(result.state)) field.skip(target, 15000);
           continue;
         }
         if (horizontal(field.latest.position, target.point) > 6) {
-          const result = await field.walk(field.explore(target.point), survival?.yieldWhen);
-          if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 15000);
+          const result = await field.walk(field.explore(target.point), survival?.pauseWhen);
+          if (!['arrived', 'paused'].includes(result.state)) field.skip(target, 15000);
           continue;
         }
-        field.reject(target, 15000);
+        field.skip(target, 15000);
       }
       const tree = o => o.code.startsWith('game:leaves-') && !field.visits.has(area(o.point));
       if (!field.targets(tree).length) await field.scan(sightRange, 'leaves', 'blocks');
       const destination = field.explore(field.targets(tree)[0]?.point);
-      await field.walk(destination, survival?.yieldWhen);
+      await field.walk(destination, survival?.pauseWhen);
     }
   } finally {
     await env.send({ action: 'stop' });
@@ -83,7 +83,7 @@ export default defineGoal({
   destructive: true,
   description:
     'Collect additional ground sticks only (default 10): scan, navigate, pick up and verify ' +
-    'inventory gain. Food management defaults on: yields below 20% satiety to forage/eat fresh ' +
+    'inventory gain. Food management defaults on: pauses below 20% satiety to forage/eat fresh ' +
     'berries to 80% plus a reserve. Set manageFood=false for ground-stick-only runs. ' +
     'Optional sprint=true permits safe, well-fed straight travel. No leaf harvesting. ' +
     'Runs until count is reached or gameplay/cancellation ' +

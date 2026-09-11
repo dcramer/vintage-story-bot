@@ -14,7 +14,7 @@ const reduce = {
     orientation: pick(s.orientation, ['yawDegrees', 'pitchDegrees']), motion: pick(s.motion, ['onGround', 'swimming', 'sprinting', 'climbing']),
     control: s.control ? pick(s.control, ['owner', 'active']) : null, target: s.target ? pick(s.target, ['kind', 'code', 'name']) : null,
     nearbyEntities: { count: s.nearbyEntities?.length ?? 0, nearest: (s.nearbyEntities ?? []).slice(0, 6).map(e => pick(e, ['code', 'distance', 'hostile'])) } }),
-  navigation: n => pick(n, ['id', 'state', 'reason', 'target', 'remainingWaypoints', 'replans', 'cachedCells', 'lastReplan', 'evading', 'threat']),
+  navigation: n => pick(n, ['id', 'state', 'reason', 'target', 'remainingCheckpoints', 'replans', 'cachedCells', 'lastReplan', 'evading', 'threat']),
   goal: g => g && { ...pick(g, ['id', 'kind', 'state', 'active', 'startedAt', 'finishedAt', 'reason', 'cleanupError']),
     args: bounded(g.args ?? null, 4096), progress: bounded(g.progress ?? null, 4096), result: bounded(g.result ?? null, 4096) },
 };

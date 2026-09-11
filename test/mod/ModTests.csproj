@@ -12,7 +12,7 @@
     <Compile Include="../../mod/Bridge/LifeTracker.cs" Link="LifeTracker.cs" />
     <Compile Include="LifeTests.cs" />
     <Compile Include="../../mod/Sensors/TerrainMap.cs" Link="TerrainMap.cs" />
-    <Compile Include="../../mod/Bridge/ControlLease.cs" Link="ControlLease.cs" />
-    <Compile Include="ControlLeaseTests.cs" />
+    <Compile Include="../../mod/Bridge/ControlHold.cs" Link="ControlHold.cs" />
+    <Compile Include="ControlHoldTests.cs" />
   </ItemGroup>
 </Project>

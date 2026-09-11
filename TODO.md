@@ -16,14 +16,14 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 
 ## 2. Perception (`blockAt`, `findBlocks`, `canSeeBlock`, `blockAtCursor`, `nearestEntity`)
 
-- [x] `scan` — awareness ≤8, cone sight ≤64, paged cursors, forage/ripe flags.
+- [x] `scan` — surroundings ≤8, cone sight ≤64, paged cursors, forage/ripe flags.
 - [x] `inspect_target` — crosshair block/entity, HUD text, hints, forming state.
 - [x] `aim_cell` — aim at a cell/face/voxel by coordinates using the block's real selection-box geometry; used by forming placement instead of caller-computed angles.
 - [ ] **P1 · `block_at {x,y,z}`** — code/state of one cell if observed or remembered; `unknown` otherwise, never air (`game`, `ctl`). Mineflayer `blockAt`. Source: terrain memory + last scan; no hidden-world lookup.
-- [ ] **P1 · `can_see {x,y,z}`** — sampled sightline from eye to cell (`mod`). Mineflayer `canSeeBlock`. Prerequisite for interact-range goals.
-- [~] sightings — `sense` returns a snapshot of entities, items and watched blocks a sightline reached; a default salient set plus goal attention; `Fieldwork.scan` reads memory instead of paging `scan`; the controller's eye loop keeps memory fresh. Not live-verified.
+- [ ] **P1 · `can_see {x,y,z}`** — sampled line of sight from eye to cell (`mod`). Mineflayer `canSeeBlock`. Prerequisite for interact-range goals.
+- [~] sightings — `sense` returns a snapshot of entities, items and watched blocks a line of sight reached; a default salient set plus goal attention; `Fieldwork.scan` reads memory instead of paging `scan`; the controller's eye loop keeps memory fresh. Not live-verified.
 - [ ] **P1 · `find_blocks {match,radius,limit}`** — controller-local read of remembered sightings, tagged visible/remembered (`ctl`). Mineflayer `findBlocks`.
-- [~] far-field vision — `sense` returns a snapshot of sight-verified surface columns inside the real field of view (light-limited, coarser with distance); Node remembers them and `terrain` shows them. Not live-verified.
+- [~] far view — `sense` returns a snapshot of sight-verified surface columns inside the real field of view (light-limited, coarser with distance); Node remembers them and `terrain` shows them. Not live-verified.
 - [~] `terrain` — merged observed/seen surface view around a point; absent columns unknown. Not live-verified.
 - [ ] **P2 · `ground_at {x,z}`** — one-column form of `terrain` (`ctl`). Site picking, `travel` with omitted y.
 - [ ] **P2 · entity detail** — `inspect_target` on entities: health if visible, hostile/passive class, tameable/harvestable hints (`mod`).
@@ -33,10 +33,10 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [x] `move` — bounded forward/back/strafe/jump/sprint/sneak.
 - [x] `look` — absolute yaw/pitch.
 - [x] `select_hotbar`.
-- [x] `stop` — global revoke.
-- [ ] **P1 · `look_at {x,y,z}` / `{target:entity}`** — smooth aim at a point or tracked entity; entity form re-aims per frame while leased (`mod`). Mineflayer `lookAt`. Prerequisite for hunting.
+- [x] `stop` — global release.
+- [ ] **P1 · `look_at {x,y,z}` / `{target:entity}`** — smooth aim at a point or tracked entity; entity form re-aims per frame while holding control (`mod`). Mineflayer `lookAt`. Prerequisite for hunting.
 - [ ] **P2 · `move` with `yaw`** — walk toward a heading in one frame instead of `look`+`move` (`ctl`).
-- [ ] **P2 · held-input while re-aiming** — knapping drag and combat need aim changes during a hand lease; today `look` cancels hand actions. Decide: refuse forever (document) or allow bounded yaw delta under lease (`mod`).
+- [ ] **P2 · held-input while re-aiming** — knapping drag and combat need aim changes during a hand action; today `look` cancels hand actions. Decide: refuse forever (document) or allow bounded yaw delta under a control hold (`mod`).
 
 ## 4. Block interaction (`dig`, `stopDigging`, `placeBlock`, `activateBlock`)
 
@@ -59,7 +59,7 @@ Nothing exists. Blocks day 2 hunting and all threat response.
 - [ ] **P1 · `butcher {target}`** — VS `EntityBehaviorHarvestable`: hold right-click with a knife on a dead animal for its harvest time, then take drops from the harvest inventory it opens; depends on container access (§7) (`mod`, `skill`). Mineflayer `activateEntity`.
 - [ ] **P2 · `activate_entity {target}`** — other right-click uses: shear, milk, feed; taming is generational, never instant (`skill`).
 - [x] hostile avoidance during navigation — 12-block detour, emergency sprint, resume after clear ([threats](src/skills/threats.mjs), navigator).
-- [ ] **P1 · `flee {to?}`** — standalone reaction while stationary (waiting, crafting, forming): route to a POI or `fleeTarget`; same allowlist, runs only inside a task (`goal`).
+- [ ] **P1 · `flee {to?}`** — standalone reaction while stationary (waiting, crafting, forming): route to a waypoint or `fleeTarget`; same allowlist, runs only inside a task (`goal`).
 - [ ] **P2 · sneak approach** — `travel` with `sneak:true` for animal approach (`ctl`, `nav`).
 
 ## 6. Inventory (`equip`, `unequip`, `toss`, `consume`, `recipesFor`, `craft`)
@@ -113,13 +113,13 @@ Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 ## 10. Navigation (`goto`, `setGoal`, `stop`, goals, movements, `path_update`)
 
 - [x] `move_to` — bounded route, level/±1, replan, arrivalRadius.
-- [~] `travel`, `explore` — legs + detours; not live-verified. Every `walk` beyond 12 blocks now turns toward the target and reads the vision feed (straight, then ±50° if no full corridor) and follows a coarse corridor leg by leg (`success|partial|noPath`, pathfinder partial-path semantics) before the final fine leg; `no_visible_route` hands over to the caller's stall recovery. Corridor status is reported in goal progress. Fine planner takes diagonals. Near-field sampling widened to 8 blocks, -3/+6. See [navigation](docs/navigation.md).
-- [x] `set_poi`, `pois` — session memory.
+- [~] `travel`, `explore` — legs + detours; not live-verified. Every `walk` beyond 12 blocks now turns toward the target and reads the far view (straight, then ±50° if no full rough route) and follows a rough route leg by leg (`success|partial|noPath`, pathfinder partial-path semantics) before the final fine leg; `no_visible_route` hands over to the caller's stuck recovery. Rough route status is reported in goal progress. Fine planner takes diagonals. Surroundings sampling widened to 8 blocks, -3/+6. See [navigation](docs/navigation.md).
+- [x] `set_waypoint`, `waypoints` — session memory.
 - [ ] **P0 · `GoalGetToBlock` / interact-range arrival** — `move_to {target:blockKey}` stops when the cell is within the player's native `pickingrange` and visible, not at a coordinate (`nav`, `ctl`). Every block goal re-implements this today.
 - [ ] **P1 · `GoalFollow` / `follow {target:entity,range}`** — track a moving entity, re-plan on movement (`nav`, `goal`). Hunting, co-op.
 - [ ] **P1 · movement policy flags** — `allowSwim`, `allowJumpGap`, `allowDoors`, `allowDig` per goal; default all off (`nav`, `ctl`). pathfinder `Movements`.
 - [ ] **P1 · `path_update` reasons on `goal_status`** — `noPath|timeout|stuck|replanned` phases with counts (`ctl`).
-- [ ] **P1 · `home` shortcut** — `travel {poi:'home'}` convention plus `return_home` before sunset check (`skill`).
+- [ ] **P1 · `home` shortcut** — `travel {waypoint:'home'}` convention plus `return_home` before sunset check (`skill`).
 - [ ] **P2 · terrain memory persistence** — keyed by world identity, invalidated on reset; today session-only (`nav`).
 - [ ] **P2 · climbable blocks, swim** — VS `Climbable` (ladders, some vines) and water traversal as movement primitives; VS auto-steps sub-block heights via `stepHeight`, full blocks still need jump (`mod`, `nav`).
 
@@ -137,7 +137,7 @@ Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 - [x] Temporal stability in `observe`, rust-world attrition classification.
 - [x] Body condition: body temperature, wetness, freezing, tiredness, intoxication.
 - [ ] **P1 · temporal storm awareness** — storm approaching/active in `observe`/`events`; policy: get indoors, no travel during storms (`mod`, `skill`).
-- [ ] **P1 · stability retreat** — when `temporalStability` keeps dropping, leave the low-stability region toward the last stable POI (`skill`).
+- [ ] **P1 · stability retreat** — when `temporalStability` keeps dropping, leave the low-stability region toward the last stable waypoint (`skill`).
 - [ ] **P1 · season/winter prep** — days-until-winter from calendar; goals for stored food and clothing warmth (`ctl`, `goal`).
 - [ ] **P1 · rain vs pit kiln** — `environment` precipitation gates kiln firing, or build the full cover (`skill`).
 - [ ] **P2 · respawn point** — temporal gear use sets spawn; expose spawn status (`mod`, `skill`).

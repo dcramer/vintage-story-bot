@@ -39,7 +39,7 @@ public sealed partial class AiBridgeMod : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         this.api = api;
-        control.Revoke("world_changed");
+        control.Release("world_changed");
         terrainSensor = new TerrainSensor(api, terrain);
         api.Event.BlockChanged += terrainSensor.Changed;
         api.Input.InWorldAction += RetainOwnedMovement;
@@ -70,7 +70,7 @@ public sealed partial class AiBridgeMod : ModSystem
         sensor.Reset();
         vision.Reset();
         terrainSensor.Reset();
-        control.Revoke("world_changed");
+        control.Release("world_changed");
         life = new LifeTracker();
         inventory = new InventoryAdapter(api);
         blockActions.Reset();
@@ -172,7 +172,7 @@ public sealed partial class AiBridgeMod : ModSystem
                 long now = Environment.TickCount64;
                 if (control.Active && (ManualInput() || control.Expire(now))) ReleaseControl(ManualInput() ? "manual_input" : "expired");
                 terrainSensor.Sample(now, sensorPriority);
-                // Far-field vision streams only while a controller is reading it.
+                // Far view vision streams only while a controller is reading it.
                 if (now - lastSenseAt < 5000) vision.Sample(now);
                 if (control.Active) ApplyCamera(dt);
             }
@@ -218,7 +218,7 @@ public sealed partial class AiBridgeMod : ModSystem
 
     }
 
-    // Judge lease refreshes when the bridge received them, before expiring the
+    // Judge control hold refreshes when the bridge received them, before expiring the
     // owner on a delayed render tick. Requests cancelled by the network timeout
     // are still discarded and cannot revive control.
     private void DrainRequests()
@@ -304,7 +304,7 @@ public sealed partial class AiBridgeMod : ModSystem
         }
     }
 
-    // Wire actions refused while a control lease owns the inputs; stop releases it first.
+    // Wire actions refused while a control hold owns the inputs; stop releases it first.
     private static readonly HashSet<string> Mutations = ["move_to", "move", "look", "aim_cell", "select", "interact", "attack", "stop", "respawn", "craft", "inventory_move", "block_action_begin", "block_action_continue", "select_recipe", "ui_activate"];
     private bool CanControl() => api.World?.Player?.Entity?.Alive == true && !api.IsGamePaused &&
         !api.Gui.OpenedGuis.Any(dialog => dialog.IsOpened() && DialogAdapter.BlocksControl(dialog));

@@ -8,7 +8,7 @@ import { SightingsMemory } from '../navigation/sightings.mjs';
 // Blocks a player notices without looking for them; goals add to this, never replace it.
 export const salient = ['ore', 'berry', 'stick', 'flint', 'loose', 'mushroom', 'cattail', 'chest', 'basket', 'vessel', 'fire', 'torch'];
 
-// Game RPC only. Policies never construct lease owners, sequences or terrain cursors.
+// Game RPC only. Policies never construct control owners, sequences or terrain cursors.
 // Perception memory lives here: the mod reports what the eye sees this instant,
 // Node remembers.
 export class GameClient {
@@ -39,7 +39,7 @@ export class GameClient {
       catch: error => error instanceof Error ? error : new Error(String(error)),
     });
   }
-  // One request carries the near-field geometry deltas plus snapshots of what
+  // One request carries the surroundings geometry deltas plus snapshots of what
   // the eye sees right now (surface, sightings) and the current attention.
   cursors() { return { session: this.map.session, after: this.map.cursor, watch: this.watch }; }
   remember(batch) {

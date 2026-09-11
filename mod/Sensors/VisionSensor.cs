@@ -9,7 +9,7 @@ namespace VintageStoryAI;
 
 public readonly record struct Column(int X, int Z);
 
-// The eye's short-term buffer of far-field surface columns. Not memory: a
+// The eye's short-term buffer of far view surface columns. Not memory: a
 // snapshot returns what has been confirmed in the last few seconds inside
 // the current view, and Node remembers. CheckedAt drives resampling and
 // attention changes; SeenAt drives what counts as seen right now.
@@ -49,7 +49,7 @@ public sealed class SurfaceMap(long ttlMs = 30000, int radius = 96)
 
 // Passive vision: every tick, while a controller is listening, sample surface
 // columns, entities, ground items and watched blocks inside the camera's real
-// field of view and remember what a sightline reaches. Nothing is learned by
+// field of view and remember what a line of sight reaches. Nothing is learned by
 // asking; the head has to point there. Radius shrinks with darkness; nothing
 // below the visible surface, behind a ridge or in an unloaded chunk is ever
 // reported. Entities within 16 blocks are also reported as heard, the one
@@ -165,7 +165,7 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
             if (blocks.GetMapChunkAtBlockPos(new BlockPos(x, 0, z, 0)) == null ||
                 blocks.GetChunkAtBlockPos(new BlockPos(x, (int)eye.Y, z, 0)) == null) continue;
             // The rain map only says where to start looking down the column;
-            // the descent stops at the first surface and the sightline decides.
+            // the descent stops at the first surface and the line of sight decides.
             int top = Math.Min(blocks.GetRainMapHeightAt(x, z), (int)Math.Floor(eye.Y) + radius);
             string? kind = null, code = null; double surface = 0; BlockPos? target = null;
             bool canopy = false, loaded = true;
@@ -240,8 +240,8 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
         if (sweeping && pending.Count == 0) { sweeping = false; Sweeps++; }
     }
 
-    // Entities and ground items: seen when a sightline inside the field of view
-    // reaches them, near within the eight-block awareness ring, heard within
+    // Entities and ground items: seen when a line of sight inside the field of view
+    // reaches them, near within the eight-block surroundings ring, heard within
     // sixteen blocks otherwise (living entities only; items make no sound).
     private void SampleEntities(Entity player, Point3 eyePoint, Vec3d origin, double yaw, double pitch,
         double halfYaw, double halfPitch, int radius, long now)

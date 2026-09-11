@@ -39,7 +39,7 @@ export class TerrainMemory {
   dry(p, w, h, margin = .55, missing, requireKnown = false) {
     // Keep planned body positions away from liquid/fire cells, including
     // hazards below a ledge. A dry block beside water two levels down is still
-    // an unsafe waypoint: slopes, gravity, and one bounded frame can carry the
+    // an unsafe checkpoint: slopes, gravity, and one bounded frame can carry the
     // player over that edge before the next observation arrives.
     const body = [p.x - w - margin, p.y - 2, p.z - w - margin,
       p.x + w + margin, p.y + h, p.z + w + margin];

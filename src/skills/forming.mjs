@@ -96,7 +96,7 @@ export async function form(field, { kind, output, material }) {
     for (let i = 0; i < 15 && !detail?.forming?.recipe; i++) { await field.wait(200); detail = await inspectSurface(field, cell); }
     if (detail?.forming?.recipe?.output !== output) return { ok: false, reason: 'recipe_not_selected', ...summary() };
   }
-  let stalled = 0, lastRemaining = detail.forming.remaining;
+  let stuck = 0, lastRemaining = detail.forming.remaining;
   const skipped = new Set();
   while (true) {
     await field.observe(true);
@@ -131,7 +131,7 @@ export async function form(field, { kind, output, material }) {
     await field.wait(350);
     detail = await inspectSurface(field, cell);
     if (detail?.forming) {
-      if (detail.forming.remaining < lastRemaining) { stalled = 0; skipped.clear(); } else if (++stalled >= 12) return { ok: false, reason: 'no_progress', ...summary(), remaining: detail.forming.remaining };
+      if (detail.forming.remaining < lastRemaining) { stuck = 0; skipped.clear(); } else if (++stuck >= 12) return { ok: false, reason: 'no_progress', ...summary(), remaining: detail.forming.remaining };
       lastRemaining = detail.forming.remaining;
     }
   }

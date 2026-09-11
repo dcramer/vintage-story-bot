@@ -7,7 +7,7 @@ Seraph is a bot system for Vintage Story: client C# mod → Node controller → 
 
 ## Terms
 
-Use Vintage Story's word when one exists; otherwise these, exactly. No new synonyms. Backticks give the code name where it differs.
+Use Vintage Story's word when one exists; otherwise these, exactly. No new synonyms. Backticks give the mod-protocol name where it differs.
 
 Game:
 
@@ -35,31 +35,31 @@ Seraph system:
 - **goal**: a public tool for longer work (`src/goals`); start it, check it by id, stop it; one at a time.
 - **skill**: reusable Node behavior that goals share (`src/skills`).
 - **feature flag**: what the mod says it supports (`observe.capabilities`); check it, never the mod version.
-- **control**: the controller's exclusive, short-lived hold on the inputs; each input renews it (`lease`).
-- **release**: the mod dropping every held input on stop, damage, death, menus, manual input or F8; nothing resumes (`revoke`).
+- **control hold**: the controller's exclusive, short-lived hold on the inputs; each input renews it.
+- **release**: the mod dropping every held input on stop, damage, death, menus, manual input or F8; nothing resumes.
 - **vitals**: health, satiety and oxygen.
 - **eye**: where the player looks from; it checks lines of sight across the camera's view.
-- **line of sight**: an unblocked line from the eye; nothing is known unless one reached it (`sightline`).
-- **surroundings**: exact block shapes within 8 blocks, in every direction (`near-field`, "awareness").
-- **far view**: ground heights seen in the camera's view, up to 64 blocks by day, a torch's reach at night (`far-field`, `surface`).
+- **line of sight**: an unblocked line from the eye; nothing is known unless one reached it.
+- **surroundings**: exact block shapes within 8 blocks, in every direction.
+- **far view**: ground heights seen in the camera's view, up to 64 blocks by day, a torch's reach at night (`surface`).
 - **cell**: one block position (x,y,z).
 - **column**: one x,z spot and the ground seen there: ground, canopy, water or hazard.
-- **hazard**: liquid or fire; paths keep a margin from it.
+- **hazard**: liquid or fire; routes keep a margin from it.
 - **unknown**: not seen, not loaded or too old; never assume air or safe.
 - **sighting**: an entity, item or watched block the eye confirmed: where, when and how (`seen`, `near`, `heard`).
 - **heard**: a living creature within 16 blocks with no line of sight; the only non-visual sense.
 - **watch list**: block codes the eye is looking out for (`watch`).
-- **standing spot**: a cell where the body fits and has support.
-- **path**: standing spots joined by straight steps, each checked against memory before moving (`route`).
-- **rough path**: a long path over far-view columns toward a distant target (`corridor`).
-- **leg**: one stretch of a path walked before looking again (≤40 blocks).
-- **stuck**: moving without progress; triggers a new path or a recovery (`stall`).
-- **leaf clearing**: breaking up to three leaf blocks to get unstuck; never used to plan paths (`clearance`).
+- **checkpoint**: a cell along a route where the body fits and has support; the bot walks from one to the next.
+- **route**: checkpoints joined by straight steps, each checked against memory before moving.
+- **rough route**: a long route over far-view columns toward a distant target.
+- **leg**: one stretch of a route walked before looking again (≤40 blocks).
+- **stuck**: moving without progress; triggers a new route or a recovery.
+- **leaf clearing**: breaking up to three leaf blocks to get unstuck; never used to plan routes.
 - **threat**: a hostile seen, heard or recently seen within range; the bot moves away until it is clear.
 - **forage**: picking food from the world (berries, mushrooms, wild crops) from a safe list.
-- **pause**: stopping travel for something more urgent (food, storm), then carrying on (`yielded`).
-- **skip**: ignoring a target for a while after a failed attempt (`reject`, "quarantine").
-- **waypoint**: a named place, like a marker on the game map (`set_poi`, `pois`); steps of a path are not waypoints.
+- **pause**: stopping travel for something more urgent (food, storm), then carrying on.
+- **skip**: ignoring a target for a while after a failed attempt.
+- **waypoint**: a named place, like a marker on the game map (`set_waypoint`, `waypoints`).
 - **verify**: confirm by what changed in blocks, inventory or health, never by the reply alone.
 - **prediction**: what the client shows before the server agrees; it may be undone.
 - **operator**: a human using screenshots, clicks and keys; never part of gameplay.
@@ -81,14 +81,14 @@ Details and rationale: [architecture](docs/architecture.md#design-intent), [game
 
 The split is by what a player does in one act, never by convenience.
 
-- **Mod = one player act, sensed or performed.** Every mod action is exactly one of: a read of what the camera is seeing right now (own state, the surroundings feed, the far view feed, objects in view, the HUD of the aimed target, inventory as the player sees it) or an act of input (hold keys for a bounded duration, aim, select a slot, press or hold a mouse button on the aimed target, move one inventory slot). Each returns what the game shows and finishes on its own. The mod never decides where to look, where to go, what to do next, or whether to retry, and never chains two acts. The only logic it keeps is safety that must hold even if Node dies: the control lease and its expiry, life sampling that releases inputs on damage/death/menus, F8 and manual-input revoke, mutation refusals while a lease is held.
-- **Node = anything with a decision in it, and all memory.** The mod reports what the eye sees this instant; Node keeps what was seen, for how long, and what it means. Planning (where to look next, paths, rough paths), sequencing (look, walk, then act), verification by observed deltas, retries, food and threat policy, goals. If a behavior needs "then", "until", "unless", "remember" or "toward", it is Node, composed from existing actions.
-- **Test for new work:** "Can a player do this with one look or one input?" Yes → a mod action in `mod/Sensors` or `mod/Actuators`, a capability flag, and a thin `src/actions` tool. No → a skill or goal in Node; add a mod action only for the single act still missing underneath it.
+- **Mod = one player act, sensed or performed.** Every mod action is exactly one of: a read of what the camera is seeing right now (own state, the surroundings feed, the far view feed, objects in view, the HUD of the aimed target, inventory as the player sees it) or an act of input (hold keys for a bounded duration, aim, select a slot, press or hold a mouse button on the aimed target, move one inventory slot). Each returns what the game shows and finishes on its own. The mod never decides where to look, where to go, what to do next, or whether to retry, and never chains two acts. The only logic it keeps is safety that must hold even if Node dies: the control hold and its expiry, life sampling that releases inputs on damage/death/menus, F8 and manual-input release, mutation refusals while control is held.
+- **Node = anything with a decision in it, and all memory.** The mod reports what the eye sees this instant; Node keeps what was seen, for how long, and what it means. Planning (where to look next, routes, rough routes), sequencing (look, walk, then act), verification by observed deltas, retries, food and threat policy, goals. If a behavior needs "then", "until", "unless", "remember" or "toward", it is Node, composed from existing actions.
+- **Test for new work:** "Can a player do this with one look or one input?" Yes → a mod action in `mod/Sensors` or `mod/Actuators`, a feature flag, and a thin `src/actions` tool. No → a skill or goal in Node; add a mod action only for the single act still missing underneath it.
 - **Consequences.** No mod-side pathfinding, target search, auto-collect or multi-step recipes; holding a key until the game itself finishes the act (a block breaks) is still one act, and so is streaming what the camera sees. No Node-side hidden-world reads: Node knows only what mod samples returned. Sensing returns bounded pages, never the whole world; inputs run for bounded durations, never open-ended.
 
 | Player act (mod) | Decision (Node) |
 | --- | --- |
-| `sense`: the camera's current view as deltas: surroundings within 8 blocks, far view in the camera's view, entities/items/watched blocks a line of sight reached | `walk`: turn toward the destination, remember what came into view, choose a rough path, look again per leg; `findRoute`: safe standing spots and steps, new paths, getting unstuck |
+| `sense`: the camera's current view as deltas: surroundings within 8 blocks, far view in the camera's view, entities/items/watched blocks a line of sight reached | `walk`: turn toward the destination, remember what came into view, choose a rough route, look again per leg; `findRoute`: safe checkpoints and steps, new routes, getting unstuck |
 | `look`: turn the head | `lookAhead`: where to look, for how long, and what the landscape means |
 | `watch`: what the eye is currently looking for | `scan`: set attention, wait one sweep, choose targets from what was seen |
 | `block_action_begin`: hold click on the aimed cell until it changes or expires | `dig_block`: pick the cell, walk into range, aim, act, verify air, handle drops |
@@ -103,9 +103,9 @@ The split is by what a player does in one act, never by convenience.
 | `src/skills/` | Reusable behaviors (fieldwork, food, blocks, travel, forming…) and the `task.mjs` harness. | A behavior two goals share. `fieldwork.mjs`/`survival.mjs` are hubs: keep edits minimal. |
 | `src/navigation/` | Terrain memory, planning, steering; pure, no I/O. | Route/terrain logic only. |
 | `src/controller/` | Service, tool registry, shared zod fragments, goal lifecycle. | Lifecycle or cross-tool contract changes only. |
-| `src/game/`, `src/bridge/` | Mod RPC client, control leases, transport. | Wire protocol changes (pair with `mod/`). |
+| `src/game/`, `src/bridge/` | Mod RPC client, control holds, transport. | Wire protocol changes (pair with `mod/`). |
 | `src/mcp/`, `src/operator/`, `scripts/` | Adapters, operator UI, launch/CLI. | Never import gameplay code into `operator/`. |
-| `mod/Bridge/` | `AiBridgeMod` partials: lifecycle/dispatch, `Sensing`, `Movement`, `Hands`; lease and life tracker. | New mod action (dispatch line + method in the owning partial) or safety rule. |
+| `mod/Bridge/` | `AiBridgeMod` partials: lifecycle/dispatch, `Sensing`, `Movement`, `Hands`; control hold and life tracker. | New mod action (dispatch line + method in the owning partial) or safety rule. |
 | `mod/Sensors/` | Read-only perception classes. | New observation. Must respect the perception limits above. |
 | `mod/Actuators/` | Input-driven mutations (blocks, inventory, forming). | New interaction. Must go through native input/packets. |
 | `test/` | Unit checks: `*.test.mjs` (Node), `test/mod/` (C#). | Critical regressions only. |
@@ -116,7 +116,7 @@ Tools are discovered by filename: the basename is the public name and the file m
 ## Working in parallel
 
 - Add a tool as a new file; extend an existing one only if you own that change. Do not touch unrelated tools, hubs or docs in the same commit.
-- New mod behavior: add the mod action in `mod/Bridge/AiBridgeMod.cs` dispatch, implement it in the owning partial or a new `Sensors`/`Actuators` class, and advertise a capability flag in `observe.capabilities`. Node checks the flag (`field.start([...])`), never the mod version.
+- New mod behavior: add the mod action in `mod/Bridge/AiBridgeMod.cs` dispatch, implement it in the owning partial or a new `Sensors`/`Actuators` class, and advertise a feature flag in `observe.capabilities`. Node checks the flag (`field.start([...])`), never the mod version.
 - Wire changes land mod and Node sides together; public schemas change with behavior. MCP/CLI need no edits.
 - Check the working tree before editing; preserve others' uncommitted changes, never revert or overwrite work you did not make, never stash or rebase over it.
 - Commit one verified slice at a time on `main`, push, then pull/rebase when the tree is clean. No branches or pull requests.
