@@ -10,18 +10,24 @@ const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const intersects = (a, b) => a[0] < b[3] - .001 && a[3] > b[0] + .001 && a[1] < b[4] - .001 && a[4] > b[1] + .001 && a[2] < b[5] - .001 && a[5] > b[2] + .001;
 
 export class TerrainMemory {
-  cells = new Map(); session = null; cursor = 0; now = 0;
+  cells = new Map(); hazards = new Map(); session = null; cursor = 0; now = 0;
   apply(batch) {
-    if (batch.reset || batch.session !== this.session) this.cells.clear();
+    if (batch.reset || batch.session !== this.session) { this.cells.clear(); this.hazards.clear(); }
     this.session = batch.session; this.cursor = batch.cursor; this.now = batch.clock;
     for (const [x, y, z, at, hazard, boxes] of batch.cells) {
       const id = cellKey(x, y, z);
-      if (boxes === null) this.cells.delete(id);
-      else this.cells.set(id, { x, y, z, at, hazard, boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) });
+      if (boxes === null) this.forget(id);
+      else {
+        const cell = { x, y, z, at, hazard, boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) };
+        this.cells.set(id, cell);
+        // Hazards are few; index them so margin checks never scan the whole cache.
+        if (hazard) this.hazards.set(id, cell); else this.hazards.delete(id);
+      }
     }
-    for (const [id, cell] of this.cells) if (this.now - cell.at > 120000) this.cells.delete(id);
-    while (this.cells.size > 16384) this.cells.delete(this.cells.keys().next().value);
+    for (const [id, cell] of this.cells) if (this.now - cell.at > 120000) this.forget(id);
+    while (this.cells.size > 16384) this.forget(this.cells.keys().next().value);
   }
+  forget(id) { this.cells.delete(id); this.hazards.delete(id); }
   get(x, y, z) { return this.cells.get(cellKey(Math.floor(x), Math.floor(y), Math.floor(z))); }
   missing(missing, x, y, z) { missing?.set(cellKey(Math.floor(x), Math.floor(y), Math.floor(z)), { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) }); }
   // An unknown cell sealed under known solid ground can never be observed by a
@@ -75,8 +81,8 @@ export class TerrainMemory {
   }
   hazardDistance(p, h) {
     let nearest = Infinity;
-    for (const cell of this.cells.values()) {
-      if (!cell.hazard || cell.y + 1 < p.y - 2 || cell.y > p.y + h) continue;
+    for (const cell of this.hazards.values()) {
+      if (cell.y + 1 < p.y - 2 || cell.y > p.y + h) continue;
       const dx = Math.max(cell.x - p.x, 0, p.x - cell.x - 1);
       const dz = Math.max(cell.z - p.z, 0, p.z - cell.z - 1);
       nearest = Math.min(nearest, Math.hypot(dx, dz));

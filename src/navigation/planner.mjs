@@ -9,8 +9,12 @@ const jumpDirections = [
   [2, 2], [2, -2], [-2, 2], [-2, -2],
   [3, 0], [-3, 0], [0, 3], [0, -3],
 ];
+// Bounded like mineflayer-pathfinder's thinkTimeout: planning runs between two
+// control frames, so it must finish well inside the two-second heartbeat.
+// When the budget or deadline runs out the best partial frontier is returned.
 export function findRoute(map, start, goal, w, h,
-  { blocked = new Set(), visits = new Map(), partial = true, budget = 512, avoid = [] } = {}) {
+  { blocked = new Set(), visits = new Map(), partial = true, budget = 512, avoid = [], deadlineMs = 250 } = {}) {
+  const deadline = performance.now() + deadlineMs;
   const remaining = p => goal.horizontalOnly ? horizontal(p, goal) : distance(p, goal);
   const safe = p => avoid.every(item => horizontal(p, item.point) >= item.minimumDistance);
   const centers = [];
@@ -47,7 +51,7 @@ export function findRoute(map, start, goal, w, h,
       : map.traverse(start, list[1], w, h, true))) list.shift();
     return list;
   };
-  while (open.length && closed.size < budget) {
+  while (open.length && closed.size < budget && performance.now() < deadline) {
     open.sort((a, b) => b.score - a.score);
     const at = open.pop().p, id = key(at);
     if (closed.has(id)) continue;
@@ -62,9 +66,10 @@ export function findRoute(map, start, goal, w, h,
       const score = remaining(at) + costs.get(id) * .15;
       if (score < best) { best = score; frontier = at; }
     }
+    const failed = new Set();
     for (const [dx, dz] of directions) {
       const next = map.stand(at.x + dx, at.z + dz, at.y, w, h);
-      if (!next || !safe(next) || blocked.has(`${id}>${key(next)}`) || !map.traverse(at, next, w, h)) continue;
+      if (!next || !safe(next) || blocked.has(`${id}>${key(next)}`) || !map.traverse(at, next, w, h)) { failed.add(`${dx},${dz}`); continue; }
       const cost = costs.get(id) + Math.hypot(dx, dz) + Math.abs(next.y - at.y), nextId = key(next);
       if ((costs.get(nextId) ?? Infinity) <= cost) continue;
       costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: next, score: cost + remaining(next) });
@@ -72,7 +77,9 @@ export function findRoute(map, start, goal, w, h,
     // A single observed hole or gap must not strand the bot on a terrain
     // island. Gap edges carry an explicit marker so execution jumps only the
     // exact segment whose landing and arc were validated by TerrainMemory.
+    // They are escape edges: tried only where the ordinary step that way failed.
     if (typeof map.jumpTraverse === 'function') for (const [dx, dz] of jumpDirections) {
+      if (!failed.has(`${Math.sign(dx)},${Math.sign(dz)}`)) continue;
       const landing = map.stand(at.x + dx, at.z + dz, at.y, w, h);
       if (!landing || !safe(landing) || !map.jumpTraverse(at, landing, w, h)) continue;
       // Prefer a same-length supported detour; jumping is an escape edge, not

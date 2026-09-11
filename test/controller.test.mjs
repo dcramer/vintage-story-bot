@@ -438,7 +438,9 @@ test('lost frame acknowledgement is not retried and releases ownership', async (
   assert.equal((await controller.request(target)).ok, true); await frame;
   for (let i = 0; controller.active && i < 100; i++) await new Promise(r => setTimeout(r, 5));
   assert.equal(controller.active, null);
-  assert.equal(controller.view().state, 'blocked');
+  // Ownership is uncertain after a lost acknowledgement: the walk is cancelled, not blocked terrain.
+  assert.equal(controller.view().state, 'cancelled');
+  assert.match(controller.view().reason, /^control_lost/);
   assert.equal(calls.filter(c => c.action === 'control_step').length, 1);
   assert.equal(calls.filter(c => c.action === 'sense').length, 1);
   assert.equal(calls.filter(c => c.action === 'control_end').length, 1);

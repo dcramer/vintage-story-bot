@@ -63,7 +63,9 @@ export class Controller {
     const tick = async () => {
       if (this.closing) return;
       let delay = intervalMs;
-      try { await Effect.runPromise(this.game.sense()); } catch { delay = 2000; }
+      // A walking goal's control frames already carry the feed; extra reads
+      // would only compete with them on the game thread.
+      if (!this.active?.nav?.active) { try { await Effect.runPromise(this.game.sense()); } catch { delay = 2000; } }
       if (!this.closing) this.eyeTimer = setTimeout(tick, delay);
     };
     this.eyeTimer = setTimeout(tick, intervalMs);
@@ -193,7 +195,11 @@ export class Controller {
           forward: frame?.forward ?? false, jump: frame?.jump ?? false, sprint: frame?.sprint ?? false,
           sneak: frame?.sneak ?? false, focus: frame?.focus ?? null, durationMs: frame?.durationMs ?? 500 };
         self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
-        const batch = yield* control.step(input);
+        // A refused frame means the hold is gone (expired, revoked, manual
+        // input): the walk is cancelled, never blocked terrain.
+        const stepped = yield* Effect.either(control.step(input));
+        if (stepped._tag === 'Left') { nav.finish('cancelled', 'control_lost: ' + stepped.left.message); break; }
+        const batch = stepped.right;
         state = batch.state;
         if (state.player.uid !== initial.player.uid || state.life.session !== initial.life.session || state.control.owner !== control.owner ||
           !state.controlReady || !state.alive || state.life.lastDamageAt !== initial.life.lastDamageAt ||
@@ -210,10 +216,11 @@ export class Controller {
         // Renew immediately after the sensed step, before deterministic route
         // planning on the next iteration. Repeating the already-vetted frame for
         // one game tick keeps planning time outside the heartbeat critical path.
-        yield* control.frame(batch.terrain.reset ? {
+        const renewed = yield* Effect.either(control.frame(batch.terrain.reset ? {
           yawDegrees: state.orientation.yawDegrees, pitchDegrees: 15,
           forward: false, jump: false, sprint: false, sneak: false, focus: null,
-        } : input);
+        } : input));
+        if (renewed._tag === 'Left') { nav.finish('cancelled', 'control_lost: ' + renewed.left.message); break; }
       }
       if (started) record.state = nav.state;
       self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
