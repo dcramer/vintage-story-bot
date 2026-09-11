@@ -91,6 +91,19 @@ test('navigation sneaks through a nearby sharp waypoint', () => {
   assert.equal(frame.sneak, true);
 });
 
+test('navigation keeps recentering safely from partial edge support', () => {
+  const traversals = [];
+  const map = { cells: new Map(), support: () => 9, clear: () => true,
+    traverse: (_, __, ___, ____, recenter) => (traversals.push(recenter), recenter), views: () => new Map() };
+  const state = { position: { x: .9, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 75 }, vitals: { hunger: { current: 1000, max: 1500 } } };
+  const nav = new Navigation(map, state, { x: 5.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
+  nav.state = 'moving'; nav.route = [{ x: 1.5, y: 0, z: .5 }]; nav.edgeStart = state.position;
+  const frame = nav.tick(state, 500);
+  assert.equal(frame.forward, true);
+  assert.deepEqual(traversals, [true, true]);
+});
+
 test('shared controller excludes mutations/UI and Effect interruption releases its owner', async () => {
   const { controller, calls, frame } = fixture();
   const result = await controller.request(target);
