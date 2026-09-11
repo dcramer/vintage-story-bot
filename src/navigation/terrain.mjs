@@ -113,7 +113,8 @@ export class TerrainMemory {
           kind = 'jump'; cost = d + 1.5;
         } else if (rise < -STEP_HEIGHT) {
           if (diagonal || this.shore(to) || !this.clearBetween(x + dx, z + dz, to.y, t + BODY_HEIGHT, missing)) continue;
-          kind = 'drop'; cost = d + .4 * -rise;
+          // Stepping down is cheap; a stair of big drops is not a shortcut.
+          kind = 'drop'; cost = d + (-rise > 1.5 ? 1.5 * -rise : .4 * -rise);
         } else {
           if (diagonal) {
             const low = Math.min(t, to.y), high = Math.max(t, to.y);

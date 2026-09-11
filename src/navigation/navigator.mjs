@@ -97,7 +97,9 @@ export class Navigation {
     // Advance past checkpoints the body has reached: close by, or crossed
     // along the segment between slow samples.
     const reached = node => {
-      if (Math.abs(p.y - node.y) > .6 && !(node.move === 'drop' && p.y < node.y + .6 && p.y > node.y - .6)) return false;
+      if (Math.abs(p.y - node.y) > .6) return false;
+      // A cell reached by dropping counts only once the body has landed on it.
+      if (node.y < this.edgeStart.y - STEP_HEIGHT) return grounded && horizontal(p, node) < .5;
       if (horizontal(p, node) < .4) return true;
       const dx = node.x - this.edgeStart.x, dz = node.z - this.edgeStart.z, length = Math.hypot(dx, dz);
       if (length < .01) return false;
@@ -156,16 +158,26 @@ export class Navigation {
     // jump even if the route reached it on the level.
     const rise = next.y - p.y;
     const jumpMove = next.move === 'gap' || rise > STEP_HEIGHT;
-    const tight = near < 2 && (jumpMove || rise < -STEP_HEIGHT || turn > 60);
-    const durationMs = tight || yawMagnitude > 30 ? 180 : 500;
+    const dropping = rise < -STEP_HEIGHT;
+    const tight = near < 2 && (jumpMove || dropping || turn > 60);
+    const durationMs = dropping && near < 1.2 ? 120 : tight || yawMagnitude > 30 ? 180 : 500;
     // Jumps go straight at the cell from close by; everything else keeps
     // walking through the bend while the head comes round.
     if (jumpMove && grounded && !this.jumpAt && yawMagnitude < 15 && near < (next.move === 'gap' ? 2.2 : 1.3)) this.jumpAt = now;
     if (this.jumpAt && !grounded) this.airborne = true;
     if (this.jumpAt && now - this.jumpAt > 2500) return this.replan(p, now, 'jump_failed');
-    const walking = jumpMove && near < 1.3 && !this.jumpAt ? yawMagnitude < 15 : yawMagnitude < 60 || durationMs === 180 && yawMagnitude <= 90;
+    let walking = jumpMove && near < 1.3 && !this.jumpAt ? yawMagnitude < 15 : yawMagnitude < 60 || durationMs === 180 && yawMagnitude <= 90;
+    // A drop is walked to the edge, then left with one short step so the
+    // body lands on the cell below instead of flying past it. Walking pace
+    // off an edge carries about two blocks before a three-block fall lands.
+    if (dropping && near < 1.2) {
+      if (yawMagnitude > 20) walking = false;
+      else if (near > .62) walking = true;
+      else if (this.steppedOff !== next) { this.steppedOff = next; walking = true; }
+      else walking = false;
+    }
     // Falling: let gravity land the body on the validated lower cell.
-    if (!grounded && !this.jumpAt) return { yawDegrees, pitchDegrees: 15, forward: false, jump: false, sprint: false, sneak: false, durationMs: 180 };
+    if (!grounded && !this.jumpAt) return { yawDegrees, pitchDegrees: 15, forward: false, jump: false, sprint: false, sneak: false, durationMs: 120 };
     const food = state.vitals?.hunger;
     const emergency = this.evading || this.target.emergency;
     const straight = turn < 5 && next.move === 'walk' && near > 3 && yawMagnitude < 5;
