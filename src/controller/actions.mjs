@@ -38,6 +38,7 @@ import build from './actions/build.mjs';
 import selectRecipe from './actions/select_recipe.mjs';
 import knap from './actions/knap.mjs';
 import clayform from './actions/clayform.mjs';
+import chat from './actions/chat.mjs';
 
 export const actions = [
   api,
@@ -79,5 +80,6 @@ export const actions = [
   selectRecipe,
   knap,
   clayform,
+  chat,
   stop,
 ];

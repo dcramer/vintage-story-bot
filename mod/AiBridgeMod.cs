@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.Client.NoObf;
 
 namespace VintageStoryAI;
@@ -259,7 +260,7 @@ public sealed class AiBridgeMod : ModSystem
                 return new
                 {
                     ok = true,
-                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming" },
+                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat" },
                     observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
                     world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString() },
@@ -442,6 +443,16 @@ public sealed class AiBridgeMod : ModSystem
                 handStopAt = Environment.TickCount64 + handMilliseconds;
                 SetHandButtons();
                 return new { ok = true, status = "started", durationMs = handMilliseconds };
+            case "chat":
+                if (!request.TryGetProperty("message", out var chatField) || chatField.ValueKind != JsonValueKind.String)
+                    return new { ok = false, error = "Supply a message string." };
+                var chatText = chatField.GetString()!.Replace('\n', ' ').Replace('\r', ' ').Trim();
+                // Never let generated status text be interpreted as a chat command.
+                while (chatText.Length > 0 && (chatText[0] == '/' || chatText[0] == '.')) chatText = chatText[1..].TrimStart();
+                if (chatText.Length == 0) return new { ok = false, error = "Empty chat message." };
+                if (chatText.Length > 256) chatText = chatText[..256];
+                api.SendChatMessage(chatText, GlobalConstants.GeneralChatGroup, null);
+                return new { ok = true, status = "sent", message = chatText };
             case "sense":
                 long cursor = 0;
                 if (request.TryGetProperty("after", out var cursorField) && (!cursorField.TryGetInt64(out cursor) || cursor < 0))

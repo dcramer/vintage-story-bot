@@ -93,11 +93,17 @@ export class Controller {
       return result;
     })));
   }
+  // Fire-and-forget status chat so other players on the server can follow what the bot is doing.
+  announce(kind, args) {
+    const message = describeGoal(kind, args);
+    if (message) Promise.resolve().then(() => this.send({ action: 'chat', message })).catch(() => {});
+  }
   launch(kind, args, work) {
     const started = Effect.runSync(Deferred.make());
     const record = { id: randomUUID(), kind, args, state: 'starting', startedAt: Date.now() };
     this.active = this.last = record;
     this.track(record);
+    this.announce(kind, args);
     const program = Effect.scoped(work(record, started)).pipe(
       Effect.catchAllCause(cause => Effect.gen(function* () {
         const error = String(Cause.squash(cause));
@@ -209,5 +215,33 @@ export class Controller {
       record.result = yield* attempt(() => running);
       record.state = record.result.ok ? 'arrived' : 'blocked';
     });
+  }
+}
+
+const cleanName = code => String(code ?? '').split(':').pop().replace(/[-_]/g, ' ').trim() || 'something';
+
+// Short, human-sounding description of a starting goal for server chat.
+export function describeGoal(kind, args = {}) {
+  switch (kind) {
+    case 'move_to': return 'Heading over to take a look.';
+    case 'collect_stick': return 'Grabbing a stick.';
+    case 'gather_sticks': return 'Collecting some sticks.';
+    case 'forage': return 'Foraging for a bite to eat.';
+    case 'eat': return 'Stopping for a bite.';
+    case 'equip': return 'Sorting out my gear.';
+    case 'collect_item': return 'Picking something up.';
+    case 'dig_block': return 'Digging a block.';
+    case 'place_block': return 'Placing a block.';
+    case 'craft_item': return `Crafting ${cleanName(args.output)}.`;
+    case 'harvest': return `Off to gather ${cleanName(args.item ?? args.match)}.`;
+    case 'fell_tree': return 'Chopping down a tree for logs.';
+    case 'use_on_block': return `Working on a block${args.item ? ` with ${cleanName(args.item)}` : ''}.`;
+    case 'travel': return args.poi ? `Traveling to ${args.poi}.` : 'Setting off on a journey.';
+    case 'explore': return 'Exploring the area a bit.';
+    case 'dig_area': return 'Clearing out an area.';
+    case 'build': return `Building a ${(args.preset?.kind ?? 'structure').replace(/[-_]/g, ' ')}.`;
+    case 'knap': return `Knapping ${cleanName(args.output)}.`;
+    case 'clayform': return `Forming ${cleanName(args.output)} out of clay.`;
+    default: return `Starting to ${String(kind).replace(/[-_]/g, ' ')}.`;
   }
 }
