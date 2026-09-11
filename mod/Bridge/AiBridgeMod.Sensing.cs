@@ -22,7 +22,7 @@ public sealed partial class AiBridgeMod
         return new
         {
             ok = true,
-            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs" },
+            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_survey" },
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
             world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString() },
@@ -109,6 +109,21 @@ public sealed partial class AiBridgeMod
             scanCursor = scanCursorField.GetString();
         }
         return sensor.Scan(radius, limit, kind, matches, scanCursor);
+    }
+
+    private object Survey(JsonElement request)
+    {
+        int radius = 48;
+        if (request.TryGetProperty("radius", out _) && (!TryInteger(request, "radius", out radius) || radius < 8 || radius > 64))
+            return new { ok = false, error = "radius: integer 8–64." };
+        string? surveyCursor = null;
+        if (request.TryGetProperty("cursor", out var surveyCursorField))
+        {
+            if (surveyCursorField.ValueKind != JsonValueKind.String || !Guid.TryParseExact(surveyCursorField.GetString(), "N", out _))
+                return new { ok = false, error = "cursor must be a returned survey cursor." };
+            surveyCursor = surveyCursorField.GetString();
+        }
+        return survey.Survey(radius, surveyCursor);
     }
 
     private object Events(JsonElement request)

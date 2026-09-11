@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { Effect } from 'effect';
 import { requestBridge } from '../bridge/client.mjs';
 import { TerrainMemory } from '../navigation/terrain.mjs';
+import { SurfaceMemory } from '../navigation/surface.mjs';
 
 // Game RPC only. Policies never construct lease owners, sequences or terrain cursors.
 export class GameClient {
   map = new TerrainMemory();
+  surface = new SurfaceMemory();
   constructor(send = requestBridge) { this.send = send; }
   io(request) {
     return Effect.tryPromise({

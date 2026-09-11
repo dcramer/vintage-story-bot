@@ -23,6 +23,7 @@ public sealed partial class AiBridgeMod : ModSystem
     private PausedDispatcher? pausedDispatcher;
     private long tickListener;
     private SceneSensor sensor = null!;
+    private SurveySensor survey = null!;
     private LifeTracker life = new();
     private InventoryAdapter inventory = null!;
     private ContextSensor context = null!;
@@ -40,6 +41,7 @@ public sealed partial class AiBridgeMod : ModSystem
         api.Event.BlockChanged += terrainSensor.Changed;
         api.Input.InWorldAction += RetainOwnedMovement;
         sensor = new SceneSensor(api, CanControl);
+        survey = new SurveySensor(api, CanControl);
         inventory = new InventoryAdapter(api);
         context = new ContextSensor(api);
         blockActions = new BlockActions(api);
@@ -63,6 +65,7 @@ public sealed partial class AiBridgeMod : ModSystem
         worldInteractions = (api.World as ClientMain)?.clientSystems
             .OfType<SystemMouseInWorldInteractions>().FirstOrDefault();
         sensor.Reset();
+        survey.Reset();
         terrainSensor.Reset();
         control.Revoke("world_changed");
         life = new LifeTracker();
@@ -262,6 +265,7 @@ public sealed partial class AiBridgeMod : ModSystem
             case "observe": return Observe();
             case "sense": return Sense(request);
             case "scan": return Scan(request);
+            case "survey": return Survey(request);
             case "inspect_target": return CanControl() ? context.InspectTarget(life.Session) : new { ok = false, error = "Close menus and unpause before inspecting." };
             case "environment": return context.Environment(life.Session);
             case "events": return Events(request);
@@ -307,6 +311,7 @@ public sealed partial class AiBridgeMod : ModSystem
         ReleaseControl("bridge_off");
         terrainSensor?.Reset();
         sensor?.Reset();
+        survey?.Reset();
         StopMovement();
         StopHandAction();
         if (priorWorldInteraction.HasValue)

@@ -1,5 +1,6 @@
 import { horizontal, lookAt, normalize } from '../navigation/terrain.mjs';
 import { findRoute } from '../navigation/planner.mjs';
+import { nextLeg, planCorridor } from '../navigation/surface.mjs';
 import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.mjs';
 
 export const area = p => `${Math.floor(p.x / 16)},${Math.floor(p.z / 16)}`;
@@ -85,6 +86,40 @@ export class Fieldwork {
     await this.observe();
     await this.env.aim(angles, { allowStarvingRecovery: this.recoveringFood });
     await this.observe();
+  }
+  // Look toward a destination and take in the landscape, the way a player
+  // picks a line across a valley before walking it. Read-only and stationary;
+  // absent columns stay unknown, and every leg is still validated by the fine
+  // navigator against observed nearby terrain.
+  async survey(toward, radius = sightRange) {
+    if (!this.env.surface || !this.latest.capabilities.includes('surface_survey')) return 0;
+    const p = this.latest.position;
+    const look = toward ? lookAt({ ...p, y: p.y + this.latest.body.eyeHeight }, toward) : { yawDegrees: this.heading, pitchDegrees: 0 };
+    await this.aim({ yawDegrees: look.yawDegrees, pitchDegrees: Math.max(-30, Math.min(30, look.pitchDegrees)) });
+    let cursor, columns = 0;
+    do {
+      const page = await this.env.send({ action: 'survey', radius, ...(cursor ? { cursor } : {}) });
+      if (page.code === 'survey_expired') break;
+      if (!page.ok) throw Error(page.error ?? 'Survey refused');
+      columns += this.env.surface.apply(page);
+      cursor = page.more ? page.cursor : null;
+    } while (cursor);
+    this.env.surface.prune();
+    await this.observe();
+    return columns;
+  }
+  // Next bounded leg along the surveyed corridor toward a far goal, or null
+  // when nothing visible leads there. Penalized 16x16 areas cost extra so a
+  // leg that already failed on the ground is not replanned identically.
+  corridor(goal, { maxDistance = 40 } = {}) {
+    if (!this.env.surface) return null;
+    const p = this.latest.position;
+    const plan = planCorridor(this.env.surface, p, goal, { penalty: column => (this.visits.get(area(column)) ?? 0) * 6 });
+    const point = plan.waypoints.length ? nextLeg(plan.waypoints, p, { maxDistance }) : null;
+    this.corridorStatus = { status: plan.status, reason: plan.reason, waypoints: plan.waypoints.length, explored: plan.explored,
+      end: plan.waypoints.at(-1) ? { x: plan.waypoints.at(-1).x, z: plan.waypoints.at(-1).z } : null };
+    if (!point || horizontal(p, point) < 2) return null;
+    return { x: point.x, y: point.y, z: point.z, horizontalOnly: true, arrivalRadius: Math.min(3, Math.max(1, point.step)), corridor: plan.status };
   }
   async scan(radius, match, kind = 'all') {
     let cursor;

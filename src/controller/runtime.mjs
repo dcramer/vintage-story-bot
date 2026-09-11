@@ -37,6 +37,7 @@ export class Controller {
   }
   track(record, coalesce = false) { this.telemetry?.publish('goal', this.goalView(record), { coalesce }); }
   get map() { return this.game.map; }
+  get surface() { return this.game.surface; }
   io(request) { return this.game.io(request); }
   view() { return this.last?.nav?.observe() ?? { state: 'idle' }; }
   info() { return { version: '0.1.0', session: this.session, active: !!this.active, terrainCells: this.map.cells.size }; }
@@ -224,7 +225,7 @@ export class Controller {
       };
       const run = effect => Effect.runPromise(effect, { signal: cancellation.signal });
       running = policy({
-        send, map: self.map, sync: () => run(self.snapshot()),
+        send, map: self.map, surface: self.surface, sync: () => run(self.snapshot()),
         aim: (angles, safety) => run(self.aim(angles, record, safety)),
         navigate: (goal, yieldWhen, safety) => run(self.navigate(goal, record, undefined, yieldWhen, safety)),
         report: progress => { record.progress = progress; self.track(record, true); },
