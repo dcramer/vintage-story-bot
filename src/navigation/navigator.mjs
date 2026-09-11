@@ -36,7 +36,7 @@ export class Navigation {
     if (!this.active) return null;
     if (now >= this.deadline) return this.finish('blocked', 'deadline');
     const p = state.position, grounded = state.motion.onGround, map = this.map, w = this.width, h = this.height;
-    if (grounded && horizontal(p, this.target) < .3 && (this.target.horizontalOnly || Math.abs(p.y - this.target.y) < .1) && map.support(p, w) === 9)
+    if (grounded && horizontal(p, this.target) < (this.target.arrivalRadius ?? .3) && (this.target.horizontalOnly || Math.abs(p.y - this.target.y) < .1) && map.support(p, w) === 9)
       return this.finish('arrived', 'destination_reached');
     if (this.state === 'surveying') {
       if (!grounded) return now - this.surveyAt > 1000 ? this.finish('blocked', 'lost_support') : null;
@@ -61,7 +61,16 @@ export class Navigation {
       this.route = planned; this.index = 0; this.state = 'moving'; this.lookingAt = null;
       this.lastProgress = this.edgeStart = p; this.progressAt = now;
     }
-    while (this.index < this.route.length && grounded && distance(p, this.route[this.index]) < .3) {
+    const reached = waypoint => {
+      if (distance(p, waypoint) < .3) return true;
+      // A landing may carry us past a waypoint between samples. Keep moving along the route,
+      // but retain exact final-goal arrival and never skip a still-unsupported landing.
+      const dx = waypoint.x - this.edgeStart.x, dz = waypoint.z - this.edgeStart.z;
+      return horizontal(waypoint, this.target) > 1 && Math.abs(p.y - waypoint.y) < .1 &&
+        horizontal(p, waypoint) < .8 && dx * dx + dz * dz > .01 &&
+        (p.x - waypoint.x) * dx + (p.z - waypoint.z) * dz >= 0;
+    };
+    while (this.index < this.route.length && grounded && map.support(p, w) === 9 && reached(this.route[this.index])) {
       this.edgeStart = this.route[this.index++]; this.jumpAt = 0; this.landing = false; this.progressAt = now; this.lastProgress = p;
     }
     if (this.index >= this.route.length) {

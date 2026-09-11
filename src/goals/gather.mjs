@@ -11,7 +11,7 @@ const sightRange = 64, travelRange = sightRange * .75;
 // Policy only: supplied runtime owns sensing, input leases and cancellation.
 export async function gather(env, { count = 10, timeoutMs, signal, wait = ms => new Promise(r => setTimeout(r, ms)), now = Date.now } = {}) {
   if (!Number.isInteger(count) || count < 1 || count > 64) throw Error('count must be 1–64');
-  const started = now(), seen = new Map(), rejected = new Map(), visits = new Map();
+  const started = now(), seen = new Map(), rejected = new Map(), visits = new Map(), trees = new Map();
   let initial, latest, gained = 0, moved = 0, heading = 0, attempts = 0, searched = 0;
   const check = () => {
     if (signal?.aborted) throw Error('Goal cancelled');
@@ -29,16 +29,20 @@ export async function gather(env, { count = 10, timeoutMs, signal, wait = ms => 
   };
   const report = (phase, extra = {}) => env.report?.({ phase, count, gained, moved: +moved.toFixed(1), searched, targets: seen.size, ...extra });
   const aim = async angles => { await observe(); await env.aim(angles); await observe(); };
-  const scan = async radius => {
+  const scan = async (radius, match = 'stick') => {
     let cursor;
     const objects = [];
     do {
       await observe();
-      const page = await env.send({ action: 'scan', kind: 'all', match: 'stick', radius, limit: 32, ...(cursor ? { cursor } : {}) });
+      const page = await env.send({ action: 'scan', kind: match === 'stick' ? 'all' : 'blocks', match, radius, limit: 32, ...(cursor ? { cursor } : {}) });
       if (page.code === 'scan_expired') break;
       if (!page.ok) throw Error(page.error ?? 'Scan refused');
       objects.push(...page.objects);
       for (const object of page.objects.filter(o => loose(o) || dropped(o))) seen.set(object.key, { ...object, seenAt: now() });
+      if (match === 'leaves') for (const object of page.objects) {
+        if (!object.code.startsWith('game:leaves-') || (visits.get(area(object.point)) ?? 0) > 0) continue;
+        trees.set(area(object.point), { point: object.point, seenAt: now() });
+      }
       cursor = page.more ? page.cursor : null;
     } while (cursor);
     searched++;
@@ -72,7 +76,7 @@ export async function gather(env, { count = 10, timeoutMs, signal, wait = ms => 
     const candidates = [0, 45, -45, 90, -90, 180].map(offset => {
       const radians = normalize(direction + offset) * Math.PI / 180;
       const q = { x: Math.floor(p.x + Math.sin(radians) * distance) + .5, y: p.y,
-        z: Math.floor(p.z + Math.cos(radians) * distance) + .5, horizontalOnly: true };
+        z: Math.floor(p.z + Math.cos(radians) * distance) + .5, horizontalOnly: true, arrivalRadius: 4 };
       return { q, score: (visits.get(area(q)) ?? 0) * 8 + Math.abs(offset) / 90 };
     });
     // One distant move_to goal owns all local replanning; resource scans resume at the next patch.
@@ -83,6 +87,7 @@ export async function gather(env, { count = 10, timeoutMs, signal, wait = ms => 
 
   try {
     initial = await observe(true); heading = initial.orientation.yawDegrees;
+    visits.set(area(initial.position), 1);
     if (!initial.motion.onGround) throw Error('Start grounded');
     if (!initial.capabilities.includes('nearby_awareness')) throw Error('Update mod: nearby_awareness required');
     await aim({ yawDegrees: heading, pitchDegrees: 15 });
@@ -128,7 +133,11 @@ export async function gather(env, { count = 10, timeoutMs, signal, wait = ms => 
         }
         rejected.set(target.key, now() + 15000);
       }
-      const destination = explore();
+      for (const [id, tree] of trees) if (now() - tree.seenAt > 120000 || visits.has(id)) trees.delete(id);
+      while (trees.size > 128) trees.delete(trees.keys().next().value);
+      if (!trees.size) await scan(sightRange, 'leaves');
+      const tree = [...trees.values()].sort((a, b) => horizontal(a.point, latest.position) - horizontal(b.point, latest.position))[0];
+      const destination = explore(tree?.point);
       const before = latest.position;
       await walk(destination);
       if (horizontal(before, latest.position) > 1) heading = lookAt(before, latest.position).yawDegrees;

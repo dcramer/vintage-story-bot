@@ -19,7 +19,7 @@ function fixture({ gain = true, interruptAfter = Infinity } = {}) {
       if (request.action === 'observe') return state();
       if (request.action === 'scan') {
         scans++; if (scans >= interruptAfter) cancellation.abort();
-        if (walks < 2) return { ok: true, objects: [{ kind: 'block', code: 'game:leaves-grown-birch', key: 'leaf', withinPickingRange: true }] };
+        if (walks < 2) return { ok: true, objects: [{ kind: 'block', code: 'game:leaves-grown-birch', key: 'leaf', point: { x: 3, y: 2, z: .5 }, withinPickingRange: true }] };
         target = { key: `stick:${scans}`, code: 'game:loosestick-free' };
         return { ok: true, objects: [{ ...target, kind: 'block', point: { x: walks * 3, y: .1, z: .5 },
           withinPickingRange: true, look: { yawDegrees: 90, pitchDegrees: 30 } }] };

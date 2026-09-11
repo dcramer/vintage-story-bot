@@ -17,6 +17,7 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
     const at = open.pop().p, id = key(at);
     if (closed.has(id)) continue;
     closed.add(id);
+    if (goal.arrivalRadius && horizontal(at, goal) < goal.arrivalRadius && (goal.horizontalOnly || Math.abs(at.y - goal.y) < .1)) return path(at);
     const destination = { ...goal, y: goal.horizontalOnly ? at.y : goal.y };
     if (Math.abs(at.x - goal.x) < .51 && Math.abs(at.z - goal.z) < .51 && Math.abs(at.y - destination.y) < .15 && map.traverse(at, destination, w, h)) {
       const list = path(at); if (distance(at, destination) > .001) list.push(destination); return list;

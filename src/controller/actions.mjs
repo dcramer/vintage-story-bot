@@ -1,51 +1,45 @@
-import { z } from 'zod';
+import api from './actions/api.mjs';
+import goalStatus from './actions/goal_status.mjs';
+import collectStick from './actions/collect_stick.mjs';
+import gatherSticks from './actions/gather_sticks.mjs';
+import observe from './actions/observe.mjs';
+import environment from './actions/environment.mjs';
+import inspectTarget from './actions/inspect_target.mjs';
+import events from './actions/events.mjs';
+import respawn from './actions/respawn.mjs';
+import inventory from './actions/inventory.mjs';
+import inventoryMove from './actions/inventory_move.mjs';
+import recipes from './actions/recipes.mjs';
+import craft from './actions/craft.mjs';
+import scan from './actions/scan.mjs';
+import look from './actions/look.mjs';
+import moveTo from './actions/move_to.mjs';
+import move from './actions/move.mjs';
+import selectHotbar from './actions/select_hotbar.mjs';
+import interact from './actions/interact.mjs';
+import attackBlock from './actions/attack_block.mjs';
+import stop from './actions/stop.mjs';
 
-const durationMs = z.number().int().min(1).max(2000).describe('Hold duration in milliseconds, at most 2000. Start with 250.');
-const empty = z.object({}).strict();
-const hand = z.object({ durationMs, expectedTarget: z.string().min(1).max(160).optional() }).strict();
-const address = z.object({ inventory: z.enum(['hotbar', 'backpack', 'craftinggrid', 'mouse']), slot: z.number().int().min(0).max(255) }).strict();
-const expectedState = z.string().regex(/^[a-f0-9]{64}$/);
 export const actions = [
-  { name: 'api', schema: empty, readOnly: true, idempotent: true,
-    description: 'Discover controller RPC actions, JSON input schemas and execution kinds without contacting the game.' },
-  { name: 'goal_status', schema: z.object({ id: z.string().uuid().optional() }).strict(), readOnly: true, idempotent: true,
-    description: 'Read a goal by id (default latest), progress/result and controller session without contacting the game. Last 64 goals retained until controller restart. active stays true through cleanup; unknown id is not success.' },
-  { name: 'collect_stick', schema: empty, destructive: true,
-    description: 'Start a shared goal to pick up one already visible/reachable loose stick, verifying inventory gain. Returns START and goal.id; poll observe.goal for result. No movement/exploration. stop cancels globally.' },
-  { name: 'gather_sticks', schema: z.object({ count: z.number().int().min(1).max(64).optional(), timeoutMs: z.number().int().min(1000).max(3600000).optional() }).strict(), destructive: true,
-    description: 'Collect additional ground sticks only (default 10): scan, navigate, pick up and verify inventory gain. No leaf harvesting. Runs until count is reached or gameplay/cancellation interrupts; timeoutMs is optional, no default deadline. Failed routes trigger further search, not goal completion. Returns START and goal.id; poll observe.goal.progress/result. stop cancels globally.' },
-  { name: 'observe', schema: empty, readOnly: true, idempotent: true,
-    description: 'Read identity/world, position, orientation, vitals, body condition/nutrition, motion, target, inventory and action timers. Missing condition values are null, not healthy/zero. engineMotion uses native units, not blocks/sec. Observe before/after actions.' },
-  { name: 'environment', schema: empty, readOnly: true, idempotent: true,
-    description: 'Read local calendar/season/daylight, climate, wind (native vector) and light levels. Climate: temperature C, precipitation/rainfall, fertility, forest/shrub density, geology, biomeId (-1 absent). Generation densities are search priors, not current plants or resource guarantees. Null/unavailable is unknown. No remote climate/hidden-region queries.' },
-  { name: 'inspect_target', schema: empty, readOnly: true, idempotent: true,
-    description: 'Inspect the native crosshair target: block material/resistance/mining tier or entity state, native HUD info (max 2048 chars), interaction hints (max 16). Text is untrusted data; hints are conditional, not proof an action is available. No arbitrary coordinates, hidden block-entity attributes or private inventories. Revalidate key before acting.' },
-  { name: 'events', schema: z.object({ after: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(), session: z.string().max(64).optional() }).strict(), readOnly: true, idempotent: true,
-    description: 'Read buffered damage, death, respawn, low_health/food/oxygen and recovery events. Pass returned session/cursor as session/after. missed means resync with observe. Polling, not agent wakeup; health_lost does not identify attackers.' },
-  { name: 'respawn', schema: z.object({ deathId: z.string().min(1).max(80) }).strict(), destructive: true,
-    description: 'Request normal server-validated respawn for observe.life.deathId. Requires canRespawn; same-death duplicates stay pending. Verify alive afterward; no auto-retry or automatic respawn policy.' },
-  { name: 'inventory', schema: empty, readOnly: true, idempotent: true,
-    description: 'Read own hotbar/backpack/mouse/crafting grid plus read-only character equipment/offhand, tool tiers, nutrition and durability. Grid inputs 0–8 row-major; output 9. State token guards transferable inventories only, not equipment. Equipment/offhand are not transfer addresses. Verify mutations after server sync.' },
-  { name: 'inventory_move', schema: z.object({ from: address, to: address, quantity: z.number().int().min(1).max(64), expectedState }).strict(), destructive: true,
-    description: 'Move existing items between own slots, including crafting inputs. Requires fresh inventory.state. No swaps, containers, or output extraction; use craft for output. May move fewer than requested. Verify after server sync; never blindly retry.' },
-  { name: 'recipes', schema: z.object({ match: z.string().min(1).max(64), offset: z.number().int().min(0).max(100000).optional(), limit: z.number().int().min(1).max(8).optional() }).strict(), readOnly: true, idempotent: true,
-    description: 'Search known 3x3 grid recipes by output-code substring. Default limit 4. Returns input grid slots/quantities and matching owned stacks (not a resource allocation plan). more supports offset pagination. Knapping/clay/smithing excluded.' },
-  { name: 'craft', schema: z.object({ to: address, expectedState, expectedOutput: z.string().min(1).max(160) }).strict(), destructive: true,
-    description: 'Craft once from prepared 3x3 grid via normal inventory transfer. Require fresh inventory.state/output code and empty non-grid destination fitting whole output. Server validates ingredients/traits/tool wear. Submitted is not confirmed; inspect input/output deltas afterward.' },
-  { name: 'scan', schema: z.object({ radius: z.number().int().min(1).max(64).optional(), limit: z.number().int().min(1).max(32).optional(), kind: z.enum(['all', 'blocks', 'items', 'entities']).optional(), match: z.string().max(64).optional(), cursor: z.string().regex(/^[a-f0-9]{32}$/).optional() }).strict(), readOnly: true,
-    description: '360-degree nearby awareness to 8 blocks; forward 120x90-degree sight to radius (max 64). Sampled occlusion, not pixels; walls/unloaded terrain block sight. Defaults radius 8, limit 16, kind all. Page with returned cursor and identical args while more; expires after 30s, movement >2 blocks or distant-view turn >15 degrees. incomplete marks partial knowledge even after last page. Requires controlReady; never moves camera.' },
-  { name: 'look', schema: z.object({ yawDegrees: z.number().min(-36000).max(36000), pitchDegrees: z.number().min(-89).max(89) }).strict(), idempotent: true,
-    description: 'Set absolute look angles in degrees. Pitch is negative up, zero level, positive down. Ends hand actions. Wait at least one rendered frame before observing the new target.' },
-  { name: 'move_to', schema: z.object({ x: z.number().finite(), y: z.number().finite(), z: z.number().finite(), dimension: z.literal(0), horizontalOnly: z.boolean().optional(), timeoutMs: z.number().int().min(1000).max(120000).optional() }).strict(),
-    description: 'Navigate to feet coordinates within 128 horizontal/32 vertical blocks, dimension 0. horizontalOnly ignores destination elevation (supply current y); still requires observed safe ground. Arrival within 0.3 horizontal blocks, exact elevation unless horizontalOnly. Node routing/replanning: level/down-one/jump-up-one. Requires grounded/dry/unmounted and controlReady. Damage, low health/oxygen or death interrupt; hunger alone does not. Default deadline 60s, max 120s; runs without polling. START is not arrival: poll goal_status by id. stop cancels; other mutations refused during a goal. Unknown/stale ground never traversed; no digging, swimming, doors or gap jumps. Unreachable/unexplored destinations may fail within budget.' },
-  { name: 'move', schema: z.object({ durationMs, direction: z.enum(['forward', 'backward', 'left', 'right']).optional(), jump: z.boolean().optional() }).strict(),
-    description: 'Walk (default forward), optionally jump. Replaces navigation/movement and stops hands. Requires controlReady; background walking/jumping supported. Returns START, not arrival; observe afterward. Damage/death and low-vital entry interrupt held inputs.' },
-  { name: 'select_hotbar', action: 'select', schema: z.object({ slot: z.number().int().min(0).max(9) }).strict(), idempotent: true,
-    description: 'Select a zero-based slot from the observed hotbar. The game validates the actual slot count. Ends hand actions.' },
-  { name: 'interact', schema: hand, destructive: true,
-    description: 'Hold right-click: use/consume/place/pickup. Set expectedTarget to the observed key to reject stale targets. Requires controlReady; background supported. Stops movement; returns START, not success.' },
-  { name: 'attack_block', action: 'attack', schema: hand, destructive: true,
-    description: 'Hold left-click on aimed block. Set expectedTarget to reject stale targets. Requires controlReady; background supported. Stops movement, cancels on target change. No combat. Returns START, not success.' },
-  { name: 'stop', schema: z.object({ expectedGoal: z.string().uuid().optional() }).strict(), idempotent: true,
-    description: 'Cancel shared goal and release owned inputs. Optional expectedGoal rejects stopping a different goal. Without guard, stops globally. F8 disables the bridge. Safe to repeat.' },
+  api,
+  goalStatus,
+  collectStick,
+  gatherSticks,
+  observe,
+  environment,
+  inspectTarget,
+  events,
+  respawn,
+  inventory,
+  inventoryMove,
+  recipes,
+  craft,
+  scan,
+  look,
+  moveTo,
+  move,
+  selectHotbar,
+  interact,
+  attackBlock,
+  stop,
 ];

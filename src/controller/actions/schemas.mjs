@@ -1,0 +1,18 @@
+import { z } from 'zod';
+
+export const durationMs = z.number().int().min(1).max(2000)
+  .describe('Hold duration in milliseconds, at most 2000. Start with 250.');
+
+export const address = z.object({
+  inventory: z.enum(['hotbar', 'backpack', 'craftinggrid', 'mouse']),
+  slot: z.number().int().min(0).max(255),
+}).strict();
+
+export const expectedState = z.string().regex(/^[a-f0-9]{64}$/);
+
+export const empty = z.object({}).strict();
+
+export const hand = z.object({
+  durationMs,
+  expectedTarget: z.string().min(1).max(160).optional(),
+}).strict();
