@@ -102,6 +102,8 @@ test('terrain permits supported recentering off thin partial ground cover', () =
   assert.ok(map.support(start, .3) > 0 && map.support(start, .3) < 9);
   assert.equal(map.traverse(start, safe, .3, 1.85, false), false);
   assert.equal(map.traverse(start, safe, .3, 1.85, true), true);
+  const edge = { x: .9, y: 1.0625, z: .5 };
+  assert.deepEqual(findRoute(map, edge, { x: 4.5, y: 1, z: .5 }, .3, 1.85), [safe]);
 });
 
 test('terrain keeps planned standing centers clear of adjacent liquid hazards', () => {

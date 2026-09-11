@@ -16,6 +16,7 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
   const center = centers.sort((a, b) => distance(a, start) - distance(b, start))
     .find(p => map.traverse(start, p, w, h, true, undefined, escapingMargin));
   if (!center) return null;
+  const recentering = map.support(start, w) !== 9 && distance(center, start) >= .12;
   // Move one verified step farther from the hazard, then resample from the new
   // position. The native sensor's six-block radius bounds this recovery and a
   // later plan can continue until the ordinary dry graph is reachable.
@@ -54,5 +55,8 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
       costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: next, score: cost + remaining(next) });
     }
   }
-  return frontier ? path(frontier) : null;
+  // A natively grounded player can rest on a thin edge with partial sampled
+  // support. The nearest safe center may be less than the ordinary one-block
+  // frontier threshold; move there first, then resample from full support.
+  return frontier ? path(frontier) : recentering ? [center] : null;
 }
