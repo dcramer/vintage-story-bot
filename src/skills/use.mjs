@@ -33,7 +33,8 @@ export async function selectCell(field, cell, { point, face, clearPlants = false
 }
 
 // Hold right-click on one observed block with the held (or requested) item; verify by block change or item consumption.
-export async function useOnBlock(field, { target, item, sneak = false, holdMs = 600, expectAfter, consume = false }) {
+// expectDialog: a native dialog opening (controlReady false) is an expected effect, e.g. recipe selection after surface creation.
+export async function useOnBlock(field, { target, item, sneak = false, holdMs = 600, expectAfter, consume = false, expectDialog = false }) {
   const cell = parseBlockKey(target);
   const state = await field.observe();
   if (cell.dimension !== state.position.dimension || distance(state.position, cell) > 8) throw Error('Target out of local reach; move closer first');
@@ -51,17 +52,27 @@ export async function useOnBlock(field, { target, item, sneak = false, holdMs = 
   try {
     await field.send({ action: 'interact', durationMs: holdMs, expectedTarget: target, expectedState: inventory.state,
       expectedItem: { slot, code: heldCode }, ...(sneak ? { sneak: true } : {}) });
-    for (let i = 0; i < Math.ceil(holdMs / 200); i++) { await field.wait(200); await field.observe(); }
+    const look = async () => {
+      const state = await field.send({ action: 'observe' });
+      return expectDialog && state.alive && !state.controlReady ? state : field.guard(state);
+    };
+    for (let i = 0; i < Math.ceil(holdMs / 200); i++) { await field.wait(200); await look(); }
     await field.send({ action: 'stop' });
     let last;
     for (let i = 0; i < 10; i++) {
-      await field.observe();
-      const detail = await field.send({ action: 'inspect_target' });
+      const dialog = !(await look()).controlReady;
       const contents = await field.send({ action: 'inventory' });
       const consumed = heldCode ? before - itemCount(contents, heldCode) : 0;
+      if (dialog) {
+        last = { target, after: null, changed: null, consumed, item: heldCode, dialog: true };
+        if (!consume || consumed > 0) return { ok: true, goal: 'use_on_block', ...last, verification: 'client_observed' };
+        await field.wait(200);
+        continue;
+      }
+      const detail = await field.send({ action: 'inspect_target' });
       const after = detail.key?.startsWith('block:') ? detail.code ?? detail.key.split(':').slice(5).join(':') : null;
       const changed = detail.key !== target;
-      last = { target, after, changed, consumed, item: heldCode };
+      last = { target, after, changed, consumed, item: heldCode, dialog: false };
       const expected = (expectAfter === undefined || typeof after === 'string' && after.includes(expectAfter)) && (!consume || consumed > 0);
       if (expected && (changed || consumed > 0 || expectAfter !== undefined))
         return { ok: true, goal: 'use_on_block', ...last, verification: 'client_observed' };

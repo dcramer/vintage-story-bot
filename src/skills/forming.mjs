@@ -63,14 +63,14 @@ export async function form(field, { kind, output, material }) {
     const groundDetail = await selectCell(field, ground, { point: { x: ground.x + .5, y: ground.y + .999, z: ground.z + .5 }, face: 'up', clearPlants: true });
     if (!groundDetail) throw Error('Ground block ahead not selectable');
     field.report('placing_surface', summary({ ground: groundDetail.key }));
-    const placed = await useOnBlock(field, { target: groundDetail.key, item: material, sneak: true, holdMs: 300, consume: true });
+    const placed = await useOnBlock(field, { target: groundDetail.key, item: material, sneak: true, holdMs: 300, consume: true, expectDialog: true });
     if (!placed.ok) return { ok: false, reason: 'surface_not_created', ...summary(), detail: placed };
     cell = { x: ground.x, y: ground.y + 1, z: ground.z };
   }
   const key = `block:0:${cell.x}:${cell.y}:${cell.z}:${surfaceCode}`;
-  // Clay forms open the native recipe dialog on creation; select before inspecting so controls come back.
-  await field.observe();
-  if (!field.latest.controlReady || kind === 'clayforming') {
+  // Surface creation opens the native recipe dialog; select before inspecting so controls come back.
+  const state = await field.send({ action: 'observe' });
+  if (!state.controlReady || kind === 'clayforming') {
     await field.send({ action: 'select_recipe', target: key, output });
     await field.wait(300);
   }
