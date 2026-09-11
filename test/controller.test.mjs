@@ -65,6 +65,19 @@ test('navigation tolerates slow physical response without unbounded input', () =
   assert.equal(nav.lastReplan, 'stalled');
 });
 
+test('navigation counts camera convergence as bounded progress', () => {
+  const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: () => true,
+    views: () => new Map() };
+  const state = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 0 }, vitals: { hunger: { current: 1000, max: 1500 } } };
+  const nav = new Navigation(map, state, { x: 5.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
+  nav.state = 'moving'; nav.route = [{ x: 1.5, y: 0, z: .5 }]; nav.progressAt = 0; nav.lastProgress = state.position;
+  assert.equal(nav.tick(state, 2000).forward, false);
+  assert.equal(nav.tick({ ...state, orientation: { yawDegrees: 30 } }, 4000).forward, false);
+  assert.equal(nav.replans, 0);
+  assert.equal(nav.progressAt, 4000);
+});
+
 test('navigation accepts a bounded waypoint crossing between slow samples', () => {
   const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: () => true,
     views: () => new Map() };

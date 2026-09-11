@@ -25,7 +25,7 @@ export class Navigation {
   finish(state, reason) { this.state = state; this.reason = reason; this.lookingAt = null; return null; }
   survey(now) {
     this.state = 'surveying'; this.surveyAt = now; this.jumpAt = 0; this.landing = false;
-    this.lookingAt = null; this.nextPlanAt = 0;
+    this.lookingAt = null; this.nextPlanAt = 0; this.lastYawError = undefined;
   }
   replan(p, now, reason) {
     this.lastReplan = reason;
@@ -96,14 +96,19 @@ export class Navigation {
     if (this.jumpAt && grounded && Math.abs(p.y - next.y) < .06) { this.jumpAt = 0; this.landing = true; }
     const recenter = this.landing || this.index === 0 || Math.floor(p.x) === Math.floor(next.x) && Math.floor(p.z) === Math.floor(next.z);
     if (grounded && !this.jumpAt && !map.traverse(p, next, w, h, recenter)) return this.replan(p, now, 'terrain_changed');
-    if (distance(p, this.lastProgress) > .12) { this.progressAt = now; this.lastProgress = p; }
+    if (distance(p, this.lastProgress) > .12) { this.progressAt = now; this.lastProgress = p; this.lastYawError = undefined; }
+    const desiredYaw = lookAt(p, next).yawDegrees;
+    this.desiredYaw = desiredYaw;
+    this.yawError = angle(desiredYaw, state.orientation.yawDegrees);
+    const yawMagnitude = Math.abs(this.yawError);
+    // Camera convergence is real progress on a software-rendered remote client.
+    // A motionless camera still reaches the same bounded stall timeout.
+    if (this.lastYawError !== undefined && yawMagnitude < this.lastYawError - .5) this.progressAt = now;
+    this.lastYawError = yawMagnitude;
     // Remote correction and low render rates can take several sensed frames to
     // turn an accepted input into visible motion. Keep the bounded lease fast,
     // but do not discard a still-valid route after only a handful of samples.
     if (now - this.progressAt > 3000) return this.replan(p, now, 'stalled');
-    const desiredYaw = lookAt(p, next).yawDegrees;
-    this.desiredYaw = desiredYaw;
-    this.yawError = angle(desiredYaw, state.orientation.yawDegrees);
     const following = this.route[this.index + 1];
     const turn = following ? Math.abs(angle(lookAt(next, following).yawDegrees, desiredYaw)) : 0;
     const tight = horizontal(p, next) < 3 && (Math.abs(next.y - p.y) > .05 || turn > 20);
