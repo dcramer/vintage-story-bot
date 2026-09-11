@@ -35,6 +35,7 @@ export class Survival {
   surveyed = false;
   desperateSurveyed = false;
   searchTarget = null;
+  searchStalls = 0;
   lastFarView = null;
   constructor(field) { this.field = field; }
   yieldWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : hunger(state) < .2 ? 'food_needed' : null;
@@ -136,6 +137,14 @@ export class Survival {
       const result = await field.walk(destination, this.eatWhen);
       const progress = horizontal(before, field.latest.position);
       this.searchTarget = !['arrived', 'yielded'].includes(result.state) && progress > 2 ? destination : null;
+      if (stalledFoodRoute(result, before, field.latest.position)) {
+        if (++this.searchStalls >= 3 && await clearFoliage(field, destination)) {
+          this.searchStalls = 0;
+          this.surveyed = false;
+          this.desperateSurveyed = false;
+          this.lastFarView = null;
+        }
+      } else this.searchStalls = 0;
       // The initial panorama is retained for this recovery episode. Each moved
       // viewpoint already refreshes its 32-block forward cone above; repeating
       // a full panorama every short leg burns the starvation window on RPC.
