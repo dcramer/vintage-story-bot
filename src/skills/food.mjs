@@ -1,4 +1,3 @@
-import { normalize } from '../navigation/terrain.mjs';
 import { ownedSlots } from './inventory.mjs';
 
 // Installed survival fruit assets; no inference that arbitrary nutritious items are safe raw.
@@ -58,6 +57,11 @@ export function hunger(state) {
   return vital.current / vital.max;
 }
 
+const eatingHeadings = [0, 45, 90, 135, 180, 225, 270, 315];
+const eatingPitches = [-60, -30, 0, 30, 60];
+export const eatingLooks = () => eatingPitches.flatMap(pitchDegrees =>
+  eatingHeadings.map(yawDegrees => ({ yawDegrees, pitchDegrees })));
+
 export async function emptyHand(field) {
   await field.observe();
   const inventory = await field.send({ action: 'inventory' });
@@ -86,10 +90,9 @@ export async function consume(field) {
   }
   await field.send({ action: 'select', slot: food.slot });
   // Look for clear air without placing food or accidentally activating nearby blocks.
-  const yaw = field.latest.orientation.yawDegrees;
   let before;
-  for (const offset of [0, 90, -90, 180]) {
-    await field.aim({ yawDegrees: normalize(yaw + offset), pitchDegrees: -15 });
+  for (const look of eatingLooks()) {
+    await field.aim(look);
     before = await field.observe();
     if (!before.target) break;
   }

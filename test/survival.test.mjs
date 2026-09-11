@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { explorationDistance, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
-import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
+import { eatingLooks, forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
 import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, stalledFoodRoute } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat, threatClearRadius, threatStartRadius, threatVerticalRange } from '../src/skills/threats.mjs';
 import { routeRegressed, travel } from '../src/skills/travel.mjs';
@@ -27,6 +27,19 @@ test('deterministic forage allowlist rejects poisonous and psychedelic mushrooms
   assert.equal(safeFood(slot('game:mushroom-deathcap-normal')), false);
   assert.equal(safeFood({ ...slot('game:mushroom-chanterelle-normal'), nutrition: { saturation: 80, health: -1 } }), false);
   assert.equal(ripeForage({ kind: 'block', forage: { ripe: true, foodCode: 'game:mushroom-chanterelle-normal' } }), true);
+});
+
+test('eating searches a deterministic three-dimensional clear-air grid', () => {
+  const looks = eatingLooks();
+  assert.equal(looks.length, 40);
+  assert.deepEqual(looks.slice(0, 5), [
+    { yawDegrees: 0, pitchDegrees: -60 },
+    { yawDegrees: 45, pitchDegrees: -60 },
+    { yawDegrees: 90, pitchDegrees: -60 },
+    { yawDegrees: 135, pitchDegrees: -60 },
+    { yawDegrees: 180, pitchDegrees: -60 },
+  ]);
+  assert.deepEqual(looks.at(-1), { yawDegrees: 315, pitchDegrees: 60 });
 });
 
 test('only mature crops with verified raw food drops are actionable', () => {
