@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { remember } from '../src/skills/facts.mjs';
-import { eatingLooks, edible, foodYield, forageFoodCode, forageReady, safeFood } from '../src/skills/food.mjs';
+import { eatingLooks, edible, foodYield, safeFood } from '../src/skills/food.mjs';
 import { accessibleForage, desperateFoodSightRange, foodElevationDetourDistance, foodRecoverySatisfied,
   foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, matchingFoodDrops, stuckFoodRoute,
   wideFoodSurveyNeeded } from '../src/skills/survival.mjs';
@@ -63,11 +63,9 @@ test('a block is forage when the pages read say it yields food now', () => {
   page('game:vegetable-carrot', { nutrition: food });
   page('game:crop-carrot-5', { drops: [{ code: 'game:seeds-carrot' }] });
   page('game:crop-carrot-6', { drops: [{ code: 'game:seeds-carrot' }, { code: 'game:vegetable-carrot' }] });
-  assert.equal(forageReady({ kind: 'block', code: 'game:crop-carrot-5' }), false);
-  assert.equal(forageReady({ kind: 'block', code: 'game:crop-carrot-6' }), true);
-  assert.equal(forageFoodCode({ kind: 'block', code: 'game:crop-carrot-6' }), 'game:vegetable-carrot');
-  assert.equal(forageReady({ kind: 'block', code: 'game:crop-cassava-9' }), false, 'an unread page yields nothing');
-  assert.equal(forageReady({ kind: 'item', code: 'game:vegetable-carrot' }), false);
+  assert.equal(foodYield({ kind: 'block', code: 'game:crop-carrot-5' }), null);
+  assert.deepEqual(foodYield({ kind: 'block', code: 'game:crop-carrot-6' }), { code: 'game:vegetable-carrot', how: 'break' });
+  assert.equal(foodYield({ kind: 'block', code: 'game:crop-cassava-9' }), null, 'an unread page yields nothing');
 });
 
 test('forage planning skips targets denied by cached server access', () => {

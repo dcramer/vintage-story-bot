@@ -131,7 +131,7 @@ internal sealed class ContextSensor(ICoreClientAPI api)
     }
 
     // Native HUD text/hints are untrusted descriptive data, not action authorization.
-    private static string? Clip(string? value, int limit) => value == null ? null : value[..Math.Min(limit, value.Length)];
+    internal static string? Clip(string? value, int limit) => value == null ? null : value[..Math.Min(limit, value.Length)];
     private static object Hints(WorldInteraction[]? hints) => new
     {
         truncated = (hints?.Length ?? 0) > 16,

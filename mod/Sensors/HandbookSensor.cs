@@ -14,7 +14,6 @@ namespace VintageStoryAI;
 internal sealed class HandbookSensor(ICoreClientAPI api)
 {
     private static readonly FieldInfo? StackSlot = typeof(ItemstackTextComponent).GetField("slot", BindingFlags.NonPublic | BindingFlags.Instance);
-    private static readonly FieldInfo? HarvestSeconds = typeof(BlockBehaviorHarvestable).GetField("harvestTime", BindingFlags.NonPublic | BindingFlags.Instance);
 
     public object ItemInfo(string code)
     {
@@ -26,16 +25,16 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
         var block = collectible as Block;
         var nutrition = collectible.GetNutritionProperties(api.World, stack, api.World.Player.Entity);
         var fuel = collectible.CombustibleProps;
-        string? name;
-        try { name = collectible.GetHeldItemName(stack); } catch { name = null; }
+        int bagSlots = collectible.Attributes?["backpack"]?["quantitySlots"]?.AsInt(0) ?? 0;
         return new
         {
             ok = true, observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            code = collectible.Code.ToString(), type = block == null ? "item" : "block", name = Clip(name, 96),
+            code = collectible.Code.ToString(), type = block == null ? "item" : "block",
+            name = ContextSensor.Clip(collectible.GetHeldItemName(stack), 96),
             maxStackSize = collectible.MaxStackSize,
             tool = collectible.Tool?.ToString(), toolTier = collectible.ToolTier,
-            durability = collectible.Tool == null && collectible.Durability <= 1 ? (int?)null : collectible.GetMaxDurability(stack),
-            bagSlots = collectible.Attributes?["backpack"]?["quantitySlots"]?.AsInt(0) is > 0 and var slots ? slots : (int?)null,
+            durability = collectible.Durability > 1 ? collectible.GetMaxDurability(stack) : (int?)null,
+            bagSlots = bagSlots > 0 ? bagSlots : (int?)null,
             nutrition = nutrition == null ? null : new
             {
                 saturation = nutrition.Satiety, health = nutrition.Health, category = nutrition.FoodCategory.ToString(),
@@ -46,15 +45,10 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
                 burnTemperature = fuel.BurnTemperature, burnDuration = fuel.BurnDuration, meltingPoint = fuel.MeltingPoint,
                 smeltsInto = fuel.SmeltedStack?.ResolvedItemstack?.Collectible?.Code?.ToString(), smeltedRatio = fuel.SmeltedRatio
             },
-            drops = block == null ? null : Drops(SafeDrops(block, stack)),
+            drops = block == null ? null : Drops(block.GetDropsForHandbook(stack, api.World.Player)),
             harvest = block == null ? null : Harvest(block),
             text = PageText(collectible, slot)
         };
-    }
-
-    private BlockDropItemStack[]? SafeDrops(Block block, ItemStack stack)
-    {
-        try { return block.GetDropsForHandbook(stack, api.World.Player); } catch { return null; }
     }
 
     private static object[]? Drops(BlockDropItemStack[]? drops) => drops?
@@ -69,13 +63,9 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
     private static object? Harvest(Block block)
     {
         if (block.GetBehavior(typeof(BlockBehaviorHarvestable), true) is BlockBehaviorHarvestable harvestable && harvestable.harvestedStacks != null)
-            return new
-            {
-                drops = Drops(harvestable.harvestedStacks), tool = harvestable.Tool?.ToString(),
-                seconds = HarvestSeconds?.GetValue(harvestable) is float seconds ? Math.Round(seconds, 2) : (double?)null, requiresGrowth = (string?)null
-            };
+            return new { drops = Drops(harvestable.harvestedStacks), tool = harvestable.Tool?.ToString() };
         if (block.GetBehavior(typeof(BlockBehaviorFruitingBush), true) is BlockBehaviorFruitingBush bush && bush.harvestedStacks != null)
-            return new { drops = Drops(bush.harvestedStacks), tool = (string?)null, seconds = (double?)Math.Round(bush.harvestTime, 2), requiresGrowth = "ripe" };
+            return new { drops = Drops(bush.harvestedStacks), requiresGrowth = "ripe" };
         return null;
     }
 
@@ -104,12 +94,8 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
                     break;
                 case RichTextComponent rich: text.Append(rich.DisplayText); break;
             }
-            try { component.Dispose(); } catch { }
         }
-        var lines = text.ToString().Replace("\r", "").Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0).Take(80).ToArray();
-        int budget = 6000;
-        return lines.TakeWhile(line => (budget -= line.Length) >= 0).Select(line => Clip(line, 400)!).ToArray();
+        return text.ToString().Replace("\r", "").Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0)
+            .Take(80).Select(line => ContextSensor.Clip(line, 400)!).ToArray();
     }
-
-    private static string? Clip(string? value, int limit) => value == null ? null : value[..Math.Min(limit, value.Length)];
 }

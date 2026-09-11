@@ -26,9 +26,6 @@ export const foodYield = (object, page = known(object.code)) => {
   const drop = (page.drops ?? []).find(d => edible(known(d.code)?.nutrition));
   return drop ? { code: drop.code, how: 'break' } : null;
 };
-export const forageReady = object => object.kind === 'block' && !!foodYield(object);
-export const forageBreaks = object => foodYield(object)?.how === 'break';
-export const forageFoodCode = object => foodYield(object)?.code ?? null;
 export function hunger(state) {
   const vital = state.vitals?.hunger;
   if (!Number.isFinite(vital?.current) || !Number.isFinite(vital?.max) || vital.max <= 0)

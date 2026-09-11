@@ -1,3 +1,4 @@
+using System.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.GameContent;
@@ -14,10 +15,10 @@ internal static class BlockFacts
         string? growth = null;
         if (block.HasBehavior<BlockBehaviorFruitingBush>(true))
             growth = world.BlockAccessor.GetBlockEntity(pos)?.GetBehavior<BEBehaviorFruitingBush>()?.BState.Growthstate.ToString().ToLowerInvariant();
-        var variant = new Dictionary<string, string>();
-        foreach (var pair in block.VariantStrict) variant[pair.Key] = pair.Value;
-        string? name;
-        try { name = block.GetPlacedBlockName(world, pos); } catch { name = null; }
-        return new { name = name == null ? null : name[..Math.Min(96, name.Length)], variant, growth };
+        return new
+        {
+            name = ContextSensor.Clip(block.GetPlacedBlockName(world, pos), 96),
+            variant = block.VariantStrict.ToDictionary(pair => pair.Key, pair => pair.Value), growth
+        };
     }
 }

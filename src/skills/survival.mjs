@@ -4,7 +4,7 @@ import { changeBlock } from './blocks.mjs';
 import { clearLeafPath } from './leaf-clearing.mjs';
 import { collectItem } from './collect-item.mjs';
 import { learnYields } from './facts.mjs';
-import { consume, emptyHand, foodReserve, forageBreaks, forageFoodCode, forageReady, forageWatch, hunger } from './food.mjs';
+import { consume, emptyHand, foodReserve, foodYield, forageWatch, hunger } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
 export const foodSightRange = Math.min(32, sightRange);
@@ -17,12 +17,13 @@ export const foodElevationDetourDistance = verticalRemaining => verticalRemainin
   Math.min(foodSearchDistance, Math.max(6, verticalRemaining * 2));
 export const foodRecoverySatisfied = (ratio, reserve, eaten) =>
   ratio >= .8 && reserve >= 320 || eaten > 0 && ratio >= .6;
-const breaksForage = forageBreaks;
-const ripeForage = forageReady;
+const breaks = object => foodYield(object)?.how === 'break';
+// Worth walking to: yields food now and the server lets this player take it.
+const forage = object => foodYield(object) && accessibleForage(object);
 export const accessibleForage = object => {
-  return breaksForage(object) ? object.access?.buildOrBreak !== false : object.access?.use !== false;
+  return breaks(object) ? object.access?.buildOrBreak !== false : object.access?.use !== false;
 };
-export const harvestReady = (object, position, halfWidth = .3) => object.withinPickingRange && (!breaksForage(object) ||
+export const harvestReady = (object, position, halfWidth = .3) => object.withinPickingRange && (!breaks(object) ||
   horizontal(position, object.point) <= 1.5 &&
   !(position.x + halfWidth > Math.floor(object.point.x) && position.x - halfWidth < Math.floor(object.point.x) + 1 &&
     position.z + halfWidth > Math.floor(object.point.z) && position.z - halfWidth < Math.floor(object.point.z) + 1));
@@ -91,7 +92,7 @@ export class Survival {
       }
       // A single paged sweep finds both supported food families without enumerating unrelated blocks.
       const near = await this.study(8);
-      const ready = near.find(o => ripeForage(o) && accessibleForage(o) &&
+      const ready = near.find(forage &&
         harvestReady(o, field.latest.position, field.latest.body.halfWidth) && !field.skipped.has(o.key));
       if (ready) {
         await this.harvest(ready);
@@ -105,13 +106,13 @@ export class Survival {
         this.lastFarView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
       }
       // One smooth initial look-around; don't walk away from food just behind the initial view.
-      if (!this.surveyed && !field.targets(o => ripeForage(o) && accessibleForage(o)).length) {
+      if (!this.surveyed && !field.targets(forage).length) {
         this.surveyed = true;
         for (const offset of [120, 240]) {
           await field.aim({ yawDegrees: normalize(field.heading + offset), pitchDegrees: 15 });
           await this.study(foodSightRange);
           this.lastFarView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
-          if (field.targets(o => ripeForage(o) && accessibleForage(o)).length) break;
+          if (field.targets(forage).length) break;
         }
       }
       // Once recovery starts below 20%, one structured four-direction sweep
@@ -119,19 +120,19 @@ export class Survival {
       // legs through a forage-poor pocket. It still never activates food work
       // above the requested 20% threshold.
       if (!this.desperateSurveyed && wideFoodSurveyNeeded(hunger(field.latest)) &&
-          !field.targets(o => ripeForage(o) && accessibleForage(o)).length) {
+          !field.targets(forage).length) {
         this.desperateSurveyed = true;
         for (const offset of [0, 90, 180, 270]) {
           await field.aim({ yawDegrees: normalize(field.heading + offset), pitchDegrees: 15 });
           await this.study(desperateFoodSightRange);
           this.lastFarView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
-          if (field.targets(o => ripeForage(o) && accessibleForage(o)).length) break;
+          if (field.targets(forage).length) break;
         }
       }
-      const target = field.targets(o => ripeForage(o) && accessibleForage(o))[0];
+      const target = field.targets(forage)[0];
       if (target) {
         this.searchTarget = null;
-        const destination = field.approach(target, breaksForage(target) ? q =>
+        const destination = field.approach(target, breaks(target) ? q =>
           Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z) : null);
         if (destination) {
           const before = { ...field.latest.position };
@@ -188,11 +189,11 @@ export class Survival {
     if (aimed.target?.key !== target.key) { field.skip(target, 5000); return; }
     const detail = await field.send({ action: 'inspect_target' });
     await learnYields(field, [detail.code]);
-    if (detail.key !== target.key || !ripeForage(detail)) { field.skip(target); return; }
+    if (detail.key !== target.key || !foodYield(detail)) { field.skip(target); return; }
     await field.observe();
     if (await field.evadeThreat(target => clearLeafPath(field, target))) return;
-    const foodCode = forageFoodCode(detail);
-    const needsBreaking = breaksForage(detail);
+    const { code: foodCode, how } = foodYield(detail);
+    const needsBreaking = how === 'break';
     if (needsBreaking && detail.access?.buildOrBreak === false || !needsBreaking && detail.access?.use === false) {
       field.skip(target, 300000);
       field.report('harvest_inaccessible', { target: target.key, food: foodCode });

@@ -6,10 +6,9 @@ const pages = new Map();
 
 export const known = code => pages.get(code) ?? null;
 export const remember = (code, page) => { pages.set(code, page); return page; };
-export const forget = () => pages.clear();
 
 export async function learn(field, code) {
-  if (typeof code !== 'string' || !code) return null;
+  if (!code) return null;
   if (pages.has(code)) return pages.get(code);
   const page = await field.send({ action: 'item_info', code });
   return remember(code, page?.ok ? page : null);
