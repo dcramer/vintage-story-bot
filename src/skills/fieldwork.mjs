@@ -219,7 +219,13 @@ export class Fieldwork {
         return { state: 'blocked', reason: 'no_visible_route', roughRoute: this.roughRouteStatus };
       }
       const result = await this.leg({ ...roughRoute, leg: true }, pauseWhen);
-      if (result.state !== 'arrived') return result;
+      if (result.state !== 'arrived') {
+        // A surface leg failing within fine range means the coarse map missed
+        // terrain the fine grid can see (a dip, a hole). Let the fine navigator
+        // try the real target once; it routes around what the surface can't.
+        if (horizontal(this.latest.position, target) <= navigationReach) return this.leg(target, pauseWhen);
+        return result;
+      }
     }
     return this.leg(target, pauseWhen);
   }

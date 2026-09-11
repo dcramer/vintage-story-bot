@@ -13,7 +13,7 @@ const guardStorm = state => {
 
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
 export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
-  let stuck = 0, legs = 0, routeResets = 0, continuation = null, localDetour = false;
+  let stuck = 0, legs = 0, routeResets = 0, resetsWithoutProgress = 0, continuation = null, localDetour = false;
   let bestRemaining = Infinity;
   const summary = () => ({ moved: +field.moved.toFixed(1), legs, stuck, routeResets });
   while (true) {
@@ -70,7 +70,7 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     // forward/lateral frontier search as long travel instead of retrying an
     // identical unobserved segment forever.
     localDetour = remaining <= 48 && !['arrived', 'paused'].includes(result.state) && progress <= 2;
-    if (result.state === 'arrived' || result.state === 'paused' || progress > 2) stuck = 0;
+    if (result.state === 'arrived' || result.state === 'paused' || progress > 2) { stuck = 0; resetsWithoutProgress = 0; }
     else {
       stuck++;
       // The planner has already exhausted non-mutating routes for this leg.
@@ -103,6 +103,12 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
       // only that soft penalty and rotate the deterministic search; observed
       // terrain, skipped resources and the task deadline remain intact.
       routeResets++;
+      // Four reset cycles with no net progress means this destination is not
+      // reachable from here with what can be observed. Report blocked rather
+      // than grinding to the goal deadline.
+      if (++resetsWithoutProgress >= 4)
+        return { ok: false, goal: 'travel', reason: 'no_progress', ...summary(),
+          remaining: +horizontal(field.latest.position, goal).toFixed(1), position: field.latest.position };
       stuck = 0;
       field.resetExploration();
       field.report('recovering_route', { remaining: +horizontal(field.latest.position, goal).toFixed(1), legs, routeResets });
