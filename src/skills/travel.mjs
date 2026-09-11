@@ -13,8 +13,12 @@ const guardStorm = state => {
 
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
 export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
-  let stuck = 0, legs = 0, routeResets = 0, resetsWithoutProgress = 0, continuation = null, localDetour = false;
+  let stuck = 0, legs = 0, routeResets = 0, continuation = null, localDetour = false;
   let bestRemaining = Infinity;
+  // Liveness: give up if the bot gets no meaningfully closer for two minutes,
+  // whatever recovery loop is cycling. A trapped spot is not a deadline hang.
+  const clock = field.now ?? Date.now;
+  let closest = Infinity, closestAt = clock();
   const summary = () => ({ moved: +field.moved.toFixed(1), legs, stuck, routeResets });
   while (true) {
     let state = await field.observe(true);
@@ -29,6 +33,9 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     const remaining = horizontal(state.position, goal);
     if (horizontal(beforeFood, state.position) > 2) bestRemaining = remaining;
     else bestRemaining = Math.min(bestRemaining, remaining);
+    if (remaining < closest - 2) { closest = remaining; closestAt = clock(); }
+    else if (clock() - closestAt > 120000)
+      return { ok: false, goal: 'travel', reason: 'no_progress', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
     if (remaining <= arrivalRadius && (y === undefined || Math.abs(state.position.y - y) < 1.5))
       return { ok: true, goal: 'travel', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
     field.report('travelling', { remaining: +remaining.toFixed(1), legs, roughRoute: field.roughRouteStatus });
@@ -70,7 +77,7 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     // forward/lateral frontier search as long travel instead of retrying an
     // identical unobserved segment forever.
     localDetour = remaining <= 48 && !['arrived', 'paused'].includes(result.state) && progress <= 2;
-    if (result.state === 'arrived' || result.state === 'paused' || progress > 2) { stuck = 0; resetsWithoutProgress = 0; }
+    if (result.state === 'arrived' || result.state === 'paused' || progress > 2) stuck = 0;
     else {
       stuck++;
       // The planner has already exhausted non-mutating routes for this leg.
@@ -103,12 +110,6 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
       // only that soft penalty and rotate the deterministic search; observed
       // terrain, skipped resources and the task deadline remain intact.
       routeResets++;
-      // Four reset cycles with no net progress means this destination is not
-      // reachable from here with what can be observed. Report blocked rather
-      // than grinding to the goal deadline.
-      if (++resetsWithoutProgress >= 4)
-        return { ok: false, goal: 'travel', reason: 'no_progress', ...summary(),
-          remaining: +horizontal(field.latest.position, goal).toFixed(1), position: field.latest.position };
       stuck = 0;
       field.resetExploration();
       field.report('recovering_route', { remaining: +horizontal(field.latest.position, goal).toFixed(1), legs, routeResets });
