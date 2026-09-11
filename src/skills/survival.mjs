@@ -7,6 +7,7 @@ import { ownedSlots } from './inventory.mjs';
 
 export const foodSightRange = Math.min(32, sightRange);
 export const desperateFoodSightRange = Math.min(48, sightRange);
+export const wideFoodSurveyNeeded = ratio => ratio < .2;
 // Twelve-block steps overlap a 16-block sight cone while covering useful new
 // ground before starvation. Navigation still validates every traversed cell.
 export const foodSearchDistance = Math.min(12, foodSightRange * .75);
@@ -94,10 +95,11 @@ export class Survival {
           if (field.targets(o => ripeForage(o) && accessibleForage(o)).length) break;
         }
       }
-      // Preserve the fast 16-block path normally. Below 10%, one structured
-      // four-direction panorama is cheaper than exhausting the remaining
-      // hunger window on short legs through a forage-poor pocket.
-      if (!this.desperateSurveyed && hunger(field.latest) < .1 &&
+      // Once recovery starts below 20%, one structured four-direction sweep
+      // is cheaper than spending half the remaining hunger window on short
+      // legs through a forage-poor pocket. It still never activates food work
+      // above the requested 20% threshold.
+      if (!this.desperateSurveyed && wideFoodSurveyNeeded(hunger(field.latest)) &&
           !field.targets(o => ripeForage(o) && accessibleForage(o)).length) {
         this.desperateSurveyed = true;
         for (const offset of [0, 90, 180, 270]) {

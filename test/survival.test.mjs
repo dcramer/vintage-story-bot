@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { eatingLooks, forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
-import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, stalledFoodRoute } from '../src/skills/survival.mjs';
+import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, stalledFoodRoute, wideFoodSurveyNeeded } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat, threatClearRadius, threatStartRadius, threatVerticalRange } from '../src/skills/threats.mjs';
 import { elevationDetourDistance, routeRegressed, travel } from '../src/skills/travel.mjs';
 import { foliageBlock, foliageClearCandidate, threatAllowsClearance } from '../src/skills/clearance.mjs';
@@ -92,6 +92,8 @@ test('food exploration uses observed local steps and does not rescan an unchange
   assert.equal(foodViewChanged(view, state(12.1, 10, 30)), true);
   assert.equal(foodViewChanged(view, state(10, 10, 46)), true);
   assert.equal(foodViewChanged(view, state(10, 10, 350)), true);
+  assert.equal(wideFoodSurveyNeeded(.2), false);
+  assert.equal(wideFoodSurveyNeeded(.199), true);
 });
 
 test('food leads survive productive partial routes but quarantine stalled ones', () => {
