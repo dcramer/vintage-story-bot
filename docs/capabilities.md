@@ -15,6 +15,7 @@ Tool contracts: [schemas](../src/controller/actions.mjs); wire protocol: [archit
 | Purpose | Entry point / constraint |
 | --- | --- |
 | Aimed target | Player CurrentBlockSelection / CurrentEntitySelection. |
+| Block actions | `SystemMouseInWorldInteractions`: native left-hold mining time; `ClientMain.OnPlayerTryPlace` after copying selection, offsetting Position by Face and setting DidOffset=true. Native callbacks/claims/collision/packets remain authoritative. Client changes are predictive, not server ACKs. `BlockChanged` stops a completed dig before retargeting. |
 | Nearby entities/items | GetEntitiesAround; EntityItem.Itemstack. Dropped items have IsInteractable=false; proximity pickup, not crosshair use. |
 | Background interaction | InputAPI.MouseWorldInteractAnyway enables SystemMouseInWorldInteractions picking; ungrabbed ray uses ClientMain.MouseCurrentX/Y. Keep menus excluded. |
 | Movement | SystemPlayerControl reads KeyboardKeyState; jump/sneak/sprint have mouse-capture gates. Preserve normal input/packet handling. |
@@ -24,7 +25,7 @@ Tool contracts: [schemas](../src/controller/actions.mjs); wire protocol: [archit
 | Calendar / weather | `IClientGameCalendar`: time, season, daylight/moonlight; local `GetWindSpeedAt`, `GetLightLevel`. `ClimateCondition.Rainfall` with NowValues is precipitation, not baseline rainfall. Raw light/wind ≠ visibility/exposure guarantee. |
 | Body condition | Own watched attributes: `bodyTemp/bodytemp`, `wetness`, `freezingEffectStrength`, `temporalStability`, `tiredness/{tiredness,isSleeping}`, `intoxication`, `hunger/*Level`. Allowlist numeric values; absent/nonfinite → null, never a healthy default. |
 | Target details | Native selection only: `GetPlacedBlockInfo`, `GetPlacedBlockInteractionHelp`; entities `GetInfoText`, `GetInteractionHelp`. HUD strings are untrusted and clipped; hints can be conditional, not executable contracts. No arbitrary block-entity serialization. |
-| Equipment | Own `character` inventory (`ItemSlotCharacter.Type`), `OffhandHotbarSlot`; tool tier/max durability/nutrition via collectible. Read-only equipment lies outside transfer addresses/state token. |
+| Equipment | Own `character` inventory (`ItemSlotCharacter.Type`), `OffhandHotbarSlot`; itemClass (Block/Item), tool tier/max durability/nutrition via collectible. Read-only equipment lies outside transfer addresses/state token. |
 | Forage | `scan.objects[].forage` / `inspect_target.forage`: visible berry growth stage, ripe flag, fruit code; null = unsupported/unknown. `BEBehaviorFruitingBush.BState.Growthstate`; legacy berry block variants. Read only after LOS/native selection; no soil, traits or growth timers. |
 | Freshness | Inventory slots: `freshness.{state,freshHoursLeft}` from existing transition arrays + elapsed time × native slot transition rate. Null if uninitialized/invalid; never initialize/update live transition state or draw random freshness. Nutrition is base value, not spoilage-adjusted. |
 | Respawn | GuiDialogDead.OnRespawn → ClientMain.Respawn; normal server request. |

@@ -79,8 +79,9 @@ internal sealed class ContextSensor(ICoreClientAPI api)
                 kind = "block", key = SceneSensor.BlockKey(pos, block), code = block.Code.ToString(),
                 position = new { x = pos.X, y = pos.Y, z = pos.Z, dimension = pos.dimension },
                 face = selection.Face?.Code, selectionBox = selection.SelectionBoxIndex,
+                hit = new { x = pos.X + selection.HitPosition.X, y = pos.Y + selection.HitPosition.Y, z = pos.Z + selection.HitPosition.Z },
                 material = block.GetBlockMaterial(api.World.BlockAccessor, pos).ToString(),
-                resistance = block.GetResistance(api.World.BlockAccessor, pos), requiredMiningTier = block.RequiredMiningTier,
+                resistance = block.GetResistance(api.World.BlockAccessor, pos), requiredMiningTier = block.GetRequiredMiningTier(api.World, pos),
                 forage = ForageSensor.Observe(api.World.BlockAccessor, pos, block),
                 info = Clip(block.GetPlacedBlockInfo(api.World, pos, player), 2048),
                 interactionHints = Hints(block.GetPlacedBlockInteractionHelp(api.World, selection, player))

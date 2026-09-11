@@ -32,6 +32,7 @@ public sealed class AiBridgeMod : ModSystem
     private LifeTracker life = new();
     private InventoryAdapter inventory = null!;
     private ContextSensor context = null!;
+    private BlockActions blockActions = null!;
     private bool? priorWorldInteraction;
     private readonly TerrainMap terrain = new(16384, 120000, 64);
     private readonly ControlLease control = new();
@@ -51,6 +52,8 @@ public sealed class AiBridgeMod : ModSystem
         sensor = new SceneSensor(api, CanControl);
         inventory = new InventoryAdapter(api);
         context = new ContextSensor(api);
+        blockActions = new BlockActions(api);
+        api.Event.BlockChanged += blockActions.Changed;
         api.ChatCommands.Create("aibridge")
             .WithDescription("Control the local AI bridge")
             .HandleWith(_ => TextCommandResult.Success("Use .aibridge on to enable, or .aibridge off to stop. F7 enables; F8 stops."))
@@ -89,6 +92,7 @@ public sealed class AiBridgeMod : ModSystem
         control.Revoke("world_changed");
         life = new LifeTracker();
         inventory = new InventoryAdapter(api);
+        blockActions.Reset();
         SampleLife();
         bool registered = api.ChatCommands.Get("aibridge") != null;
         api.Logger.Notification($"[AI bridge] World ready; command registered: {registered}");
@@ -191,6 +195,8 @@ public sealed class AiBridgeMod : ModSystem
             }
         }
         else if (control.Active) ReleaseControl("control_unavailable");
+        blockActions.Tick(CanControl() && !ManualInput() && !NavigationDanger() &&
+            api.World.Player.Entity.OnGround && !api.World.Player.Entity.FeetInLiquid);
         if (handAction != null)
         {
             if (Environment.TickCount64 >= handStopAt || api.IsGamePaused ||
@@ -237,7 +243,7 @@ public sealed class AiBridgeMod : ModSystem
         if (lifetime == null || entity == null)
             return new { ok = false, error = "Bridge requires an active world." };
 
-        if (action.GetString() is "move_to" or "move" or "look" or "select" or "interact" or "attack" or "stop" or "respawn" or "craft" or "inventory_move")
+        if (action.GetString() is "move_to" or "move" or "look" or "select" or "interact" or "attack" or "stop" or "respawn" or "craft" or "inventory_move" or "block_action_begin" or "block_action_continue")
         {
             if (action.GetString() != "stop" && control.Active)
                 return new { ok = false, error = "Controller owns inputs; stop it before another mutation." };
@@ -251,7 +257,7 @@ public sealed class AiBridgeMod : ModSystem
                 return new
                 {
                     ok = true,
-                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint" },
+                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions" },
                     observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
                     world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString() },
@@ -283,6 +289,7 @@ public sealed class AiBridgeMod : ModSystem
                     remainingMs = movingControls == null ? 0 : Math.Max(0, stopAt - Environment.TickCount64),
                     handAction,
                     handRemainingMs = handAction == null ? 0 : Math.Max(0, handStopAt - Environment.TickCount64),
+                    blockAction = blockActions.Observe(),
                     target = ObserveTarget(),
                     activeSlot = api.World.Player.InventoryManager.ActiveHotbarSlotNumber,
                     hotbar = ObserveInventory("hotbar"),
@@ -308,6 +315,15 @@ public sealed class AiBridgeMod : ModSystem
                 return context.Environment(life.Session);
             case "inspect_target":
                 return CanControl() ? context.InspectTarget(life.Session) : new { ok = false, error = "Close menus and unpause before inspecting." };
+            case "block_action_begin":
+                if (!CanControl() || ManualInput() || NavigationDanger() || !entity.OnGround || entity.FeetInLiquid || entity.MountedOn != null)
+                    return new { ok = false, error = "Block actions need grounded, dry, ready controls." };
+                StopMovement(); StopHandAction();
+                return blockActions.Begin(request, inventory);
+            case "block_action_continue":
+                return blockActions.Read(request, true);
+            case "block_action_status":
+                return blockActions.Read(request, false);
             case "events":
                 long after = 0;
                 if (request.TryGetProperty("after", out var afterField) &&
@@ -688,6 +704,7 @@ public sealed class AiBridgeMod : ModSystem
 
     private void StopHandAction()
     {
+        blockActions?.Cancel("stopped");
         if (handAction != null)
         {
             api.Input.InWorldMouseButton.Left = false;
@@ -757,6 +774,7 @@ public sealed class AiBridgeMod : ModSystem
             api.Event.LevelFinalize -= OnLevelReady;
             api.Event.LeaveWorld -= StopBridge;
             api.Event.BlockChanged -= terrainSensor.Changed;
+            api.Event.BlockChanged -= blockActions.Changed;
             api.Input.InWorldAction -= RetainOwnedMovement;
         }
         base.Dispose();

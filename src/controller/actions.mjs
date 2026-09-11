@@ -20,6 +20,8 @@ import move from './actions/move.mjs';
 import selectHotbar from './actions/select_hotbar.mjs';
 import interact from './actions/interact.mjs';
 import attackBlock from './actions/attack_block.mjs';
+import digBlock from './actions/dig_block.mjs';
+import placeBlock from './actions/place_block.mjs';
 import stop from './actions/stop.mjs';
 
 export const actions = [
@@ -45,5 +47,7 @@ export const actions = [
   selectHotbar,
   interact,
   attackBlock,
+  digBlock,
+  placeBlock,
   stop,
 ];

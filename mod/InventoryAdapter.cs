@@ -67,6 +67,7 @@ public sealed class InventoryAdapter(ICoreClientAPI api)
         var stack = slot?.Itemstack;
         var nutrition = stack?.Collectible.GetNutritionProperties(api.World, stack, api.World.Player.Entity);
         return new { slot = index, code = stack?.Collectible.Code.ToString(), quantity = slot?.StackSize ?? 0,
+            itemClass = stack?.Class.ToString(),
             dressType = (slot as ItemSlotCharacter)?.Type.ToString(),
             tool = stack?.Collectible.Tool?.ToString(), toolTier = stack?.Collectible.ToolTier,
             durability = stack == null ? (int?)null : stack.Collectible.GetRemainingDurability(stack),
