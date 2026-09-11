@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { findTool, goals, tools } from './registry.mjs';
 import { GameClient } from '../game/client.mjs';
 import { Navigation } from '../navigation/navigator.mjs';
+import { Knowledge } from '../navigation/knowledge.mjs';
 
 const attempt = fn => Effect.tryPromise({ try: fn, catch: error => error instanceof Error ? error : new Error(String(error)) });
 
@@ -13,6 +14,7 @@ export class Controller {
   gate = Effect.runSync(Effect.makeSemaphore(1));
   constructor(send, telemetry = null) {
     this.game = new GameClient(send); this.telemetry = telemetry;
+    this.knowledge = this.game.knowledge = new Knowledge(process.env.VINTAGE_STORY_KNOWLEDGE_DIR ?? '.runtime/knowledge', this.game);
     if (telemetry) {
       const raw = this.game.send;
       this.game.send = (request, options) => raw(request, options).then(
@@ -46,7 +48,7 @@ export class Controller {
   get sightings() { return this.game.sightings; }
   io(request) { return this.game.io(request); }
   view() { return this.last?.nav?.observe() ?? { state: 'idle' }; }
-  info() { return { version: '0.1.0', session: this.session, active: !!this.active, terrainCells: this.map.cells.size }; }
+  info() { return { version: '0.1.0', session: this.session, active: !!this.active, terrainCells: this.map.cells.size, knowledge: this.knowledge.status() }; }
   goalView(record = this.last) {
     if (!record) return null;
     return { id: record.id, kind: record.kind, args: record.args, state: record.kind === 'move_to' ? record.nav?.state ?? record.state : record.state,
@@ -71,11 +73,15 @@ export class Controller {
       // A walking goal's control frames already carry the feed; extra reads
       // would only compete with them on the game thread.
       if (!this.active?.nav?.active) { try { await Effect.runPromise(this.game.sense()); } catch { delay = 2000; } }
+      try { this.knowledge.save(); } catch (error) { this.telemetry?.publish('action', { action: 'knowledge_save', ok: false, error: error.message }); }
       if (!this.closing) this.eyeTimer = setTimeout(tick, delay);
     };
     this.eyeTimer = setTimeout(tick, intervalMs);
   }
-  async close() { this.closing = true; clearTimeout(this.eyeTimer); await this.stop('controller_shutdown'); }
+  async close() {
+    this.closing = true; clearTimeout(this.eyeTimer); await this.stop('controller_shutdown');
+    try { this.knowledge.save(true); } catch { /* nothing to keep, or nowhere to keep it */ }
+  }
   request(request) {
     if (!request || typeof request !== 'object' || Array.isArray(request)) return Promise.reject(new Error('Expected an action object'));
     // Control-plane reads never wait for a game request or an in-flight goal startup.

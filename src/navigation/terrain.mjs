@@ -24,26 +24,37 @@ const around = [...cardinals, ...diagonals];
 // This is the bot's map: what it has seen stays until a block change is
 // reported or the memory is very old. The mod's eye forgetting a cell it
 // no longer keeps in range is not a reason for the player to forget it.
-export const REMEMBER_MS = 30 * 60 * 1000;
+export const REMEMBER_MS = 7 * 24 * 60 * 60 * 1000;
 export class TerrainMemory {
   cells = new Map(); hazards = new Map(); session = null; cursor = 0; now = 0; capacity = 262144;
-  apply(batch) {
-    if (batch.reset || batch.session !== this.session) { this.cells.clear(); this.hazards.clear(); }
+  apply(batch, wall = Date.now()) {
+    // A new mod session only restarts the delta stream; what the player
+    // remembers of the world is not erased by the eye reopening.
     this.session = batch.session; this.cursor = batch.cursor; this.now = batch.clock;
     for (const [x, y, z, at, hazard, boxes, reason] of batch.cells) {
       const id = cellKey(x, y, z);
       if (boxes === null) { if (reason !== 'forgot') this.forget(id); }
-      else {
-        const cell = { x, y, z, at, hazard, boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) };
-        this.cells.set(id, cell);
-        if (hazard) this.hazards.set(id, cell); else this.hazards.delete(id);
-      }
+      else this.put({ x, y, z, at, seenAt: wall, hazard, boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) });
     }
-    if (this.cells.size > this.capacity || (this.now - (this.prunedAt ?? 0)) > 60000) {
-      this.prunedAt = this.now;
-      for (const [id, cell] of this.cells) if (this.now - cell.at > REMEMBER_MS) this.forget(id);
+    if (this.cells.size > this.capacity || wall - (this.prunedAt ?? 0) > 60000) {
+      this.prunedAt = wall;
+      for (const [id, cell] of this.cells) if (wall - cell.seenAt > REMEMBER_MS) this.forget(id);
       while (this.cells.size > this.capacity) this.forget(this.cells.keys().next().value);
     }
+  }
+  put(cell) {
+    const id = cellKey(cell.x, cell.y, cell.z);
+    this.cells.set(id, cell);
+    if (cell.hazard) this.hazards.set(id, cell); else this.hazards.delete(id);
+  }
+  // Persistence: relative boxes and wall-clock stamps; the delta cursor is not part of memory.
+  export() {
+    return [...this.cells.values()].map(c => [c.x, c.y, c.z, c.seenAt, c.hazard, c.boxes.map(b => b.map((n, i) => n - [c.x, c.y, c.z][i % 3]))]);
+  }
+  restore(rows) {
+    this.cells.clear(); this.hazards.clear();
+    for (const [x, y, z, seenAt, hazard, boxes] of rows)
+      this.put({ x, y, z, at: 0, seenAt, hazard, boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) });
   }
   forget(id) { this.cells.delete(id); this.hazards.delete(id); }
   get(x, y, z) { return this.cells.get(cellKey(Math.floor(x), Math.floor(y), Math.floor(z))); }

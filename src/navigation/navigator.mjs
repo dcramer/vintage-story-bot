@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { angle, horizontal, key, lookAt, normalize, STEP_HEIGHT } from './terrain.mjs';
+import { angle, horizontal, key, lookAt, normalize, JUMP_HEIGHT, MAX_DROP, STEP_HEIGHT } from './terrain.mjs';
 import { findRoute } from './planner.mjs';
 import { fleeTarget, nearbyThreats, nearbyUnclearedThreats } from '../skills/threats.mjs';
 
@@ -178,6 +178,15 @@ export class Navigation {
       else if (near > .62) walking = true;
       else if (this.steppedOff !== next) { this.steppedOff = next; walking = true; }
       else walking = false;
+    }
+    // Cliff guard: never walk toward a cell that has nothing to stand on
+    // within a jump up or three blocks down, unless it is the checkpoint
+    // itself. Turning brings the facing back onto the route first.
+    if (walking && grounded && !this.jumpAt) {
+      const radians = state.orientation.yawDegrees * Math.PI / 180;
+      const fx = Math.floor(p.x + Math.sin(radians) * .7), fz = Math.floor(p.z + Math.cos(radians) * .7);
+      const own = fx === Math.floor(p.x) && fz === Math.floor(p.z), checkpoint = fx === Math.floor(next.x) && fz === Math.floor(next.z);
+      if (!own && !checkpoint && !map.levels(fx, fz, p.y, JUMP_HEIGHT, MAX_DROP).length) walking = false;
     }
     // Falling: let gravity land the body on the validated lower cell.
     if (!grounded && !this.jumpAt) return { yawDegrees, pitchDegrees: 15, forward: false, jump: false, sprint: false, sneak: false, durationMs: 120 };

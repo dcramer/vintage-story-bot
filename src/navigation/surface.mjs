@@ -10,17 +10,26 @@ const steps = [1, 2, 4];
 const directions = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 export class SurfaceMemory {
-  columns = new Map(); now = 0; sweeps = 0; ttlMs = 300000; capacity = 32768;
-  apply(snapshot) {
+  columns = new Map(); now = 0; sweeps = 0; ttlMs = 7 * 24 * 60 * 60 * 1000; capacity = 262144;
+  apply(snapshot, wall = Date.now()) {
     if (!snapshot) return 0;
     this.now = snapshot.clock ?? this.now;
     // Completed passes of the mod's eye over the current view.
     this.sweeps = snapshot.sweeps ?? this.sweeps;
-    for (const [x, z, y, kind, step, code, at, color] of snapshot.columns ?? [])
-      this.columns.set(columnKey(x, z), { x, z, y, kind, step, code, color, at: at ?? this.now });
-    for (const [id, column] of this.columns) if (this.now - column.at > this.ttlMs) this.columns.delete(id);
-    while (this.columns.size > this.capacity) this.columns.delete(this.columns.keys().next().value);
+    for (const [x, z, y, kind, step, code, at] of snapshot.columns ?? [])
+      this.columns.set(columnKey(x, z), { x, z, y, kind, step, code, at: at ?? this.now, seenAt: wall });
+    if (this.columns.size > this.capacity || wall - (this.prunedAt ?? 0) > 60000) {
+      this.prunedAt = wall;
+      for (const [id, column] of this.columns) if (wall - column.seenAt > this.ttlMs) this.columns.delete(id);
+      while (this.columns.size > this.capacity) this.columns.delete(this.columns.keys().next().value);
+    }
     return snapshot.columns?.length ?? 0;
+  }
+  // Persistence: columns with wall-clock stamps.
+  export() { return [...this.columns.values()].map(c => [c.x, c.z, c.y, c.kind, c.step, c.code, c.seenAt]); }
+  restore(rows) {
+    this.columns.clear();
+    for (const [x, z, y, kind, step, code, seenAt] of rows) this.columns.set(columnKey(x, z), { x, z, y, kind, step, code, at: 0, seenAt });
   }
   get(x, z) { return this.columns.get(columnKey(Math.floor(x), Math.floor(z))); }
   // Nearest sampled column around a point, honouring the coarse rings.

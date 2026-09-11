@@ -22,6 +22,7 @@ export class GameClient {
       const result = await send(request, options);
       // observe carries only this instant's entities; memory adds what left the view.
       if (request.action === 'observe' && result?.ok && Array.isArray(result.nearbyEntities)) {
+        this.knowledge?.enter(result.world?.identifier);
         this.sightings.observeEntities(result.nearbyEntities);
         result.nearbyEntities = this.sightings.entities(result.position);
       }
@@ -43,7 +44,10 @@ export class GameClient {
   // the eye sees right now (surface, sightings) and the current attention.
   cursors() { return { session: this.map.session, after: this.map.cursor, watch: this.watch }; }
   remember(batch) {
+    // Memory is per world: the save identifier selects which one is loaded.
+    this.knowledge?.enter(batch.state?.world?.identifier);
     this.map.apply(batch.terrain);
+    this.knowledge?.touch();
     if (batch.surface) this.surface.apply(batch.surface);
     if (batch.sightings) this.sightings.apply(batch.sightings);
     if (batch.sightings && batch.state) batch.state.nearbyEntities = this.sightings.entities(batch.state.position);

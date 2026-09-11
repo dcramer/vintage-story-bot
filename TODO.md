@@ -121,7 +121,7 @@ Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 - [ ] **P1 · movement policy flags** — `allowSwim`, `allowJumpGap`, `allowDoors`, `allowDig` per goal; default all off (`nav`, `ctl`). pathfinder `Movements`.
 - [ ] **P1 · `path_update` reasons on `goal_status`** — `noPath|timeout|stuck|replanned` phases with counts (`ctl`).
 - [ ] **P1 · `home` shortcut** — `travel {waypoint:'home'}` convention plus `return_home` before sunset check (`skill`).
-- [ ] **P2 · terrain memory persistence** — keyed by world identity, invalidated on reset; today session-only (`nav`).
+- [~] terrain memory persistence — terrain, surface and remembered blocks per save identifier in `.runtime/knowledge`, week-long, invalidated by reported block changes. Not live-verified across a restart.
 - [ ] **P2 · climbable blocks, swim** — VS `Climbable` (ladders, some vines) and water traversal as movement primitives; VS auto-steps sub-block heights via `stepHeight`, full blocks still need jump (`mod`, `nav`).
 
 ## 11. Survival and time
