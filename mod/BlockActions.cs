@@ -62,6 +62,9 @@ internal sealed class BlockActions(ICoreClientAPI api)
         }
         else
         {
+            if (api.World is ClientMain accessClient &&
+                accessClient.WorldMap.TestBlockAccess(player, selection, EnumBlockAccessFlags.BuildOrBreak) != EnumWorldAccessResponse.Granted)
+                return Error("Server access rules deny breaking this block.");
             var entity = player.Entity;
             var p = entity.Pos;
             var body = entity.CollisionBox;

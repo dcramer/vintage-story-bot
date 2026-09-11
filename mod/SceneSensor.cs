@@ -37,6 +37,7 @@ internal sealed class SceneSensor(ICoreClientAPI api, Func<bool> canControl)
             return new { ok = false, error = "Scene scanning currently supports dimension 0 only." };
         var current = player.Pos.XYZ.Add(player.LocalEyePos);
         var currentEye = new Point3(current.X, current.Y, current.Z);
+        var client = api.World as Vintagestory.Client.NoObf.ClientMain;
         double yaw = SceneGeometry.Normalize(player.Pos.Yaw * 180 / Math.PI);
         double pitch = (player.Pos.Pitch - Math.PI) * 180 / Math.PI;
         var blocks = api.World.BlockAccessor;
@@ -134,6 +135,11 @@ internal sealed class SceneSensor(ICoreClientAPI api, Func<bool> canControl)
                 kind = candidate.Kind, key = candidate.Key, code = candidate.Code,
                 point = new { x = candidate.Point.X, y = candidate.Point.Y, z = candidate.Point.Z },
                 distance = Math.Round(distance, 2), quantity = candidate.Quantity,
+                access = candidate.Block == null || client == null ? null : new
+                {
+                    buildOrBreak = client.WorldMap.TestAccess(api.World.Player, candidate.Block, EnumBlockAccessFlags.BuildOrBreak) == EnumWorldAccessResponse.Granted,
+                    use = client.WorldMap.TestAccess(api.World.Player, candidate.Block, EnumBlockAccessFlags.Use) == EnumWorldAccessResponse.Granted
+                },
                 forage = candidate.Block == null ? null : ForageSensor.Observe(blocks, candidate.Block, blocks.GetBlock(candidate.Block)),
                 source = distance <= Math.Min(8, radius) ? "nearby" : "sight",
                 withinPickingRange = distance <= api.World.Player.WorldData.PickingRange,

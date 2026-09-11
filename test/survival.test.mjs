@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Fieldwork } from '../src/skills/fieldwork.mjs';
 import { forageFoodCode, mushroomCode, ripeForage, safeFood } from '../src/skills/food.mjs';
+import { accessibleForage } from '../src/skills/survival.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
   freshness: { state: 'fresh', freshHoursLeft: 100 } });
@@ -25,6 +26,15 @@ test('only mature crops with verified raw food drops are actionable', () => {
   assert.equal(ripeForage(crop('soybean', 11)), false);
   assert.equal(safeFood(slot('game:vegetable-carrot')), true);
   assert.equal(safeFood(slot('game:rawcassava-raw')), false);
+});
+
+test('forage planning skips targets denied by cached server access', () => {
+  const mushroom = { forage: { kind: 'mushroom', foodCode: 'game:mushroom-chanterelle-normal' } };
+  const berries = { forage: { kind: 'berry', foodCode: 'game:fruit-blueberry' } };
+  assert.equal(accessibleForage({ ...mushroom, access: { buildOrBreak: false, use: true } }), false);
+  assert.equal(accessibleForage({ ...berries, access: { buildOrBreak: true, use: false } }), false);
+  assert.equal(accessibleForage({ ...mushroom, access: { buildOrBreak: true, use: false } }), true);
+  assert.equal(accessibleForage(berries), true);
 });
 
 test('low health is tolerated only during explicit starving food recovery', () => {

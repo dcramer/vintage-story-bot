@@ -74,6 +74,7 @@ internal sealed class ContextSensor(ICoreClientAPI api)
             if (api.World.BlockAccessor.GetChunkAtBlockPos(pos) == null)
                 return new { ok = false, error = "Selected block unloaded." };
             var block = api.World.BlockAccessor.GetBlock(pos);
+            var client = api.World as Vintagestory.Client.NoObf.ClientMain;
             return new
             {
                 ok = true, observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), session,
@@ -83,6 +84,11 @@ internal sealed class ContextSensor(ICoreClientAPI api)
                 hit = new { x = pos.X + selection.HitPosition.X, y = pos.Y + selection.HitPosition.Y, z = pos.Z + selection.HitPosition.Z },
                 material = block.GetBlockMaterial(api.World.BlockAccessor, pos).ToString(),
                 resistance = block.GetResistance(api.World.BlockAccessor, pos), requiredMiningTier = block.GetRequiredMiningTier(api.World, pos),
+                access = client == null ? null : new
+                {
+                    buildOrBreak = client.WorldMap.TestBlockAccess(player, selection, EnumBlockAccessFlags.BuildOrBreak) == EnumWorldAccessResponse.Granted,
+                    use = client.WorldMap.TestBlockAccess(player, selection, EnumBlockAccessFlags.Use) == EnumWorldAccessResponse.Granted
+                },
                 forage = ForageSensor.Observe(api.World.BlockAccessor, pos, block),
                 forming = Forming.Describe(pos, selection),
                 info = Clip(block.GetPlacedBlockInfo(api.World, pos, player), 2048),
