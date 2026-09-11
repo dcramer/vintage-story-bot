@@ -6,8 +6,20 @@ export const normalize = n => (n % 360 + 360) % 360;
 export const angle = (a, b) => normalize(a - b + 180) - 180;
 export const lookAt = (eye, p) => ({ yawDegrees: normalize(Math.atan2(p.x - eye.x, p.z - eye.z) * 180 / Math.PI),
   pitchDegrees: -Math.atan2(p.y - eye.y, horizontal(eye, p)) * 180 / Math.PI });
-const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-const intersects = (a, b) => a[0] < b[3] - .001 && a[3] > b[0] + .001 && a[1] < b[4] - .001 && a[4] > b[1] + .001 && a[2] < b[5] - .001 && a[5] > b[2] + .001;
+
+// The world as a player reasons about it: a grid of blocks. A cell is a
+// place to stand when it has a floor and enough free cells above for the
+// body; moves between cells are a walk, a step, a jump up one block, or a
+// drop of up to three. Water and fire are walls, unknown is a wall, and a
+// pit is simply a set of cells the search cannot leave.
+export const BODY_HEIGHT = 1.85;
+export const STEP_HEIGHT = .6;   // Vintage Story auto-steps sub-block heights; a full block needs a jump.
+export const JUMP_HEIGHT = 1.05;
+export const MAX_DROP = 3.05;    // No fall damage at three blocks; deeper is never planned.
+export const JUMP_HEADROOM = 2.3; // Body top rises about one block during a jump.
+const cardinals = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const diagonals = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+const around = [...cardinals, ...diagonals];
 
 export class TerrainMemory {
   cells = new Map(); hazards = new Map(); session = null; cursor = 0; now = 0;
@@ -20,7 +32,6 @@ export class TerrainMemory {
       else {
         const cell = { x, y, z, at, hazard, boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) };
         this.cells.set(id, cell);
-        // Hazards are few; index them so margin checks never scan the whole cache.
         if (hazard) this.hazards.set(id, cell); else this.hazards.delete(id);
       }
     }
@@ -30,235 +41,131 @@ export class TerrainMemory {
   forget(id) { this.cells.delete(id); this.hazards.delete(id); }
   get(x, y, z) { return this.cells.get(cellKey(Math.floor(x), Math.floor(y), Math.floor(z))); }
   missing(missing, x, y, z) { missing?.set(cellKey(Math.floor(x), Math.floor(y), Math.floor(z)), { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) }); }
-  // An unknown cell sealed under known solid ground can never be observed by a
-  // sightline and can never touch a body standing on that ground. Only cells
-  // with air or nothing known above them are exposed and must be seen.
-  buried(x, y, z) {
-    for (let above = Math.floor(y) + 1; above <= Math.floor(y) + 3; above++) {
-      const cell = this.get(x, above, z);
-      if (!cell) continue;
-      return !cell.hazard && cell.boxes.some(b => b[3] - b[0] > .99 && b[5] - b[2] > .99 && b[4] - b[1] > .99);
+
+  // Highest floor inside cell (x,y,z): null for air/unknown, Infinity for a
+  // shape taller than its cell (fences, walls) that cannot be stood on.
+  floor(x, y, z) {
+    const cell = this.get(x, y, z);
+    if (!cell || !cell.boxes.length) return null;
+    let top = -Infinity;
+    for (const b of cell.boxes) { if (b[4] > y + 1.01) return Infinity; top = Math.max(top, b[4]); }
+    return top > y ? top : null;
+  }
+  // Every cell of the column between two heights is known and free of
+  // collision boxes and hazards: room for a body, a jump arc or a fall.
+  clearBetween(x, z, from, to, missing) {
+    let ok = true;
+    for (let y = Math.floor(from); y <= Math.floor(to - .001); y++) {
+      const cell = this.get(x, y, z);
+      if (!cell) { this.missing(missing, x, y, z); ok = false; continue; }
+      if (cell.hazard) return false;
+      if (cell.boxes.some(b => b[1] < to - .001 && b[4] > from + .001)) return false;
     }
+    return ok;
+  }
+  // A place to stand: a floor in this cell and a body's worth of known free space above it.
+  standable(x, y, z, missing) {
+    const cell = this.get(x, y, z);
+    if (!cell) { this.missing(missing, x, y, z); return null; }
+    if (cell.hazard) return null;
+    const top = this.floor(x, y, z);
+    if (top === null || top === Infinity) return null;
+    if (!this.clearBetween(x, z, top, top + BODY_HEIGHT, missing)) return null;
+    return { x: x + .5, y: top, z: z + .5 };
+  }
+  // Standing places in a column within reach of a height: one jump up, three blocks down.
+  levels(x, z, nearY, up = JUMP_HEIGHT, down = MAX_DROP, missing) {
+    const found = [];
+    for (let y = Math.floor(nearY - down) - 1; y <= Math.floor(nearY + up); y++) {
+      const node = this.standable(x, y, z, missing);
+      if (node && node.y - nearY <= up && nearY - node.y <= down) found.push(node);
+    }
+    return found.sort((a, b) => Math.abs(a.y - nearY) - Math.abs(b.y - nearY));
+  }
+  nodeAt(x, z, nearY, up = JUMP_HEIGHT, down = MAX_DROP) { return this.levels(x, z, nearY, up, down)[0] ?? null; }
+  // Compatibility for callers that think in coordinates.
+  stand(x, z, nearY) { return this.nodeAt(Math.floor(x), Math.floor(z), nearY); }
+  // The player's own footing: a standable cell under the body at its height.
+  standingOn(p, tolerance = .35) {
+    const x = Math.floor(p.x), z = Math.floor(p.z);
+    return this.levels(x, z, p.y, tolerance, tolerance).some(node => Math.abs(node.y - p.y) <= tolerance);
+  }
+  // Water or fire touching the node's own level or the one below, in any direction.
+  shore(node) {
+    const x = Math.floor(node.x), z = Math.floor(node.z), y = Math.floor(node.y - .01);
+    for (const [dx, dz] of around) for (let dy = -1; dy <= 1; dy++)
+      if (this.get(x + dx, y + dy, z + dz)?.hazard) return true;
     return false;
   }
-  clear(p, w, h, missing) {
-    const body = [p.x - w, p.y + .01, p.z - w, p.x + w, p.y + h, p.z + w];
-    let unknown = false;
-    for (let x = Math.floor(body[0]); x <= Math.floor(body[3] - .001); x++)
-      for (let y = Math.floor(body[1]); y <= Math.floor(body[4] - .001); y++)
-        for (let z = Math.floor(body[2]); z <= Math.floor(body[5] - .001); z++) {
-          const cell = this.get(x, y, z);
-          if (!cell) { unknown = true; this.missing(missing, x, y, z); }
-          else if (cell.hazard || cell.boxes.some(b => intersects(b, body))) return false;
-        }
-    return !unknown || !!missing;
-  }
-  dry(p, w, h, margin = .55, missing, requireKnown = false) {
-    // Keep planned body positions away from liquid/fire cells, including
-    // hazards below a ledge. A dry block beside water two levels down is still
-    // an unsafe checkpoint: slopes, gravity, and one bounded frame can carry the
-    // player over that edge before the next observation arrives.
-    const body = [p.x - w - margin, p.y - 2, p.z - w - margin,
-      p.x + w + margin, p.y + h, p.z + w + margin];
-    const feet = Math.floor(p.y);
-    for (let x = Math.floor(body[0]); x <= Math.floor(body[3] - .001); x++)
-      for (let y = Math.floor(body[1]); y <= Math.floor(body[4] - .001); y++)
-        for (let z = Math.floor(body[2]); z <= Math.floor(body[5] - .001); z++) {
-          const cell = this.get(x, y, z);
-          // The margin is extra caution around the already-known body path,
-          // not additional clearance geometry. Unknown margin/underground
-          // cells are queued when possible but do not strand a freshly joined
-          // player; clear() still requires the actual body volume to be known.
-          if (!cell) {
-            if (y < feet && this.buried(x, y, z)) continue;
-            if (y >= feet || requireKnown) this.missing(missing, x, y, z);
-            if (requireKnown) return false;
-            continue;
+  // Possible moves out of a node: walk/step to any neighbour, jump up one
+  // block or drop up to three along a cardinal, never a diagonal corner cut
+  // past something solid, never a drop beside water.
+  moves(node, missing) {
+    const x = Math.floor(node.x), z = Math.floor(node.z), t = node.y, result = [];
+    for (const [dx, dz] of around) {
+      const diagonal = dx !== 0 && dz !== 0, d = diagonal ? Math.SQRT2 : 1;
+      for (const to of this.levels(x + dx, z + dz, t, JUMP_HEIGHT, MAX_DROP, missing)) {
+        const rise = to.y - t;
+        let kind, cost;
+        if (rise > STEP_HEIGHT) {
+          if (diagonal || !this.clearBetween(x, z, t, t + JUMP_HEADROOM, missing) ||
+              !this.clearBetween(x + dx, z + dz, to.y, to.y + JUMP_HEADROOM - .3, missing)) continue;
+          kind = 'jump'; cost = d + 1.5;
+        } else if (rise < -STEP_HEIGHT) {
+          if (diagonal || this.shore(to) || !this.clearBetween(x + dx, z + dz, to.y, t + BODY_HEIGHT, missing)) continue;
+          kind = 'drop'; cost = d + .4 * -rise;
+        } else {
+          if (diagonal) {
+            const low = Math.min(t, to.y), high = Math.max(t, to.y);
+            if (!this.clearBetween(x + dx, z, low + .01, high + BODY_HEIGHT, missing) ||
+                !this.clearBetween(x, z + dz, low + .01, high + BODY_HEIGHT, missing)) continue;
           }
-          else if (cell.hazard) return false;
+          kind = rise > .05 ? 'step' : 'walk'; cost = d + Math.abs(rise) * .3;
         }
-    return true;
-  }
-  hazardDistance(p, h) {
-    let nearest = Infinity;
-    for (const cell of this.hazards.values()) {
-      if (cell.y + 1 < p.y - 2 || cell.y > p.y + h) continue;
-      const dx = Math.max(cell.x - p.x, 0, p.x - cell.x - 1);
-      const dz = Math.max(cell.z - p.z, 0, p.z - cell.z - 1);
-      nearest = Math.min(nearest, Math.hypot(dx, dz));
-    }
-    return nearest;
-  }
-  support(p, w, missing) {
-    let count = 0;
-    for (const dx of [-w, 0, w]) for (const dz of [-w, 0, w]) {
-      const x = p.x + dx, z = p.z + dz;
-      for (let y = Math.floor(p.y); y >= Math.floor(p.y - .06); y--) {
-        const cell = this.get(x, y, z);
-        if (!cell && missing && y < p.y) { this.missing(missing, x, y, z); count++; break; }
-        if (cell && !cell.hazard && cell.boxes.some(b => Math.abs(b[4] - p.y) < .06 && x >= b[0] && x <= b[3] && z >= b[2] && z <= b[5])) { count++; break; }
-      }
-    }
-    return count;
-  }
-  ground(p, w, drop, missing) {
-    for (const dx of [-w, 0, w]) for (const dz of [-w, 0, w]) {
-      const x = p.x + dx, z = p.z + dz;
-      let found = false;
-      for (let y = Math.floor(p.y - .01); y >= Math.floor(p.y - drop - .01); y--) {
-        const cell = this.get(x, y, z);
-        if (!cell) {
-          if (!missing) return false;
-          this.missing(missing, x, y, z); found = true; break;
-        }
-        if (cell.hazard) return false;
-        if (cell.boxes.some(b => b[4] <= p.y + .01 && b[4] >= p.y - drop - .01 && x >= b[0] && x <= b[3] && z >= b[2] && z <= b[5])) { found = true; break; }
-      }
-      if (!found) return false;
-    }
-    return true;
-  }
-  groundSupport(p, w, drop) {
-    let count = 0;
-    for (const dx of [-w, 0, w]) for (const dz of [-w, 0, w]) {
-      const x = p.x + dx, z = p.z + dz;
-      for (let y = Math.floor(p.y - .01); y >= Math.floor(p.y - drop - .01); y--) {
-        const cell = this.get(x, y, z);
-        if (cell?.hazard) return -1;
-        if (cell?.boxes.some(b => b[4] <= p.y + .01 && b[4] >= p.y - drop - .01 &&
-            x >= b[0] && x <= b[3] && z >= b[2] && z <= b[5])) { count++; break; }
-      }
-    }
-    return count;
-  }
-  stand(x, z, nearY, w, h, allowUnsafe = false) {
-    const tops = new Set();
-    for (let y = Math.floor(nearY) - 3; y <= Math.floor(nearY) + 1; y++) {
-      const cell = this.get(x, y, z);
-      if (cell && !cell.hazard) for (const b of cell.boxes)
-        if (b[4] - nearY <= 1.01 && nearY - b[4] <= 2.01) tops.add(b[4]);
-    }
-    for (const y of [...tops].sort((a, b) => Math.abs(a - nearY) - Math.abs(b - nearY))) {
-      const p = { x, y, z };
-      if (this.support(p, w) === 9 && this.clear(p, w, h) && (allowUnsafe || this.dry(p, w, h))) return p;
-    }
-    return null;
-  }
-  traverse(from, to, w, h, recenter = false, missing, allowMarginEscape = false) {
-    const rise = to.y - from.y;
-    // One-block rises need a jump. A fully observed two-block descent is a
-    // normal, damage-free drop; larger falls remain forbidden.
-    if (rise > 1.06 || rise < -2.06) return false;
-    const jump = rise > .05, travelY = Math.max(from.y, to.y) + (jump ? .25 : 0);
-    const steps = Math.max(1, Math.ceil(distance(from, to) * 10));
-    // A returning point can itself be inside the braking margin while the
-    // player's actual body is dry. Permit a direct, supported exit toward a
-    // safe endpoint, but never allow a path to re-enter the margin once clear.
-    const startHazardDistance = this.hazardDistance(from, h);
-    let support = 0, escapedHazardMargin = this.dry(from, w, h, .55, missing);
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps, p = { x: from.x + (to.x - from.x) * t, y: travelY, z: from.z + (to.z - from.z) * t };
-      if (!this.clear(p, w, h, missing)) return false;
-      const dry = this.dry(p, w, h, .55, missing);
-      if (!dry && escapedHazardMargin) return false;
-      if (dry) escapedHazardMargin = true;
-      if (Math.abs(rise) < .05) {
-        const n = this.support(p, w, missing);
-        // A planned segment needs full support all the way. The live body is
-        // grounded by the game's own physics, often on the very edge of a
-        // block right after a jump, so its segment needs only some contact
-        // along the way and a fully supported endpoint, checked below.
-        if (recenter ? n === 0 : n !== 9) return false;
-        support = n;
-      }
-      if (rise < -.05) {
-        if (recenter && -rise <= .125) {
-          // Thin ground cover can leave a natively grounded player with only
-          // partial observed support. Require continuous known contact while
-          // recentering onto a fully supported, collision-checked endpoint.
-          const n = this.groundSupport(p, w, -rise + .06);
-          if (n <= 0) return false;
-          support = n;
-        } else if (!this.ground(p, w, -rise + .06, missing)) return false;
-      }
-      if (jump && !this.ground(p, w, travelY - from.y + .06, missing)) return false;
-    }
-    for (const end of [from, to]) for (let y = end.y; y <= travelY + .01; y += .1)
-      if (!this.clear({ ...end, y }, w, h, missing)) return false;
-    // A lower landing can conceal water or fire beneath a ledge. Unlike an
-    // extra level-ground caution margin, every cell down to two blocks below
-    // a descent endpoint must be observed before gravity is allowed to commit.
-    if (rise < -.05 && !this.dry(to, w, h, .55, missing, true)) return false;
-    const improvedMargin = allowMarginEscape && !escapedHazardMargin &&
-      this.hazardDistance(to, h) > startHazardDistance + .05;
-    return (escapedHazardMargin || improvedMargin) && this.support(to, w, missing) === 9;
-  }
-  // Diagnostic twin of traverse(): the first failing check and where, for
-  // telemetry when a live segment is rejected. Never used for decisions.
-  explainTraverse(from, to, w, h, recenter = false) {
-    const rise = to.y - from.y;
-    if (rise > 1.06 || rise < -2.06) return `rise ${rise.toFixed(2)}`;
-    const jump = rise > .05, travelY = Math.max(from.y, to.y) + (jump ? .25 : 0);
-    const steps = Math.max(1, Math.ceil(distance(from, to) * 10));
-    let escaped = this.dry(from, w, h);
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps, p = { x: from.x + (to.x - from.x) * t, y: travelY, z: from.z + (to.z - from.z) * t };
-      const at = `sample ${i}/${steps}`;
-      if (!this.clear(p, w, h)) return `${at} clear`;
-      const dry = this.dry(p, w, h);
-      if (!dry && escaped) return `${at} re-enters hazard margin`;
-      if (dry) escaped = true;
-      if (Math.abs(rise) < .05) { const n = this.support(p, w); if (recenter ? n === 0 : n !== 9) return `${at} support ${n}`; }
-      if (rise < -.05) {
-        if (recenter && -rise <= .125) { if (this.groundSupport(p, w, -rise + .06) <= 0) return `${at} groundSupport`; }
-        else if (!this.ground(p, w, -rise + .06)) return `${at} ground`;
-      }
-      if (jump && !this.ground(p, w, travelY - from.y + .06)) return `${at} jump ground`;
-    }
-    for (const end of [from, to]) for (let y = end.y; y <= travelY + .01; y += .1)
-      if (!this.clear({ ...end, y }, w, h)) return `end clear at y ${y.toFixed(2)}`;
-    if (rise < -.05 && !this.dry(to, w, h, .55, undefined, true)) return 'landing margin unknown';
-    if (!escaped) return 'never dry';
-    if (this.support(to, w) !== 9) return `end support ${this.support(to, w)}`;
-    return 'passes';
-  }
-  jumpTraverse(from, to, w, h) {
-    const span = horizontal(from, to), rise = to.y - from.y;
-    // Only bridge one missing grid cell. Both banks and the complete jump arc
-    // must already be known, clear and dry; this is not permission to leap
-    // toward an unobserved or hazardous landing.
-    if (span < 1.5 || span > 3.1 || rise > 1.01 || rise < -1.01 ||
-        this.support(from, w) !== 9 || this.support(to, w) !== 9 ||
-        !this.clear(to, w, h) || !this.dry(to, w, h, .55, undefined, true)) return false;
-    const steps = Math.ceil(distance(from, to) * 12);
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const p = { x: from.x + (to.x - from.x) * t,
-        y: from.y + rise * t + Math.sin(Math.PI * t) * .8,
-        z: from.z + (to.z - from.z) * t };
-      if (!this.clear(p, w, h) || !this.dry(p, w, h, .55, undefined, true)) return false;
-    }
-    return true;
-  }
-  frontier(p, w, h) {
-    const result = new Map();
-    for (const [dx, dz] of directions) {
-      const x = p.x + dx, z = p.z + dz;
-      for (let y = Math.floor(p.y) - 3; y <= Math.floor(p.y) + 1; y++) {
-        const cell = this.get(x, y, z);
-        if (cell?.hazard) continue;
-        const tops = cell ? cell.boxes.map(b => b[4]) : [y + 1];
-        for (const top of tops.filter(top => top - p.y <= 1.01 && p.y - top <= 2.01)) {
-          const missing = new Map();
-          if (this.traverse(p, { x, y: top, z }, w, h, false, missing)) for (const [id, value] of missing) result.set(id, value);
-        }
+        if (this.shore(to)) cost += 2;
+        result.push({ node: { ...to, move: kind }, cost });
       }
     }
     return result;
   }
-  views(p, w, h) {
-    const missing = this.frontier({ x: Math.floor(p.x) + .5, y: p.y, z: Math.floor(p.z) + .5 }, w, h);
-    this.clear(p, w, h, missing); this.support(p, w, missing);
+  // Escape edges over a one-cell hole: the far cell stands, the middle one
+  // does not, and there is room for the arc. Costly, so only ever a last resort.
+  gapMoves(node, missing) {
+    const x = Math.floor(node.x), z = Math.floor(node.z), t = node.y, result = [];
+    for (const [dx, dz] of cardinals) {
+      if (this.levels(x + dx, z + dz, t, JUMP_HEIGHT, MAX_DROP).length) continue;
+      if (!this.clearBetween(x, z, t, t + JUMP_HEADROOM, missing) || !this.clearBetween(x + dx, z + dz, t - .5, t + JUMP_HEADROOM, missing)) continue;
+      for (const to of this.levels(x + 2 * dx, z + 2 * dz, t, JUMP_HEIGHT, JUMP_HEIGHT, missing)) {
+        if (this.shore(to) || !this.clearBetween(x + 2 * dx, z + 2 * dz, to.y, to.y + JUMP_HEADROOM - .3, missing)) continue;
+        result.push({ node: { ...to, move: 'gap' }, cost: 2 + 4 });
+      }
+    }
+    return result;
+  }
+  // Unknown cells a move out of this node would need: what to look at next.
+  frontier(node) {
+    const missing = new Map();
+    this.moves(node, missing); this.gapMoves(node, missing);
     return missing;
+  }
+  views(p) {
+    const x = Math.floor(p.x), z = Math.floor(p.z);
+    const node = this.nodeAt(x, z, p.y, .5, .5) ?? { x: x + .5, y: p.y, z: z + .5 };
+    const missing = this.frontier(node);
+    this.clearBetween(x, z, p.y, p.y + BODY_HEIGHT, missing);
+    return missing;
+  }
+  // Straight walk between two level nodes over standable cells only, for
+  // merging checkpoints into one segment.
+  lineWalkable(from, to) {
+    if (Math.abs(from.y - to.y) > .05) return false;
+    const steps = Math.ceil(horizontal(from, to) * 2);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps, x = from.x + (to.x - from.x) * t, z = from.z + (to.z - from.z) * t;
+      const node = this.nodeAt(Math.floor(x), Math.floor(z), from.y, .05, .05);
+      if (!node || Math.abs(node.y - from.y) > .05) return false;
+      if (this.shore(node)) return false;
+    }
+    return true;
   }
 }

@@ -1,54 +1,43 @@
-import { distance, horizontal, key } from './terrain.mjs';
-// Cardinal and diagonal steps. A diagonal costs its real length; traverse()
-// sweeps the whole body along the segment, so cutting a corner through a
-// block or past a ledge is rejected exactly like any other unsafe segment.
-const directions = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-const jumpDirections = [
-  [2, 0], [-2, 0], [0, 2], [0, -2],
-  [2, 1], [2, -1], [-2, 1], [-2, -1], [1, 2], [-1, 2], [1, -2], [-1, -2],
-  [2, 2], [2, -2], [-2, 2], [-2, -2],
-  [3, 0], [-3, 0], [0, 3], [0, -3],
-];
-// Bounded like mineflayer-pathfinder's thinkTimeout: planning runs between two
-// control frames, so it must finish well inside the two-second heartbeat.
-// When the budget or deadline runs out the best partial frontier is returned.
+import { horizontal, key } from './terrain.mjs';
+
+// A* over standing cells, in the shape of mineflayer-pathfinder: moves come
+// from the terrain grid with their costs, a goal is a predicate, and when the
+// goal is beyond what has been seen the best frontier node is returned as a
+// partial route to walk before looking again. Planning runs between two
+// control frames, so it stops at a deadline and returns what it has.
 export function findRoute(map, start, goal, w, h,
-  { blocked = new Set(), visits = new Map(), partial = true, budget = 512, avoid = [], deadlineMs = 250 } = {}) {
+  { blocked = new Set(), visits = new Map(), partial = true, budget = 1024, avoid = [], deadlineMs = 250 } = {}) {
   const deadline = performance.now() + deadlineMs;
-  const remaining = p => goal.horizontalOnly ? horizontal(p, goal) : distance(p, goal);
+  const remaining = p => goal.horizontalOnly ? horizontal(p, goal) : Math.hypot(p.x - goal.x, (p.y - goal.y) * .5, p.z - goal.z);
   const safe = p => avoid.every(item => horizontal(p, item.point) >= item.minimumDistance);
-  const centers = [];
-  // A reconnect can place the fresh terrain cache around a player who is dry,
-  // but already inside the conservative margin of nearby water or fire. Find
-  // the nearest fully safe anchor reachable by one continuously validated
-  // ground segment; subsequent route cells still cannot enter the margin.
-  const escapingMargin = typeof map.dry === 'function' && !map.dry(start, w, h);
-  const anchorRadius = escapingMargin ? 6 : 1;
-  for (let x = -anchorRadius; x <= anchorRadius; x++) for (let z = -anchorRadius; z <= anchorRadius; z++) {
-    const p = map.stand(Math.floor(start.x) + .5 + x, Math.floor(start.z) + .5 + z, start.y, w, h, escapingMargin);
-    if (p && (!escapingMargin || horizontal(p, start) >= .75)) centers.push(p);
+  const reached = p => {
+    if (goal.arrivalRadius && horizontal(p, goal) < goal.arrivalRadius && (goal.horizontalOnly || Math.abs(p.y - goal.y) < .6)) return true;
+    return Math.abs(p.x - goal.x) < .51 && Math.abs(p.z - goal.z) < .51 && (goal.horizontalOnly || Math.abs(p.y - goal.y) < .6);
+  };
+  // Where the player stands, or the nearest cell it can step onto when it is
+  // between cells or on an edge after a jump.
+  if (typeof map.nodeAt !== 'function') return null;
+  const cx = Math.floor(start.x), cz = Math.floor(start.z);
+  let origin = map.nodeAt(cx, cz, start.y, .6, .6);
+  if (!origin) {
+    const candidates = [];
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+      const node = map.nodeAt(cx + dx, cz + dz, start.y, .6, .6);
+      if (node && horizontal(node, start) < 1.3) candidates.push(node);
+    }
+    origin = candidates.sort((a, b) => horizontal(a, start) - horizontal(b, start))[0] ?? null;
   }
-  const anchor = centers.sort((a, b) => distance(a, start) - distance(b, start))
-    .find(p => map.traverse(start, p, w, h, true, undefined, escapingMargin));
-  if (!anchor) return null;
-  const recentering = map.support(start, w) !== 9 && distance(anchor, start) >= .12;
-  const center = recentering ? { ...anchor, recenter: true } : anchor;
-  // Move one verified step farther from the hazard, then resample from the new
-  // position. The native sensor's six-block radius bounds this recovery and a
-  // later plan can continue until the ordinary dry graph is reachable.
-  if (escapingMargin && !map.dry(center, w, h)) return [center];
-  const costs = new Map([[key(center), 0]]), previous = new Map(), closed = new Set(), open = [{ p: center, score: 0 }];
-  let frontier, best = Infinity;
+  if (!origin) return null;
+  const costs = new Map([[key(origin), 0]]), previous = new Map(), closed = new Set();
+  const open = [{ p: origin, score: remaining(origin) }];
+  let frontier = null, best = Infinity;
   const path = end => {
     const list = [end];
     while (previous.has(key(end))) { end = previous.get(key(end)); list.push(end); }
     list.reverse();
-    // The grid center is a planning anchor, not a mandatory physical checkpoint.
-    // Slow samples can leave the player well off-center while still safely
-    // connected to the first real step.
-    if (!recentering && list.length > 1 && (list[1].jumpGap
-      ? map.jumpTraverse?.(start, list[1], w, h)
-      : map.traverse(start, list[1], w, h, true))) list.shift();
+    // The origin cell is where the player already is; keep it only when the
+    // body is off the cell and needs to walk onto it first.
+    if (list.length > 1 && horizontal(start, list[0]) < .35 && Math.abs(start.y - list[0].y) < .6) list.shift();
     return list;
   };
   while (open.length && closed.size < budget && performance.now() < deadline) {
@@ -56,43 +45,24 @@ export function findRoute(map, start, goal, w, h,
     const at = open.pop().p, id = key(at);
     if (closed.has(id)) continue;
     closed.add(id);
-    if (goal.arrivalRadius && horizontal(at, goal) < goal.arrivalRadius && (goal.horizontalOnly || Math.abs(at.y - goal.y) < .1)) return path(at);
-    const destination = { ...goal, y: goal.horizontalOnly ? at.y : goal.y };
-    if (Math.abs(at.x - goal.x) < .51 && Math.abs(at.z - goal.z) < .51 && Math.abs(at.y - destination.y) < .15 &&
-        safe(destination) && map.traverse(at, destination, w, h)) {
-      const list = path(at); if (distance(at, destination) > .001) list.push(destination); return list;
-    }
-    if (partial && distance(start, at) >= 1 && !visits.has(id) && map.frontier(at, w, h).size) {
+    if (reached(at)) return path(at);
+    if (partial && horizontal(start, at) >= 1 && !visits.has(id) && map.frontier(at).size) {
       const score = remaining(at) + costs.get(id) * .15;
       if (score < best) { best = score; frontier = at; }
     }
-    const failed = new Set();
-    for (const [dx, dz] of directions) {
-      const next = map.stand(at.x + dx, at.z + dz, at.y, w, h);
-      if (!next || !safe(next) || blocked.has(`${id}>${key(next)}`) || !map.traverse(at, next, w, h)) { failed.add(`${dx},${dz}`); continue; }
-      const cost = costs.get(id) + Math.hypot(dx, dz) + Math.abs(next.y - at.y), nextId = key(next);
-      if ((costs.get(nextId) ?? Infinity) <= cost) continue;
-      costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: next, score: cost + remaining(next) });
+    const moves = map.moves(at);
+    const stepped = new Set(moves.map(m => `${Math.sign(Math.floor(m.node.x) - Math.floor(at.x))},${Math.sign(Math.floor(m.node.z) - Math.floor(at.z))}`));
+    // Gap jumps are escape edges: only where no ordinary move leaves that way.
+    for (const m of map.gapMoves(at)) {
+      const dir = `${Math.sign(Math.floor(m.node.x) - Math.floor(at.x))},${Math.sign(Math.floor(m.node.z) - Math.floor(at.z))}`;
+      if (!stepped.has(dir)) moves.push(m);
     }
-    // A single observed hole or gap must not strand the bot on a terrain
-    // island. Gap edges carry an explicit marker so execution jumps only the
-    // exact segment whose landing and arc were validated by TerrainMemory.
-    // They are escape edges: tried only where the ordinary step that way failed.
-    if (typeof map.jumpTraverse === 'function') for (const [dx, dz] of jumpDirections) {
-      if (!failed.has(`${Math.sign(dx)},${Math.sign(dz)}`)) continue;
-      const landing = map.stand(at.x + dx, at.z + dz, at.y, w, h);
-      if (!landing || !safe(landing) || !map.jumpTraverse(at, landing, w, h)) continue;
-      // Prefer a same-length supported detour; jumping is an escape edge, not
-      // a shortcut across ordinary walkable terrain.
-      const next = { ...landing, jumpGap: true }, cost = costs.get(id) + 3 + horizontal(at, landing) * 2 +
-        Math.abs(next.y - at.y);
-      const nextId = key(next);
+    for (const { node, cost: step } of moves) {
+      if (!safe(node) || blocked.has(`${id}>${key(node)}`)) continue;
+      const cost = costs.get(id) + step, nextId = key(node);
       if ((costs.get(nextId) ?? Infinity) <= cost) continue;
-      costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: next, score: cost + remaining(next) });
+      costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: node, score: cost + remaining(node) });
     }
   }
-  // A natively grounded player can rest on a thin edge with partial sampled
-  // support. The nearest safe center may be less than the ordinary one-block
-  // frontier threshold; move there first, then resample from full support.
-  return frontier ? path(frontier) : recentering ? [center] : null;
+  return frontier ? path(frontier) : null;
 }

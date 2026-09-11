@@ -190,7 +190,7 @@ export class Controller {
       while (nav.active) {
         const pausing = pauseWhen?.(state);
         // Pause only on supported ground; a food task must not take over mid-jump.
-        if (pausing && state.motion.onGround && self.map.support(state.position, state.body.halfWidth) === 9) {
+        if (pausing && state.motion.onGround && self.map.standingOn(state.position)) {
           nav.finish('paused', pausing);
           break;
         }
@@ -215,7 +215,7 @@ export class Controller {
         terrainMore = batch.terrain.more;
         if (!nav.active) break;
         const nextPause = pauseWhen?.(state);
-        if (nextPause && state.motion.onGround && self.map.support(state.position, state.body.halfWidth) === 9) {
+        if (nextPause && state.motion.onGround && self.map.standingOn(state.position)) {
           nav.finish('paused', nextPause); break;
         }
         // Renew immediately after the sensed step, before deterministic route
