@@ -188,6 +188,21 @@ test('navigation accepts a bounded waypoint crossing between slow samples', () =
   assert.equal(nav.state, 'surveying');
 });
 
+test('navigation preserves recentering when look-ahead advances the route index', () => {
+  const map = { cells: new Map(), support: () => 9, clear: () => true, dry: () => true,
+    traverse: (_from, _to, _w, _h, recenter) => recenter, views: () => new Map() };
+  const state = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals: { hunger: { current: 1000, max: 1500 } },
+    nearbyEntities: [] };
+  const nav = new Navigation(map, state, { x: 4.5, y: 0, z: .5, timeoutMs: 60000 }, 0);
+  nav.state = 'moving'; nav.route = [{ x: 1.5, y: 0, z: .5 }, { x: 2.5, y: 0, z: .5 }]; nav.index = 0;
+  const frame = nav.tick(state, 1);
+  assert.ok(frame);
+  assert.equal(nav.index, 1);
+  assert.equal(nav.state, 'moving');
+  assert.equal(nav.replans, 0);
+});
+
 test('navigation sneaks through a nearby sharp waypoint', () => {
   const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: (_, to) => to.z === .5,
     views: () => new Map() };

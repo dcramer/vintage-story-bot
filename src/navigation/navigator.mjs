@@ -96,11 +96,12 @@ export class Navigation {
       if (++this.segments >= 64 || this.visits.get(id) > 3) return this.finish('blocked', 'exploration_exhausted');
       this.survey(now); return null;
     }
+    let skippedAhead = false;
     if (grounded && !this.jumpAt && !this.landing) for (let ahead = this.index + 1; ahead < this.route.length; ahead++) {
       const next = this.route[ahead];
       if (distance(p, next) > 5 || Math.abs(next.y - p.y) > .05 ||
           !traverse(p, next, this.index === 0) || this.blocked.has(`${key(p)}>${key(next)}`)) break;
-      this.index = ahead; this.edgeStart = p;
+      this.index = ahead; this.edgeStart = p; skippedAhead = true;
     }
     const next = this.route[this.index];
     this.nextWaypoint = next;
@@ -111,7 +112,8 @@ export class Navigation {
       return grounded ? this.replan(p, now, 'terrain_changed') : this.finish('blocked', 'landing_changed');
     }
     if (this.jumpAt && grounded && Math.abs(p.y - next.y) < .06) { this.jumpAt = 0; this.landing = true; }
-    const recenter = this.landing || this.index === 0 || Math.floor(p.x) === Math.floor(next.x) && Math.floor(p.z) === Math.floor(next.z);
+    const recenter = skippedAhead || this.landing || this.index === 0 ||
+      Math.floor(p.x) === Math.floor(next.x) && Math.floor(p.z) === Math.floor(next.z);
     if (grounded && !this.jumpAt && !traverse(p, next, recenter)) {
       this.diagnostics = { kind: 'segment_invalid', from: p, point: next, recenter,
         fromDry: typeof map.dry !== 'function' || map.dry(p, w, h),
