@@ -50,7 +50,7 @@ public sealed partial class AiBridgeMod
                 eyeHeight = entity.LocalEyePos.Y },
             mounted = entity.MountedOn != null,
             pickingRange = api.World.Player.WorldData.PickingRange,
-            // Only what has been seen or heard: sightings memory, not a radius query.
+            // Only what is seen or heard this instant; Node remembers what left the view.
             nearbyEntities = NearbyEntities(),
             moving = movingControls != null,
             moveDirection = movingControls == null ? null : moveDirection,
@@ -72,13 +72,11 @@ public sealed partial class AiBridgeMod
             return new { ok = false, error = "Invalid terrain cursor." };
         string? terrainSession = request.TryGetProperty("session", out var terrainSessionField) && terrainSessionField.ValueKind == JsonValueKind.String
             ? terrainSessionField.GetString() : null;
-        if (!TryVisionCursors(request, out long surfaceCursor, out string? surfaceSession, out long sightingsCursor, out string? sightingsSession, out string? watchError))
-            return new { ok = false, error = watchError };
+        if (!TryWatch(request, out string? watchError)) return new { ok = false, error = watchError };
         lastSenseAt = Environment.TickCount64;
         return new { ok = true, state = Observe(),
             terrain = terrain.Read(cursor, terrainSession, lastSenseAt),
-            surface = surface.Read(surfaceCursor, surfaceSession, lastSenseAt, vision.Sweeps),
-            sightings = sightings.Read(sightingsCursor, sightingsSession, lastSenseAt) };
+            surface = vision.Surface(lastSenseAt), sightings = vision.Sightings(lastSenseAt) };
     }
 
     private object[] NearbyEntities(int limit = 24)
@@ -87,42 +85,23 @@ public sealed partial class AiBridgeMod
         var eye = entity.Pos.XYZ.Add(entity.LocalEyePos);
         var origin = new Point3(eye.X, eye.Y, eye.Z);
         long now = Environment.TickCount64;
-        return sightings.Current("entity")
+        return sightings.Current(now, "entity")
             .Select(pair => new { key = pair.Key, code = pair.Value.Code,
                 point = new { x = pair.Value.Point.X, y = pair.Value.Point.Y, z = pair.Value.Point.Z },
                 distance = Math.Round(SceneGeometry.Distance(origin, pair.Value.Point), 2),
-                how = pair.Value.How, seenAt = pair.Value.At, visible = now - pair.Value.At < 1000 })
+                how = pair.Value.How, seenAt = pair.Value.At, visible = true })
             .OrderBy(sighting => sighting.distance).Take(limit).Cast<object>().ToArray();
     }
 
-    // Vision deltas ride along with terrain deltas under their own cursors; an
-    // optional watch list sets what blocks the eye is currently looking for.
-    private bool TryVisionCursors(JsonElement request, out long surfaceCursor, out string? surfaceSession,
-        out long sightingsCursor, out string? sightingsSession, out string? error)
+    // An optional watch list sets what blocks the eye is currently looking for.
+    private bool TryWatch(JsonElement request, out string? error)
     {
-        surfaceCursor = sightingsCursor = 0; surfaceSession = sightingsSession = null; error = null;
-        if (!TrySurfaceCursor(request, out surfaceCursor, out surfaceSession)) { error = "Invalid surface cursor."; return false; }
-        if (request.TryGetProperty("sightingsAfter", out var cursorField) && (!cursorField.TryGetInt64(out sightingsCursor) || sightingsCursor < 0))
-        { error = "Invalid sightings cursor."; return false; }
-        sightingsSession = request.TryGetProperty("sightingsSession", out var sessionField) && sessionField.ValueKind == JsonValueKind.String
-            ? sessionField.GetString() : null;
-        if (request.TryGetProperty("watch", out var watchField))
-        {
-            if (watchField.ValueKind != JsonValueKind.Array || watchField.GetArrayLength() > 8 ||
-                watchField.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.String || value.GetString()!.Length is < 1 or > 64))
-            { error = "watch must be up to 8 strings of 1–64 characters."; return false; }
-            vision.SetWatch(watchField.EnumerateArray().Select(value => value.GetString()!).ToArray());
-        }
-        return true;
-    }
-
-    // Far-field vision deltas ride along with terrain deltas under their own cursor.
-    private static bool TrySurfaceCursor(JsonElement request, out long cursor, out string? session)
-    {
-        cursor = 0; session = null;
-        if (request.TryGetProperty("surfaceAfter", out var cursorField) && (!cursorField.TryGetInt64(out cursor) || cursor < 0)) return false;
-        session = request.TryGetProperty("surfaceSession", out var sessionField) && sessionField.ValueKind == JsonValueKind.String
-            ? sessionField.GetString() : null;
+        error = null;
+        if (!request.TryGetProperty("watch", out var watchField)) return true;
+        if (watchField.ValueKind != JsonValueKind.Array || watchField.GetArrayLength() > 16 ||
+            watchField.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.String || value.GetString()!.Length is < 1 or > 64))
+        { error = "watch must be up to 16 strings of 1–64 characters."; return false; }
+        vision.SetWatch(watchField.EnumerateArray().Select(value => value.GetString()!).ToArray());
         return true;
     }
 

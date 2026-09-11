@@ -9,6 +9,7 @@ import { Reporter } from './reporter.mjs';
 const sinks = [new Telemetry(), Reporter.fromEnv()].filter(Boolean);
 const telemetry = { publish: (...args) => sinks.forEach(sink => sink.publish(...args)), close: () => sinks.forEach(sink => sink.close()) };
 const controller = new Controller(undefined, telemetry), sockets = new Set();
+controller.eye();
 const server = net.createServer(socket => {
   sockets.add(socket); socket.on('close', () => sockets.delete(socket)); socket.on('error', () => {});
   socket.setTimeout(15000, () => socket.destroy());

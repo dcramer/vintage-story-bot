@@ -9,69 +9,42 @@ namespace VintageStoryAI;
 
 public readonly record struct Column(int X, int Z);
 
-// Far-field surface memory as the mod holds it: what the camera has seen,
-// published as deltas like TerrainMap. Rows carry the standing surface top
-// and its kind; a null row forgets a column that expired or moved out of range.
-public sealed class SurfaceMap(int capacity = 8192, long ttlMs = 300000, int radius = 96)
+// The eye's short-term buffer of far-field surface columns. Not memory: a
+// snapshot returns what has been confirmed in the last few seconds inside
+// the current view, and Node remembers. CheckedAt drives resampling and
+// attention changes; SeenAt drives what counts as seen right now.
+public sealed class SurfaceMap(long ttlMs = 30000, int radius = 96)
 {
-    private const long RefreshDeltaMs = 10_000;
-    private sealed record Observation(double? Y, string? Kind, int Step, string? Code, long At, long Sequence, long PublishedAt);
+    private sealed record Observation(double Y, string Kind, int Step, string? Code, long SeenAt, long CheckedAt);
     private readonly Dictionary<Column, Observation> columns = new();
-    private long sequence, lostThrough;
-    public string Session { get; private set; } = Guid.NewGuid().ToString("N");
     public int Count => columns.Count;
-    public void Clear() { columns.Clear(); sequence = lostThrough = 0; Session = Guid.NewGuid().ToString("N"); }
+    public void Clear() => columns.Clear();
     public bool Fresh(Column column, long now, long age) =>
-        columns.TryGetValue(column, out var value) && value.Y != null && now - value.At <= Math.Min(age, ttlMs);
-    public void Invalidate(Column column)
-    {
-        if (!columns.TryGetValue(column, out var prior) || prior.Y == null) return;
-        long now = Environment.TickCount64;
-        columns[column] = new(null, null, prior.Step, null, now, ++sequence, now);
-        Bound();
-    }
-    public void Put(Column column, double y, string kind, int step, string? code, long now)
-    {
-        if (columns.TryGetValue(column, out var prior) && prior.Y != null && prior.Kind == kind &&
-            Math.Abs(prior.Y.Value - y) < .001 && prior.Step == step)
-        {
-            bool publish = now - prior.PublishedAt >= RefreshDeltaMs;
-            columns[column] = prior with { At = now, Sequence = publish ? ++sequence : prior.Sequence,
-                PublishedAt = publish ? now : prior.PublishedAt };
-        }
-        else columns[column] = new(y, kind, step, code, now, ++sequence, now);
-        Bound();
-    }
-    private void Bound()
-    {
-        if (columns.Count <= capacity) return;
-        var oldest = columns.MinBy(pair => pair.Value.Sequence);
-        lostThrough = Math.Max(lostThrough, oldest.Value.Sequence);
-        columns.Remove(oldest.Key);
-    }
-    // Attention changed: every column must be looked at again for watched
-    // blocks. Known surfaces stay known and republish only if they changed.
+        columns.TryGetValue(column, out var value) && now - value.CheckedAt <= age;
+    // Attention changed: every column must be looked at again for watched blocks.
     public void MarkStale()
     {
-        foreach (var (column, value) in columns.ToArray()) if (value.Y != null) columns[column] = value with { At = 0 };
+        foreach (var (column, value) in columns.ToArray()) columns[column] = value with { CheckedAt = 0 };
     }
+    public void Put(Column column, double y, string kind, int step, string? code, long now) =>
+        columns[column] = new(y, kind, step, code, now, now);
     public void Prune(double x, double z, long now)
     {
         foreach (var (column, value) in columns.ToArray())
-            if (value.Y != null && (now - value.At > ttlMs || Math.Abs(column.X - x) > radius || Math.Abs(column.Z - z) > radius))
-                Invalidate(column);
+            if (now - value.SeenAt > ttlMs || Math.Abs(column.X - x) > radius || Math.Abs(column.Z - z) > radius) columns.Remove(column);
     }
-    public object Read(long after, string? session, long now, long sweeps = 0)
-    {
-        bool reset = session != Session || after < lostThrough || after > sequence;
-        if (reset) after = 0;
-        var batch = columns.Where(p => p.Value.Sequence > after).OrderBy(p => p.Value.Sequence).Take(256).ToArray();
-        long cursor = batch.Length == 0 ? sequence : batch[^1].Value.Sequence;
-        return new { session = Session, reset, cursor, more = cursor < sequence, clock = now, sweeps,
-            columns = batch.Select(p => p.Value.Y == null
-                ? new object?[] { p.Key.X, p.Key.Z, null }
-                : new object?[] { p.Key.X, p.Key.Z, Math.Round(p.Value.Y.Value, 3), p.Value.Kind, p.Value.Step, p.Value.Code, p.Value.At }).ToArray() };
-    }
+    // What the eye sees now: columns inside the current view confirmed recently.
+    public object[] Snapshot(long now, Point3 eye, double yaw, double halfYaw, long maxAgeMs = 5000) => columns
+        .Where(p =>
+        {
+            if (now - p.Value.SeenAt > maxAgeMs) return false;
+            double planar = Math.Sqrt(Math.Pow(p.Key.X + .5 - eye.X, 2) + Math.Pow(p.Key.Z + .5 - eye.Z, 2));
+            if (planar <= 8) return true;
+            double bearing = SceneGeometry.Normalize(Math.Atan2(p.Key.X + .5 - eye.X, p.Key.Z + .5 - eye.Z) * 180 / Math.PI);
+            return Math.Abs(SceneGeometry.Normalize(bearing - yaw + 180) - 180) <= halfYaw;
+        })
+        .Select(p => new object?[] { p.Key.X, p.Key.Z, Math.Round(p.Value.Y, 3), p.Value.Kind, p.Value.Step, p.Value.Code, p.Value.SeenAt })
+        .ToArray();
 }
 
 // Passive vision: every tick, while a controller is listening, sample surface
@@ -84,11 +57,14 @@ public sealed class SurfaceMap(int capacity = 8192, long ttlMs = 300000, int rad
 internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, SightingsMap sightings)
 {
     private const double HearingRange = 16;
+    private const long TurnSettleMs = 150;
     private readonly Queue<Column> pending = new();
-    private long nextBatch, nextPrune;
+    private long nextBatch, nextPrune, lastTurnAt;
     private double batchYaw = double.NaN, batchPitch;
     private Cell? batchPosition;
-    private bool sweeping;
+    private bool sweeping, turning;
+    private double viewYaw, viewHalfYaw;
+    private Point3 viewEye;
     // Attention: block code substrings Node is currently looking for.
     public string[] Watch { get; private set; } = [];
     // Completed passes over the current view; Node waits for one after turning or changing attention.
@@ -97,8 +73,11 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
     public void Reset()
     {
         pending.Clear(); map.Clear(); sightings.Clear(); nextBatch = 0; batchYaw = double.NaN; batchPosition = null;
-        Watch = []; Sweeps = 0; sweeping = false;
+        Watch = []; Sweeps = 0; sweeping = turning = false;
     }
+    // What the eye sees right now, for one sense response.
+    public object Surface(long now) => new { sweeps = Sweeps, clock = now, columns = map.Snapshot(now, viewEye, viewYaw, viewHalfYaw) };
+    public object Sightings(long now) => new { clock = now, sightings = sightings.Snapshot(now) };
     public void SetWatch(string[] watch)
     {
         if (watch.SequenceEqual(Watch)) return;
@@ -142,14 +121,19 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
         if (now >= nextPrune) { map.Prune(eye.X, eye.Z, now); sightings.Prune(now); nextPrune = now + 1000; }
         var (halfYaw, halfPitch) = HalfAngles();
         int radius = Radius(new BlockPos((int)Math.Floor(eye.X), (int)Math.Floor(eye.Y), (int)Math.Floor(eye.Z), 0));
-        bool turned = double.IsNaN(batchYaw) || Math.Abs(SceneGeometry.Normalize(yaw - batchYaw + 180) - 180) > 10 ||
-            Math.Abs(pitch - batchPitch) > 10 || position != batchPosition;
         var eyePoint = new Point3(eye.X, eye.Y, eye.Z);
         var origin = new Vec3d(eye.X, eye.Y, eye.Z);
+        viewEye = eyePoint; viewYaw = yaw; viewHalfYaw = halfYaw;
         SampleEntities(player, eyePoint, origin, yaw, pitch, halfYaw, halfPitch, radius, now);
-        if (turned || pending.Count == 0 && now >= nextBatch)
+        // A turning head sees a blur: wait until the camera has settled before
+        // sweeping the new view. Walking only re-centres the sweep.
+        bool turned = !double.IsNaN(batchYaw) && (Math.Abs(SceneGeometry.Normalize(yaw - batchYaw + 180) - 180) > 10 || Math.Abs(pitch - batchPitch) > 10);
+        if (turned) { turning = true; lastTurnAt = now; batchYaw = yaw; batchPitch = pitch; }
+        if (turning && now - lastTurnAt < TurnSettleMs) return;
+        bool moved = position != batchPosition;
+        if (double.IsNaN(batchYaw) || turning || moved || pending.Count == 0 && now >= nextBatch)
         {
-            pending.Clear();
+            pending.Clear(); turning = false;
             batchYaw = yaw; batchPitch = pitch; batchPosition = position;
             int eyeX = (int)Math.Floor(eye.X), eyeZ = (int)Math.Floor(eye.Z);
             var candidates = new List<(Column Column, double Angle, double Distance)>();

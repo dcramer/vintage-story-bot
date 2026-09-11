@@ -23,7 +23,7 @@ public sealed partial class AiBridgeMod : ModSystem
     private PausedDispatcher? pausedDispatcher;
     private long tickListener;
     private SceneSensor sensor = null!;
-    private readonly SurfaceMap surface = new(8192, 300000, 96);
+    private readonly SurfaceMap surface = new(30000, 96);
     private readonly SightingsMap sightings = new();
     private VisionSensor vision = null!;
     private long lastSenseAt;

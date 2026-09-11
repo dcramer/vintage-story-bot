@@ -59,16 +59,15 @@ public sealed partial class AiBridgeMod
     {
         var entity = api.World!.Player.Entity;
         bool includeSense = action == "control_step";
-        long stepCursor = 0, stepSurfaceCursor = 0, stepSightingsCursor = 0;
-        string? stepSession = null, stepSurfaceSession = null, stepSightingsSession = null;
+        long stepCursor = 0;
+        string? stepSession = null;
         if (includeSense)
         {
             if (request.TryGetProperty("after", out var stepCursorField) && (!stepCursorField.TryGetInt64(out stepCursor) || stepCursor < 0))
                 return new { ok = false, error = "Invalid terrain cursor." };
             stepSession = request.TryGetProperty("session", out var stepSessionField) && stepSessionField.ValueKind == JsonValueKind.String
                 ? stepSessionField.GetString() : null;
-            if (!TryVisionCursors(request, out stepSurfaceCursor, out stepSurfaceSession, out stepSightingsCursor, out stepSightingsSession, out var visionError))
-                return new { ok = false, error = visionError };
+            if (!TryWatch(request, out var watchError)) return new { ok = false, error = watchError };
         }
         if (!request.TryGetProperty("owner", out var frameOwner) || frameOwner.ValueKind != JsonValueKind.String ||
             !request.TryGetProperty("sequence", out var sequenceField) || !sequenceField.TryGetInt64(out long sequence) ||
@@ -126,8 +125,7 @@ public sealed partial class AiBridgeMod
             lastSenseAt = Environment.TickCount64;
             return new { ok = true, sequence, state = Observe(),
                 terrain = terrain.Read(stepCursor, stepSession, lastSenseAt),
-                surface = surface.Read(stepSurfaceCursor, stepSurfaceSession, lastSenseAt, vision.Sweeps),
-                sightings = sightings.Read(stepSightingsCursor, stepSightingsSession, lastSenseAt) };
+                surface = vision.Surface(lastSenseAt), sightings = vision.Sightings(lastSenseAt) };
         }
         return new { ok = true, sequence };
     }

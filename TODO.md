@@ -11,7 +11,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [x] `inventory` — hotbar/backpack/grid/mouse, equipment read-only, tool tiers, freshness.
 - [x] `goal_status`, `api`.
 - [ ] **P1 · `players`** — other players on server: name, distance, visible flag (`ctl`, `mod`). Mineflayer `bot.players`. Needed for co-op/follow.
-- [~] `observe.nearbyEntities` — entities seen in the field of view, near within 8, or heard within 16, with last-seen time and 20 s memory; hostile allowlist and `nearestThreat` in [threats](src/skills/threats.mjs). Sight-limited path not live-verified.
+- [~] `observe.nearbyEntities` — entities seen in the field of view, near within 8, or heard within 16 this instant; Node overlays 20 s memory; hostile allowlist and `nearestThreat` in [threats](src/skills/threats.mjs). Sight-limited path not live-verified.
 - [ ] **P2 · `observe.time.untilSunset/untilDawn`** — derived from calendar so goals can budget daylight without recomputing (`ctl`).
 
 ## 2. Perception (`blockAt`, `findBlocks`, `canSeeBlock`, `blockAtCursor`, `nearestEntity`)
@@ -21,9 +21,9 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [x] `aim_cell` — aim at a cell/face/voxel by coordinates using the block's real selection-box geometry; used by forming placement instead of caller-computed angles.
 - [ ] **P1 · `block_at {x,y,z}`** — code/state of one cell if observed or remembered; `unknown` otherwise, never air (`game`, `ctl`). Mineflayer `blockAt`. Source: terrain memory + last scan; no hidden-world lookup.
 - [ ] **P1 · `can_see {x,y,z}`** — sampled sightline from eye to cell (`mod`). Mineflayer `canSeeBlock`. Prerequisite for interact-range goals.
-- [~] sightings feed — `sense` streams entities, items and watched blocks a sightline reached; `Fieldwork.scan` sets the eye's attention and reads the feed instead of paging `scan`. Not live-verified.
+- [~] sightings — `sense` returns a snapshot of entities, items and watched blocks a sightline reached; a default salient set plus goal attention; `Fieldwork.scan` reads memory instead of paging `scan`; the controller's eye loop keeps memory fresh. Not live-verified.
 - [ ] **P1 · `find_blocks {match,radius,limit}`** — controller-local read of remembered sightings, tagged visible/remembered (`ctl`). Mineflayer `findBlocks`.
-- [~] far-field vision feed — `sense` streams sight-verified surface columns inside the real field of view as the camera moves (light-limited, coarser with distance); Node remembers them and `terrain` shows them. Not live-verified.
+- [~] far-field vision — `sense` returns a snapshot of sight-verified surface columns inside the real field of view (light-limited, coarser with distance); Node remembers them and `terrain` shows them. Not live-verified.
 - [~] `terrain` — merged observed/seen surface view around a point; absent columns unknown. Not live-verified.
 - [ ] **P2 · `ground_at {x,z}`** — one-column form of `terrain` (`ctl`). Site picking, `travel` with omitted y.
 - [ ] **P2 · entity detail** — `inspect_target` on entities: health if visible, hostile/passive class, tameable/harvestable hints (`mod`).

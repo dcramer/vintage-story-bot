@@ -55,7 +55,20 @@ export class Controller {
     this.track(active);
     await Effect.runPromise(Fiber.interrupt(active.fiber));
   }
-  async close() { this.closing = true; await this.stop('controller_shutdown'); }
+  // The eye: read what the player sees at a steady cadence whether or not a
+  // goal is walking, so memory and threats are never older than a glance.
+  // Read-only; a lost bridge just backs off until it returns.
+  eye(intervalMs = 250) {
+    if (this.eyeTimer) return;
+    const tick = async () => {
+      if (this.closing) return;
+      let delay = intervalMs;
+      try { await Effect.runPromise(this.game.sense()); } catch { delay = 2000; }
+      if (!this.closing) this.eyeTimer = setTimeout(tick, delay);
+    };
+    this.eyeTimer = setTimeout(tick, intervalMs);
+  }
+  async close() { this.closing = true; clearTimeout(this.eyeTimer); await this.stop('controller_shutdown'); }
   request(request) {
     if (!request || typeof request !== 'object' || Array.isArray(request)) return Promise.reject(new Error('Expected an action object'));
     // Control-plane reads never wait for a game request or an in-flight goal startup.
@@ -226,7 +239,7 @@ export class Controller {
       };
       const run = effect => Effect.runPromise(effect, { signal: cancellation.signal });
       running = policy({
-        send, map: self.map, surface: self.surface, sightings: self.sightings, watch: list => { self.game.watch = list; },
+        send, map: self.map, surface: self.surface, sightings: self.sightings, watch: list => self.game.attend(list),
         sync: () => run(self.snapshot()),
         aim: (angles, safety) => run(self.aim(angles, record, safety)),
         navigate: (goal, yieldWhen, safety) => run(self.navigate(goal, record, undefined, yieldWhen, safety)),
