@@ -8,7 +8,8 @@ export const hostileEntity = entity => typeof entity?.code === 'string' &&
   hostileMarkers.some(marker => entity.code.toLowerCase().includes(marker));
 
 export const nearbyThreats = (state, radius = 32) => (state.nearbyEntities ?? [])
-  .filter(entity => hostileEntity(entity) && horizontal(state.position, entity.point) <= radius)
+  .filter(entity => hostileEntity(entity) && Math.abs(state.position.y - entity.point.y) <= 8 &&
+    horizontal(state.position, entity.point) <= radius)
   .sort((a, b) => horizontal(state.position, a.point) - horizontal(state.position, b.point));
 
 export const nearestThreat = (state, radius = 32) => nearbyThreats(state, radius)[0] ?? null;

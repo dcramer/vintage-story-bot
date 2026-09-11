@@ -43,18 +43,14 @@ export class Navigation {
     const p = state.position, grounded = state.motion.onGround, map = this.map, w = this.width, h = this.height;
     const threats = nearbyThreats(state);
     const nearby = threats[0] ?? null;
-    const threatKeys = threats.map(entity => entity.key).join(',');
     if (!this.evading && nearby) {
-      this.evading = true; this.threat = nearby; this.threats = threats; this.threatKeys = threatKeys;
+      this.evading = true; this.threat = nearby; this.threats = threats;
       this.target = fleeTarget(p, threats); this.survey(now);
     } else if (this.evading && !nearby) {
-      this.evading = false; this.threat = null; this.threats = []; this.threatKeys = '';
+      this.evading = false; this.threat = null; this.threats = [];
       this.avoid = []; this.target = this.primaryTarget; this.survey(now);
     } else if (this.evading) {
       this.threat = nearby; this.threats = threats;
-      if (threatKeys !== this.threatKeys) {
-        this.threatKeys = threatKeys; this.target = fleeTarget(p, threats); this.survey(now);
-      }
     }
     this.avoid = threats.map(entity => ({ point: entity.point,
       minimumDistance: Math.max(0, horizontal(p, entity.point) - .5) }));

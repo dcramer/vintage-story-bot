@@ -76,6 +76,7 @@ test('threat avoidance is explicit, proximity-bounded and points away', () => {
   assert.equal(hostileEntity({ ...wolf, code: 'game:chicken-hen' }), false);
   assert.equal(nearestThreat({ position: player, nearbyEntities: [wolf] }), wolf);
   assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...wolf, point: { x: -22, z: 10.5 } }] }), null);
+  assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...wolf, point: { x: 8.5, y: -7, z: 10.5 } }] }), null);
   const target = fleeTarget(player, wolf);
   assert.ok(target.x > player.x + 30 && target.sprint && target.emergency);
 });
