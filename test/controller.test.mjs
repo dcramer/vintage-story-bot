@@ -103,7 +103,7 @@ test('terrain permits supported recentering off thin partial ground cover', () =
   assert.equal(map.traverse(start, safe, .3, 1.85, false), false);
   assert.equal(map.traverse(start, safe, .3, 1.85, true), true);
   const edge = { x: .9, y: 1.0625, z: .5 };
-  assert.deepEqual(findRoute(map, edge, { x: 4.5, y: 1, z: .5 }, .3, 1.85), [safe]);
+  assert.deepEqual(findRoute(map, edge, { x: 4.5, y: 1, z: .5 }, .3, 1.85), [{ ...safe, recenter: true }]);
 });
 
 test('terrain keeps planned standing centers clear of adjacent liquid hazards', () => {
@@ -277,6 +277,21 @@ test('navigation keeps recentering safely from partial edge support', () => {
   const frame = nav.tick(state, 500);
   assert.equal(frame.forward, true);
   assert.deepEqual(traversals, [true, true]);
+});
+
+test('navigation does not cross or loosely finish a precise recenter waypoint', () => {
+  const map = { cells: new Map(), support: p => p.z > .4 && p.z < .6 ? 9 : 3, clear: () => true,
+    dry: () => true, traverse: () => true, views: () => new Map() };
+  const initial = { position: { x: .5, y: 0, z: .15 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 0 }, vitals: { hunger: { current: 1000, max: 1500 } },
+    nearbyEntities: [] };
+  const nav = new Navigation(map, initial, { x: .5, y: 0, z: 8.5, timeoutMs: 10000 }, 0);
+  nav.state = 'moving'; nav.route = [{ x: .5, y: 0, z: .5, recenter: true }]; nav.edgeStart = initial.position;
+  assert.ok(nav.tick(initial, 100));
+  assert.equal(nav.index, 0);
+  const near = { ...initial, position: { x: .5, y: 0, z: .45 } };
+  nav.tick(near, 200);
+  assert.equal(nav.index, 1);
 });
 
 test('navigation temporarily routes away from an explicit nearby hostile', () => {

@@ -76,7 +76,8 @@ export class Navigation {
     const traverse = (from, to, recenter = false) => map.traverse(from, to, w, h, recenter, undefined,
       typeof map.dry === 'function' && !map.dry(from, w, h));
     const reached = waypoint => {
-      if (distance(p, waypoint) < .3) return true;
+      if (distance(p, waypoint) < (waypoint.recenter ? .1 : .3)) return true;
+      if (waypoint.recenter) return false;
       // A bounded frame can carry the player more than one block between slow
       // client samples. Accept a crossed intermediate waypoint only while the
       // observed position remains close to its validated route segment.

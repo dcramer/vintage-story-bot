@@ -13,10 +13,11 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
     const p = map.stand(Math.floor(start.x) + .5 + x, Math.floor(start.z) + .5 + z, start.y, w, h, escapingMargin);
     if (p && (!escapingMargin || horizontal(p, start) >= .75)) centers.push(p);
   }
-  const center = centers.sort((a, b) => distance(a, start) - distance(b, start))
+  const anchor = centers.sort((a, b) => distance(a, start) - distance(b, start))
     .find(p => map.traverse(start, p, w, h, true, undefined, escapingMargin));
-  if (!center) return null;
-  const recentering = map.support(start, w) !== 9 && distance(center, start) >= .12;
+  if (!anchor) return null;
+  const recentering = map.support(start, w) !== 9 && distance(anchor, start) >= .12;
+  const center = recentering ? { ...anchor, recenter: true } : anchor;
   // Move one verified step farther from the hazard, then resample from the new
   // position. The native sensor's six-block radius bounds this recovery and a
   // later plan can continue until the ordinary dry graph is reachable.
