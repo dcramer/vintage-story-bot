@@ -1,6 +1,6 @@
 import { distance, horizontal, key } from './terrain.mjs';
 const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-const jumpDirections = [[2, 0], [-2, 0], [0, 2], [0, -2]];
+const jumpDirections = [[2, 0], [-2, 0], [0, 2], [0, -2], [3, 0], [-3, 0], [0, 3], [0, -3]];
 export function findRoute(map, start, goal, w, h,
   { blocked = new Set(), visits = new Map(), partial = true, budget = 512, avoid = [] } = {}) {
   const remaining = p => goal.horizontalOnly ? horizontal(p, goal) : distance(p, goal);
@@ -69,7 +69,8 @@ export function findRoute(map, start, goal, w, h,
       if (!landing || !safe(landing) || !map.jumpTraverse(at, landing, w, h)) continue;
       // Prefer a same-length supported detour; jumping is an escape edge, not
       // a shortcut across ordinary walkable terrain.
-      const next = { ...landing, jumpGap: true }, cost = costs.get(id) + 5 + Math.abs(next.y - at.y);
+      const next = { ...landing, jumpGap: true }, cost = costs.get(id) + 3 + horizontal(at, landing) * 2 +
+        Math.abs(next.y - at.y);
       const nextId = key(next);
       if ((costs.get(nextId) ?? Infinity) <= cost) continue;
       costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: next, score: cost + remaining(next) });

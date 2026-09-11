@@ -176,7 +176,7 @@ export class TerrainMemory {
     // Only bridge one missing grid cell. Both banks and the complete jump arc
     // must already be known, clear and dry; this is not permission to leap
     // toward an unobserved or hazardous landing.
-    if (span < 1.5 || span > 2.1 || rise > 1.01 || rise < -1.01 ||
+    if (span < 1.5 || span > 3.1 || rise > 1.01 || rise < -1.01 ||
         this.support(from, w) !== 9 || this.support(to, w) !== 9 ||
         !this.clear(to, w, h) || !this.dry(to, w, h, .55, undefined, true)) return false;
     const steps = Math.ceil(distance(from, to) * 12);

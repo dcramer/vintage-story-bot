@@ -61,6 +61,8 @@ test('planner crosses only a fully observed dry one-cell gap', () => {
   const start = { x: .5, y: 0, z: .5 }, landing = { x: 2.5, y: 0, z: .5 };
   assert.equal(map.traverse(start, landing, .3, 1.85), false);
   assert.equal(map.jumpTraverse(start, landing, .3, 1.85), true);
+  assert.equal(map.jumpTraverse(start, { x: 3.5, y: 0, z: .5 }, .3, 1.85), true);
+  assert.equal(map.jumpTraverse(start, { x: 3.61, y: 0, z: .5 }, .3, 1.85), false);
   const route = findRoute(map, start, { x: 3.5, y: 0, z: .5 }, .3, 1.85, { partial: false });
   assert.equal(route[0].jumpGap, true);
   assert.equal(route[0].x, landing.x);
@@ -75,9 +77,11 @@ test('navigation holds a validated gap jump until airborne', () => {
   const state = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
     motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals: { hunger: { current: 1000, max: 1500 } },
     nearbyEntities: [] };
-  const nav = new Navigation(map, state, { x: 3.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
-  nav.state = 'moving'; nav.route = [{ x: 2.5, y: 0, z: .5, jumpGap: true }]; nav.edgeStart = state.position;
-  assert.equal(nav.tick(state, 100).jump, true);
+  const nav = new Navigation(map, state, { x: 4.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
+  nav.state = 'moving'; nav.route = [{ x: 3.5, y: 0, z: .5, jumpGap: true }]; nav.edgeStart = state.position;
+  const first = nav.tick(state, 100);
+  assert.equal(first.jump, true);
+  assert.equal(first.sprint, true);
   assert.equal(nav.tick(state, 250).jump, true, 'a slow first frame must not look like a landing');
   const airborne = { ...state, position: { x: 1.2, y: .4, z: .5 }, motion: { onGround: false } };
   assert.equal(nav.tick(airborne, 350).forward, true);
