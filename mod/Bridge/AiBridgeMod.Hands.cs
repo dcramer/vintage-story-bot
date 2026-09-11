@@ -120,6 +120,19 @@ public sealed partial class AiBridgeMod
         return new { ok = true, status = "sent", message = chatText };
     }
 
+    private object MapWaypointRemove(JsonElement request)
+    {
+        if (!request.TryGetProperty("guid", out var guidField) || guidField.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(guidField.GetString()))
+            return new { ok = false, error = "Supply the waypoint guid from map_waypoints." };
+        var guid = guidField.GetString()!;
+        var index = mapWaypoints.IndexOf(guid);
+        if (index == null) return new { ok = false, error = "No such waypoint on the map; read map_waypoints again." };
+        // The map screen's own edit dialog deletes a marker by sending exactly this command; the server
+        // validates it and resends the list, so verify by reading map_waypoints until the guid is gone.
+        api.SendChatMessage($"/waypoint remove {index}", GlobalConstants.GeneralChatGroup, null);
+        return new { ok = true, status = "requested", guid, index, verification = "map_waypoints" };
+    }
+
     private void SetHandButtons()
     {
         // We simulate a real player, so interactions must go through the game's own input pipeline: setting these

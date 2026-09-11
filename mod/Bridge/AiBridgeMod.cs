@@ -33,6 +33,7 @@ public sealed partial class AiBridgeMod : ModSystem
     private BlockActions blockActions = null!;
     private readonly TerrainMap terrain = new(16384, 120000, 64);
     private TerrainSensor terrainSensor = null!;
+    private MapWaypointSensor mapWaypoints = null!;
 
     public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Client;
 
@@ -47,6 +48,7 @@ public sealed partial class AiBridgeMod : ModSystem
         vision = new VisionSensor(api, surface, sightings);
         inventory = new InventoryAdapter(api);
         context = new ContextSensor(api);
+        mapWaypoints = new MapWaypointSensor(api);
         blockActions = new BlockActions(api);
         dialogs = new DialogAdapter(api);
         api.Event.BlockChanged += blockActions.Changed;
@@ -288,6 +290,8 @@ public sealed partial class AiBridgeMod : ModSystem
             case "block_action_continue": return blockActions.Read(request, true);
             case "block_action_status": return blockActions.Read(request, false);
             case "chat": return Chat(request);
+            case "map_waypoints": return mapWaypoints.Observe();
+            case "map_waypoint_remove": return MapWaypointRemove(request);
             case "look": return Look(request);
             case "aim_cell": return AimCell(request);
             case "move": return Move(request);
