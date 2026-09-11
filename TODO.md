@@ -11,7 +11,8 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [x] `inventory` — hotbar/backpack/grid/mouse, equipment read-only, tool tiers, freshness.
 - [x] `goal_status`, `api`.
 - [ ] **P1 · `players`** — other players on server: name, distance, visible flag (`ctl`, `mod`). Mineflayer `bot.players`. Needed for co-op/follow.
-- [ ] **P1 · threat summary in `observe`** — nearest visible hostile (drifter etc.), distance, last-seen tick (`mod`). Cheap edge for night safety without a full `scan`.
+- [x] `observe.nearbyEntities` — living entities ≤8 blocks; hostile allowlist and `nearestThreat` in [threats](src/skills/threats.mjs).
+- [ ] **P2 · hostile sightings beyond 8 blocks** — `scan` entity results tagged hostile via the same allowlist, with last-seen tick (`ctl`).
 - [ ] **P2 · `observe.time.untilSunset/untilDawn`** — derived from calendar so goals can budget daylight without recomputing (`ctl`).
 
 ## 2. Perception (`blockAt`, `findBlocks`, `canSeeBlock`, `blockAtCursor`, `nearestEntity`)
@@ -55,7 +56,8 @@ Nothing exists. Blocks day 2 hunting and all threat response.
 - [ ] **P0 · `attack_entity {target,expectedKind,weapon?}`** — approach to melee range, aim, left-click until entity gone or fled; verify by entity disappearance + carcass/drop sighting (`mod` aim-at-entity, `skill`, `goal`). Mineflayer `attack`.
 - [ ] **P0 · `throw {target}`** — spear throw: hold right-click with spear aimed at entity, verify spear count drop; pair with `collect_item` for retrieval (`skill`).
 - [ ] **P1 · `activate_entity {target}`** — right-click entity: harvest carcass with knife, shear, milk (`mod`, `skill`). Mineflayer `activateEntity`.
-- [ ] **P1 · `flee {from?}`** — move away from nearest hostile to lit/enclosed POI; survival priority hook, runs only inside a task (`skill`).
+- [x] hostile avoidance during navigation — 12-block detour, emergency sprint, resume after clear ([threats](src/skills/threats.mjs), navigator).
+- [ ] **P1 · `flee {to?}`** — standalone reaction while stationary (waiting, crafting, forming): route to a POI or `fleeTarget`; same allowlist, runs only inside a task (`goal`).
 - [ ] **P2 · sneak approach** — `travel` with `sneak:true` for animal approach (`ctl`, `nav`).
 
 ## 6. Inventory (`equip`, `unequip`, `toss`, `consume`, `recipesFor`, `craft`)
