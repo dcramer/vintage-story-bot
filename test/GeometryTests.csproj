@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../mod/SceneGeometry.cs" Link="SceneGeometry.cs" />
+    <Compile Include="GeometryTests.cs" />
+    <Compile Include="../mod/LifeTracker.cs" Link="LifeTracker.cs" />
+    <Compile Include="LifeTests.cs" />
+    <Compile Include="../mod/TerrainMap.cs" Link="TerrainMap.cs" />
+    <Compile Include="../mod/ControlLease.cs" Link="ControlLease.cs" />
+    <Compile Include="ControlLeaseTests.cs" />
+  </ItemGroup>
+</Project>

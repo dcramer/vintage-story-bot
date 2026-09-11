@@ -1,0 +1,7 @@
+- Bot name: **Diggy Smalls**.
+- Tests: do not write tests unless covering a critical regression. Prefer live gameplay verification and builds; no routine feature, refactor, or speculative tests.
+- [Conventions](docs/conventions.md) — read first; repo-wide agent-first, minimal-token rules.
+- [Development](docs/development.md) — read when changing code or running tests.
+- [Architecture](docs/architecture.md) — design intent, ownership, RPC contracts, goal lifecycle.
+- [Runtime](docs/runtime.md) — read before launching, deploying, configuring MCP, or controlling the bot.
+- [Game API reference](docs/capabilities.md) — read for game API entry points, source material, and perception constraints.

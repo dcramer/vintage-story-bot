@@ -1,0 +1,13 @@
+{
+  "type": "code",
+  "modid": "vintagestoryai",
+  "name": "Vintage Story AI Bridge",
+  "authors": ["Vintage Story AI contributors"],
+  "description": "An experimental local bridge for observing and controlling a player.",
+  "version": "0.1.0",
+  "side": "Client",
+  "requiredOnServer": false,
+  "dependencies": {
+    "game": "1.22.7"
+  }
+}

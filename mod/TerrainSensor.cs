@@ -1,0 +1,86 @@
+using System.Diagnostics;
+using Vintagestory.API.Client;
+using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
+
+namespace VintageStoryAI;
+
+internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
+{
+    private readonly Queue<Cell> pending = new();
+    private long nextBatch;
+    private double lastYaw = double.NaN, lastPitch = double.NaN;
+    private Cell? lastPriority;
+    public void Reset() { pending.Clear(); map.Clear(); nextBatch = 0; }
+    public void Changed(BlockPos pos, Block oldBlock)
+    {
+        // Neighbor-dependent shapes (doors/fences) must also be re-observed.
+        for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++)
+            map.Invalidate(new(pos.X + x, pos.Y + y, pos.Z + z));
+    }
+    public void Sample(long now, Cell? priority = null)
+    {
+        var player = api.World.Player.Entity;
+        if (player.Pos.Dimension != 0) { Reset(); return; }
+        var pos = player.Pos;
+        double yaw = SceneGeometry.Normalize(pos.Yaw * 180 / Math.PI), pitch = (pos.Pitch - Math.PI) * 180 / Math.PI;
+        if (priority != lastPriority) { pending.Clear(); nextBatch = 0; lastPriority = priority; }
+        if (!double.IsFinite(lastYaw) || Math.Abs(SceneGeometry.Normalize(yaw - lastYaw + 180) - 180) > 45 || Math.Abs(pitch - lastPitch) > 30)
+        {
+            pending.Clear(); nextBatch = 0; lastYaw = yaw; lastPitch = pitch;
+        }
+        var foot = new Point3(pos.X, pos.Y, pos.Z);
+        var blocks = api.World.BlockAccessor;
+        map.Prune(foot, now, cell => blocks.GetChunkAtBlockPos(new BlockPos(cell.X, cell.Y, cell.Z, 0)) != null);
+        if (pending.Count == 0 && now >= nextBatch)
+        {
+            var cells = new List<Cell>();
+            for (int x = -6; x <= 6; x++) for (int z = -6; z <= 6; z++) for (int y = -2; y <= 4; y++)
+                if (x * x + z * z <= 36) cells.Add(new((int)Math.Floor(pos.X) + x, (int)Math.Floor(pos.Y) + y, (int)Math.Floor(pos.Z) + z));
+            foreach (var cell in cells.OrderBy(c => c == priority ? 0 : map.Fresh(c, now) ? 2 : 1)
+                .ThenBy(c => Math.Pow(c.X + .5 - pos.X, 2) + Math.Pow(c.Z + .5 - pos.Z, 2))) pending.Enqueue(cell);
+            nextBatch = now + 100;
+        }
+        var watch = Stopwatch.StartNew();
+        var eye = pos.XYZ.Add(player.LocalEyePos);
+        var origin = new Point3(eye.X, eye.Y, eye.Z);
+        int rays = 0, inspected = 0;
+        while (pending.TryDequeue(out var cell))
+        {
+            if (++inspected > 256 || rays >= 128 || watch.ElapsedMilliseconds >= 5) { pending.Enqueue(cell); break; }
+            if (map.Fresh(cell, now, 500)) continue;
+            var blockPos = new BlockPos(cell.X, cell.Y, cell.Z, 0);
+            if (blocks.GetChunkAtBlockPos(blockPos) == null) { map.Invalidate(cell); continue; }
+            var block = blocks.GetBlock(blockPos);
+            var samples = SceneGeometry.BoxSamples(
+                new(cell.X, cell.Y, cell.Z), new(cell.X + 1, cell.Y + 1, cell.Z + 1));
+            bool visible = false;
+            foreach (var target in samples)
+            {
+                if (!SceneGeometry.InCone(origin, target, yaw, pitch, 8)) continue;
+                if (++rays > 128) break;
+                bool loaded = true;
+                for (int i = 0, n = (int)Math.Ceiling(SceneGeometry.Distance(origin, target) * 4); i <= n; i++)
+                {
+                    double t = n == 0 ? 0 : (double)i / n;
+                    if (blocks.GetChunkAtBlockPos(new BlockPos((int)Math.Floor(eye.X + (target.X - eye.X) * t),
+                        (int)Math.Floor(eye.Y + (target.Y - eye.Y) * t), (int)Math.Floor(eye.Z + (target.Z - eye.Z) * t), 0)) == null) { loaded = false; break; }
+                }
+                if (!loaded) continue;
+                BlockSelection? hit = null; EntitySelection? entityHit = null;
+                // Selection boxes of translucent, non-colliding foliage are not opaque walls.
+                api.World.RayTraceForSelection(eye, new Vec3d(target.X, target.Y, target.Z), ref hit, ref entityHit,
+                    (at, b) => at.Equals(blockPos) || SceneSensor.Occludes(blocks, at, b), _ => false);
+                if (hit == null || hit.Position.Equals(blockPos)) { visible = true; break; }
+            }
+            if (!visible) continue;
+            var boxes = block.GetCollisionBoxes(blocks, blockPos) ?? [];
+            var fluid = blocks.GetBlock(blockPos, BlockLayersAccess.Fluid);
+            bool hazard = fluid.IsLiquid() || block.Code?.Path.Contains("fire") == true ||
+                block.Code?.Path.Contains("lava") == true || boxes.Length > 16 ||
+                boxes.Any(b => b.X1 < 0 || b.Y1 < 0 || b.Z1 < 0 || b.X2 > 1 || b.Y2 > 1 || b.Z2 > 1);
+            map.Put(cell, boxes.Take(16).Select(b => new Bounds(cell.X + b.X1, cell.Y + b.Y1, cell.Z + b.Z1,
+                cell.X + b.X2, cell.Y + b.Y2, cell.Z + b.Z2)).ToArray(), hazard, now);
+        }
+    }
+}

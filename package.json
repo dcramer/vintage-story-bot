@@ -1,0 +1,26 @@
+{
+  "name": "vintage-story-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "controller": "node src/controller/server.mjs",
+    "controller:dev": "node --watch src/controller/server.mjs",
+    "mcp": "node src/mcp-server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:mod": "DOTNET_CLI_HOME=$PWD/.runtime/dotnet-home .dotnet/dotnet run --project test/GeometryTests.csproj",
+    "control": "node scripts/control.mjs",
+    "goal:stick": "node scripts/collect-stick.mjs",
+    "goal:gather": "node scripts/gather.mjs",
+    "mcp:smoke": "node scripts/mcp-smoke.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "effect": "3.22.2",
+    "zod": "4.6.1"
+  }
+}
