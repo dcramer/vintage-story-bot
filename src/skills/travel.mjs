@@ -74,7 +74,12 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
       // Clear an explicitly observed leaf now; waiting through two identical
       // 20-second surveys wastes the food window in dense forest. Keep the
       // less constrained physical nudge behind the established stall count.
-      const cleared = await clearFoliagePath(field, leg);
+      // Exploration targets are disposable probes around hard terrain. Do not
+      // cut permanent corridors toward a sideways or reverse probe: in dense
+      // forest that clears random canopy while moving away from the trip. Aim
+      // foliage work at the actual destination; non-mutating routes may still
+      // detour around cliffs, water and other hard obstacles.
+      const cleared = await clearFoliagePath(field, goal);
       const nudged = !cleared && stalled >= 3 ? await field.nudge(leg) : 0;
       if (cleared || nudged > .1) {
         // Once a cautious probe proves this corridor is physically
