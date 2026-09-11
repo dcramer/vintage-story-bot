@@ -40,7 +40,7 @@ export function Bot({ id }) {
     <section><h2>Player</h2>
       <Dl rows={[['name', s.player?.name], ['world', s.world ? `${s.world.singleplayer ? 'singleplayer' : 'multiplayer'} · ${s.world.gameMode}` : null],
         ['position', s.position ? `${point(s.position)}${s.position.dimension ? ' (dim ' + s.position.dimension + ')' : ''}` : null],
-        ['yaw / pitch', s.orientation ? `${s.orientation.yawDegrees?.toFixed(0)}° / ${s.orientation.pitchDegrees?.toFixed(0)}°` : null],
+        ['yaw / pitch', s.orientation ? `${s.orientation.yawDegrees?.toFixed(0) ?? '?'}° / ${s.orientation.pitchDegrees?.toFixed(0) ?? '?'}°` : null],
         ['target', s.target ? `${s.target.kind ?? ''} ${code(s.target.code ?? s.target.name ?? '')}`.trim() : null],
         ['body temp', s.condition?.bodyTemperatureC == null ? null : `${s.condition.bodyTemperatureC.toFixed(1)} °C`], ['stability', s.condition?.temporalStability],
         ['lives left', s.life?.livesRemaining], ['last damage', s.life?.lastDamageAt ? time(s.life.lastDamageAt) : 'none'], ['control owner', s.control?.owner?.slice(0, 8)],

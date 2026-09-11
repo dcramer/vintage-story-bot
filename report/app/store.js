@@ -13,6 +13,11 @@ setInterval(() => { now.value = Date.now(); }, 1000);
 export const list = computed(() => Object.values(bots.value).sort((a, b) => b.seenAt - a.seenAt));
 export const isLive = bot => now.value - bot.seenAt < liveMs;
 export const vitalHistory = id => history.get(id) ?? [];
+export const positionHistory = bot => {
+  if (bot?.trail?.length) return bot.trail;
+  const state = bot?.topics?.state;
+  return state?.data?.position ? [{ at: state.at, ...state.data.position }] : [];
+};
 const pct = v => v?.max ? v.current / v.max : null;
 function record(bot) {
   const state = bot.topics.state;

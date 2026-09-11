@@ -5,7 +5,7 @@ import { DurableObject } from 'cloudflare:workers';
 // and pushes updates to browser WebSockets. Reads (API and the static SPA in dist/, see app/) require VIEW_TOKEN when set;
 // writes require REPORT_TOKEN.
 const topicRe = /^[a-z][a-z0-9_]{0,63}$/, idRe = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
-const maxBody = 131072, maxLog = 200, maxMeta = 128, persistMs = 30000, sweepMs = 900000;
+const maxBody = 131072, maxLog = 200, maxTrail = 540, maxMeta = 128, persistMs = 30000, sweepMs = 900000;
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const bearer = request => { const value = request.headers.get('authorization') ?? ''; return value.startsWith('Bearer ') ? value.slice(7) : ''; };
@@ -15,6 +15,29 @@ function equal(given, expected) {
   return a.byteLength === b.byteLength && b.byteLength > 0 && crypto.subtle.timingSafeEqual(a, b);
 }
 const number = (value, fallback) => Number.isFinite(value) ? value : fallback;
+const finitePoint = point => point && Number.isFinite(point.x) && Number.isFinite(point.z);
+
+// Keep a compact recent path in the fleet record. Reporters still send only
+// what the player's client observed; this merely retains successive own
+// positions so the dashboard can show movement and goal context over time.
+function appendTrail(bot, stateEntry, now) {
+  const position = stateEntry?.data?.position;
+  if (!finitePoint(position)) return false;
+  const goal = bot.topics.goal?.data, progress = goal?.progress;
+  const sample = {
+    at: number(stateEntry.at, now), x: position.x, y: Number.isFinite(position.y) ? position.y : null,
+    z: position.z, dimension: Number.isFinite(position.dimension) ? position.dimension : 0,
+    goal: goal?.id ? String(goal.id).slice(0, 64) : null,
+    kind: typeof goal?.kind === 'string' ? goal.kind.slice(0, 64) : null,
+    phase: typeof progress?.phase === 'string' ? progress.phase.slice(0, 64) : null,
+  };
+  const trail = bot.trail ??= [], last = trail.at(-1);
+  const moved = last ? Math.hypot(sample.x - last.x, sample.z - last.z) : Infinity;
+  if (last && sample.dimension === last.dimension && sample.goal === last.goal && moved < .5 && sample.at - last.at < 60000) return false;
+  trail.push(sample);
+  while (trail.length > maxTrail) trail.shift();
+  return true;
+}
 
 export default {
   fetch(request, env) {
@@ -81,6 +104,7 @@ export class SeraphFleet extends DurableObject {
       if (!topicRe.test(topic) || !entry || typeof entry !== 'object') continue;
       bot.topics[topic] = { at: number(entry.at, now), data: entry.data ?? null };
     }
+    const trailed = appendTrail(bot, body.topics?.state, now);
     for (const entry of (Array.isArray(body.log) ? body.log : []).slice(-maxLog)) {
       if (!entry || typeof entry !== 'object' || !topicRe.test(entry.topic)) continue;
       bot.log.push({ topic: entry.topic, at: number(entry.at, now), data: entry.data ?? null });
@@ -88,7 +112,9 @@ export class SeraphFleet extends DurableObject {
     while (bot.log.length > maxLog) bot.log.shift();
     this.bots.set(id, bot); this.dirty.add(id);
     this.broadcast({ type: 'bot', bot });
-    await this.persist(now);
+    // Unlike latest topics, a historical sample cannot be refilled by the next report.
+    // Persist movement immediately; stationary updates keep the existing write throttle.
+    await this.persist(now, trailed);
     await this.schedule();
     return json(200, { ok: true, bots: this.bots.size });
   }

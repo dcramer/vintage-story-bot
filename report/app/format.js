@@ -19,7 +19,7 @@ const describe = {
     : `${a.cells?.length ?? 0} blocks: ${[...new Set((a.cells ?? []).map(c => code(c.item)))].join(', ')}`,
   dig_area: a => a.box ? `box ${point(a.box.from)} → ${point(a.box.to)}${a.tool ? ' with ' + a.tool.toLowerCase() : ''}` : `${a.cells?.length ?? 0} cells`,
   travel: a => a.waypoint ? `to waypoint "${a.waypoint}"` : `to ${point(a)}`,
-  explore: a => `${a.legs} legs${a.heading != null ? ' from heading ' + Math.round(a.heading) + '°' : ''}`,
+  explore: a => a.legs != null ? `${a.legs} legs${a.heading != null ? ' from heading ' + Math.round(a.heading) + '°' : ''}` : 'unmapped terrain',
   use_on_block: a => `${a.item === null ? 'empty hand' : a.item ? code(a.item) : 'held item'} on ${a.target}${a.sneak ? ' (sneak)' : ''}`,
   collect_item: a => `${code(a.expectedItem)} (${a.target})`,
   equip: a => a.item === null ? 'empty hand' : a.item ? code(a.item) : `${a.tool}${a.minTier ? ' tier ≥ ' + a.minTier : ''}`,
