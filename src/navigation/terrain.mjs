@@ -115,9 +115,10 @@ export class TerrainMemory {
   }
   stand(x, z, nearY, w, h, allowUnsafe = false) {
     const tops = new Set();
-    for (let y = Math.floor(nearY) - 2; y <= Math.floor(nearY) + 1; y++) {
+    for (let y = Math.floor(nearY) - 3; y <= Math.floor(nearY) + 1; y++) {
       const cell = this.get(x, y, z);
-      if (cell && !cell.hazard) for (const b of cell.boxes) if (Math.abs(b[4] - nearY) <= 1.01) tops.add(b[4]);
+      if (cell && !cell.hazard) for (const b of cell.boxes)
+        if (b[4] - nearY <= 1.01 && nearY - b[4] <= 2.01) tops.add(b[4]);
     }
     for (const y of [...tops].sort((a, b) => Math.abs(a - nearY) - Math.abs(b - nearY))) {
       const p = { x, y, z };
@@ -127,7 +128,9 @@ export class TerrainMemory {
   }
   traverse(from, to, w, h, recenter = false, missing, allowMarginEscape = false) {
     const rise = to.y - from.y;
-    if (Math.abs(rise) > 1.06) return false;
+    // One-block rises need a jump. A fully observed two-block descent is a
+    // normal, damage-free drop; larger falls remain forbidden.
+    if (rise > 1.06 || rise < -2.06) return false;
     const jump = rise > .05, travelY = Math.max(from.y, to.y) + (jump ? .25 : 0);
     const steps = Math.max(1, Math.ceil(distance(from, to) * 10));
     // A returning point can itself be inside the braking margin while the
@@ -154,7 +157,7 @@ export class TerrainMemory {
           const n = this.groundSupport(p, w, -rise + .06);
           if (n <= 0) return false;
           support = n;
-        } else if (!this.ground(p, w, 1.06, missing)) return false;
+        } else if (!this.ground(p, w, -rise + .06, missing)) return false;
       }
       if (jump && !this.ground(p, w, travelY - from.y + .06, missing)) return false;
     }
@@ -172,11 +175,11 @@ export class TerrainMemory {
     const result = new Map();
     for (const [dx, dz] of directions) {
       const x = p.x + dx, z = p.z + dz;
-      for (let y = Math.floor(p.y) - 2; y <= Math.floor(p.y) + 1; y++) {
+      for (let y = Math.floor(p.y) - 3; y <= Math.floor(p.y) + 1; y++) {
         const cell = this.get(x, y, z);
         if (cell?.hazard) continue;
         const tops = cell ? cell.boxes.map(b => b[4]) : [y + 1];
-        for (const top of tops.filter(top => Math.abs(top - p.y) <= 1.01)) {
+        for (const top of tops.filter(top => top - p.y <= 1.01 && p.y - top <= 2.01)) {
           const missing = new Map();
           if (this.traverse(p, { x, y: top, z }, w, h, false, missing)) for (const [id, value] of missing) result.set(id, value);
         }
