@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { eatingLooks, forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
-import { accessibleForage, desperateFoodSightRange, foodElevationDetourDistance, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, matchingFoodDrops, stalledFoodRoute, wideFoodSurveyNeeded } from '../src/skills/survival.mjs';
+import { accessibleForage, desperateFoodSightRange, foodElevationDetourDistance, foodRecoverySatisfied,
+  foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, matchingFoodDrops, stalledFoodRoute,
+  wideFoodSurveyNeeded } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat, nearestUnclearedThreat, threatClearDistance,
   threatClearRadius, threatStartDistance, threatStartRadius, threatVerticalRange } from '../src/skills/threats.mjs';
 import { elevationDetourDistance, routeRegressed, travel } from '../src/skills/travel.mjs';
@@ -208,6 +210,13 @@ test('low-health food recovery remains authorized after eating clears low food',
   const fresh = new Fieldwork({});
   fresh.recoveringFood = true;
   assert.equal(fresh.alertsSafe(state(['low_health'])), false);
+});
+
+test('successful food recovery resumes travel without waiting for a local stockpile', () => {
+  assert.equal(foodRecoverySatisfied(.599, 0, 8), false);
+  assert.equal(foodRecoverySatisfied(.6, 0, 1), true);
+  assert.equal(foodRecoverySatisfied(.8, 320, 0), true);
+  assert.equal(foodRecoverySatisfied(.8, 0, 0), false);
 });
 
 test('food recovery marks safe search legs as emergency sprint between ten and twenty percent', async () => {

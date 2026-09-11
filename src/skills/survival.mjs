@@ -14,6 +14,8 @@ export const wideFoodSurveyNeeded = ratio => ratio < .2;
 export const foodSearchDistance = Math.min(12, foodSightRange * .75);
 export const foodElevationDetourDistance = verticalRemaining => verticalRemaining < 1.5 ? 0 :
   Math.min(foodSearchDistance, Math.max(6, verticalRemaining * 2));
+export const foodRecoverySatisfied = (ratio, reserve, eaten) =>
+  ratio >= .8 && reserve >= 320 || eaten > 0 && ratio >= .6;
 const forageMatches = ['bush', 'mushroom', 'crop-', 'termitemound-'];
 const breaksForage = object => mushroomCode(forageFoodCode(object)) || termiteCode(forageFoodCode(object)) ||
   object.forage?.kind === 'crop';
@@ -33,7 +35,9 @@ export const matchingFoodDrops = (objects, foodCode, point) => objects
     Number.isInteger(object.quantity) && object.quantity > 0)
   .sort((a, b) => horizontal(a.point, point) - horizontal(b.point, point));
 
-// Hysteresis: prepare food below 20%, eat to 80%, retain 320 satiety in safe fresh forage.
+// Hysteresis: prepare food below 20%. A successful recovery resumes travel at
+// 60% instead of consuming that buffer while searching for a local stockpile;
+// an already well-fed forced task may also finish with an ample reserve.
 // Navigation checks yieldWhen every sensing tick; food work owns no parallel inputs.
 export class Survival {
   tending = false;
@@ -66,7 +70,7 @@ export class Survival {
       const inventory = await field.send({ action: 'inventory' });
       this.reserve = foodReserve(inventory);
       field.report('food', { hunger: hunger(field.latest), reserve: this.reserve, eaten: this.eaten, harvested: this.harvested });
-      if (hunger(field.latest) >= .8 && this.reserve >= 320) {
+      if (foodRecoverySatisfied(hunger(field.latest), this.reserve, this.eaten)) {
         this.tending = false;
         field.recoveringFood = false;
         await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
