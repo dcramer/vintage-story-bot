@@ -69,7 +69,8 @@ const heartbeat = setInterval(() => { for (const client of clients) client.write
 server.listen(port, '127.0.0.1');
 await once(server, 'listening');
 console.error(`Dashboard on http://127.0.0.1:${port} (ingest POST /ingest, stream GET /events)`);
-stream = superviseStream({ onChange: status => broadcast('stream', status), log: line => console.error(`[stream] ${line}`) });
+stream = superviseStream({ bind: process.env.VINTAGE_STORY_STREAM_BIND || undefined,
+  onChange: status => broadcast('stream', status), log: line => console.error(`[stream] ${line}`) });
 if (process.env.VINTAGE_STORY_REPORT_URL && process.env.VINTAGE_STORY_REPORT_TOKEN && process.env.VINTAGE_STORY_BOT_ID) {
   worldMap = superviseWorldMap({ onChange: status => broadcast('worldmap', status), log: line => console.error(`[worldmap] ${line}`) });
   nativeMap = superviseNativeMap({ onChange: status => broadcast('nativemap', status), log: line => console.error(`[nativemap] ${line}`) });
