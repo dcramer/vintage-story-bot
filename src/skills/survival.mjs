@@ -4,8 +4,8 @@ import { changeBlock } from './blocks.mjs';
 import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, ripeForage } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
-const foodSightRange = Math.min(24, sightRange);
-const foodSearchDistance = foodSightRange / 2;
+export const foodSightRange = Math.min(16, sightRange);
+export const foodSearchDistance = Math.min(6, foodSightRange / 2);
 const forageMatches = ['bush', 'mushroom', 'crop-'];
 const breaksForage = object => mushroomCode(forageFoodCode(object)) || object.forage?.kind === 'crop';
 export const accessibleForage = object => {
@@ -14,6 +14,8 @@ export const accessibleForage = object => {
 export const harvestReady = (object, position) => object.withinPickingRange && (!breaksForage(object) ||
   horizontal(position, object.point) <= 1.5 &&
   (Math.floor(position.x) !== Math.floor(object.point.x) || Math.floor(position.z) !== Math.floor(object.point.z)));
+export const foodViewChanged = (view, state) => !view || horizontal(view.position, state.position) > 2 ||
+  Math.abs(normalize(state.orientation.yawDegrees - view.yawDegrees + 180) - 180) > 15;
 
 // Hysteresis: prepare food below 20%, eat to 80%, retain 320 satiety in safe fresh forage.
 // Navigation checks yieldWhen every sensing tick; food work owns no parallel inputs.
@@ -23,6 +25,7 @@ export class Survival {
   eaten = 0;
   harvested = 0;
   surveyed = false;
+  lastFarView = null;
   constructor(field) { this.field = field; }
   yieldWhen = state => hunger(state) < .2 ? 'food_needed' : null;
   eatWhen = state => this.reserve > 0 && hunger(state) < .8 ? 'food_available' : null;
@@ -55,15 +58,20 @@ export class Survival {
         await this.harvest(ready);
         continue;
       }
-      // Shorter sweeps finish much sooner on low-tick-rate clients and let us
-      // change viewpoints instead of starving during one enormous volume scan.
-      await field.scan(foodSightRange, forageMatches, 'blocks');
+      // Cache the distant cone until movement or a meaningful turn changes it.
+      // Repeating the same paged volume scan cannot reveal new nearby food and
+      // used to crowd out the short, known-terrain exploration step.
+      if (foodViewChanged(this.lastFarView, field.latest)) {
+        await field.scan(foodSightRange, forageMatches, 'blocks');
+        this.lastFarView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
+      }
       // One smooth initial look-around; don't walk away from food just behind the initial view.
       if (!this.surveyed && !field.targets(o => ripeForage(o) && accessibleForage(o)).length) {
         this.surveyed = true;
         for (const offset of [120, 240]) {
           await field.aim({ yawDegrees: normalize(field.heading + offset), pitchDegrees: 15 });
           await field.scan(foodSightRange, forageMatches, 'blocks');
+          this.lastFarView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
           if (field.targets(o => ripeForage(o) && accessibleForage(o)).length) break;
         }
       }
@@ -83,10 +91,11 @@ export class Survival {
         }
         field.reject(target, 30000);
       }
+      const before = { ...field.latest.position };
       await field.walk(field.explore(undefined, foodSearchDistance), this.eatWhen);
       // A changed viewpoint needs a fresh deterministic 360-degree sweep;
       // otherwise later searches only inspect the current forward cone.
-      this.surveyed = false;
+      if (horizontal(before, field.latest.position) > 2) this.surveyed = false;
     }
   }
   async harvest(target) {

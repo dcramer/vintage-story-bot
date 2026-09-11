@@ -54,7 +54,7 @@ test('Node geometry preserves step, headroom and hole constraints', () => {
 test('terrain permits supported recentering off thin partial ground cover', () => {
   const map = new TerrainMemory();
   const cells = [];
-  for (let x = -1; x <= 2; x++) for (let y = 0; y <= 3; y++) for (let z = -1; z <= 2; z++)
+  for (let x = -1; x <= 2; x++) for (let y = -1; y <= 3; y++) for (let z = -1; z <= 2; z++)
     cells.push([x, y, z, 0, false, []]);
   cells.push([0, 1, 0, 0, false, [[0, 0, 0, .5, .0625, 1]]]);
   cells.push([1, 0, 0, 0, false, [[0, 0, 0, 1, 1, 1]]]);
@@ -69,6 +69,7 @@ test('terrain keeps planned standing centers clear of adjacent liquid hazards', 
   const map = new TerrainMemory();
   const cells = [];
   for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) {
+    cells.push([x, -1, z, 0, false, []]);
     cells.push([x, 0, z, 0, false, [[0, 0, 0, 1, 1, 1]]]);
     cells.push([x, 1, z, 0, z === 1, []]);
     cells.push([x, 2, z, 0, false, []]);
@@ -76,6 +77,16 @@ test('terrain keeps planned standing centers clear of adjacent liquid hazards', 
   map.apply({ session: 'shore', reset: true, cursor: 1, clock: 0, cells });
   assert.equal(map.stand(.5, -.5, 1, .3, 1.85)?.y, 1);
   assert.equal(map.stand(.5, 0.5, 1, .3, 1.85), null);
+
+  const deep = [];
+  for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) for (let y = -2; y <= 3; y++) {
+    const water = z === 1 && y === -1;
+    const ground = z === 1 ? y === -2 : y === 0;
+    deep.push([x, y, z, 0, water, ground ? [[0, 0, 0, 1, 1, 1]] : []]);
+  }
+  map.apply({ session: 'deep-shore', reset: true, cursor: 1, clock: 0, cells: deep });
+  assert.equal(map.stand(.5, .5, 1, .3, 1.85), null, 'water below a nearby ledge is unsafe');
+  assert.equal(map.stand(.5, -.5, 1, .3, 1.85)?.y, 1, 'dry ground outside the margin remains usable');
 });
 
 test('navigation tolerates slow physical response without unbounded input', () => {

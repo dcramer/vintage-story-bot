@@ -37,10 +37,11 @@ export class TerrainMemory {
     return !unknown || !!missing;
   }
   dry(p, w, h, margin = .55, missing) {
-    // Keep planned body positions away from liquid/fire cells, not merely out
-    // of their exact voxel. A controller can carry some momentum beyond a
-    // waypoint, so a one-cell shoreline is not reliable braking room.
-    const body = [p.x - w - margin, p.y + .01, p.z - w - margin,
+    // Keep planned body positions away from liquid/fire cells, including
+    // hazards below a ledge. A dry block beside water two levels down is still
+    // an unsafe waypoint: slopes, gravity, and one bounded frame can carry the
+    // player over that edge before the next observation arrives.
+    const body = [p.x - w - margin, p.y - 2, p.z - w - margin,
       p.x + w + margin, p.y + h, p.z + w + margin];
     let unknown = false;
     for (let x = Math.floor(body[0]); x <= Math.floor(body[3] - .001); x++)

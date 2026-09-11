@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Fieldwork } from '../src/skills/fieldwork.mjs';
 import { forageFoodCode, mushroomCode, ripeForage, safeFood } from '../src/skills/food.mjs';
-import { accessibleForage, harvestReady } from '../src/skills/survival.mjs';
+import { accessibleForage, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady } from '../src/skills/survival.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
   freshness: { state: 'fresh', freshHoursLeft: 100 } });
@@ -43,6 +43,17 @@ test('breakable forage is harvested beside its drop, never at maximum reach or u
   assert.equal(harvestReady(mushroom, { x: 8.9, z: 10.5 }), false);
   assert.equal(harvestReady(mushroom, { x: 9.5, z: 10.5 }), true);
   assert.equal(harvestReady(mushroom, { x: 10.2, z: 10.3 }), false);
+});
+
+test('food exploration uses observed local steps and does not rescan an unchanged distant cone', () => {
+  assert.equal(foodSearchDistance, 6);
+  assert.equal(foodSightRange, 16);
+  const view = { position: { x: 10, z: 10 }, yawDegrees: 30 };
+  const state = (x, z, yawDegrees) => ({ position: { x, z }, orientation: { yawDegrees } });
+  assert.equal(foodViewChanged(view, state(11.9, 10, 44.9)), false);
+  assert.equal(foodViewChanged(view, state(12.1, 10, 30)), true);
+  assert.equal(foodViewChanged(view, state(10, 10, 46)), true);
+  assert.equal(foodViewChanged(view, state(10, 10, 350)), true);
 });
 
 test('low health is tolerated only during explicit starving food recovery', () => {
