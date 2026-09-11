@@ -69,8 +69,10 @@ export class Fieldwork {
   async scan(radius, match, kind = 'all') {
     let cursor;
     const objects = [];
+    // A scan is read-only and stationary. Guard once around the paged sweep
+    // instead of spending an extra game-thread round trip on every page.
+    await this.observe();
     do {
-      await this.observe();
       const page = await this.env.send({ action: 'scan', kind, match, radius, limit: 32, ...(cursor ? { cursor } : {}) });
       if (page.code === 'scan_expired') break;
       if (!page.ok) throw Error(page.error ?? 'Scan refused');
@@ -78,6 +80,7 @@ export class Fieldwork {
       for (const object of page.objects) this.seen.set(object.key, { ...object, seenAt: this.now() });
       cursor = page.more ? page.cursor : null;
     } while (cursor);
+    await this.observe();
     this.searched++;
     this.prune();
     return objects;

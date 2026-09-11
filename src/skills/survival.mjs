@@ -3,6 +3,8 @@ import { sightRange } from './fieldwork.mjs';
 import { consume, emptyHand, foodReserve, hunger, ripeBerries } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
+const foodSightRange = Math.min(32, sightRange);
+
 // Hysteresis: prepare food below 20%, eat to 80%, retain 320 satiety in fresh berries.
 // Navigation checks yieldWhen every sensing tick; food work owns no parallel inputs.
 export class Survival {
@@ -41,13 +43,15 @@ export class Survival {
         await this.harvest(ready);
         continue;
       }
-      await field.scan(sightRange, 'bush', 'blocks');
+      // Shorter sweeps finish much sooner on low-tick-rate clients and let us
+      // change viewpoints instead of starving during one enormous volume scan.
+      await field.scan(foodSightRange, 'bush', 'blocks');
       // One smooth initial look-around; don't walk away from food just behind the initial view.
       if (!this.surveyed && !field.targets(ripeBerries).length) {
         this.surveyed = true;
         for (const offset of [120, 240]) {
           await field.aim({ yawDegrees: normalize(field.heading + offset), pitchDegrees: 15 });
-          await field.scan(sightRange, 'bush', 'blocks');
+          await field.scan(foodSightRange, 'bush', 'blocks');
           if (field.targets(ripeBerries).length) break;
         }
       }
