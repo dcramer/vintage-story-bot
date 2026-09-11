@@ -5,7 +5,7 @@ import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from 
 import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, stalledFoodRoute } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat, threatVerticalRange } from '../src/skills/threats.mjs';
 import { routeRegressed, travel } from '../src/skills/travel.mjs';
-import { foliageBlock, foliageClearCandidate } from '../src/skills/clearance.mjs';
+import { foliageBlock, foliageClearCandidate, threatAllowsClearance } from '../src/skills/clearance.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
   freshness: { state: 'fresh', freshHoursLeft: 100 } });
@@ -275,4 +275,6 @@ test('foliage clearance selects only a reachable body-level leaf toward the goal
   const nearSide = object('near-side', 'game:leaves-grown-oak', 1.5, 2, .5, 90);
   assert.equal(foliageClearCandidate([forward, nearSide], state, { x: .5, z: 10.5 }), nearSide);
   assert.equal(foliageClearCandidate([{ ...forward, withinPickingRange: false }], state, { x: .5, z: 10.5 }), null);
+  assert.equal(threatAllowsClearance(state, { point: { x: 20.5, z: .5 } }), true);
+  assert.equal(threatAllowsClearance(state, { point: { x: 20.49, z: .5 } }), false);
 });

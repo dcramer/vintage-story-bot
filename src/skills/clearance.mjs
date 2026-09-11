@@ -5,6 +5,8 @@ import { nearestThreat } from './threats.mjs';
 
 export const foliageBlock = object => object?.kind === 'block' &&
   /^game:leaves(?:branchy)?-/.test(object.code ?? '');
+export const threatAllowsClearance = (state, threat, minimum = 20) => !threat ||
+  horizontal(state.position, threat.point) >= minimum;
 
 export function foliageClearCandidate(objects, state, toward) {
   const direction = lookAt(state.position, toward).yawDegrees;
@@ -24,7 +26,11 @@ export function foliageClearCandidate(objects, state, toward) {
 // pathfinding has already exhausted non-mutating local routes.
 export async function clearFoliage(field, toward) {
   await field.observe(true);
-  if (nearestThreat(field.latest) || !field.latest.capabilities.includes('block_actions')) return false;
+  const threat = nearestThreat(field.latest);
+  // A distant predator plus a leaf enclosure otherwise creates a permanent
+  // deadlock: evasion has no route and clearance refuses to open one. Preserve
+  // a wide no-fieldwork perimeter while allowing one quick leaf beyond it.
+  if (!threatAllowsClearance(field.latest, threat) || !field.latest.capabilities.includes('block_actions')) return false;
   const objects = await field.scan(5, ['leaves-', 'leavesbranchy-'], 'blocks');
   const target = foliageClearCandidate(objects, field.latest, toward);
   if (!target) return false;
