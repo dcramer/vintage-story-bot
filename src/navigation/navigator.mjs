@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { angle, distance, horizontal, key, lookAt, normalize } from './terrain.mjs';
 import { findRoute } from './planner.mjs';
-import { fleeTarget, nearbyThreats, threatClearRadius, threatStartRadius } from '../skills/threats.mjs';
+import { fleeTarget, nearbyThreats, nearbyUnclearedThreats } from '../skills/threats.mjs';
 
 export class Navigation {
   id = randomUUID(); state = 'surveying'; reason = null;
@@ -43,7 +43,7 @@ export class Navigation {
     if (!this.active) return null;
     if (now >= this.deadline) return this.finish('blocked', 'deadline');
     const p = state.position, grounded = state.motion.onGround, map = this.map, w = this.width, h = this.height;
-    const threats = nearbyThreats(state, this.evading ? threatClearRadius : threatStartRadius);
+    const threats = this.evading ? nearbyUnclearedThreats(state) : nearbyThreats(state);
     const nearby = threats[0] ?? null;
     if (!this.evading && nearby) {
       this.evading = true; this.threat = nearby; this.threats = threats;

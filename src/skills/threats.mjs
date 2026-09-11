@@ -11,6 +11,23 @@ const hostileMarkers = ['drifter', 'wolf-', 'bear-', 'locust-', 'bell-', 'bowtor
 export const threatStartRadius = 20;
 export const threatClearRadius = 32;
 
+// Ranged mobs and fast large predators need more reaction time than a walking
+// drifter. Keep these explicit by known game code: unknown/modded entities do
+// not become dangerous through behavioral inference.
+export const threatStartDistance = code => {
+  const lower = code.toLowerCase();
+  if (lower.includes('bowtorn-')) return 36;
+  if (['bear-', 'wolf-', 'hyena-'].some(marker => lower.includes(marker))) return 28;
+  return threatStartRadius;
+};
+
+export const threatClearDistance = code => {
+  const lower = code.toLowerCase();
+  if (lower.includes('bowtorn-')) return 48;
+  if (['bear-', 'wolf-', 'hyena-'].some(marker => lower.includes(marker))) return 36;
+  return threatClearRadius;
+};
+
 export const hostileEntity = entity => typeof entity?.code === 'string' &&
   hostileMarkers.some(marker => entity.code.toLowerCase().includes(marker));
 
@@ -21,13 +38,20 @@ export const threatVerticalRange = code => {
   return 8;
 };
 
-export const nearbyThreats = (state, radius = threatStartRadius) => (state.nearbyEntities ?? [])
+export const nearbyThreats = (state, radius) => (state.nearbyEntities ?? [])
   .filter(entity => hostileEntity(entity) &&
     Math.abs(state.position.y - entity.point.y) <= threatVerticalRange(entity.code) &&
-    horizontal(state.position, entity.point) <= radius)
+    horizontal(state.position, entity.point) <= (radius ?? threatStartDistance(entity.code)))
   .sort((a, b) => horizontal(state.position, a.point) - horizontal(state.position, b.point));
 
-export const nearestThreat = (state, radius = threatStartRadius) => nearbyThreats(state, radius)[0] ?? null;
+export const nearbyUnclearedThreats = state => (state.nearbyEntities ?? [])
+  .filter(entity => hostileEntity(entity) &&
+    Math.abs(state.position.y - entity.point.y) <= threatVerticalRange(entity.code) &&
+    horizontal(state.position, entity.point) <= threatClearDistance(entity.code))
+  .sort((a, b) => horizontal(state.position, a.point) - horizontal(state.position, b.point));
+
+export const nearestThreat = (state, radius) => nearbyThreats(state, radius)[0] ?? null;
+export const nearestUnclearedThreat = state => nearbyUnclearedThreats(state)[0] ?? null;
 
 export const fleeTarget = (position, threat, distance = 32) => {
   const threats = Array.isArray(threat) ? threat : [threat];

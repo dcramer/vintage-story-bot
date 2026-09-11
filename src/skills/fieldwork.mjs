@@ -1,6 +1,6 @@
 import { horizontal, lookAt, normalize } from '../navigation/terrain.mjs';
 import { findRoute } from '../navigation/planner.mjs';
-import { fleeTarget, nearestThreat, threatClearRadius } from './threats.mjs';
+import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.mjs';
 
 export const area = p => `${Math.floor(p.x / 16)},${Math.floor(p.z / 16)}`;
 export const sightRange = 64;
@@ -187,12 +187,12 @@ export class Fieldwork {
     let fled = false;
     while (true) {
       this.check();
-      const threat = nearestThreat(this.latest, fled ? threatClearRadius : undefined);
+      const threat = fled ? nearestUnclearedThreat(this.latest) : nearestThreat(this.latest);
       if (!threat) return fled;
       const target = fleeTarget(this.latest.position, threat);
       this.report('evading', { threat: threat.code, distance: +horizontal(this.latest.position, threat.point).toFixed(1), target });
       const before = { ...this.latest.position };
-      const result = await this.walk(target, state => nearestThreat(state, threatClearRadius) ? null : 'threat_cleared');
+      const result = await this.walk(target, state => nearestUnclearedThreat(state) ? null : 'threat_cleared');
       if (!['arrived', 'yielded'].includes(result.state) && horizontal(before, this.latest.position) <= 2)
         await clearStall?.(target);
       fled = true;
