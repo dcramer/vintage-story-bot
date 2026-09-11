@@ -47,7 +47,10 @@ export function findRoute(map, start, goal, w, h,
     closed.add(id);
     if (reached(at)) return path(at);
     if (partial && horizontal(start, at) >= 1 && !visits.has(id) && map.frontier(at).size) {
-      const score = remaining(at) + costs.get(id) * .15;
+      // A frontier down a hole is not worth walking into: what looks closer
+      // to the goal from below may have no way back up. Prefer frontiers at
+      // the start's level or above.
+      const score = remaining(at) + costs.get(id) * .15 + Math.max(0, start.y - at.y - 1) * 3;
       if (score < best) { best = score; frontier = at; }
     }
     const moves = map.moves(at);

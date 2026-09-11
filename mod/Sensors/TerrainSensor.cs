@@ -65,7 +65,7 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
             if (++inspected > 256 || rays >= 128 || watch.ElapsedMilliseconds >= 5) { pending.Enqueue(cell); break; }
             if (map.Fresh(cell, now, RefreshMs(cell, pos))) continue;
             var blockPos = new BlockPos(cell.X, cell.Y, cell.Z, 0);
-            if (blocks.GetChunkAtBlockPos(blockPos) == null) { map.Invalidate(cell); continue; }
+            if (blocks.GetChunkAtBlockPos(blockPos) == null) { map.Invalidate(cell, "forgot"); continue; }
             var block = blocks.GetBlock(blockPos);
             var samples = SceneGeometry.BoxSamples(
                 new(cell.X, cell.Y, cell.Z), new(cell.X + 1, cell.Y + 1, cell.Z + 1));

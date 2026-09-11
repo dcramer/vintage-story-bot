@@ -21,22 +21,29 @@ const cardinals = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const diagonals = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
 const around = [...cardinals, ...diagonals];
 
+// This is the bot's map: what it has seen stays until a block change is
+// reported or the memory is very old. The mod's eye forgetting a cell it
+// no longer keeps in range is not a reason for the player to forget it.
+export const REMEMBER_MS = 30 * 60 * 1000;
 export class TerrainMemory {
-  cells = new Map(); hazards = new Map(); session = null; cursor = 0; now = 0;
+  cells = new Map(); hazards = new Map(); session = null; cursor = 0; now = 0; capacity = 262144;
   apply(batch) {
     if (batch.reset || batch.session !== this.session) { this.cells.clear(); this.hazards.clear(); }
     this.session = batch.session; this.cursor = batch.cursor; this.now = batch.clock;
-    for (const [x, y, z, at, hazard, boxes] of batch.cells) {
+    for (const [x, y, z, at, hazard, boxes, reason] of batch.cells) {
       const id = cellKey(x, y, z);
-      if (boxes === null) this.forget(id);
+      if (boxes === null) { if (reason !== 'forgot') this.forget(id); }
       else {
         const cell = { x, y, z, at, hazard, boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) };
         this.cells.set(id, cell);
         if (hazard) this.hazards.set(id, cell); else this.hazards.delete(id);
       }
     }
-    for (const [id, cell] of this.cells) if (this.now - cell.at > 120000) this.forget(id);
-    while (this.cells.size > 16384) this.forget(this.cells.keys().next().value);
+    if (this.cells.size > this.capacity || (this.now - (this.prunedAt ?? 0)) > 60000) {
+      this.prunedAt = this.now;
+      for (const [id, cell] of this.cells) if (this.now - cell.at > REMEMBER_MS) this.forget(id);
+      while (this.cells.size > this.capacity) this.forget(this.cells.keys().next().value);
+    }
   }
   forget(id) { this.cells.delete(id); this.hazards.delete(id); }
   get(x, y, z) { return this.cells.get(cellKey(Math.floor(x), Math.floor(y), Math.floor(z))); }
