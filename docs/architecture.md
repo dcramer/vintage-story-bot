@@ -28,7 +28,7 @@
 - Follow [Mineflayer](https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md)'s state/control separation and [pathfinder](https://github.com/PrismarineJS/mineflayer-pathfinder)'s independent goals, movement policy and outcomes; do not reproduce Minecraft physics or assume its world visibility.
 - Skills compose inside one controller-owned goal. One file per public tool: `src/actions/<name>.mjs` (query/command) or `src/goals/<name>.mjs` (goal); `src/controller/registry.mjs` discovers them by basename and MCP/CLI/discovery share those contracts. No arbitrary code-loading RPC.
 - Keep the fast loop local: structured observations → Node decision → bounded input frame. LLM/MCP assigns goals, not individual walking ticks. Perception is approximate visible knowledge, not omniscience; unknown ≠ air, stale ≠ safe.
-- Mod owns immediate safety release even if Node stalls. Node decides subsequent reactions; cancellation completes cleanup before another goal runs. Do not auto-resume after damage/death/restart.
+- Mod owns immediate safety release even if Node hangs. Node decides subsequent reactions; cancellation completes cleanup before another goal runs. Do not auto-resume after damage/death/restart.
 - Transport acknowledgement is not gameplay completion. Verify arrival, inventory deltas and life state. Lost replies imply uncertain effects; inspect, never blindly resend.
 - Memory must be session-scoped, bounded and invalidatable. Share observations across skills; geometry, resource sightings and failed approaches have different expiry rules. No persistence until world identity/invalidation are defined.
 - Prefer this small client/skills/goals split over a second game engine, screenshot loops, or a generic workflow framework.

@@ -17,7 +17,7 @@
 ## WSLg / Windows (legacy)
 
 - `./scripts/launch-bot-wsl.sh [--world NAME | host:port]` runs the client in the WSLg window; `scripts/setup-wsl-shortcut.ps1` recreates the desktop shortcut; `node scripts/launch-bot.mjs <game-path> [--dry-run]` is the generic graphical launcher (Windows profile `%APPDATA%\VintagestoryAI`, installed by `setup-bot.ps1`).
-- Preserve launcher environment: `XDG_SESSION_TYPE=wayland`, `OPENTK_4_USE_WAYLAND=0`, no `WAYLAND_DISPLAY`; Mesa D3D12/NVIDIA. Wayland stalled in SwapBuffers; automatic graphics selection used CPU.
+- Preserve launcher environment: `XDG_SESSION_TYPE=wayland`, `OPENTK_4_USE_WAYLAND=0`, no `WAYLAND_DISPLAY`; Mesa D3D12/NVIDIA. Wayland hung in SwapBuffers; automatic graphics selection used CPU.
 - OpenAL backend failure (`Unable to get sourceId`): launch with `ALSOFT_DRIVERS=null`.
 - Operator clicks must first activate msrdc's `Vintage Story (Ubuntu)` window via `scripts/focus-bot.ps1`; keys use direct window events. Quit via the game's pause menu before redeploying.
 
