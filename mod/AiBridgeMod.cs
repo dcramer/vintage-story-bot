@@ -574,7 +574,10 @@ public sealed class AiBridgeMod : ModSystem
                 if (frameKeys.Length > 0)
                 {
                     movingKeys = frameKeys; movingControls = entity.Controls; moveDirection = frameForward ? "forward" : "none";
-                    moveJump = jumping; moveSprint = sprinting && frameForward && !frameSneak; moveSneak = frameSneak; stopAt = control.Until; SetMovement(true);
+                    moveJump = jumping; moveSprint = sprinting && frameForward && !frameSneak; moveSneak = frameSneak;
+                    // Input duration remains exactly caller-bounded even though
+                    // the ownership heartbeat has a fixed 500 ms grace period.
+                    stopAt = frameNow + frameDuration; SetMovement(true);
                 }
                 if (includeSense)
                     return new { ok = true, sequence, state = Execute("""{"action":"observe"}"""),
