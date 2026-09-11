@@ -51,6 +51,20 @@ test('Node geometry preserves step, headroom and hole constraints', () => {
   assert.equal(map.clear(start, .3, 1.85), false);
 });
 
+test('terrain permits supported recentering off thin partial ground cover', () => {
+  const map = new TerrainMemory();
+  const cells = [];
+  for (let x = 0; x <= 1; x++) for (let y = 0; y <= 3; y++) for (let z = 0; z <= 1; z++)
+    cells.push([x, y, z, 0, false, []]);
+  cells.push([0, 1, 0, 0, false, [[0, 0, 0, .5, .0625, 1]]]);
+  cells.push([1, 0, 0, 0, false, [[0, 0, 0, 1, 1, 1]]]);
+  map.apply({ session: 'thin', reset: true, cursor: 1, clock: 0, cells });
+  const start = { x: .4, y: 1.0625, z: .5 }, safe = { x: 1.5, y: 1, z: .5 };
+  assert.ok(map.support(start, .3) > 0 && map.support(start, .3) < 9);
+  assert.equal(map.traverse(start, safe, .3, 1.85, false), false);
+  assert.equal(map.traverse(start, safe, .3, 1.85, true), true);
+});
+
 test('navigation tolerates slow physical response without unbounded input', () => {
   const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: () => true,
     views: () => new Map() };

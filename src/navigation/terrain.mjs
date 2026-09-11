@@ -65,6 +65,19 @@ export class TerrainMemory {
     }
     return true;
   }
+  groundSupport(p, w, drop) {
+    let count = 0;
+    for (const dx of [-w, 0, w]) for (const dz of [-w, 0, w]) {
+      const x = p.x + dx, z = p.z + dz;
+      for (let y = Math.floor(p.y - .01); y >= Math.floor(p.y - drop - .01); y--) {
+        const cell = this.get(x, y, z);
+        if (cell?.hazard) return -1;
+        if (cell?.boxes.some(b => b[4] <= p.y + .01 && b[4] >= p.y - drop - .01 &&
+            x >= b[0] && x <= b[3] && z >= b[2] && z <= b[5])) { count++; break; }
+      }
+    }
+    return count;
+  }
   stand(x, z, nearY, w, h) {
     const tops = new Set();
     for (let y = Math.floor(nearY) - 2; y <= Math.floor(nearY) + 1; y++) {
@@ -91,7 +104,16 @@ export class TerrainMemory {
         if (recenter ? n === 0 || n < support : n !== 9) return false;
         support = n;
       }
-      if (rise < -.05 && !this.ground(p, w, 1.06, missing)) return false;
+      if (rise < -.05) {
+        if (recenter && -rise <= .125) {
+          // Thin ground cover can leave a natively grounded player with only
+          // partial observed support. Require continuous known contact while
+          // recentering onto a fully supported, collision-checked endpoint.
+          const n = this.groundSupport(p, w, -rise + .06);
+          if (n <= 0) return false;
+          support = n;
+        } else if (!this.ground(p, w, 1.06, missing)) return false;
+      }
       if (jump && !this.ground(p, w, travelY - from.y + .06, missing)) return false;
     }
     for (const end of [from, to]) for (let y = end.y; y <= travelY + .01; y += .1)
