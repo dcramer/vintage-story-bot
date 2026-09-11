@@ -106,6 +106,19 @@ test('terrain permits supported recentering off thin partial ground cover', () =
   assert.deepEqual(findRoute(map, edge, { x: 4.5, y: 1, z: .5 }, .3, 1.85), [{ ...safe, recenter: true }]);
 });
 
+test('planner preserves a precise recenter anchor on a longer route', () => {
+  const map = new TerrainMemory(), cells = [];
+  for (let x = -1; x <= 5; x++) for (let y = -1; y <= 3; y++) for (let z = -1; z <= 1; z++)
+    cells.push([x, y, z, 0, false, []]);
+  cells.push([0, 1, 0, 0, false, [[0, 0, 0, .5, .0625, 1]]]);
+  for (let x = 1; x <= 5; x++) cells.push([x, 0, 0, 0, false, [[0, 0, 0, 1, 1, 1]]]);
+  map.apply({ session: 'thin-long', reset: true, cursor: 1, clock: 0, cells });
+  const edge = { x: .9, y: 1.0625, z: .5 }, safe = { x: 1.5, y: 1, z: .5 };
+  const route = findRoute(map, edge, { x: 4.5, y: 1, z: .5 }, .3, 1.85);
+  assert.ok(route.length > 1);
+  assert.deepEqual(route[0], { ...safe, recenter: true });
+});
+
 test('terrain keeps planned standing centers clear of adjacent liquid hazards', () => {
   const map = new TerrainMemory();
   const cells = [];
