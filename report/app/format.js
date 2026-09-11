@@ -29,7 +29,8 @@ const describe = {
 };
 export const goalTitle = g => g?.args && typeof g.args === 'object' && !g.args.truncated ? (describe[g.kind]?.(g.args) ?? fmt(g.args)) : '';
 const detailKeys = ['target', 'cell', 'ground', 'item', 'food', 'recipe', 'reason', 'from', 'slot', 'face', 'operation', 'leg', 'hunger', 'reserve'];
-export function phaseDetail(p = {}) {
+export function phaseDetail(progress) {
+  const p = progress ?? {};
   return detailKeys.filter(k => p[k] != null).map(k => {
     const v = p[k]; const text = k === 'cell' || k === 'target' && typeof v === 'object' ? point(v) : typeof v === 'string' ? code(v) : fmt(v);
     return k === 'target' || k === 'cell' ? text : `${k} ${text}`;
