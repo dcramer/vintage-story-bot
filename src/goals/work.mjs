@@ -8,14 +8,16 @@ import { digArea, build } from '../skills/build.mjs';
 import { box, presets } from '../skills/structures.mjs';
 import { form } from '../skills/forming.mjs';
 
-const food = ['forage_state', 'food_freshness'];
+const food = ['forage_state', 'food_freshness', 'block_actions'];
 
 async function run(env, options, capabilities, work) {
   const { manageFood = false, ...rest } = options;
   const field = new Fieldwork(env, rest);
+  const survival = manageFood ? new Survival(field) : null;
+  field.recoveringFood = manageFood;
   try {
     await field.start([...capabilities, ...(manageFood ? food : [])]);
-    return await work(field, manageFood ? new Survival(field) : null, rest);
+    return await work(field, survival, rest);
   } finally {
     await env.send({ action: 'stop' });
   }
@@ -39,6 +41,7 @@ export const exploreGoal = (env, { legs = 4, heading, ...options }) => run(env, 
     if (heading !== undefined) field.heading = heading;
     const results = [];
     for (let i = 0; i < legs; i++) {
+      await survival?.tend();
       field.report('exploring', { leg: i + 1, legs });
       const result = await field.walk(field.explore(), survival?.yieldWhen);
       results.push(result.state);

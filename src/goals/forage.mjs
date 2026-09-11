@@ -4,8 +4,9 @@ import { Survival } from '../skills/survival.mjs';
 
 export async function forage(env, options = {}) {
   const field = new Fieldwork(env, options);
+  field.recoveringFood = true;
   try {
-    await field.start(['forage_state', 'food_freshness']);
+    await field.start(['forage_state', 'food_freshness', 'block_actions']);
     const survival = new Survival(field);
     await survival.tend({ force: true });
     return { ok: true, goal: 'forage', eaten: survival.eaten, harvested: survival.harvested,

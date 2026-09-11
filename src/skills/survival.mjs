@@ -1,11 +1,14 @@
 import { horizontal, normalize } from '../navigation/terrain.mjs';
 import { sightRange } from './fieldwork.mjs';
-import { consume, emptyHand, foodReserve, hunger, ripeBerries } from './food.mjs';
+import { changeBlock } from './blocks.mjs';
+import { consume, emptyHand, foodReserve, hunger, mushroomCode, ripeForage } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
-const foodSightRange = Math.min(32, sightRange);
+const foodSightRange = Math.min(24, sightRange);
+const foodSearchDistance = foodSightRange / 2;
+const forageMatches = ['bush', 'mushroom'];
 
-// Hysteresis: prepare food below 20%, eat to 80%, retain 320 satiety in fresh berries.
+// Hysteresis: prepare food below 20%, eat to 80%, retain 320 satiety in safe fresh forage.
 // Navigation checks yieldWhen every sensing tick; food work owns no parallel inputs.
 export class Survival {
   tending = false;
@@ -19,8 +22,9 @@ export class Survival {
   async tend({ force = false } = {}) {
     const field = this.field;
     await field.observe();
-    if (!this.tending && !force && hunger(field.latest) >= .2) return;
+    if (!this.tending && !force && hunger(field.latest) >= .2) { field.recoveringFood = false; return; }
     this.tending = true;
+    field.recoveringFood = true;
     while (this.tending) {
       await field.observe(true);
       const inventory = await field.send({ action: 'inventory' });
@@ -28,6 +32,7 @@ export class Survival {
       field.report('food', { hunger: hunger(field.latest), reserve: this.reserve, eaten: this.eaten, harvested: this.harvested });
       if (hunger(field.latest) >= .8 && this.reserve >= 320) {
         this.tending = false;
+        field.recoveringFood = false;
         await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
         return;
       }
@@ -36,26 +41,26 @@ export class Survival {
         this.eaten += result.consumed;
         continue;
       }
-      // Scans include nonripe bushes in memory but only ripe allowlisted fruit is actionable.
-      const near = await field.scan(8, 'bush', 'blocks');
-      const ready = near.find(o => ripeBerries(o) && o.withinPickingRange && !field.rejected.has(o.key));
+      // A single paged sweep finds both supported food families without enumerating unrelated blocks.
+      const near = await field.scan(8, forageMatches, 'blocks');
+      const ready = near.find(o => ripeForage(o) && o.withinPickingRange && !field.rejected.has(o.key));
       if (ready) {
         await this.harvest(ready);
         continue;
       }
       // Shorter sweeps finish much sooner on low-tick-rate clients and let us
       // change viewpoints instead of starving during one enormous volume scan.
-      await field.scan(foodSightRange, 'bush', 'blocks');
+      await field.scan(foodSightRange, forageMatches, 'blocks');
       // One smooth initial look-around; don't walk away from food just behind the initial view.
-      if (!this.surveyed && !field.targets(ripeBerries).length) {
+      if (!this.surveyed && !field.targets(ripeForage).length) {
         this.surveyed = true;
         for (const offset of [120, 240]) {
           await field.aim({ yawDegrees: normalize(field.heading + offset), pitchDegrees: 15 });
-          await field.scan(foodSightRange, 'bush', 'blocks');
-          if (field.targets(ripeBerries).length) break;
+          await field.scan(foodSightRange, forageMatches, 'blocks');
+          if (field.targets(ripeForage).length) break;
         }
       }
-      const target = field.targets(ripeBerries)[0];
+      const target = field.targets(ripeForage)[0];
       if (target) {
         const destination = field.approach(target);
         if (destination) {
@@ -64,13 +69,13 @@ export class Survival {
           continue;
         }
         if (horizontal(field.latest.position, target.point) > 6) {
-          const result = await field.walk(field.explore(target.point), this.eatWhen);
+          const result = await field.walk(field.explore(target.point, foodSearchDistance), this.eatWhen);
           if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 15000);
           continue;
         }
         field.reject(target, 30000);
       }
-      await field.walk(field.explore(), this.eatWhen);
+      await field.walk(field.explore(undefined, foodSearchDistance), this.eatWhen);
       // A changed viewpoint needs a fresh deterministic 360-degree sweep;
       // otherwise later searches only inspect the current forward cone.
       this.surveyed = false;
@@ -83,17 +88,22 @@ export class Survival {
     const aimed = await field.observe();
     if (aimed.target?.key !== target.key) { field.reject(target, 5000); return; }
     const detail = await field.send({ action: 'inspect_target' });
-    if (detail.key !== target.key || !ripeBerries(detail)) { field.reject(target); return; }
+    if (detail.key !== target.key || !ripeForage(detail)) { field.reject(target); return; }
     const inventory = await field.send({ action: 'inventory' });
     const count = contents => ownedSlots(contents).filter(s => s.code === detail.forage.foodCode)
       .reduce((n, s) => n + s.quantity, 0);
     const before = count(inventory);
     field.report('harvesting', { target: target.key, food: detail.forage.foodCode });
     try {
-      await field.send({ action: 'interact', durationMs: 1200, expectedTarget: target.key,
-        expectedState: inventory.state, expectedItem: { slot, code: null } });
-      for (let i = 0; i < 7; i++) { await field.wait(200); await field.observe(); }
-      await field.send({ action: 'stop' });
+      if (mushroomCode(detail.forage.foodCode)) {
+        const result = await changeBlock(field, 'dig', { target: target.key, point: detail.hit, slot, expectedItem: null });
+        if (!result.ok) { field.reject(target, 120000); return; }
+      } else {
+        await field.send({ action: 'interact', durationMs: 1200, expectedTarget: target.key,
+          expectedState: inventory.state, expectedItem: { slot, code: null } });
+        for (let i = 0; i < 7; i++) { await field.wait(200); await field.observe(); }
+        await field.send({ action: 'stop' });
+      }
       for (let i = 0; i < 10; i++) {
         await field.observe();
         const after = await field.send({ action: 'inventory' });

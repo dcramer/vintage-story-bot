@@ -8,14 +8,15 @@ namespace VintageStoryAI;
 internal sealed class SceneSensor(ICoreClientAPI api, Func<bool> canControl)
 {
     private sealed record Candidate(string Kind, string Key, string Code, Point3 Point, BlockPos? Block, int? Quantity);
-    private sealed class ScanJob(Point3 eye, double yaw, double pitch, int radius, int limit, string kind, string match)
+    private sealed class ScanJob(Point3 eye, double yaw, double pitch, int radius, int limit, string kind, string[] matches)
     {
         public readonly string Id = Guid.NewGuid().ToString("N");
         public readonly long Started = Environment.TickCount64;
         public readonly Point3 Eye = eye;
         public readonly double Yaw = yaw, Pitch = pitch;
         public readonly int Radius = radius, Limit = limit, Side = radius * 2 + 1;
-        public readonly string Kind = kind, Match = match;
+        public readonly string Kind = kind;
+        public readonly string[] Matches = matches;
         public readonly Queue<Candidate> Pending = new();
         public readonly HashSet<string> Seen = [];
         public int Index;
@@ -25,7 +26,7 @@ internal sealed class SceneSensor(ICoreClientAPI api, Func<bool> canControl)
     private readonly Dictionary<string, ScanJob> jobs = new();
     public void Reset() => jobs.Clear();
 
-    public object Scan(int radius, int limit, string kind, string match, string? cursor = null)
+    public object Scan(int radius, int limit, string kind, string[] matches, string? cursor = null)
     {
         if (!canControl())
             return new { ok = false, error = "Close menus and unpause before scanning." };
@@ -43,7 +44,8 @@ internal sealed class SceneSensor(ICoreClientAPI api, Func<bool> canControl)
         ScanJob job;
         if (cursor != null)
         {
-            if (!jobs.TryGetValue(cursor, out job!) || job.Radius != radius || job.Limit != limit || job.Kind != kind || job.Match != match ||
+            if (!jobs.TryGetValue(cursor, out job!) || job.Radius != radius || job.Limit != limit || job.Kind != kind ||
+                !job.Matches.SequenceEqual(matches) ||
                 SceneGeometry.Distance(job.Eye, currentEye) > 2 || radius > 8 &&
                 (Math.Abs(SceneGeometry.Normalize(job.Yaw - yaw + 180) - 180) > 15 || Math.Abs(job.Pitch - pitch) > 15))
             {
@@ -54,12 +56,12 @@ internal sealed class SceneSensor(ICoreClientAPI api, Func<bool> canControl)
         else
         {
             while (jobs.Count >= 4) jobs.Remove(jobs.Keys.First());
-            job = new ScanJob(currentEye, yaw, pitch, radius, limit, kind, match);
+            job = new ScanJob(currentEye, yaw, pitch, radius, limit, kind, matches);
             jobs.Add(job.Id, job);
         }
         var eye = job.Eye;
         var origin = new Vec3d(eye.X, eye.Y, eye.Z);
-        bool Matches(string code) => code.Contains(match, StringComparison.OrdinalIgnoreCase);
+        bool Matches(string code) => matches.Length == 0 || matches.Any(match => code.Contains(match, StringComparison.OrdinalIgnoreCase));
         bool InView(Point3 point) => SceneGeometry.Distance(eye, point) <= Math.Min(8, radius) ||
             SceneGeometry.InCone(eye, point, job.Yaw, job.Pitch, radius);
 

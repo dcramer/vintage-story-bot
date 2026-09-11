@@ -146,14 +146,16 @@ export class Controller {
       return yield* Effect.fail(new Error('Camera did not settle'));
     }));
   }
-  navigate(goal, record, started, yieldWhen) {
+  navigate(goal, record, started, yieldWhen, { allowStarvingRecovery = false } = {}) {
     const self = this;
     return Effect.scoped(Effect.gen(function* () {
       const initial = yield* self.snapshot();
       if (goal.sprint && !initial.capabilities.includes('background_sprint'))
         return yield* Effect.fail(new Error('Update mod: background_sprint required'));
+      const alertsSafe = state => state.life.alerts.every(alert => alert === 'low_food' ||
+        alert === 'low_health' && allowStarvingRecovery && state.life.alerts.includes('low_food'));
       if (!initial.controlReady || !initial.alive || !initial.motion.onGround || initial.motion.swimming || initial.motion.feetInLiquid || initial.mounted ||
-        initial.life.alerts.some(a => a !== 'low_food') || initial.position.dimension !== 0 ||
+        !alertsSafe(initial) || initial.position.dimension !== 0 ||
         Math.abs(goal.x - initial.position.x) > 128 || Math.abs(goal.z - initial.position.z) > 128 || Math.abs(goal.y - initial.position.y) > 32)
         return yield* Effect.fail(new Error('Navigation needs grounded/dry/ready player and destination within 128 horizontal/32 vertical blocks.'));
       const control = yield* self.game.control(initial, error => { record.cleanupError = error.message; });
@@ -181,7 +183,7 @@ export class Controller {
         state = batch.state;
         if (state.player.uid !== initial.player.uid || state.life.session !== initial.life.session || state.control.owner !== control.owner ||
           !state.controlReady || !state.alive || state.life.lastDamageAt !== initial.life.lastDamageAt ||
-          state.life.alerts.some(a => a !== 'low_food') || state.motion.swimming || state.motion.feetInLiquid || state.mounted || state.position.dimension !== 0) {
+          !alertsSafe(state) || state.motion.swimming || state.motion.feetInLiquid || state.mounted || state.position.dimension !== 0) {
           nav.finish('cancelled', state.control.reason ?? 'identity_life_or_control_changed'); break;
         }
         if (batch.terrain.reset) nav.survey(Date.now());
@@ -224,7 +226,8 @@ export class Controller {
       const run = effect => Effect.runPromise(effect, { signal: cancellation.signal });
       running = policy({
         send, map: self.map, sync: () => run(self.snapshot()),
-        aim: angles => run(self.aim(angles, record)), navigate: (goal, yieldWhen) => run(self.navigate(goal, record, undefined, yieldWhen)),
+        aim: angles => run(self.aim(angles, record)),
+        navigate: (goal, yieldWhen, safety) => run(self.navigate(goal, record, undefined, yieldWhen, safety)),
         report: progress => { record.progress = progress; self.track(record, true); },
       }, { ...args, signal: cancellation.signal });
       record.result = yield* attempt(() => running);

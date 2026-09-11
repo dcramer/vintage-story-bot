@@ -11,12 +11,13 @@ export async function gather(env, { count = 10, manageFood = true, ...options } 
   if (!Number.isInteger(count) || count < 1 || count > 64) throw Error('count must be 1–64');
   const field = new Fieldwork(env, options);
   const survival = manageFood ? new Survival(field) : null;
+  field.recoveringFood = manageFood;
   const gained = () => field.initial ? stickCount(field.latest) - stickCount(field.initial) : 0;
   // Preserve parent-task progress when a composed food or movement skill reports.
   field.report = (phase, extra = {}) => env.report?.({ phase, count, gained: gained(),
     moved: +field.moved.toFixed(1), searched: field.searched, eaten: survival?.eaten ?? 0, ...extra });
   try {
-    await field.start(manageFood ? ['forage_state', 'food_freshness'] : []);
+    await field.start(manageFood ? ['forage_state', 'food_freshness', 'block_actions'] : []);
     await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
     while (true) {
       await field.observe(true);

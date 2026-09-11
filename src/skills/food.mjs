@@ -7,8 +7,18 @@ export const berryTypes = new Set([
   'blackcurrant', 'raspberry', 'redcurrant', 'whitecurrant', 'strawberry',
 ]);
 export const berryCode = code => typeof code === 'string' && code.startsWith('game:fruit-') && berryTypes.has(code.slice(11));
-export const ripeBerries = object => object.kind === 'block' && object.forage?.ripe === true && berryCode(object.forage.foodCode);
-export const safeFood = slot => berryCode(slot.code) && slot.quantity > 0 &&
+// Installed 1.22.7 assets with zero raw health penalty and no psychedelic effect.
+export const mushroomTypes = new Set([
+  'fieldmushroom', 'almondmushroom', 'blacktrumpet', 'chanterelle', 'commonmorel',
+  'greencrackedrussula', 'indigomilkcap', 'kingbolete', 'lobster', 'orangeoakbolete',
+  'paddystraw', 'puffball', 'redwinecap', 'saffronmilkcap', 'violetwebcap', 'witchhat',
+  'honeymushroom',
+]);
+export const mushroomCode = code => typeof code === 'string' && /^game:mushroom-[a-z0-9]+-normal$/.test(code) &&
+  mushroomTypes.has(code.slice(14, -7));
+export const ripeForage = object => object.kind === 'block' && object.forage?.ripe === true &&
+  (berryCode(object.forage.foodCode) || mushroomCode(object.forage.foodCode));
+export const safeFood = slot => (berryCode(slot.code) || mushroomCode(slot.code)) && slot.quantity > 0 &&
   slot.nutrition?.saturation > 0 && slot.nutrition.health >= 0 && slot.freshness?.state === 'fresh';
 export const foodReserve = inventory => ownedSlots(inventory).filter(safeFood)
   .reduce((sum, slot) => sum + slot.quantity * slot.nutrition.saturation, 0);
@@ -33,7 +43,7 @@ export async function consume(field) {
   let inventory = await field.send({ action: 'inventory' });
   let food = ownedSlots(inventory).filter(safeFood)
     .sort((a, b) => a.freshness.freshHoursLeft - b.freshness.freshHoursLeft)[0];
-  if (!food) throw Error('No verified fresh, safe berries in own inventory');
+  if (!food) throw Error('No verified fresh, safe forage in own inventory');
   if (food.inventory !== 'hotbar') {
     const destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && !s.code);
     if (!destination) throw Error('Eating needs an empty hotbar slot');

@@ -367,7 +367,8 @@ public sealed class AiBridgeMod : ModSystem
                 if (request.TryGetProperty("radius", out _) && (!TryInteger(request, "radius", out radius) || radius < 1 || radius > 64) ||
                     request.TryGetProperty("limit", out _) && (!TryInteger(request, "limit", out limit) || limit < 1 || limit > 32))
                     return new { ok = false, error = "radius: integer 1–64; limit: integer 1–32." };
-                string kind = "all", match = "";
+                string kind = "all";
+                string[] matches = [];
                 if (request.TryGetProperty("kind", out var kindField))
                 {
                     if (kindField.ValueKind != JsonValueKind.String) return new { ok = false, error = "kind must be a string." };
@@ -377,7 +378,14 @@ public sealed class AiBridgeMod : ModSystem
                 {
                     if (matchField.ValueKind != JsonValueKind.String || matchField.GetString()!.Length > 64)
                         return new { ok = false, error = "match must be a string of at most 64 characters." };
-                    match = matchField.GetString()!;
+                    if (matchField.GetString()!.Length > 0) matches = [matchField.GetString()!];
+                }
+                if (request.TryGetProperty("matches", out var matchesField))
+                {
+                    if (matches.Length != 0 || matchesField.ValueKind != JsonValueKind.Array || matchesField.GetArrayLength() is < 1 or > 4 ||
+                        matchesField.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.String || value.GetString()!.Length is < 1 or > 64))
+                        return new { ok = false, error = "matches must be 1–4 strings of 1–64 characters and cannot accompany match." };
+                    matches = matchesField.EnumerateArray().Select(value => value.GetString()!).ToArray();
                 }
                 if (kind is not ("all" or "blocks" or "items" or "entities")) return new { ok = false, error = "Invalid scan kind." };
                 string? scanCursor = null;
@@ -387,7 +395,7 @@ public sealed class AiBridgeMod : ModSystem
                         return new { ok = false, error = "cursor must be a returned scan cursor." };
                     scanCursor = scanCursorField.GetString();
                 }
-                return sensor.Scan(radius, limit, kind, match, scanCursor);
+                return sensor.Scan(radius, limit, kind, matches, scanCursor);
             case "look":
                 if (!TryNumber(request, "yawDegrees", out double yaw) ||
                     !TryNumber(request, "pitchDegrees", out double pitch) || pitch < -89 || pitch > 89 || Math.Abs(yaw) > 36000)

@@ -28,6 +28,10 @@ export class Fieldwork {
     if (this.signal?.aborted) throw Error('Goal cancelled');
     if (this.timeoutMs !== undefined && this.now() - this.started >= this.timeoutMs) throw Error('Requested deadline reached');
   }
+  alertsSafe(state) {
+    const starvingRecovery = this.recoveringFood && state.life.alerts.includes('low_food');
+    return state.life.alerts.every(alert => alert === 'low_food' || alert === 'low_health' && starvingRecovery);
+  }
   async send(request) {
     this.check();
     const result = await this.env.send(request);
@@ -36,7 +40,7 @@ export class Fieldwork {
   }
   guard(state) {
     this.check();
-    if (!state.ok || !state.alive || !state.controlReady || state.life.alerts.some(a => a !== 'low_food') ||
+    if (!state.ok || !state.alive || !state.controlReady || !this.alertsSafe(state) ||
         state.motion.swimming || state.motion.feetInLiquid || state.mounted)
       throw Error('Gameplay interruption: life, controls or liquid');
     const initial = this.initial;
@@ -73,7 +77,8 @@ export class Fieldwork {
     // instead of spending an extra game-thread round trip on every page.
     await this.observe();
     do {
-      const page = await this.env.send({ action: 'scan', kind, match, radius, limit: 32, ...(cursor ? { cursor } : {}) });
+      const filter = Array.isArray(match) ? { matches: match } : { match };
+      const page = await this.env.send({ action: 'scan', kind, ...filter, radius, limit: 32, ...(cursor ? { cursor } : {}) });
       if (page.code === 'scan_expired') break;
       if (!page.ok) throw Error(page.error ?? 'Scan refused');
       objects.push(...page.objects);
@@ -104,7 +109,7 @@ export class Fieldwork {
     const result = await this.env.navigate({ ...target, dimension: 0, timeoutMs, sprint: this.sprint }, state => {
       this.guard(state);
       return yieldWhen?.(state);
-    });
+    }, { allowStarvingRecovery: this.recoveringFood });
     const after = await this.observe(true);
     this.moved += horizontal(before.position, after.position);
     this.visits.set(area(after.position), (this.visits.get(area(after.position)) ?? 0) + 1);
@@ -128,10 +133,10 @@ export class Fieldwork {
     }
     return candidates.sort((a, b) => a.score - b.score)[0]?.q;
   }
-  explore(toward) {
+  explore(toward, maxDistance = sightRange * .75) {
     const p = this.latest.position;
     const direction = toward ? lookAt(p, toward).yawDegrees : this.heading;
-    const distance = toward ? Math.min(sightRange * .75, horizontal(p, toward)) : sightRange * .75;
+    const distance = toward ? Math.min(maxDistance, horizontal(p, toward)) : maxDistance;
     const candidates = [0, 45, -45, 90, -90, 180].map(offset => {
       const radians = normalize(direction + offset) * Math.PI / 180;
       const q = { x: Math.floor(p.x + Math.sin(radians) * distance) + .5, y: p.y,
