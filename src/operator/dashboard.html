@@ -61,6 +61,7 @@ canvas { width:100%; height:96px; display:block; }
   <span class="pill" id="link">dashboard</span>
   <span class="pill" id="producer">controller</span>
   <span class="pill" id="age">no data</span>
+  <span class="pill" id="stream">stream</span>
 </header>
 <main>
   <section class="wide">
@@ -298,6 +299,7 @@ source.addEventListener('snapshot', e => {
   renderLog();
   for (const entry of Object.values(snap.topics)) apply({ ...entry, log: false });
   renderGoal(snap.topics.goal?.data); renderNav(snap.topics.navigation?.data); renderFrame(snap.topics.frame?.data);
+  renderStream(snap.stream);
 });
 source.addEventListener('update', e => apply(JSON.parse(e.data)));
 source.addEventListener('producers', e => producers(JSON.parse(e.data).count));
@@ -305,14 +307,22 @@ setInterval(() => { const age = lastAt ? Math.round((Date.now() - lastAt) / 1000
   el.textContent = age == null ? 'no data' : age < 2 ? 'updated now' : `updated ${age}s ago`; el.className = 'pill ' + (age == null ? '' : age < 5 ? 'on' : 'off');
   if (goal?.active) $('goal-tags').innerHTML = [tag(goal.state, stateClass(goal.state)), tag('active', 'good'), tag(elapsed(goal))].join(''); }, 1000);
 renderGoal(null); renderNav(null); renderFrame(null);
-// Live view: mediamtx (pnpm game stream start) serves its own WebRTC player next to the RTSP/HLS endpoints; the
-// dashboard only frames it on the same host it was opened from.
-{
+// Live view: the dashboard process runs ffmpeg + mediamtx, and mediamtx serves its own WebRTC player next to the
+// RTSP/HLS endpoints; the page frames that player on the host it was opened from and reloads it when the stream returns.
+let streaming = null;
+function renderStream(s) {
   const host = location.hostname || 'localhost';
-  const webrtc = `http://${host}:8889/bot/`, hls = `http://${host}:8888/bot/`, rtsp = `rtsp://${host}:8554/bot`;
-  $('live').src = webrtc;
-  $('live-links').innerHTML = `If the picture stays black, start it with <code>pnpm game stream start</code>. Open the player alone: <a href="${webrtc}" target="_blank">WebRTC</a> · <a href="${hls}" target="_blank">HLS</a> · RTSP <code>${rtsp}</code>`;
+  const url = u => (u ?? '').replace('HOST', host);
+  const el = $('stream');
+  el.className = 'pill ' + (s?.streaming ? 'on' : 'off');
+  el.textContent = s?.streaming ? `stream ${s.codec}` : `stream off${s?.reason ? ': ' + s.reason : ''}`;
+  if (s?.streaming && streaming !== true) $('live').src = url(s.urls.webrtc);
+  streaming = Boolean(s?.streaming);
+  $('live-links').innerHTML = s?.urls
+    ? `Open the player alone: <a href="${url(s.urls.webrtc)}" target="_blank">WebRTC</a> · <a href="${url(s.urls.hls)}" target="_blank">HLS</a> · RTSP <code>${url(s.urls.rtsp)}</code>`
+    : '';
 }
+source.addEventListener('stream', e => renderStream(JSON.parse(e.data)));
 </script>
 </body>
 </html>
