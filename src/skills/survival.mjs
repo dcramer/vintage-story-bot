@@ -7,11 +7,13 @@ import { ownedSlots } from './inventory.mjs';
 const foodSightRange = Math.min(24, sightRange);
 const foodSearchDistance = foodSightRange / 2;
 const forageMatches = ['bush', 'mushroom', 'crop-'];
+const breaksForage = object => mushroomCode(forageFoodCode(object)) || object.forage?.kind === 'crop';
 export const accessibleForage = object => {
-  const foodCode = forageFoodCode(object);
-  const needsBreaking = mushroomCode(foodCode) || object.forage?.kind === 'crop';
-  return needsBreaking ? object.access?.buildOrBreak !== false : object.access?.use !== false;
+  return breaksForage(object) ? object.access?.buildOrBreak !== false : object.access?.use !== false;
 };
+export const harvestReady = (object, position) => object.withinPickingRange && (!breaksForage(object) ||
+  horizontal(position, object.point) <= 1.5 &&
+  (Math.floor(position.x) !== Math.floor(object.point.x) || Math.floor(position.z) !== Math.floor(object.point.z)));
 
 // Hysteresis: prepare food below 20%, eat to 80%, retain 320 satiety in safe fresh forage.
 // Navigation checks yieldWhen every sensing tick; food work owns no parallel inputs.
@@ -48,7 +50,7 @@ export class Survival {
       }
       // A single paged sweep finds both supported food families without enumerating unrelated blocks.
       const near = await field.scan(8, forageMatches, 'blocks');
-      const ready = near.find(o => ripeForage(o) && accessibleForage(o) && o.withinPickingRange && !field.rejected.has(o.key));
+      const ready = near.find(o => ripeForage(o) && accessibleForage(o) && harvestReady(o, field.latest.position) && !field.rejected.has(o.key));
       if (ready) {
         await this.harvest(ready);
         continue;
@@ -67,7 +69,8 @@ export class Survival {
       }
       const target = field.targets(o => ripeForage(o) && accessibleForage(o))[0];
       if (target) {
-        const destination = field.approach(target);
+        const destination = field.approach(target, breaksForage(target) ? q =>
+          Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z) : null);
         if (destination) {
           const result = await field.walk(destination, this.eatWhen);
           if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 15000);
@@ -95,7 +98,7 @@ export class Survival {
     const detail = await field.send({ action: 'inspect_target' });
     if (detail.key !== target.key || !ripeForage(detail)) { field.reject(target); return; }
     const foodCode = forageFoodCode(detail);
-    const needsBreaking = mushroomCode(foodCode) || detail.forage.kind === 'crop';
+    const needsBreaking = breaksForage(detail);
     if (needsBreaking && detail.access?.buildOrBreak === false || !needsBreaking && detail.access?.use === false) {
       field.reject(target, 300000);
       field.report('harvest_inaccessible', { target: target.key, food: foodCode });

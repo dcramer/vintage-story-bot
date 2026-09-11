@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Fieldwork } from '../src/skills/fieldwork.mjs';
 import { forageFoodCode, mushroomCode, ripeForage, safeFood } from '../src/skills/food.mjs';
-import { accessibleForage } from '../src/skills/survival.mjs';
+import { accessibleForage, harvestReady } from '../src/skills/survival.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
   freshness: { state: 'fresh', freshHoursLeft: 100 } });
@@ -35,6 +35,14 @@ test('forage planning skips targets denied by cached server access', () => {
   assert.equal(accessibleForage({ ...berries, access: { buildOrBreak: true, use: false } }), false);
   assert.equal(accessibleForage({ ...mushroom, access: { buildOrBreak: true, use: false } }), true);
   assert.equal(accessibleForage(berries), true);
+});
+
+test('breakable forage is harvested beside its drop, never at maximum reach or underfoot', () => {
+  const mushroom = { withinPickingRange: true, point: { x: 10.5, y: 2.1, z: 10.5 },
+    forage: { kind: 'mushroom', foodCode: 'game:mushroom-chanterelle-normal' } };
+  assert.equal(harvestReady(mushroom, { x: 8.9, z: 10.5 }), false);
+  assert.equal(harvestReady(mushroom, { x: 9.5, z: 10.5 }), true);
+  assert.equal(harvestReady(mushroom, { x: 10.2, z: 10.3 }), false);
 });
 
 test('low health is tolerated only during explicit starving food recovery', () => {
