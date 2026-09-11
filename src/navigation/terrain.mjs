@@ -193,6 +193,35 @@ export class TerrainMemory {
       this.hazardDistance(to, h) > startHazardDistance + .05;
     return (escapedHazardMargin || improvedMargin) && this.support(to, w, missing) === 9;
   }
+  // Diagnostic twin of traverse(): the first failing check and where, for
+  // telemetry when a live segment is rejected. Never used for decisions.
+  explainTraverse(from, to, w, h, recenter = false) {
+    const rise = to.y - from.y;
+    if (rise > 1.06 || rise < -2.06) return `rise ${rise.toFixed(2)}`;
+    const jump = rise > .05, travelY = Math.max(from.y, to.y) + (jump ? .25 : 0);
+    const steps = Math.max(1, Math.ceil(distance(from, to) * 10));
+    let escaped = this.dry(from, w, h);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps, p = { x: from.x + (to.x - from.x) * t, y: travelY, z: from.z + (to.z - from.z) * t };
+      const at = `sample ${i}/${steps}`;
+      if (!this.clear(p, w, h)) return `${at} clear`;
+      const dry = this.dry(p, w, h);
+      if (!dry && escaped) return `${at} re-enters hazard margin`;
+      if (dry) escaped = true;
+      if (Math.abs(rise) < .05) { const n = this.support(p, w); if (recenter ? n < 4 : n !== 9) return `${at} support ${n}`; }
+      if (rise < -.05) {
+        if (recenter && -rise <= .125) { if (this.groundSupport(p, w, -rise + .06) <= 0) return `${at} groundSupport`; }
+        else if (!this.ground(p, w, -rise + .06)) return `${at} ground`;
+      }
+      if (jump && !this.ground(p, w, travelY - from.y + .06)) return `${at} jump ground`;
+    }
+    for (const end of [from, to]) for (let y = end.y; y <= travelY + .01; y += .1)
+      if (!this.clear({ ...end, y }, w, h)) return `end clear at y ${y.toFixed(2)}`;
+    if (rise < -.05 && !this.dry(to, w, h, .55, undefined, true)) return 'landing margin unknown';
+    if (!escaped) return 'never dry';
+    if (this.support(to, w) !== 9) return `end support ${this.support(to, w)}`;
+    return 'passes';
+  }
   jumpTraverse(from, to, w, h) {
     const span = horizontal(from, to), rise = to.y - from.y;
     // Only bridge one missing grid cell. Both banks and the complete jump arc

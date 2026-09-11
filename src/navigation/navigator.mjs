@@ -39,6 +39,16 @@ export class Navigation {
     this.survey(now); this.lastProgress = p; this.progressAt = now;
     return null;
   }
+  // Re-plan in this same tick so a changed segment costs no stopped frame,
+  // but only once per tick: a route whose first segment fails the same
+  // check from the same state would otherwise recurse to the replan limit
+  // and, at 250 ms per plan, past the control heartbeat.
+  replanNow(state, p, now) {
+    this.replan(p, now, 'terrain_changed');
+    if (!this.active || this.replannedAt === now) return null;
+    this.replannedAt = now;
+    return this.tick(state, now);
+  }
   tick(state, now = Date.now()) {
     if (!this.active) return null;
     if (now >= this.deadline) return this.finish('blocked', 'deadline');
@@ -129,8 +139,7 @@ export class Navigation {
       this.diagnostics = { kind: 'checkpoint_invalid', point: next, support: nextSupport, clear: nextClear,
         dry: typeof map.dry !== 'function' || map.dry(next, w, h) };
       if (!grounded) return this.finish('blocked', 'landing_changed');
-      this.replan(p, now, 'terrain_changed');
-      return this.active ? this.tick(state, now) : null;
+      return this.replanNow(state, p, now);
     }
     if (this.jumpAt && !grounded) this.airborneDuringJump = true;
     if (this.jumpAt && grounded && this.airborneDuringJump && Math.abs(p.y - next.y) < .06) {
@@ -144,12 +153,11 @@ export class Navigation {
     const recenter = true;
     if (grounded && !this.jumpAt && !traverse(p, next, recenter)) {
       this.diagnostics = { kind: 'segment_invalid', from: p, point: next, recenter,
+        why: map.explainTraverse?.(p, next, w, h, recenter), grounded, jumping: !!this.jumpAt, landing: this.landing,
         fromDry: typeof map.dry !== 'function' || map.dry(p, w, h),
         dry: typeof map.dry !== 'function' || map.dry(next, w, h),
         fromHazardDistance: map.hazardDistance?.(p, h), hazardDistance: map.hazardDistance?.(next, h) };
-      // Re-plan in this same tick so a changed segment costs no stopped frame.
-      this.replan(p, now, 'terrain_changed');
-      return this.active ? this.tick(state, now) : null;
+      return this.replanNow(state, p, now);
     }
     if (distance(p, this.lastProgress) > .12) { this.progressAt = now; this.lastProgress = p; this.lastYawError = undefined; }
     const desiredYaw = lookAt(p, next).yawDegrees;
