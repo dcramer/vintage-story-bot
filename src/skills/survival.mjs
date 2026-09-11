@@ -92,7 +92,7 @@ export class Survival {
       }
       // A single paged sweep finds both supported food families without enumerating unrelated blocks.
       const near = await this.study(8);
-      const ready = near.find(forage &&
+      const ready = near.find(o => forage(o) &&
         harvestReady(o, field.latest.position, field.latest.body.halfWidth) && !field.skipped.has(o.key));
       if (ready) {
         await this.harvest(ready);
