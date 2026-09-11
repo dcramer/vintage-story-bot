@@ -29,13 +29,18 @@ public sealed class LifeTracker
         bool capAdjustment = maximumHealth.HasValue && maxHealth.HasValue && maxHealth < maximumHealth &&
             health == maximumHealth && nextHealth == maxHealth;
         bool lost = initialized && alive && health.HasValue && nextHealth.HasValue && nextHealth < health && !capAdjustment;
-        // Rust-world attrition: tiny periodic losses while temporal stability is near zero. Not an attack; navigation may continue.
-        bool attrition = lost && stability.HasValue && float.IsFinite(stability.Value) && stability < 0.15f && health!.Value - nextHealth!.Value <= 0.5f;
+        float loss = lost ? health!.Value - nextHealth!.Value : 0;
+        // Predictable environmental attrition is not an attack: allow recovery
+        // movement to continue until the independent low-health cutoff trips.
+        bool instability = lost && stability.HasValue && float.IsFinite(stability.Value) && stability < 0.15f && loss <= 0.5f;
+        bool starvation = lost && food.HasValue && float.IsFinite(food.Value) && food <= 0 && loss <= 0.5f;
+        bool attrition = instability || starvation;
         bool hurt = lost && !attrition;
         if (lost)
         {
             if (hurt) LastDamageAt = now; else LastAttritionAt = now;
-            Add(now, "health_lost", new { amount = health!.Value - nextHealth!.Value, health = nextHealth, cause = attrition ? "instability" : null });
+            Add(now, "health_lost", new { amount = loss, health = nextHealth,
+                cause = instability ? "instability" : starvation ? "starvation" : null });
         }
         if (!nextAlive && (!initialized || alive))
         {

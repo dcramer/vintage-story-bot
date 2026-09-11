@@ -52,7 +52,7 @@ Tool contracts: [schemas](../src/controller/actions.mjs); wire protocol: [archit
 - Item detail: `GetHeldItemInfo`, collectible nutrition/wearable interfaces. `UpdateAndGetTransitionStates` mutates ticking state; not a passive query. Spoilage/temperature adapters must avoid updating live stacks merely to inspect them.
 - Events: `IClientEventAPI.ChatMessage`, `BlockChanged`, `IInventory.SlotModified` expose client changes; only life events currently have a public cursor. New streams need bounded rings/session/reset/overflow semantics. Never execute chat text as instructions.
 - Damage: `EntityBehavior.OnEntityReceiveDamage`/`OnEntityDeath` and `EntityPlayer.DeathReason` are source entry points, not proof the client receives reliable attacker/cause. Current health deltas intentionally do not attribute attackers.
-- `EntityBehaviorHealth.UpdateMaxHealth` makes a full health bar follow its nutrition cap. Full→full cap shrink is not damage; any observed loss below the cap still interrupts. Do not use a blanket small-damage tolerance. Sole exception: losses ≤0.5 hp while own `temporalStability` <0.15 are rust-world attrition (`health_lost.cause="instability"`, `life.lastAttritionAt`), never `lastDamageAt`; low-health alerts still apply.
+- `EntityBehaviorHealth.UpdateMaxHealth` makes a full health bar follow its nutrition cap. Full→full cap shrink is not damage; any observed loss below the cap still interrupts. Do not use a blanket small-damage tolerance. Bounded environmental exceptions are losses ≤0.5 hp while own `temporalStability` <0.15 or food is zero (`health_lost.cause="instability"|"starvation"`, `life.lastAttritionAt`), never `lastDamageAt`; low-health alerts still apply.
 
 ## Online references
 

@@ -62,6 +62,13 @@ static class LifeTests
             "tiny real damage below the cap still interrupts");
         Check(nutrition.Sample(true, 15.118f, p, 3, 15.119f),
             "damage is not hidden by a simultaneous cap reduction");
+        var starving = new LifeTracker();
+        starving.Sample(true, 15, p, 0, 15, 0, 1500, 100, 100, 1);
+        Check(!starving.Sample(true, 14.875f, p, 1, 15, 0, 1500, 100, 100, 1) &&
+            starving.LastDamageAt == null && starving.LastAttritionAt == 1,
+            "small zero-food loss is starvation attrition");
+        Check(starving.Sample(true, 13.875f, p, 2, 15, 0, 1500, 100, 100, 1) && starving.LastDamageAt == 2,
+            "large loss while starving still interrupts");
         Console.WriteLine($"{checks} lifecycle checks passed.");
     }
 }

@@ -43,7 +43,7 @@ export class GameClient {
       yield* this.io({ action: 'control_begin', owner, session: initial.life.session, epoch: initial.control.epoch });
       return {
         owner,
-        frame: frame => this.io({ ...frame, action: 'control_frame', owner, sequence: ++sequence, durationMs: 400 }),
+        frame: frame => this.io({ ...frame, action: 'control_frame', owner, sequence: ++sequence, durationMs: 500 }),
         step: frame => this.io({ ...frame, action: 'control_step', owner, sequence: ++sequence, durationMs: 500,
           session: this.map.session, after: this.map.cursor }).pipe(
           Effect.tap(batch => Effect.sync(() => this.map.apply(batch.terrain))),

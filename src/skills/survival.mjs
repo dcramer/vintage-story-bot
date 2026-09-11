@@ -71,6 +71,9 @@ export class Survival {
         field.reject(target, 30000);
       }
       await field.walk(field.explore(), this.eatWhen);
+      // A changed viewpoint needs a fresh deterministic 360-degree sweep;
+      // otherwise later searches only inspect the current forward cone.
+      this.surveyed = false;
     }
   }
   async harvest(target) {

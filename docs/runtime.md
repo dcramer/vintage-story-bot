@@ -55,7 +55,7 @@ Preserve other registrations. These do not configure native Windows clients.
 
 ## Life / inventory
 
-- Game tick (~20 ms request, frame/thread bounded): sample health/vitals; damage/death/low-vital entry release owned inputs. Navigation may continue on hunger alone or on rust-world attrition (≤0.5 hp losses while temporal stability <0.15; `life.lastAttritionAt`), which never counts as damage. Pausing singleplayer suspends this tick/bridge responses. Food policy runs in assigned Node tasks only; no idle auto-flee/eat/combat/respawn.
+- Game tick (~20 ms request, frame/thread bounded): sample health/vitals; damage/death/low-vital entry release owned inputs. Navigation may continue on hunger alone and on bounded environmental attrition (`life.lastAttritionAt`): ≤0.5 hp losses from zero food or while temporal stability is below 0.15. Low health still stops it; larger/other losses remain damage. Pausing singleplayer suspends this tick/bridge responses. Food policy runs in assigned Node tasks only; no idle auto-flee/eat/combat/respawn.
 - `forage`: ripe berries → empty-hand harvest → fresh-food equip/eat → satiety/reserve verification. `eat`: one verified consumption from inventory. Both use normal right-click and stop on damage. Unknown/spoiling food is refused; no mushrooms/raw meat. Food in backpack needs a free ordinary hotbar slot.
 - Low health ≤30%; food/oxygen ≤20%; clear 5 percentage points above entry. Events edge-triggered; health drops can coalesce within one sample; attacker/cause unknown. Missing vitals do not infer healthy.
 - `events` holds 128 entries, pages 64; UTC ms, session/cursor; `missed` requires observe/resync. Passive MCP polling does not wake idle agents.

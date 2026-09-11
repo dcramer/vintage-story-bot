@@ -173,10 +173,11 @@ export class Controller {
           break;
         }
         const frame = terrainMore ? null : nav.tick(state);
-        self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
-        const batch = yield* control.step({
+        const input = {
           yawDegrees: frame?.yawDegrees ?? state.orientation.yawDegrees, pitchDegrees: frame?.pitchDegrees ?? 15,
-          forward: frame?.forward ?? false, jump: frame?.jump ?? false, sprint: frame?.sprint ?? false, focus: frame?.focus ?? null });
+          forward: frame?.forward ?? false, jump: frame?.jump ?? false, sprint: frame?.sprint ?? false, focus: frame?.focus ?? null };
+        self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
+        const batch = yield* control.step(input);
         state = batch.state;
         if (state.player.uid !== initial.player.uid || state.life.session !== initial.life.session || state.control.owner !== control.owner ||
           !state.controlReady || !state.alive || state.life.lastDamageAt !== initial.life.lastDamageAt ||
@@ -186,6 +187,17 @@ export class Controller {
         if (batch.terrain.reset) nav.survey(Date.now());
         terrainMore = batch.terrain.more;
         if (!nav.active) break;
+        const nextYield = yieldWhen?.(state);
+        if (nextYield && state.motion.onGround && self.map.support(state.position, state.body.halfWidth) === 9) {
+          nav.finish('yielded', nextYield); break;
+        }
+        // Renew immediately after the sensed step, before deterministic route
+        // planning on the next iteration. Repeating the already-vetted frame for
+        // one game tick keeps planning time outside the heartbeat critical path.
+        yield* control.frame(batch.terrain.reset ? {
+          yawDegrees: state.orientation.yawDegrees, pitchDegrees: 15,
+          forward: false, jump: false, sprint: false, focus: null,
+        } : input);
       }
       if (started) record.state = nav.state;
       self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
