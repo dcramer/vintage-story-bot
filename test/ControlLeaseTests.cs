@@ -13,9 +13,9 @@ static class ControlLeaseTests
         Check(!lease.Frame("b", 1, 101, 101, 400), "foreign frame");
         Check(lease.Frame("a", 1, 101, 101, 400), "owned frame");
         Check(!lease.Frame("a", 1, 102, 102, 400), "duplicate frame");
-        Check(!lease.Frame("a", 2, 601, 601, 400), "late frame cannot resurrect owner");
-        Check(lease.Frame("a", 2, 600, 700, 180), "timely short frame survives a delayed tick");
-        Check(lease.Expire(1200) && !lease.Active, "tick releases expired owner");
+        Check(!lease.Frame("a", 2, 2101, 2101, 400), "late frame cannot resurrect owner");
+        Check(lease.Frame("a", 2, 2100, 2200, 180), "timely short frame survives a delayed replan");
+        Check(lease.Expire(4200) && !lease.Active, "tick releases expired owner");
         Check(!lease.Begin("b", 0, 1001), "stale acquisition epoch");
         Check(lease.Begin("b", lease.Epoch, 1001, true) && lease.StarvingRecovery, "scoped starving recovery acquisition");
         lease.Revoke("manual_input");

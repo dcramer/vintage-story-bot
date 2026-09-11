@@ -2,7 +2,7 @@ namespace VintageStoryAI;
 
 public sealed class ControlLease
 {
-    private const int HeartbeatMs = 500;
+    private const int HeartbeatMs = 2000;
     public string? Owner { get; private set; }
     public long Epoch { get; private set; }
     public long Until { get; private set; }
@@ -21,7 +21,8 @@ public sealed class ControlLease
         if (!Active || owner != Owner || sequence <= Sequence || receivedAt >= Until || duration is < 1 or > 500) return false;
         // The authorization heartbeat is independent of how briefly this
         // particular input should be held. Tight 180 ms steering frames still
-        // need enough round-trip time for the next queued refresh to arrive.
+        // need enough time for a bounded terrain replan before the next queued
+        // refresh arrives; held keys retain their separate <=500 ms deadline.
         Sequence = sequence; Until = now + HeartbeatMs;
         return true;
     }
