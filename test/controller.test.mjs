@@ -332,11 +332,17 @@ test('navigation temporarily routes away from an explicit nearby hostile', () =>
     motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals: { hunger: { current: 1000, max: 1500 } },
     nearbyEntities: [{ key: 'entity:1', code: 'game:wolf-male', point: { x: -.5, y: 0, z: .5 } }] };
   const goal = { x: 5.5, y: 0, z: .5, timeoutMs: 10000 };
+  const distant = { ...state, nearbyEntities: [{ ...state.nearbyEntities[0], point: { x: -24.5, y: 0, z: .5 } }] };
+  const calm = new Navigation(map, distant, goal, 0);
+  calm.tick(distant, 0);
+  assert.equal(calm.evading, false);
   const nav = new Navigation(map, state, goal, 0);
   assert.ok(nav.tick(state, 0));
   assert.equal(nav.evading, true);
   assert.ok(nav.target.x > goal.x && nav.target.emergency);
-  nav.tick({ ...state, nearbyEntities: [] }, 1);
+  nav.tick(distant, 1);
+  assert.equal(nav.evading, true);
+  nav.tick({ ...state, nearbyEntities: [{ ...state.nearbyEntities[0], point: { x: -32.5, y: 0, z: .5 } }] }, 2);
   assert.equal(nav.evading, false);
   assert.equal(nav.target, goal);
 });

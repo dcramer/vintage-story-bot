@@ -4,6 +4,13 @@ import { horizontal } from '../navigation/terrain.mjs';
 // never become hostile by inference.
 const hostileMarkers = ['drifter', 'wolf-', 'bear-', 'locust-', 'bell-', 'bowtorn-', 'shiver-', 'hyena-'];
 
+// Start fleeing only when a hostile enters the actionable perimeter, then
+// keep the wider observed perimeter until escape is complete. Using the full
+// scan radius for both thresholds makes entities hovering at its edge start
+// repeated long evasions despite never approaching the player.
+export const threatStartRadius = 20;
+export const threatClearRadius = 32;
+
 export const hostileEntity = entity => typeof entity?.code === 'string' &&
   hostileMarkers.some(marker => entity.code.toLowerCase().includes(marker));
 
@@ -14,13 +21,13 @@ export const threatVerticalRange = code => {
   return 8;
 };
 
-export const nearbyThreats = (state, radius = 32) => (state.nearbyEntities ?? [])
+export const nearbyThreats = (state, radius = threatStartRadius) => (state.nearbyEntities ?? [])
   .filter(entity => hostileEntity(entity) &&
     Math.abs(state.position.y - entity.point.y) <= threatVerticalRange(entity.code) &&
     horizontal(state.position, entity.point) <= radius)
   .sort((a, b) => horizontal(state.position, a.point) - horizontal(state.position, b.point));
 
-export const nearestThreat = (state, radius = 32) => nearbyThreats(state, radius)[0] ?? null;
+export const nearestThreat = (state, radius = threatStartRadius) => nearbyThreats(state, radius)[0] ?? null;
 
 export const fleeTarget = (position, threat, distance = 32) => {
   const threats = Array.isArray(threat) ? threat : [threat];

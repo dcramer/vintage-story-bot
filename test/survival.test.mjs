@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { explorationDistance, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
 import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, stalledFoodRoute } from '../src/skills/survival.mjs';
-import { fleeTarget, hostileEntity, nearestThreat, threatVerticalRange } from '../src/skills/threats.mjs';
+import { fleeTarget, hostileEntity, nearestThreat, threatClearRadius, threatStartRadius, threatVerticalRange } from '../src/skills/threats.mjs';
 import { routeRegressed, travel } from '../src/skills/travel.mjs';
 import { foliageBlock, foliageClearCandidate, threatAllowsClearance } from '../src/skills/clearance.mjs';
 
@@ -94,6 +94,11 @@ test('threat avoidance is explicit, proximity-bounded and points away', () => {
   assert.equal(hostileEntity(wolf), true);
   assert.equal(hostileEntity({ ...wolf, code: 'game:chicken-hen' }), false);
   assert.equal(nearestThreat({ position: player, nearbyEntities: [wolf] }), wolf);
+  assert.equal(threatStartRadius, 20);
+  assert.equal(threatClearRadius, 32);
+  const boundaryWolf = { ...wolf, point: { x: -10, y: 2, z: 10.5 } };
+  assert.equal(nearestThreat({ position: player, nearbyEntities: [boundaryWolf] }), null);
+  assert.equal(nearestThreat({ position: player, nearbyEntities: [boundaryWolf] }, threatClearRadius), boundaryWolf);
   assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...wolf, point: { x: -22, z: 10.5 } }] }), null);
   assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...wolf, code: 'game:locust-bronze',
     point: { x: 8.5, y: -7, z: 10.5 } }] }), null);
