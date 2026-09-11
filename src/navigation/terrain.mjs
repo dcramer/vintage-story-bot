@@ -43,12 +43,20 @@ export class TerrainMemory {
     // player over that edge before the next observation arrives.
     const body = [p.x - w - margin, p.y - 2, p.z - w - margin,
       p.x + w + margin, p.y + h, p.z + w + margin];
+    const feet = Math.floor(p.y);
     let unknown = false;
     for (let x = Math.floor(body[0]); x <= Math.floor(body[3] - .001); x++)
       for (let y = Math.floor(body[1]); y <= Math.floor(body[4] - .001); y++)
         for (let z = Math.floor(body[2]); z <= Math.floor(body[5] - .001); z++) {
           const cell = this.get(x, y, z);
-          if (!cell) { unknown = true; this.missing(missing, x, y, z); }
+          // Buried cells are normally occluded from the visible sensor. They
+          // need not be known-clear; this extension only rejects hazards that
+          // were actually observed below the ledge. Body-height knowledge
+          // remains mandatory as before.
+          if (!cell) {
+            if (y < feet) continue;
+            unknown = true; this.missing(missing, x, y, z);
+          }
           else if (cell.hazard) return false;
         }
     return !unknown || !!missing;
