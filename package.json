@@ -18,8 +18,8 @@
     "goal:stick": "node scripts/collect-stick.mjs",
     "goal:gather": "node scripts/gather.mjs",
     "mcp:smoke": "node scripts/mcp-smoke.mjs",
-    "report:dev": "pnpm dlx wrangler@4 dev -c report/wrangler.jsonc",
-    "report:deploy": "pnpm dlx wrangler@4 deploy -c report/wrangler.jsonc"
+    "report:dev": "pnpm --filter diggy-fleet dev",
+    "report:deploy": "pnpm --filter diggy-fleet deploy"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

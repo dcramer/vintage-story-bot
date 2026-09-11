@@ -22,6 +22,8 @@ coverage/
 .env
 .env.*
 !.env.example
+.dev.vars
+.wrangler/
 .mcp.json
 .claude/settings.local.json
 .DS_Store

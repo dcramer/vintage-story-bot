@@ -4,8 +4,11 @@ import { Effect } from 'effect';
 import { Controller } from './runtime.mjs';
 import { controllerPort } from './client.mjs';
 import { Telemetry } from './telemetry.mjs';
+import { Reporter } from './reporter.mjs';
 
-const telemetry = new Telemetry(), controller = new Controller(undefined, telemetry), sockets = new Set();
+const sinks = [new Telemetry(), Reporter.fromEnv()].filter(Boolean);
+const telemetry = { publish: (...args) => sinks.forEach(sink => sink.publish(...args)), close: () => sinks.forEach(sink => sink.close()) };
+const controller = new Controller(undefined, telemetry), sockets = new Set();
 const server = net.createServer(socket => {
   sockets.add(socket); socket.on('close', () => sockets.delete(socket)); socket.on('error', () => {});
   socket.setTimeout(15000, () => socket.destroy());
