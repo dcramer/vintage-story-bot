@@ -55,6 +55,8 @@ export async function gather(env, { count = 10, timeoutMs, signal, wait = ms => 
     const after = await observe(true);
     moved += horizontal(before.position, after.position);
     visits.set(area(after.position), (visits.get(area(after.position)) ?? 0) + 1);
+    if (result.state === 'arrived' && area(target) !== area(after.position))
+      visits.set(area(target), (visits.get(area(target)) ?? 0) + 1);
     if (visits.size > 4096) visits.delete(visits.keys().next().value);
     if (result.state === 'cancelled') throw Error(`Navigation interrupted: ${result.reason}`);
     if (result.state !== 'arrived') report('rerouting', { reason: result.reason });

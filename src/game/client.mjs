@@ -24,7 +24,8 @@ export class GameClient {
   }
   snapshot() {
     return Effect.gen(this, function* () {
-      for (let pages = 0; pages < 64; pages++) {
+      // 16,384 retained entries / 128 per page, plus headroom for live refreshes.
+      for (let pages = 0; pages < 256; pages++) {
         const batch = yield* this.sense();
         if (!batch.terrain.more) return batch.state;
       }
