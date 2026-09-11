@@ -13,8 +13,11 @@ export function foliageClearCandidate(objects, state, toward) {
       object.point.y <= state.position.y + state.body.height + .5 &&
       (Math.floor(object.point.x) !== Math.floor(state.position.x) ||
         Math.floor(object.point.z) !== Math.floor(state.position.z)))
-    .sort((a, b) => Math.abs(angle(a.look.yawDegrees, direction)) - Math.abs(angle(b.look.yawDegrees, direction)) ||
-      horizontal(a.point, state.position) - horizontal(b.point, state.position) || a.key.localeCompare(b.key))[0] ?? null;
+    // Prefer the nearest visible surface so a farther leaf behind it cannot
+    // fail the native target guard. Heading is the deterministic tie-breaker.
+    .sort((a, b) => horizontal(a.point, state.position) - horizontal(b.point, state.position) ||
+      Math.abs(angle(a.look.yawDegrees, direction)) - Math.abs(angle(b.look.yawDegrees, direction)) ||
+      a.key.localeCompare(b.key))[0] ?? null;
 }
 
 // Break only one explicitly observed leaf obstruction after deterministic
