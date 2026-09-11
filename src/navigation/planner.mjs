@@ -1,5 +1,8 @@
 import { distance, horizontal, key } from './terrain.mjs';
-const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+// Cardinal and diagonal steps. A diagonal costs its real length; traverse()
+// sweeps the whole body along the segment, so cutting a corner through a
+// block or past a ledge is rejected exactly like any other unsafe segment.
+const directions = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 const jumpDirections = [
   [2, 0], [-2, 0], [0, 2], [0, -2],
   [2, 1], [2, -1], [-2, 1], [-2, -1], [1, 2], [-1, 2], [1, -2], [-1, -2],
@@ -62,7 +65,7 @@ export function findRoute(map, start, goal, w, h,
     for (const [dx, dz] of directions) {
       const next = map.stand(at.x + dx, at.z + dz, at.y, w, h);
       if (!next || !safe(next) || blocked.has(`${id}>${key(next)}`) || !map.traverse(at, next, w, h)) continue;
-      const cost = costs.get(id) + 1 + Math.abs(next.y - at.y), nextId = key(next);
+      const cost = costs.get(id) + Math.hypot(dx, dz) + Math.abs(next.y - at.y), nextId = key(next);
       if ((costs.get(nextId) ?? Infinity) <= cost) continue;
       costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: next, score: cost + remaining(next) });
     }
