@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { positionHistory } from './store.js';
+import { isLive, positionHistory } from './store.js';
 
 const finitePoint = point => point && Number.isFinite(point.x) && Number.isFinite(point.z);
 const stateOf = bot => bot.topics.state?.data ?? {};
@@ -102,7 +102,7 @@ function ScreenshotMap({ bots, detailed }) {
   const source = bots.filter(bot => bot.mapImage?.at).sort((a, b) => b.mapImage.at - a.mapImage.at)[0];
   if (!source) return <div class="map-empty"><span>Waiting for explored terrain</span><small>Open the World Map once on a reporting Seraph.</small></div>;
   const height = 1000 * source.mapImage.height / source.mapImage.width;
-  const agents = !source.mapImage.view ? [] : bots.map((bot, index) => {
+  const agents = !source.mapImage.view ? [] : bots.filter(isLive).map((bot, index) => {
     const state = stateOf(bot), trail = positionHistory(bot).filter(point => finitePoint(point) && (point.dimension ?? 0) === (state.position?.dimension ?? 0));
     const current = finitePoint(state.position) ? state.position : trail.at(-1);
     return current ? { bot, index, state, current: screenshotProject(current, source.mapImage.view, height) } : null;
@@ -168,11 +168,11 @@ function GlobalMap({ bots, world, bot, detailed }) {
   });
   const players = useMemo(() => {
     const rows = new Map();
-    for (const source of bots.filter(item => item.nativeMap?.world === world).sort((a, b) => a.nativeMap.at - b.nativeMap.at))
+    for (const source of bots.filter(item => isLive(item) && item.nativeMap?.world === world).sort((a, b) => a.nativeMap.at - b.nativeMap.at))
       for (const player of source.nativeMap.players ?? []) rows.set(player.name, player);
     return [...rows.values()].filter(player => !bots.some(item => item.id.toLowerCase() === player.name.toLowerCase()));
   }, [bots, world]);
-  const agents = useMemo(() => bots.filter(item => item.nativeMap?.world === world).map((item, index) => {
+  const agents = useMemo(() => bots.filter(item => isLive(item) && item.nativeMap?.world === world).map((item, index) => {
     const state = stateOf(item), current = state.position, target = targetOf(item), dimension = current?.dimension ?? 0;
     return finitePoint(current) && dimension === 0 ? { bot: item, index, state, current: screenPoint(current, camera, size), target: screenPoint(target, camera, size),
       trails: contiguousTrails(positionHistory(item).filter(point => (point.dimension ?? 0) === dimension)).map(trail => trail.map(point => screenPoint(point, camera, size)).filter(Boolean)) } : null;
