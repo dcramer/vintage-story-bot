@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { Fieldwork } from '../src/skills/fieldwork.mjs';
 import { forageFoodCode, mushroomCode, ripeForage, safeFood } from '../src/skills/food.mjs';
 import { accessibleForage, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady } from '../src/skills/survival.mjs';
+import { fleeTarget, hostileEntity, nearestThreat } from '../src/skills/threats.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
   freshness: { state: 'fresh', freshHoursLeft: 100 } });
@@ -54,6 +55,17 @@ test('food exploration uses observed local steps and does not rescan an unchange
   assert.equal(foodViewChanged(view, state(12.1, 10, 30)), true);
   assert.equal(foodViewChanged(view, state(10, 10, 46)), true);
   assert.equal(foodViewChanged(view, state(10, 10, 350)), true);
+});
+
+test('threat avoidance is explicit, proximity-bounded and points away', () => {
+  const player = { x: 10.5, y: 2, z: 10.5 };
+  const wolf = { code: 'game:wolf-male', point: { x: 8.5, y: 2, z: 10.5 } };
+  assert.equal(hostileEntity(wolf), true);
+  assert.equal(hostileEntity({ ...wolf, code: 'game:chicken-hen' }), false);
+  assert.equal(nearestThreat({ position: player, nearbyEntities: [wolf] }), wolf);
+  assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...wolf, point: { x: 1, z: 1 } }] }), null);
+  const target = fleeTarget(player, wolf);
+  assert.ok(target.x > player.x && target.sprint && target.emergency);
 });
 
 test('low health is tolerated only during explicit starving food recovery', () => {

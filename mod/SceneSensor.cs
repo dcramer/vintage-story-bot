@@ -26,6 +26,29 @@ internal sealed class SceneSensor(ICoreClientAPI api, Func<bool> canControl)
     private readonly Dictionary<string, ScanJob> jobs = new();
     public void Reset() => jobs.Clear();
 
+    public object[] NearbyEntities(int radius = 8, int limit = 24)
+    {
+        var player = api.World.Player.Entity;
+        var eye = player.Pos.XYZ.Add(player.LocalEyePos);
+        var origin = new Point3(eye.X, eye.Y, eye.Z);
+        return api.World.GetEntitiesAround(eye, radius, radius)
+            .Where(entity => entity.EntityId != player.EntityId && entity.Pos.Dimension == player.Pos.Dimension &&
+                entity is not EntityItem && entity.Alive && entity.Code != null)
+            .Select(entity =>
+            {
+                var box = entity.SelectionBox ?? entity.CollisionBox;
+                var point = new Point3(entity.Pos.X,
+                    entity.Pos.Y + (box == null ? 0.1 : (box.Y1 + box.Y2) / 2), entity.Pos.Z);
+                return new { key = $"entity:{entity.EntityId}", code = entity.Code!.ToString(),
+                    point = new { x = point.X, y = point.Y, z = point.Z },
+                    distance = Math.Round(SceneGeometry.Distance(origin, point), 2) };
+            })
+            .OrderBy(entity => entity.distance)
+            .Take(limit)
+            .Cast<object>()
+            .ToArray();
+    }
+
     public object Scan(int radius, int limit, string kind, string[] matches, string? cursor = null)
     {
         if (!canControl())

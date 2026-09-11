@@ -177,6 +177,22 @@ test('navigation keeps recentering safely from partial edge support', () => {
   assert.deepEqual(traversals, [true, true]);
 });
 
+test('navigation temporarily routes away from an explicit nearby hostile', () => {
+  const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: () => true,
+    stand: (x, z, y) => ({ x, y, z }), frontier: () => new Map(), views: () => new Map() };
+  const state = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals: { hunger: { current: 1000, max: 1500 } },
+    nearbyEntities: [{ key: 'entity:1', code: 'game:wolf-male', point: { x: -.5, y: 0, z: .5 } }] };
+  const goal = { x: 5.5, y: 0, z: .5, timeoutMs: 10000 };
+  const nav = new Navigation(map, state, goal, 0);
+  assert.ok(nav.tick(state, 0));
+  assert.equal(nav.evading, true);
+  assert.ok(nav.target.x > goal.x && nav.target.emergency);
+  nav.tick({ ...state, nearbyEntities: [] }, 1);
+  assert.equal(nav.evading, false);
+  assert.equal(nav.target, goal);
+});
+
 test('shared controller excludes mutations/UI and Effect interruption releases its owner', async () => {
   const { controller, calls, frame } = fixture();
   const result = await controller.request(target);

@@ -279,7 +279,7 @@ public sealed class AiBridgeMod : ModSystem
                 return new
                 {
                     ok = true,
-                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat" },
+                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat" },
                     observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
                     world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString() },
@@ -306,6 +306,7 @@ public sealed class AiBridgeMod : ModSystem
                         Math.Max(Math.Abs(entity.CollisionBox.Z1), Math.Abs(entity.CollisionBox.Z2))), height = entity.CollisionBox.Y2,
                         eyeHeight = entity.LocalEyePos.Y },
                     mounted = entity.MountedOn != null,
+                    nearbyEntities = sensor.NearbyEntities(),
                     moving = movingControls != null,
                     moveDirection = movingControls == null ? null : moveDirection,
                     remainingMs = movingControls == null ? 0 : Math.Max(0, stopAt - Environment.TickCount64),

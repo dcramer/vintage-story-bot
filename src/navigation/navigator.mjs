@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { angle, distance, horizontal, key, lookAt, normalize } from './terrain.mjs';
 import { findRoute } from './planner.mjs';
+import { fleeTarget, nearestThreat } from '../skills/threats.mjs';
 
 export class Navigation {
   id = randomUUID(); state = 'surveying'; reason = null;
@@ -9,8 +10,9 @@ export class Navigation {
   lookingAt = null;
   jumpAt = 0; landing = false; nextPlanAt = 0;
   steeringYaw = null; steeringAt = 0;
+  evading = false; threat = null;
   constructor(map, state, goal, now = Date.now()) {
-    this.map = map; this.target = goal;
+    this.map = map; this.primaryTarget = this.target = goal;
     this.width = state.body.halfWidth; this.height = state.body.height; this.eyeHeight = state.body.eyeHeight;
     this.deadline = now + (goal.timeoutMs ?? 60000); this.surveyAt = this.progressAt = now;
     this.lastProgress = this.edgeStart = state.position;
@@ -20,7 +22,8 @@ export class Navigation {
     return { id: this.id, state: this.state, reason: this.reason, target: this.target,
       remainingWaypoints: Math.max(0, this.route.length - this.index), replans: this.replans, segments: this.segments,
       cachedCells: this.map.cells.size, lookingAt: this.lookingAt, nextWaypoint: this.nextWaypoint,
-      desiredYaw: this.desiredYaw, yawError: this.yawError, lastReplan: this.lastReplan, diagnostics: this.diagnostics };
+      desiredYaw: this.desiredYaw, yawError: this.yawError, lastReplan: this.lastReplan, diagnostics: this.diagnostics,
+      evading: this.evading, threat: this.threat };
   }
   finish(state, reason) { this.state = state; this.reason = reason; this.lookingAt = null; return null; }
   survey(now) {
@@ -38,8 +41,15 @@ export class Navigation {
     if (!this.active) return null;
     if (now >= this.deadline) return this.finish('blocked', 'deadline');
     const p = state.position, grounded = state.motion.onGround, map = this.map, w = this.width, h = this.height;
+    const nearby = nearestThreat(state);
+    if (!this.evading && nearby) {
+      this.evading = true; this.threat = nearby; this.target = fleeTarget(p, nearby); this.survey(now);
+    } else if (this.evading && !nearby) {
+      this.evading = false; this.threat = null; this.target = this.primaryTarget; this.survey(now);
+    }
     if (grounded && horizontal(p, this.target) < (this.target.arrivalRadius ?? .3) && (this.target.horizontalOnly || Math.abs(p.y - this.target.y) < .1) && map.support(p, w) === 9)
-      return this.finish('arrived', 'destination_reached');
+      if (this.evading && nearby) { this.threat = nearby; this.target = fleeTarget(p, nearby); this.survey(now); }
+      else return this.finish('arrived', 'destination_reached');
     if (this.state === 'surveying') {
       if (!grounded) return now - this.surveyAt > 1000 ? this.finish('blocked', 'lost_support') : null;
       let planned = null;
@@ -140,7 +150,7 @@ export class Navigation {
     const sprint = !!this.target.sprint && grounded && !this.jumpAt && !this.landing &&
       Math.abs(next.y - p.y) < .05 && horizontal(p, next) > 3 &&
       Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 5 &&
-      food?.max > 0 && food.current / food.max >= .6;
+      food?.max > 0 && food.current / food.max >= (this.evading ? .1 : .6);
     return { yawDegrees, pitchDegrees: 15, forward: horizontal(p, next) > .12, durationMs,
       jump: !!this.jumpAt && now - this.jumpAt < 200, sprint,
       // Sneak while lining up at a ledge, then release it so a validated
