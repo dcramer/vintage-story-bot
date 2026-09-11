@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 
 // Fleet state service. Bots POST /api/report batches `{bot:{id,...},topics:{[topic]:{at,data}},log:[{topic,at,data}]}`;
-// the single Fleet object keeps the latest value per bot/topic plus a bounded log, evicts bots unseen for RETENTION_HOURS,
+// the single DiggySmallsFleet object keeps the latest value per bot/topic plus a bounded log, evicts bots unseen for RETENTION_HOURS,
 // and pushes updates to browser WebSockets. Reads (API and the static SPA in dist/, see app/) require VIEW_TOKEN when set;
 // writes require REPORT_TOKEN.
 const topicRe = /^[a-z][a-z0-9_]{0,63}$/, idRe = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -42,7 +42,7 @@ export default {
   },
 };
 
-export class Fleet extends DurableObject {
+export class DiggySmallsFleet extends DurableObject {
   bots = new Map(); dirty = new Set(); persisted = new Map();
   constructor(ctx, env) {
     super(ctx, env);

@@ -1,13 +1,13 @@
 // Fleet reporting service: one Worker + one SQLite-backed Durable Object (free plan) serving the built SPA from dist/.
-// Deploy: `pnpm report:deploy` (workspace package diggy-fleet).
+// Deploy: `pnpm report:deploy` (workspace package diggy-smalls-fleet).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "diggy-fleet",
+  "name": "diggy-smalls-fleet",
   "main": "worker.mjs",
   "compatibility_date": "2026-08-01",
   "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
   "vars": { "RETENTION_HOURS": "6" },
-  "durable_objects": { "bindings": [{ "name": "FLEET", "class_name": "Fleet" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Fleet"] }],
+  "durable_objects": { "bindings": [{ "name": "FLEET", "class_name": "DiggySmallsFleet" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DiggySmallsFleet"] }],
   "observability": { "enabled": false }
 }

@@ -18,8 +18,8 @@
     "goal:stick": "node scripts/collect-stick.mjs",
     "goal:gather": "node scripts/gather.mjs",
     "mcp:smoke": "node scripts/mcp-smoke.mjs",
-    "report:dev": "pnpm --filter diggy-fleet dev",
-    "report:deploy": "pnpm --filter diggy-fleet deploy"
+    "report:dev": "pnpm --filter diggy-smalls-fleet dev",
+    "report:deploy": "pnpm --filter diggy-smalls-fleet deploy"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
