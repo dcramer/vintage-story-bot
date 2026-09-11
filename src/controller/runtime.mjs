@@ -38,7 +38,7 @@ export class Controller {
   info() { return { version: '0.1.0', session: this.session, active: !!this.active, terrainCells: this.map.cells.size }; }
   goalView(record = this.last) {
     if (!record) return null;
-    return { id: record.id, kind: record.kind, state: record.kind === 'move_to' ? record.nav?.state ?? record.state : record.state,
+    return { id: record.id, kind: record.kind, args: record.args, state: record.kind === 'move_to' ? record.nav?.state ?? record.state : record.state,
       active: this.active === record, startedAt: record.startedAt, finishedAt: record.finishedAt,
       reason: record.reason ?? (record.kind === 'move_to' ? record.nav?.reason : undefined), progress: record.progress, result: record.result, cleanupError: record.cleanupError };
   }
@@ -80,7 +80,7 @@ export class Controller {
       const parsed = tool.schema.parse(args);
       if (this.active && !tool.readOnly) throw new Error('Goal active; stop it before another mutation.');
       const handler = goalHandlers.get(tool.name);
-      if (handler) return this.launch(tool.name, (record, started) => handler(this, parsed, record, started));
+      if (handler) return this.launch(tool.name, parsed, (record, started) => handler(this, parsed, record, started));
       const local = localHandlers.get(tool.name);
       if (local) return local(this, parsed);
       const result = await this.send({ action: tool.action ?? tool.name, ...parsed });
@@ -93,9 +93,9 @@ export class Controller {
       return result;
     })));
   }
-  launch(kind, work) {
+  launch(kind, args, work) {
     const started = Effect.runSync(Deferred.make());
-    const record = { id: randomUUID(), kind, state: 'starting', startedAt: Date.now() };
+    const record = { id: randomUUID(), kind, args, state: 'starting', startedAt: Date.now() };
     this.active = this.last = record;
     this.track(record);
     const program = Effect.scoped(work(record, started)).pipe(

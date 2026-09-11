@@ -41,6 +41,15 @@ td.ok { color:var(--good); } td.err { color:var(--bad); }
 .log td:last-child { color:var(--ink2); overflow-wrap:anywhere; }
 canvas { width:100%; height:96px; display:block; }
 .muted { color:var(--muted); }
+.goal .headline { display:flex; flex-wrap:wrap; gap:6px 12px; align-items:baseline; margin-bottom:8px; }
+.goal .headline b { font-size:20px; line-height:1.2; overflow-wrap:anywhere; }
+.goal .headline .kind { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink2); }
+.goal .phase { font-size:15px; margin:4px 0 8px; overflow-wrap:anywhere; }
+.goal .phase b { color:var(--accent); }
+.goal .body { display:grid; gap:12px 20px; grid-template-columns:minmax(260px, 1fr) minmax(300px, 2fr); }
+@media (max-width: 720px) { .goal .body { grid-template-columns:1fr; } }
+.goal .scroll { max-height:220px; }
+.goal .meter { grid-template-columns:64px 1fr 88px; }
 </style>
 </head>
 <body>
@@ -51,6 +60,15 @@ canvas { width:100%; height:96px; display:block; }
   <span class="pill" id="age">no data</span>
 </header>
 <main>
+  <section class="wide goal">
+    <h2>Goal</h2>
+    <div class="headline"><span class="kind" id="goal-kind">no goal</span><b id="goal-title"></b><span class="tags" id="goal-tags"></span></div>
+    <div class="phase" id="goal-phase"></div>
+    <div class="body">
+      <div><div id="goal-bar"></div><dl id="goal"></dl></div>
+      <div class="scroll"><table id="activity"><thead><tr><th>Time</th><th>Phase</th><th>Detail</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
   <section>
     <h2>Vitals</h2>
     <div id="vitals"></div>
@@ -59,10 +77,6 @@ canvas { width:100%; height:96px; display:block; }
   <section>
     <h2>Player</h2>
     <dl id="player"></dl>
-  </section>
-  <section>
-    <h2>Goal</h2>
-    <dl id="goal"></dl>
   </section>
   <section>
     <h2>Navigation</h2>
@@ -126,10 +140,86 @@ function renderState(s) {
   $('hotbar').replaceChildren(...slots.map(slot => { const d = document.createElement('div'); if (slot.slot === s.activeSlot) d.className = 'active';
     d.innerHTML = `<b>${slot.slot}</b>${slot.code ? slot.code.replace(/^game:/, '') + (slot.quantity > 1 ? ' ×' + slot.quantity : '') : '<span class="muted">empty</span>'}`; return d; }));
 }
+const code = c => typeof c === 'string' ? c.replace(/^game:/, '') : c;
+const point = p => p && p.x != null ? [p.x, p.y, p.z].map(v => v == null ? '?' : Math.round(v)).join(', ') : null;
+const count = (n, what) => `${n}× ${what}`;
+// What the goal is trying to accomplish, from its request arguments (see controller/actions).
+const describe = {
+  harvest: a => `${count(a.count, code(a.item))} from ${a.match}${a.tool ? ' with ' + a.tool.toLowerCase() : ''}`,
+  fell_tree: a => `${count(a.count, 'logs')} with axe`,
+  knap: a => `${code(a.output)}${a.material ? ' from ' + code(a.material) : ''}`,
+  clayform: a => `${code(a.output)}${a.material ? ' from ' + code(a.material) : ''}`,
+  craft_item: a => count(a.count, code(a.output)),
+  build: a => a.preset ? `${a.preset.kind} of ${code(a.preset.item)} at ${point(a.preset.origin)}`
+    : `${a.cells?.length ?? 0} blocks: ${[...new Set((a.cells ?? []).map(c => code(c.item)))].join(', ')}`,
+  dig_area: a => a.box ? `box ${point(a.box.from)} → ${point(a.box.to)}${a.tool ? ' with ' + a.tool.toLowerCase() : ''}` : `${a.cells?.length ?? 0} cells`,
+  travel: a => a.poi ? `to poi "${a.poi}"` : `to ${point(a)}`,
+  explore: a => `${a.legs} legs${a.heading != null ? ' from heading ' + Math.round(a.heading) + '°' : ''}`,
+  use_on_block: a => `${a.item === null ? 'empty hand' : a.item ? code(a.item) : 'held item'} on ${a.target}${a.sneak ? ' (sneak)' : ''}`,
+  collect_item: a => `${code(a.expectedItem)} (${a.target})`,
+  equip: a => a.item === null ? 'empty hand' : a.item ? code(a.item) : `${a.tool}${a.minTier ? ' tier ≥ ' + a.minTier : ''}`,
+  dig_block: a => a.target, place_block: a => `${code(a.expectedItem)} on ${a.target}`,
+  gather_sticks: a => count(a.count ?? 10, 'sticks'), move_to: a => `to ${point(a)}`,
+  forage: () => 'ripe berries to 80% satiety', eat: () => 'fresh food from inventory', collect_stick: () => 'one visible stick',
+};
+const goalTitle = g => g?.args ? (describe[g.kind]?.(g.args) ?? fmt(g.args)) : '';
+// Progress detail keys, most specific first; the rest render as rows.
+const detailKeys = ['target', 'cell', 'ground', 'item', 'food', 'recipe', 'reason', 'from', 'slot', 'face', 'operation', 'leg', 'hunger', 'reserve'];
+function phaseDetail(p) {
+  return detailKeys.filter(k => p[k] != null).map(k => {
+    const v = p[k]; const text = k === 'cell' || k === 'target' && typeof v === 'object' ? point(v) : typeof v === 'string' ? code(v) : fmt(v);
+    return k === 'target' || k === 'cell' ? text : `${k} ${text}`;
+  }).join(' · ');
+}
+// One-line completion summary per goal kind; null when the skill reports no comparable numbers.
+function completion(g) {
+  const p = g.progress ?? {}, a = g.args ?? {};
+  if (p.gained != null && (p.count ?? p.wanted ?? a.count) != null) return { current: p.gained, max: p.count ?? p.wanted ?? a.count, unit: 'gained' };
+  if (p.total != null) return { current: (p.placed ?? p.dug ?? 0) + (p.failed ?? 0), max: p.total, unit: p.placed != null ? 'placed' : 'dug', extra: p.failed ? `${p.failed} failed` : '' };
+  if (p.legs != null && p.leg != null) return { current: p.leg, max: p.legs, unit: 'leg' };
+  if (g.kind === 'clayform' && p.layer != null) return { current: p.layer, max: 16, unit: 'layer', extra: p.remaining != null ? `${p.remaining} voxels left` : '' };
+  if (p.remaining != null) return { text: g.kind === 'travel' ? `${p.remaining} blocks to go` : `${p.remaining} voxels left${p.clicks != null ? ' · ' + p.clicks + ' clicks' : ''}` };
+  return null;
+}
+function bar(c) {
+  if (!c) return '';
+  if (c.text) return `<div class="meter" style="grid-template-columns:64px 1fr"><span>progress</span><span>${c.text}</span></div>`;
+  const pct = c.max ? Math.max(0, Math.min(1, c.current / c.max)) : 0;
+  return `<div class="meter"><span>${c.unit}</span><div class="bar"><i style="width:${pct * 100}%"></i></div><span class="value">${c.current} / ${c.max}${c.extra ? ' · ' + c.extra : ''}</span></div>`;
+}
+const stateClass = s => ['arrived'].includes(s) ? 'good' : ['blocked', 'cancelled'].includes(s) ? 'bad' : '';
+const elapsed = g => { const ms = (g.finishedAt ?? Date.now()) - g.startedAt; const sec = Math.round(ms / 1000);
+  return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`; };
+let goal = null, activity = [], activityKey = {};
 function renderGoal(g) {
-  dl($('goal'), !g ? [['state', 'none']] : [['kind', g.kind], ['state', g.state + (g.active ? ' (active)' : '')], ['id', short(g.id)],
-    ['started', g.startedAt ? time(g.startedAt) : null], ['finished', g.finishedAt ? time(g.finishedAt) : null],
-    ['progress', g.progress], ['reason', g.reason], ['result', g.result], ['cleanup', g.cleanupError]]);
+  goal = g;
+  const p = g?.progress ?? {};
+  $('goal-kind').textContent = g ? g.kind.replace(/_/g, ' ') : 'no goal';
+  $('goal-title').textContent = goalTitle(g);
+  $('goal-tags').innerHTML = !g ? '' : [tag(g.state, stateClass(g.state)), g.active ? tag('active', 'good') : '', tag(elapsed(g))].join('');
+  $('goal-phase').innerHTML = !g ? '' : p.phase ? `<b>${p.phase.replace(/_/g, ' ')}</b>${phaseDetail(p) ? ' — ' + phaseDetail(p) : ''}` : `<span class="muted">${g.state}</span>`;
+  $('goal-bar').innerHTML = g ? bar(completion(g)) : '';
+  const shown = new Set(['phase', ...detailKeys, 'match', 'clicks', 'count', 'gained', 'wanted', 'total', 'placed', 'dug', 'failed', 'legs', 'remaining', 'layer', 'kind', 'output', 'material']);
+  const rest = Object.entries(p).filter(([k]) => !shown.has(k)).map(([k, v]) => [k, v]);
+  if (p.dug != null && p.total == null) rest.unshift(['dug', p.dug]);
+  dl($('goal'), !g ? [['state', 'none']] : [...rest, ['started', g.startedAt ? time(g.startedAt) : null], ['finished', g.finishedAt ? time(g.finishedAt) : null],
+    ['reason', g.reason], ['result', g.result], ['cleanup', g.cleanupError], ['id', short(g.id)]].filter(([, v]) => v != null));
+  if (g) {
+    // Activity rows: new goal, each phase/detail change, terminal state. Coalesced updates may skip fast phases.
+    const phaseKey = `${g.id}|${p.phase ?? ''}|${phaseDetail(p)}`, stateKey = `${g.id}|${g.state}`;
+    const at = Date.now();
+    const rows = [];
+    if (!activity.length || activity[activity.length - 1].id !== g.id) rows.push({ at: g.startedAt ?? at, id: g.id, phase: g.kind.replace(/_/g, ' '), detail: goalTitle(g), cls: 'ok' });
+    if (p.phase && phaseKey !== activityKey.phase) rows.push({ at, id: g.id, phase: p.phase.replace(/_/g, ' '), detail: phaseDetail(p) || completion(g)?.text || '', cls: p.phase.includes('fail') ? 'err' : '' });
+    if (!['running', 'starting'].includes(g.state) && stateKey !== activityKey.state)
+      rows.push({ at: g.finishedAt ?? at, id: g.id, phase: g.state, detail: g.reason ?? (g.result ? fmt(g.result) : ''), cls: stateClass(g.state) === 'bad' ? 'err' : stateClass(g.state) === 'good' ? 'ok' : '' });
+    activityKey = { phase: phaseKey, state: stateKey };
+    if (rows.length) {
+      activity.push(...rows);
+      while (activity.length > 100) activity.shift();
+      $('activity').tBodies[0].innerHTML = activity.slice().reverse().map(r => `<tr><td>${time(r.at)}</td><td class="${r.cls}">${r.phase}</td><td>${r.detail ?? ''}</td></tr>`).join('');
+    }
+  }
 }
 function renderNav(n) {
   dl($('nav'), !n || n.state === 'idle' ? [['state', 'idle']] : [['state', n.state], ['target', n.target ? `${n.target.x.toFixed(1)}, ${n.target.y.toFixed(1)}, ${n.target.z.toFixed(1)}` : null],
@@ -146,7 +236,7 @@ function renderScan(scan) {
 function logDetail(e) {
   const d = e.data ?? {};
   if (e.topic === 'action') return `${d.action} ${d.ok ? '' : '✗ ' + (d.error ?? d.code ?? '')} ${JSON.stringify(d.args ?? {})}`;
-  if (e.topic === 'goal') return `${d.kind} ${d.state}${d.reason ? ' — ' + d.reason : ''}${d.progress?.phase ? ' · ' + d.progress.phase : ''}`;
+  if (e.topic === 'goal') return `${d.kind} ${goalTitle(d)} ${d.state}${d.reason ? ' — ' + d.reason : ''}${d.progress?.phase ? ' · ' + d.progress.phase : ''}`;
   return JSON.stringify(d);
 }
 function renderLog() {
@@ -204,7 +294,8 @@ source.addEventListener('snapshot', e => {
 source.addEventListener('update', e => apply(JSON.parse(e.data)));
 source.addEventListener('producers', e => producers(JSON.parse(e.data).count));
 setInterval(() => { const age = lastAt ? Math.round((Date.now() - lastAt) / 1000) : null; const el = $('age');
-  el.textContent = age == null ? 'no data' : age < 2 ? 'updated now' : `updated ${age}s ago`; el.className = 'pill ' + (age == null ? '' : age < 5 ? 'on' : 'off'); }, 1000);
+  el.textContent = age == null ? 'no data' : age < 2 ? 'updated now' : `updated ${age}s ago`; el.className = 'pill ' + (age == null ? '' : age < 5 ? 'on' : 'off');
+  if (goal?.active) $('goal-tags').innerHTML = [tag(goal.state, stateClass(goal.state)), tag('active', 'good'), tag(elapsed(goal))].join(''); }, 1000);
 renderGoal(null); renderNav(null); renderFrame(null);
 </script>
 </body>

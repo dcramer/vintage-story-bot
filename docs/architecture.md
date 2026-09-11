@@ -36,7 +36,7 @@ Loopback JSON line: `{action,...args}` → `{ok,...result}` or `{ok:false,error,
 
 - `api {}`: schemas, descriptions, execution kind (`query|command|goal`), controller session. No game I/O.
 - Goal actions return `{goal:{id,...},controller,...}`; successful START means accepted, not completed. `move_to` also returns legacy `navigation`.
-- `goal_status {id?}`: latest or retained goal, timestamps (UTC ms), state/progress/result, `active`, controller session. No game I/O or waiting behind game startup. Last 64 completed goals; unknown/evicted/restarted id → `goal_not_found`, never inferred success.
+- `goal_status {id?}`: latest or retained goal, `args` (parsed request), timestamps (UTC ms), state/progress/result, `active`, controller session. No game I/O or waiting behind game startup. Last 64 completed goals; unknown/evicted/restarted id → `goal_not_found`, never inferred success.
 - `active` remains true through finalization. States: `starting|running`, navigation phases, `arrived|blocked|cancelled`; arrival is success only after cleanup. Controller session changes on restart; history is not durable.
 - `stop {expectedGoal?}`: guarded cancellation of current/latest goal; no guard = global stop. Reject mismatched id. Separate stop/start deliberately avoids implicit replacement races.
 - `events` remains the mod's bounded life-event cursor API, separate from goal status. Resync after missed events. Polling never wakes an idle LLM.
