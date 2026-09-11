@@ -5,7 +5,7 @@ import { nearestThreat } from './threats.mjs';
 
 export const foliageBlock = object => object?.kind === 'block' &&
   /^game:leaves(?:branchy)?-/.test(object.code ?? '');
-export const threatAllowsClearance = (state, threat, minimum = 20) => !threat ||
+export const threatAllowsClearance = (state, threat, minimum = 12) => !threat ||
   horizontal(state.position, threat.point) >= minimum;
 
 export function foliageClearCandidate(objects, state, toward) {
