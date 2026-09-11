@@ -11,6 +11,8 @@ export const forageWatch = ['bush', 'mushroom', 'crop-', 'termitemound-'];
 export const edible = nutrition => nutrition?.saturation > 0 && nutrition.health >= 0 &&
   !(nutrition.psychedelic > 0) && !(nutrition.intoxication > 0);
 export const safeFood = slot => slot.quantity > 0 && edible(slot.nutrition) && slot.freshness?.state === 'fresh';
+export const foodCount = inventory => ownedSlots(inventory).filter(safeFood)
+  .reduce((sum, slot) => sum + slot.quantity, 0);
 export const foodReserve = inventory => ownedSlots(inventory).filter(safeFood)
   .reduce((sum, slot) => sum + slot.quantity * slot.nutrition.saturation, 0);
 // What a seen block yields as food, by the pages the bot has read: right-click

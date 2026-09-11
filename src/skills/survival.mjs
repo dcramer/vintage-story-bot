@@ -4,7 +4,7 @@ import { changeBlock } from './blocks.mjs';
 import { clearLeafPath } from './leaf-clearing.mjs';
 import { collectItem } from './collect-item.mjs';
 import { learnYields } from './facts.mjs';
-import { consume, emptyHand, foodReserve, foodYield, forageWatch, hunger } from './food.mjs';
+import { consume, emptyHand, foodCount, foodReserve, foodYield, forageWatch, hunger } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
 export const foodSightRange = Math.min(32, sightRange);
@@ -45,6 +45,8 @@ export class Survival {
   reserve = 0;
   eaten = 0;
   harvested = 0;
+  initialFood = null;
+  retained = 0;
   surveyed = false;
   desperateSurveyed = false;
   searchTarget = null;
@@ -60,7 +62,7 @@ export class Survival {
   }
   pauseWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : hunger(state) < .2 ? 'food_needed' : null;
   eatWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : this.reserve > 0 && hunger(state) < .8 ? 'food_available' : null;
-  async tend({ force = false, toward, watch } = {}) {
+  async tend({ force = false, toward, watch, count } = {}) {
     const field = this.field;
     this.watch = watch?.length ? watch : forageWatch;
     await field.observe();
@@ -77,9 +79,12 @@ export class Survival {
         continue;
       }
       const inventory = await field.send({ action: 'inventory' });
+      this.initialFood ??= foodCount(inventory);
+      this.retained = foodCount(inventory) - this.initialFood;
       this.reserve = foodReserve(inventory);
-      field.report('food', { hunger: hunger(field.latest), reserve: this.reserve, eaten: this.eaten, harvested: this.harvested });
-      if (foodRecoverySatisfied(hunger(field.latest), this.reserve, this.eaten)) {
+      field.report('food', { hunger: hunger(field.latest), reserve: this.reserve, eaten: this.eaten,
+        harvested: this.harvested, retained: this.retained, count });
+      if (count === undefined ? foodRecoverySatisfied(hunger(field.latest), this.reserve, this.eaten) : this.retained >= count) {
         this.tending = false;
         field.recoveringFood = false;
         await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
