@@ -72,6 +72,13 @@ test('planner escapes a returning point whose hazard margin spans adjacent cells
   const start = { x: .5, y: 0, z: .5 }, end = { x: 8.5, y: 0, z: .5 };
   assert.equal(map.dry(start, .3, 1.85), false);
   assert.equal(map.stand(4.5, .5, 0, .3, 1.85), null);
+  const nav = new Navigation(map, { position: start, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 0 }, vitals: { hunger: { current: 1000, max: 1500 } },
+    nearbyEntities: [] }, { ...end, timeoutMs: 60000 }, 0);
+  assert.ok(nav.tick({ position: start, motion: { onGround: true }, orientation: { yawDegrees: 0 },
+    vitals: { hunger: { current: 1000, max: 1500 } }, nearbyEntities: [] }, 1));
+  assert.equal(nav.state, 'moving');
+  assert.equal(nav.replans, 0);
   let at = start;
   for (let step = 0; step < 8 && !map.dry(at, .3, 1.85); step++) {
     const route = findRoute(map, at, end, .3, 1.85);

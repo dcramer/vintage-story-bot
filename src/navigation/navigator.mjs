@@ -73,6 +73,8 @@ export class Navigation {
       this.route = planned; this.index = 0; this.state = 'moving'; this.lookingAt = null;
       this.lastProgress = this.edgeStart = p; this.progressAt = now;
     }
+    const traverse = (from, to, recenter = false) => map.traverse(from, to, w, h, recenter, undefined,
+      typeof map.dry === 'function' && !map.dry(from, w, h));
     const reached = waypoint => {
       if (distance(p, waypoint) < .3) return true;
       // A bounded frame can carry the player more than one block between slow
@@ -84,7 +86,7 @@ export class Navigation {
       const overshoot = this.target.sprint ? 4 : 2.5;
       return horizontal(waypoint, this.target) > 1 && Math.abs(p.y - waypoint.y) < .1 &&
         horizontal(p, waypoint) < overshoot && lateral < w + .2 && dx * dx + dz * dz > .01 &&
-        (p.x - waypoint.x) * dx + (p.z - waypoint.z) * dz >= 0 && map.traverse(this.edgeStart, p, w, h);
+        (p.x - waypoint.x) * dx + (p.z - waypoint.z) * dz >= 0 && traverse(this.edgeStart, p);
     };
     while (this.index < this.route.length && grounded && map.support(p, w) === 9 && reached(this.route[this.index])) {
       this.edgeStart = this.route[this.index++]; this.jumpAt = 0; this.landing = false; this.progressAt = now; this.lastProgress = p;
@@ -97,7 +99,7 @@ export class Navigation {
     if (grounded && !this.jumpAt && !this.landing) for (let ahead = this.index + 1; ahead < this.route.length; ahead++) {
       const next = this.route[ahead];
       if (distance(p, next) > 5 || Math.abs(next.y - p.y) > .05 ||
-          !map.traverse(p, next, w, h, this.index === 0) || this.blocked.has(`${key(p)}>${key(next)}`)) break;
+          !traverse(p, next, this.index === 0) || this.blocked.has(`${key(p)}>${key(next)}`)) break;
       this.index = ahead; this.edgeStart = p;
     }
     const next = this.route[this.index];
@@ -105,7 +107,7 @@ export class Navigation {
     if (map.support(next, w) !== 9 || !map.clear(next, w, h)) return grounded ? this.replan(p, now, 'terrain_changed') : this.finish('blocked', 'landing_changed');
     if (this.jumpAt && grounded && Math.abs(p.y - next.y) < .06) { this.jumpAt = 0; this.landing = true; }
     const recenter = this.landing || this.index === 0 || Math.floor(p.x) === Math.floor(next.x) && Math.floor(p.z) === Math.floor(next.z);
-    if (grounded && !this.jumpAt && !map.traverse(p, next, w, h, recenter)) return this.replan(p, now, 'terrain_changed');
+    if (grounded && !this.jumpAt && !traverse(p, next, recenter)) return this.replan(p, now, 'terrain_changed');
     if (distance(p, this.lastProgress) > .12) { this.progressAt = now; this.lastProgress = p; this.lastYawError = undefined; }
     const desiredYaw = lookAt(p, next).yawDegrees;
     this.desiredYaw = desiredYaw;
@@ -135,7 +137,7 @@ export class Navigation {
       const radians = state.orientation.yawDegrees * Math.PI / 180;
       const ahead = { x: p.x + Math.sin(radians) * .6, y: p.y, z: p.z + Math.cos(radians) * .6 };
       const forward = Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 30 && Math.abs(next.y - p.y) < .05 &&
-        map.support(ahead, w) === 9 && map.traverse(p, ahead, w, h, recenter);
+        map.support(ahead, w) === 9 && traverse(p, ahead, recenter);
       this.progressAt = now; return { yawDegrees, pitchDegrees: 15, forward,
         sneak: tight && !this.jumpAt && (!descent || horizontal(p, next) > .8), durationMs };
     }
