@@ -65,15 +65,17 @@ test('planner reuses an observed corridor beyond 32 blocks', () => {
 
 test('planner escapes a returning point whose hazard margin spans adjacent cells', () => {
   const map = new TerrainMemory(), cells = [];
-  for (let x = -4; x <= 5; x++) for (let z = -4; z <= 4; z++) for (let y = -2; y <= 2; y++)
-    cells.push([x, y, z, 0, x === 0 && y === -2 && z === 0, y === -1 ? [[0, 0, 0, 1, 1, 1]] : []]);
+  for (let x = -9; x <= 10; x++) for (let z = -9; z <= 9; z++) for (let y = -2; y <= 2; y++)
+    cells.push([x, y, z, 0, Math.abs(x) <= 4 && y === -2 && Math.abs(z) <= 4,
+      y === -1 ? [[0, 0, 0, 1, 1, 1]] : []]);
   map.apply({ session: 'wide-margin', reset: true, cursor: 1, more: false, clock: 0, cells });
-  const start = { x: .5, y: 0, z: .5 }, end = { x: 4.5, y: 0, z: .5 };
+  const start = { x: .5, y: 0, z: .5 }, end = { x: 8.5, y: 0, z: .5 };
   assert.equal(map.dry(start, .3, 1.85), false);
-  assert.equal(map.stand(1.5, .5, 0, .3, 1.85), null);
+  assert.equal(map.stand(4.5, .5, 0, .3, 1.85), null);
   const route = findRoute(map, start, end, .3, 1.85);
   assert.ok(route);
-  assert.ok(route[0].x >= 2.5 || route[0].z !== .5);
+  assert.equal(map.dry(route[0], .3, 1.85), true);
+  assert.ok(Math.hypot(route[0].x - start.x, route[0].z - start.z) >= 6);
 });
 
 test('terrain permits supported recentering off thin partial ground cover', () => {

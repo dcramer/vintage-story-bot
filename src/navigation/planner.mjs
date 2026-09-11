@@ -7,7 +7,8 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
   // but already inside the conservative margin of nearby water or fire. Find
   // the nearest fully safe anchor reachable by one continuously validated
   // ground segment; subsequent route cells still cannot enter the margin.
-  for (let x = -4; x <= 4; x++) for (let z = -4; z <= 4; z++) {
+  const anchorRadius = typeof map.dry === 'function' && !map.dry(start, w, h) ? 8 : 1;
+  for (let x = -anchorRadius; x <= anchorRadius; x++) for (let z = -anchorRadius; z <= anchorRadius; z++) {
     const p = map.stand(Math.floor(start.x) + .5 + x, Math.floor(start.z) + .5 + z, start.y, w, h);
     if (p) centers.push(p);
   }
