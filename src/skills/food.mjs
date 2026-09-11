@@ -104,8 +104,12 @@ export async function consume(field) {
   const quantity = ownedSlots(inventory).filter(s => s.code === food.code).reduce((n, s) => n + s.quantity, 0);
   field.report('eating', { food: food.code, hunger: hunger(before) });
   try {
+    // The selected slot and exact food code are the mutation guard. A global
+    // inventory-state token is too broad here: incidental nearby pickups can
+    // change an unrelated slot between verification and the hold, even though
+    // the intended food remains selected and safe.
     await field.send({ action: 'interact', durationMs: 1200, expectedTarget: null,
-      expectedState: inventory.state, expectedItem: { slot: food.slot, code: food.code } });
+      expectedItem: { slot: food.slot, code: food.code } });
     // Native consumption takes ~1s; poll life while the bounded hold runs.
     for (let i = 0; i < 7; i++) { await field.wait(200); await field.observe(); }
     await field.send({ action: 'stop' });
