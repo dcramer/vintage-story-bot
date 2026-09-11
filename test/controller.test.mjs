@@ -22,7 +22,11 @@ function fixture(failFrame = false) {
     if (request.action === 'sense') return { ok: true, state: structuredClone(state), terrain: terrain() };
     if (request.action === 'control_begin') state.control.owner = request.owner;
     if (request.action === 'control_end' || request.action === 'stop') state.control.owner = null;
-    if (request.action === 'control_frame') { resolveFrame(); if (failFrame) throw Error('lost acknowledgement'); }
+    if (request.action === 'control_step') {
+      resolveFrame();
+      if (failFrame) throw Error('lost acknowledgement');
+      return { ok: true, state: structuredClone(state), terrain: terrain() };
+    }
     return { ok: true };
   };
   return { controller: new Controller(send), calls, frame, state };
@@ -65,7 +69,8 @@ test('lost frame acknowledgement is not retried and releases ownership', async (
   for (let i = 0; controller.active && i < 100; i++) await new Promise(r => setTimeout(r, 5));
   assert.equal(controller.active, null);
   assert.equal(controller.view().state, 'blocked');
-  assert.equal(calls.filter(c => c.action === 'control_frame').length, 1);
+  assert.equal(calls.filter(c => c.action === 'control_step').length, 1);
+  assert.equal(calls.filter(c => c.action === 'sense').length, 1);
   assert.equal(calls.filter(c => c.action === 'control_end').length, 1);
 });
 

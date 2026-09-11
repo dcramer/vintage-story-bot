@@ -27,7 +27,12 @@ export class Controller {
     const { action, ...args } = request;
     if (action === 'sense') { if (result.ok) this.telemetry.publish('state', result.state, { coalesce: true }); return; }
     if (action === 'observe') { if (result.ok) this.telemetry.publish('state', result, { coalesce: true }); return; }
-    if (action === 'control_frame') { const { owner, ...frame } = args; this.telemetry.publish('frame', frame, { coalesce: true }); return; }
+    if (action === 'control_frame' || action === 'control_step') {
+      const { owner, session, after, ...frame } = args;
+      this.telemetry.publish('frame', frame, { coalesce: true });
+      if (action === 'control_step' && result.ok) this.telemetry.publish('state', result.state, { coalesce: true });
+      return;
+    }
     if (action === 'scan' && result.ok) { this.telemetry.publish('scan', { match: args.match, kind: args.kind, radius: args.radius, objects: result.objects }, { coalesce: true }); return; }
     this.telemetry.publish('action', { action, args, ok: result.ok, error: result.error, code: result.code });
   }
@@ -130,9 +135,8 @@ export class Controller {
       const initial = yield* self.io({ action: 'observe' });
       const control = yield* self.game.control(initial, error => { record.cleanupError = error.message; });
       for (let i = 0; i < 60; i++) {
-        yield* control.frame({ ...angles, forward: false, jump: false });
-        yield* Effect.sleep('50 millis');
-        const state = yield* self.io({ action: 'observe' });
+        const batch = yield* control.step({ ...angles, forward: false, jump: false });
+        const state = batch.state;
         if (state.control.owner !== control.owner) return yield* Effect.fail(new Error('Aiming interrupted'));
         const yawError = Math.abs(((angles.yawDegrees - state.orientation.yawDegrees + 540) % 360) - 180);
         if (yawError < 2 && Math.abs(angles.pitchDegrees - state.orientation.pitchDegrees) < 2) {
@@ -160,29 +164,28 @@ export class Controller {
         yield* Deferred.succeed(started, { ok: true, status: 'started', navigation: nav.observe() });
       }
       let state = initial;
+      let terrainMore = false;
       while (nav.active) {
-        const batch = yield* self.game.sense();
-        const reset = batch.terrain.reset;
-        state = batch.state;
-        if (state.player.uid !== initial.player.uid || state.life.session !== initial.life.session || state.control.owner !== control.owner ||
-          !state.controlReady || !state.alive || state.life.lastDamageAt !== initial.life.lastDamageAt ||
-          state.life.alerts.some(a => a !== 'low_food') || state.motion.swimming || state.motion.feetInLiquid || state.mounted || state.position.dimension !== 0) {
-          nav.finish('cancelled', state.control.reason ?? 'identity_life_or_control_changed'); break;
-        }
-        if (reset) nav.survey(Date.now());
         const yielding = yieldWhen?.(state);
         // Yield only on supported ground; a food task must not take over mid-jump.
         if (yielding && state.motion.onGround && self.map.support(state.position, state.body.halfWidth) === 9) {
           nav.finish('yielded', yielding);
           break;
         }
-        const frame = batch.terrain.more ? null : nav.tick(state);
+        const frame = terrainMore ? null : nav.tick(state);
         self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
-        yield* control.frame({
+        const batch = yield* control.step({
           yawDegrees: frame?.yawDegrees ?? state.orientation.yawDegrees, pitchDegrees: frame?.pitchDegrees ?? 15,
           forward: frame?.forward ?? false, jump: frame?.jump ?? false, sprint: frame?.sprint ?? false, focus: frame?.focus ?? null });
-        if (!nav.active) { yield* Effect.sleep('250 millis'); break; }
-        yield* Effect.sleep(batch.terrain.more ? '5 millis' : '50 millis');
+        state = batch.state;
+        if (state.player.uid !== initial.player.uid || state.life.session !== initial.life.session || state.control.owner !== control.owner ||
+          !state.controlReady || !state.alive || state.life.lastDamageAt !== initial.life.lastDamageAt ||
+          state.life.alerts.some(a => a !== 'low_food') || state.motion.swimming || state.motion.feetInLiquid || state.mounted || state.position.dimension !== 0) {
+          nav.finish('cancelled', state.control.reason ?? 'identity_life_or_control_changed'); break;
+        }
+        if (batch.terrain.reset) nav.survey(Date.now());
+        terrainMore = batch.terrain.more;
+        if (!nav.active) break;
       }
       if (started) record.state = nav.state;
       self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });

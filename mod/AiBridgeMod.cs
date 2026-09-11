@@ -480,6 +480,17 @@ public sealed class AiBridgeMod : ModSystem
                 ReleaseControl("released");
                 return new { ok = true, status = "stopped" };
             case "control_frame":
+            case "control_step":
+                bool includeSense = action.GetString() == "control_step";
+                long stepCursor = 0;
+                string? stepSession = null;
+                if (includeSense)
+                {
+                    if (request.TryGetProperty("after", out var stepCursorField) && (!stepCursorField.TryGetInt64(out stepCursor) || stepCursor < 0))
+                        return new { ok = false, error = "Invalid terrain cursor." };
+                    stepSession = request.TryGetProperty("session", out var stepSessionField) && stepSessionField.ValueKind == JsonValueKind.String
+                        ? stepSessionField.GetString() : null;
+                }
                 if (!request.TryGetProperty("owner", out var frameOwner) || frameOwner.ValueKind != JsonValueKind.String ||
                     !request.TryGetProperty("sequence", out var sequenceField) || !sequenceField.TryGetInt64(out long sequence) ||
                     !TryInteger(request, "durationMs", out int frameDuration) || frameDuration is < 1 or > 500 ||
@@ -527,6 +538,9 @@ public sealed class AiBridgeMod : ModSystem
                     movingKeys = frameKeys; movingControls = entity.Controls; moveDirection = frameForward ? "forward" : "none";
                     moveJump = jumping; moveSprint = sprinting && frameForward && !frameSneak; moveSneak = frameSneak; stopAt = control.Until; SetMovement(true);
                 }
+                if (includeSense)
+                    return new { ok = true, sequence, state = Execute("""{"action":"observe"}"""),
+                        terrain = terrain.Read(stepCursor, stepSession, Environment.TickCount64) };
                 return new { ok = true, sequence };
             case "move":
                 if (!request.TryGetProperty("durationMs", out var duration) || duration.ValueKind != JsonValueKind.Number ||

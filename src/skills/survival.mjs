@@ -3,7 +3,7 @@ import { sightRange } from './fieldwork.mjs';
 import { consume, emptyHand, foodReserve, hunger, ripeBerries } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
-// Hysteresis: prepare food below 60%, eat to 80%, retain 320 satiety in fresh berries.
+// Hysteresis: prepare food below 20%, eat to 80%, retain 320 satiety in fresh berries.
 // Navigation checks yieldWhen every sensing tick; food work owns no parallel inputs.
 export class Survival {
   tending = false;
@@ -12,12 +12,12 @@ export class Survival {
   harvested = 0;
   surveyed = false;
   constructor(field) { this.field = field; }
-  yieldWhen = state => hunger(state) < .6 ? 'food_needed' : null;
+  yieldWhen = state => hunger(state) < .2 ? 'food_needed' : null;
   eatWhen = state => this.reserve > 0 && hunger(state) < .8 ? 'food_available' : null;
   async tend({ force = false } = {}) {
     const field = this.field;
     await field.observe();
-    if (!this.tending && !force && hunger(field.latest) >= .6) return;
+    if (!this.tending && !force && hunger(field.latest) >= .2) return;
     this.tending = true;
     while (this.tending) {
       await field.observe(true);

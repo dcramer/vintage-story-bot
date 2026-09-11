@@ -14,7 +14,7 @@ export default defineAction({
   destructive: true,
   description:
     'Collect additional ground sticks only (default 10): scan, navigate, pick up and verify ' +
-    'inventory gain. Food management defaults on: yields below 60% satiety to forage/eat fresh ' +
+    'inventory gain. Food management defaults on: yields below 20% satiety to forage/eat fresh ' +
     'berries to 80% plus a reserve. Set manageFood=false for ground-stick-only runs. ' +
     'Optional sprint=true permits safe, well-fed straight travel. No leaf harvesting. ' +
     'Runs until count is reached or gameplay/cancellation ' +
