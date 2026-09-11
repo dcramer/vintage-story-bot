@@ -36,7 +36,7 @@ export class TerrainMemory {
         }
     return !unknown || !!missing;
   }
-  dry(p, w, h, margin = .55, missing) {
+  dry(p, w, h, margin = .55, missing, requireKnown = false) {
     // Keep planned body positions away from liquid/fire cells, including
     // hazards below a ledge. A dry block beside water two levels down is still
     // an unsafe waypoint: slopes, gravity, and one bounded frame can carry the
@@ -53,7 +53,8 @@ export class TerrainMemory {
           // cells are queued when possible but do not strand a freshly joined
           // player; clear() still requires the actual body volume to be known.
           if (!cell) {
-            if (y >= feet) this.missing(missing, x, y, z);
+            if (y >= feet || requireKnown) this.missing(missing, x, y, z);
+            if (requireKnown) return false;
             continue;
           }
           else if (cell.hazard) return false;
@@ -159,6 +160,10 @@ export class TerrainMemory {
     }
     for (const end of [from, to]) for (let y = end.y; y <= travelY + .01; y += .1)
       if (!this.clear({ ...end, y }, w, h, missing)) return false;
+    // A lower landing can conceal water or fire beneath a ledge. Unlike an
+    // extra level-ground caution margin, every cell down to two blocks below
+    // a descent endpoint must be observed before gravity is allowed to commit.
+    if (rise < -.05 && !this.dry(to, w, h, .55, missing, true)) return false;
     const improvedMargin = allowMarginEscape && !escapedHazardMargin &&
       this.hazardDistance(to, h) > startHazardDistance + .05;
     return (escapedHazardMargin || improvedMargin) && this.support(to, w, missing) === 9;

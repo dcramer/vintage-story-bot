@@ -133,6 +133,20 @@ test('terrain keeps planned standing centers clear of adjacent liquid hazards', 
   assert.equal(map.stand(.5, -.5, 1, .3, 1.85)?.y, 1, 'dry ground outside the margin remains usable');
 });
 
+test('a descent requires its full lower hazard margin to be observed', () => {
+  const map = new TerrainMemory(), cells = [];
+  for (let x = -2; x <= 3; x++) for (let z = -2; z <= 2; z++) for (let y = -2; y <= 3; y++) {
+    const support = x <= 0 && y === 0 || x >= 1 && y === -1;
+    cells.push([x, y, z, 0, false, support ? [[0, 0, 0, 1, 1, 1]] : []]);
+  }
+  map.apply({ session: 'descent-margin', reset: true, cursor: 1, more: false, clock: 0, cells });
+  const upper = { x: .5, y: 1, z: .5 }, lower = { x: 1.5, y: 0, z: .5 };
+  assert.equal(map.traverse(upper, lower, .3, 1.85), true);
+  map.apply({ session: 'descent-margin', reset: false, cursor: 2, more: false, clock: 1,
+    cells: [[1, -2, 0, 1, false, null]] });
+  assert.equal(map.traverse(upper, lower, .3, 1.85), false);
+});
+
 test('navigation tolerates slow physical response without unbounded input', () => {
   const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: () => true,
     views: () => new Map() };
