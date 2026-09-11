@@ -14,9 +14,8 @@ export default defineGoal({
   schema,
   destructive: true,
   description:
-    'Watch for the given block codes (default: bushes, mushrooms, crops, termite mounds), read the handbook ' +
-    'page of what comes into view, and harvest what it says yields edible food right now (right-click harvest ' +
-    'when a growth state allows it, else break); eat verified fresh food until at least 80% ' +
+    'Watch for block codes (default bushes, mushrooms, crops, termite mounds), read the handbook page of ' +
+    'what comes into view, harvest whatever it says yields edible food now, and eat until at least 80% ' +
     'satiety with 320 satiety in reserve. No default deadline; unavailable food keeps exploration ' +
     'running. Damage/death/control loss cancels; never respawns or resumes automatically. ' +
     'Returns START and goal.id; poll goal_status. Needs an empty hotbar slot for harvesting. ' +

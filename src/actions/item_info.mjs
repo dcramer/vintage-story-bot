@@ -11,8 +11,7 @@ export default defineAction({
   readOnly: true,
   idempotent: true,
   description:
-    'Read the handbook page of one item or block code: name, nutrition (saturation, health, category, ' +
-    'psychedelic), tool class/tier, durability, bag slots, fuel and smelting, what breaking it drops, what ' +
-    'right-click harvesting yields (and the growth state it needs), and the page text with item links as ' +
-    '[code]. Facts only: nothing says what a thing is for. Unknown code returns ok:false.',
+    'Read the handbook page of one item or block code: name, nutrition, tool class/tier, durability, bag ' +
+    'slots, fuel, what breaking drops, what harvesting yields and the growth state it needs, and the page ' +
+    'text with item links as [code]. Facts only, never what a thing is for. Unknown code returns ok:false.',
 });
