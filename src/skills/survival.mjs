@@ -5,7 +5,9 @@ import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, 
 import { ownedSlots } from './inventory.mjs';
 
 export const foodSightRange = Math.min(16, sightRange);
-export const foodSearchDistance = Math.min(6, foodSightRange / 2);
+// Twelve-block steps overlap a 16-block sight cone while covering useful new
+// ground before starvation. Navigation still validates every traversed cell.
+export const foodSearchDistance = Math.min(12, foodSightRange * .75);
 const forageMatches = ['bush', 'mushroom', 'crop-'];
 const breaksForage = object => mushroomCode(forageFoodCode(object)) || object.forage?.kind === 'crop';
 export const accessibleForage = object => {
@@ -29,7 +31,7 @@ export class Survival {
   constructor(field) { this.field = field; }
   yieldWhen = state => hunger(state) < .2 ? 'food_needed' : null;
   eatWhen = state => this.reserve > 0 && hunger(state) < .8 ? 'food_available' : null;
-  async tend({ force = false } = {}) {
+  async tend({ force = false, toward } = {}) {
     const field = this.field;
     await field.observe();
     if (!this.tending && !force && hunger(field.latest) >= .2) { field.recoveringFood = false; return; }
@@ -92,7 +94,7 @@ export class Survival {
         field.reject(target, 30000);
       }
       const before = { ...field.latest.position };
-      await field.walk(field.explore(undefined, foodSearchDistance), this.eatWhen);
+      await field.walk(field.explore(toward, foodSearchDistance), this.eatWhen);
       // A changed viewpoint needs a fresh deterministic 360-degree sweep;
       // otherwise later searches only inspect the current forward cone.
       if (horizontal(before, field.latest.position) > 2) this.surveyed = false;

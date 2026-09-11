@@ -3,7 +3,11 @@ const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits = new Map(), partial = true, budget = 512 } = {}) {
   const remaining = p => goal.horizontalOnly ? horizontal(p, goal) : distance(p, goal);
   const centers = [];
-  for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
+  // A reconnect can place the fresh terrain cache around a player who is dry,
+  // but already inside the conservative margin of nearby water or fire. Find
+  // the nearest fully safe anchor reachable by one continuously validated
+  // ground segment; subsequent route cells still cannot enter the margin.
+  for (let x = -4; x <= 4; x++) for (let z = -4; z <= 4; z++) {
     const p = map.stand(Math.floor(start.x) + .5 + x, Math.floor(start.z) + .5 + z, start.y, w, h);
     if (p) centers.push(p);
   }

@@ -105,7 +105,10 @@ export class Fieldwork {
   async walk(target, yieldWhen) {
     const before = await this.observe();
     this.report('walking', { target });
-    const timeoutMs = Math.min(120000, Math.max(15000, Math.ceil(horizontal(before.position, target) * 2000)));
+    // Software-rendered remote clients commonly need about three seconds per
+    // block over uneven ground. Preserve a hard two-minute ceiling, but do not
+    // abort a visibly progressing local food leg just before its next viewpoint.
+    const timeoutMs = Math.min(120000, Math.max(20000, Math.ceil(horizontal(before.position, target) * 3000)));
     const result = await this.env.navigate({ ...target, dimension: 0, timeoutMs, sprint: this.sprint }, state => {
       this.guard(state);
       return yieldWhen?.(state);
@@ -146,7 +149,8 @@ export class Fieldwork {
     const candidates = [0, 45, -45, 90, -90, 180].map(offset => {
       const radians = normalize(direction + offset) * Math.PI / 180;
       const q = { x: Math.floor(p.x + Math.sin(radians) * distance) + .5, y: p.y,
-        z: Math.floor(p.z + Math.cos(radians) * distance) + .5, horizontalOnly: true, arrivalRadius: 4 };
+        z: Math.floor(p.z + Math.cos(radians) * distance) + .5, horizontalOnly: true,
+        arrivalRadius: Math.min(4, Math.max(.75, distance / 12)) };
       return { q, score: (this.visits.get(area(q)) ?? 0) * 8 + Math.abs(offset) / 90 };
     });
     for (const { q } of candidates.sort((a, b) => a.score - b.score))

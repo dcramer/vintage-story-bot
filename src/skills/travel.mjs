@@ -5,9 +5,13 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
   let stalled = 0, legs = 0;
   const summary = () => ({ moved: +field.moved.toFixed(1), legs, stalled });
   while (true) {
-    const state = await field.observe(true);
-    await survival?.tend();
-    const goal = { x, y: y ?? state.position.y, z };
+    let state = await field.observe(true);
+    let goal = { x, y: y ?? state.position.y, z };
+    await survival?.tend({ toward: goal });
+    // Food recovery may travel a meaningful distance and elevation. Resume
+    // from its verified final observation rather than planning from stale state.
+    state = field.latest;
+    goal = { x, y: y ?? state.position.y, z };
     const remaining = horizontal(state.position, goal);
     if (remaining <= arrivalRadius && (y === undefined || Math.abs(state.position.y - y) < 1.5))
       return { ok: true, goal: 'travel', ...summary(), remaining: +remaining.toFixed(1), position: state.position };

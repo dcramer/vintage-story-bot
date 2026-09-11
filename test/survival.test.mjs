@@ -47,7 +47,7 @@ test('breakable forage is harvested beside its drop, never at maximum reach or u
 });
 
 test('food exploration uses observed local steps and does not rescan an unchanged distant cone', () => {
-  assert.equal(foodSearchDistance, 6);
+  assert.equal(foodSearchDistance, 12);
   assert.equal(foodSightRange, 16);
   const view = { position: { x: 10, z: 10 }, yawDegrees: 30 };
   const state = (x, z, yawDegrees) => ({ position: { x, z }, orientation: { yawDegrees } });
