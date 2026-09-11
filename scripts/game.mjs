@@ -3,12 +3,14 @@ import { writeFileSync } from 'node:fs';
 import { callUi, typeText } from '../src/operator/bot-window.mjs';
 import { displayStatus, ensureDisplay, stopDisplay } from '../src/operator/display.mjs';
 import { botProcesses, gameStatus, importWorld, listWorlds, startGame, stopGame } from '../src/operator/game.mjs';
+import { startStream, stopStream, streamStatus } from '../src/operator/stream.mjs';
 
 const usage = `Usage: game.mjs <command>
   start [--world NAME | --new NAME [--play-style STYLE] | --server HOST[:PORT]] [--display :N] [--size WxH] [--no-wait] [--timeout SEC]
   stop [--force]            window-close request = game's own saving exit path; --force SIGKILLs after the timeout
   status | worlds | import <file.vcdbs> [NAME]
   display start|stop|status [--display :N] [--size WxH]
+  stream start|stop|status [--fps N] [--kbps N] [--bind ADDR]   live H.264 view of the display: RTSP :8554, HLS :8888, WebRTC :8889
   screenshot [FILE.png] | click X Y | key KEY | type   (type reads one line from stdin; operator sign-in only)`;
 
 const [command, ...rest] = process.argv.slice(2);
@@ -45,6 +47,15 @@ async function run() {
         return print(await stopDisplay());
       }
       if (positional[0] === 'status') return print(await displayStatus());
+      return fail(usage);
+    case 'stream':
+      if (positional[0] === 'start') {
+        return print(await startStream({
+          display: flags.display, ...(flags.fps ? { fps: Number(flags.fps) } : {}), ...(flags.kbps ? { kbps: Number(flags.kbps) } : {}), ...(flags.bind ? { bind: flags.bind } : {}),
+        }));
+      }
+      if (positional[0] === 'stop') return print(await stopStream());
+      if (positional[0] === 'status') return print(await streamStatus());
       return fail(usage);
     case 'screenshot': {
       const result = await callUi('ui_screenshot', {});
