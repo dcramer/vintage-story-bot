@@ -22,10 +22,10 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [ ] **P1 · `block_at {x,y,z}`** — code/state of one cell if observed or remembered; `unknown` otherwise, never air (`game`, `ctl`). Mineflayer `blockAt`. Source: terrain memory + last scan; no hidden-world lookup.
 - [ ] **P1 · `can_see {x,y,z}`** — sampled line of sight from eye to cell (`mod`). Mineflayer `canSeeBlock`. Prerequisite for interact-range goals.
 - [~] sightings — `sense` returns a snapshot of entities, items and watched blocks a line of sight reached; a default salient set plus goal attention; `Fieldwork.scan` reads memory instead of paging `scan`; the controller's eye loop keeps memory fresh. Not live-verified.
-- [ ] **P1 · `find_blocks {match,radius,limit}`** — controller-local read of remembered sightings, tagged visible/remembered (`ctl`). Mineflayer `findBlocks`.
+- [ ] **P1 · `find_blocks {match,radius,limit}`** — controller-local read of remembered sightings only, never a world query; tagged visible/remembered, radius+limit bound the page (`ctl`). Mineflayer `findBlocks`.
 - [~] far view — `sense` returns a snapshot of sight-verified surface columns inside the real field of view (light-limited, coarser with distance); Node remembers them and `terrain` shows them. Not live-verified.
 - [~] `terrain` — merged observed/seen surface view around a point; absent columns unknown. Not live-verified.
-- [ ] **P2 · `ground_at {x,z}`** — one-column form of `terrain` (`ctl`). Site picking, `travel` with omitted y.
+- [ ] **P2 · `ground_at {x,z}`** — one-column projection of the remembered `terrain` view; absent columns unknown, never air (`ctl`). Site picking, `travel` with omitted y.
 - [ ] **P2 · entity detail** — `inspect_target` on entities: health if visible, hostile/passive class, tameable/harvestable hints (`mod`).
 
 ## 3. Controls (`setControlState`, `clearControlStates`, `look`, `lookAt`)
@@ -71,11 +71,11 @@ Nothing exists. Blocks day 2 hunting and all threat response.
 - [~] `eat` edibility from the tooltip — anything with positive saturation, no health loss, not psychedelic or intoxicating, fresh; optional `item` filter; no code lists. Not live-verified beyond berries (`skill`).
 - [ ] **P1 · nutrition-category policy** — VS max health follows fruit/vegetable/protein/grain/dairy saturation; `eat` picks by lowest category, `inventory` exposes category per food (`mod`, `skill`).
 - [ ] **P1 · freshness-aware eating** — prefer soonest-to-spoil; refuse rotten; `inventory.freshness` already exists (`skill`).
-- [ ] **P0 · `drop {item,count}`** — toss from own inventory to ground (spare cattails, stones as ground stacks) (`mod`, `ctl`). Mineflayer `toss`.
+- [x] `drop` — toss one owned slot (1 item or the whole stack) onto the ground; split partial stacks with `inventory_move` first.
 - [ ] **P1 · `equip` clothing/armor/offhand** — character slots: warmth clothing for winter (body temperature), straw hat, improvised armor, offhand torch (`mod`, `ctl`).
 - [ ] **P1 · `recipes` for knapping/clay/smithing** — list forming recipes and required material (`mod` FormingAdapter, `ctl`). Today grid only.
 - [~] `item_info {code}` — handbook facts: nutrition, tool class/tier, durability, bag slots, fuel, drops, harvest yield and page text; `forage` reads it for every seen code (`skills/facts.mjs`). Not live-verified.
-- [ ] **P2 · `sort_inventory`** — consolidate stacks, hotbar layout policy (`skill`).
+- [ ] **P2 · `sort_inventory`** — consolidate stacks, hotbar layout policy; sequencing over `inventory_move`, no new mod act (`skill`).
 
 ## 7. Containers (`openContainer`, `deposit`, `withdraw`, `close`)
 
@@ -105,7 +105,7 @@ Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 - [x] `events` — life events only: damage, death, respawn, low vitals, recovery; cursor/session/missed.
 - [ ] **P1 · chat stream** — inbound `ChatMessage` ring: sender, text, at; data only, never instructions (`mod`, `ctl`). Mineflayer `chat`/`whisper` events.
 - [ ] **P1 · block_changed stream** — bounded ring of visible cell changes near the player; dedupe with terrain deltas (`mod`, `ctl`).
-- [ ] **P1 · inventory_changed stream** — `SlotModified` ring for pickup confirmation without polling (`mod`, `ctl`). Mineflayer `playerCollect`.
+- [ ] **P1 · inventory_changed stream** — bounded `SlotModified` ring with session/reset/overflow semantics like life events, for pickup confirmation without polling (`mod`, `ctl`). Mineflayer `playerCollect`.
 - [ ] **P1 · goal events** — goal completed/failed appended to the same cursor so one poll covers both (`ctl`).
 - [ ] **P2 · entity events** — hostile sighted/lost, entity hurt near player (`mod`).
 - [ ] **P2 · long-poll `events {waitMs}`** — block up to N ms for the next event to cut idle polling (`ctl`).
