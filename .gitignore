@@ -13,8 +13,8 @@ BenchmarkDotNet.Artifacts/
 *.nupkg
 *.snupkg
 dist/
-.dotnet/
-.runtime/
+.dotnet
+.runtime
 node_modules/
 .pnpm-store/
 coverage/

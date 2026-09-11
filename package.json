@@ -15,6 +15,8 @@
     "test": "node --test test/*.test.mjs",
     "test:mod": "DOTNET_CLI_HOME=$PWD/.runtime/dotnet-home .dotnet/dotnet run --project test/mod/ModTests.csproj",
     "control": "node scripts/control.mjs",
+    "game": "node scripts/game.mjs",
+    "setup:linux": "bash scripts/setup-linux.sh",
     "goal:stick": "node scripts/collect-stick.mjs",
     "goal:gather": "node scripts/gather.mjs",
     "mcp:smoke": "node scripts/mcp-smoke.mjs",

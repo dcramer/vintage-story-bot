@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
-import { loadLaunchConfig, updateCharacterName } from './launch-config.mjs';
+import { loadLaunchConfig, updateCharacterName, gameArguments } from '../src/operator/launch-config.mjs';
 
 // Run on the OS hosting the bot's game client, e.g. Windows Node for a Windows game.
 const args = process.argv.slice(2);
@@ -48,11 +48,7 @@ const dotnet = wsl ? path.join(repository, '.dotnet', 'dotnet') : 'dotnet';
 const command = windows ? executable : dotnet;
 const gameArgs = [
   ...(windows ? [] : [executable]),
-  `--dataPath=${botData}`,
-  ...(wsl ? [] : [`--addModPath=${modRoot}`]),
-  ...(config.world ? [`--openWorld=${config.world}`] : []),
-  ...(config.server ? [`--connect=${config.server}`] : []),
-  ...(config.password ? [`--pw=${dryRun ? '[redacted]' : config.password}`] : []),
+  ...gameArguments(config, botData, { modRoot: wsl ? '' : modRoot, redact: dryRun }),
 ];
 console.log(`Bot profile: ${botData}`);
 console.log('Sign in with the bot account if needed, then enter .aibridge on after joining.');
