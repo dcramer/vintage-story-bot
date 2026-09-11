@@ -1,6 +1,10 @@
-# Diggy Smalls
+# Seraph
 
-Vintage Story bot: client C# mod → Node controller → MCP/CLI. Read [Conventions](docs/conventions.md) first.
+Seraph is a bot system for Vintage Story: client C# mod → Node controller → MCP/CLI. Read [Conventions](docs/conventions.md) first.
+
+- Intent: let an LLM agent play the game as an ordinary survival player, assigning goals to a bot that senses, plans and acts through the real client, and prove that against live gameplay.
+- Bots are Seraphs: one codebase, many independent instances, each a separate game account and client with its own name (`VINTAGE_STORY_BOT_ID`; the user's own bot is Diggy Smalls). Instances share nothing at runtime except the optional fleet report service ([runtime](docs/runtime.md)).
+- The name is the game's own term for a player character; a Seraph is meant to be indistinguishable from one in what the server receives.
 
 ## What we are building
 

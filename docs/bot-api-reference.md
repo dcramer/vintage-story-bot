@@ -2,7 +2,7 @@
 
 Primary sources: [Mineflayer API](https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md), [pathfinder API](https://github.com/PrismarineJS/mineflayer-pathfinder). Design analogues, not Vintage Story compatibility or an implementation checklist.
 
-| Surface | Mineflayer examples | Diggy contract intent |
+| Surface | Mineflayer examples | Seraph contract intent |
 | --- | --- | --- |
 | State | `entity`, `entities`, `inventory`, `health`, `food` | Structured snapshots; stable ids, session, observation time. |
 | Perception | `blockAt`, `findBlocks`, `nearestEntity`, `canSeeBlock` | Separate cached knowledge, discovery and current visibility. Unknown ≠ empty. |
@@ -15,5 +15,5 @@ Primary sources: [Mineflayer API](https://github.com/PrismarineJS/mineflayer/blo
 
 - Pathfinder separates movement costs/permissions, incremental planning and `path_update`/`path_reset` reasons. Use bounded work, replan on changed terrain/targets; no implicit digging/placing to travel.
 - Prioritize reusable approach → aim → interact → verify skills. Gathering orchestrates these; RPC exposes bounded primitives and goal lifecycle, not game-specific scripts in C#.
-- Do not copy loaded-world access as eyesight. [Mineflayer block search](https://github.com/PrismarineJS/mineflayer/blob/master/lib/plugins/blocks.js) and [ray tracing](https://github.com/PrismarineJS/mineflayer/blob/master/lib/plugins/ray_trace.js) are separate. Diggy deliberately filters discovery by awareness/sightline constraints.
+- Do not copy loaded-world access as eyesight. [Mineflayer block search](https://github.com/PrismarineJS/mineflayer/blob/master/lib/plugins/blocks.js) and [ray tracing](https://github.com/PrismarineJS/mineflayer/blob/master/lib/plugins/ray_trace.js) are separate. Seraph deliberately filters discovery by awareness/sightline constraints.
 - Minecraft coordinates, physics, dig times, recipes and protocol are not transferable. Vintage Story engine remains authoritative. Public implemented contracts: [tool contracts](../src/actions/) and [goals](../src/goals/).

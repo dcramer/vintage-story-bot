@@ -87,8 +87,8 @@ public sealed partial class AiBridgeMod : ModSystem
         bool registered = api.ChatCommands.Get("aibridge") != null;
         api.Logger.Notification($"[AI bridge] World ready; command registered: {registered}");
         api.ShowChatMessage(lifetime == null
-            ? "Diggy bridge ready. F7 enables bot control; F8 stops and disables it."
-            : "Diggy bridge enabled. F8 stops and disables bot control.");
+            ? "Seraph bridge ready. F7 enables bot control; F8 stops and disables it."
+            : "Seraph bridge enabled. F8 stops and disables bot control.");
     }
 
     private TextCommandResult StartBridge()

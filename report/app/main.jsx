@@ -11,7 +11,7 @@ function Header() {
   const { path } = useLocation();
   const bots = list.value, live = bots.filter(isLive).length;
   return <header>
-    <h1><a href="/">Diggy Smalls fleet</a></h1>
+    <h1><a href="/">Seraph fleet</a></h1>
     <nav><a href="/" class={path === '/' ? 'current' : ''}>Fleet</a><a href="/log" class={path === '/log' ? 'current' : ''}>Log</a></nav>
     <Pill cls={status.value === 'live' ? 'on' : status.value === 'reconnecting' ? 'off' : ''}>{status.value}</Pill>
     <Pill cls={live ? 'on' : bots.length ? 'off' : ''}>{bots.length ? `${live} live / ${bots.length} known` : 'no bots'}</Pill>

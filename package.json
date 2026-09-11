@@ -1,5 +1,5 @@
 {
-  "name": "vintage-story-ai",
+  "name": "seraph",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,8 +18,8 @@
     "goal:stick": "node scripts/collect-stick.mjs",
     "goal:gather": "node scripts/gather.mjs",
     "mcp:smoke": "node scripts/mcp-smoke.mjs",
-    "report:dev": "pnpm --filter diggy-smalls-fleet run dev",
-    "report:deploy": "pnpm --filter diggy-smalls-fleet run deploy"
+    "report:dev": "pnpm --filter seraph-fleet run dev",
+    "report:deploy": "pnpm --filter seraph-fleet run deploy"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
