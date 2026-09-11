@@ -175,10 +175,11 @@ export class Navigation {
     if (next.y > p.y + .05 && grounded && !this.jumpAt) this.jumpAt = now;
     if (this.jumpAt && now - this.jumpAt > 2500) return this.replan(p, now, 'jump_failed');
     const food = state.vitals?.hunger;
+    const emergency = this.evading || this.target.emergency;
     const sprint = !!this.target.sprint && grounded && !this.jumpAt && !this.landing &&
       Math.abs(next.y - p.y) < .05 && horizontal(p, next) > (this.evading ? .8 : 3) &&
       Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 5 &&
-      food?.max > 0 && food.current / food.max >= (this.evading ? .1 : .6);
+      food?.max > 0 && food.current / food.max >= (emergency ? .1 : .6);
     return { yawDegrees, pitchDegrees: 15, forward: horizontal(p, next) > .12, durationMs,
       jump: !!this.jumpAt && now - this.jumpAt < 200, sprint,
       // Sneak while lining up at a ledge, then release it so a validated

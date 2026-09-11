@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
+import { explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
 import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat } from '../src/skills/threats.mjs';
@@ -70,8 +70,8 @@ test('breakable forage is harvested beside its drop, never at maximum reach or u
 
 test('food exploration uses observed local steps and does not rescan an unchanged distant cone', () => {
   assert.equal(foodSearchDistance, 12);
-  assert.equal(foodSightRange, 16);
-  assert.equal(desperateFoodSightRange, 32);
+  assert.equal(foodSightRange, 32);
+  assert.equal(desperateFoodSightRange, 48);
   const view = { position: { x: 10, z: 10 }, yawDegrees: 30 };
   const state = (x, z, yawDegrees) => ({ position: { x, z }, orientation: { yawDegrees } });
   assert.equal(foodViewChanged(view, state(11.9, 10, 44.9)), false);
@@ -139,6 +139,23 @@ test('low-health food recovery remains authorized after eating clears low food',
   assert.equal(fresh.alertsSafe(state(['low_health'])), false);
 });
 
+test('food recovery marks safe search legs as emergency sprint between ten and twenty percent', async () => {
+  const state = { ok: true, alive: true, controlReady: true, mounted: false,
+    player: { uid: 'test' }, position: { x: .5, y: 1, z: .5, dimension: 0 },
+    body: { halfWidth: .3, height: 1.85 }, motion: { onGround: true, swimming: false, feetInLiquid: false },
+    life: { alerts: ['low_food'], session: 'test', lastDamageAt: null }, orientation: { yawDegrees: 0 },
+    vitals: { hunger: { current: 225, max: 1500 } } };
+  let navigationTarget;
+  const env = { send: async () => state, sync: async () => state,
+    navigate: async target => { navigationTarget = target; return { state: 'arrived' }; } };
+  const field = new Fieldwork(env, { now: () => 0 });
+  field.initial = field.latest = state;
+  field.recoveringFood = true;
+  await field.walk({ x: 8.5, y: 1, z: .5 });
+  assert.equal(navigationTarget.sprint, true);
+  assert.equal(navigationTarget.emergency, true);
+});
+
 test('a blocked exploration leg penalizes its destination for the next deterministic choice', async () => {
   const state = { ok: true, alive: true, controlReady: true, mounted: false,
     player: { uid: 'test' },
@@ -163,6 +180,12 @@ test('route recovery clears soft visit penalties and rotates deterministically',
   field.resetExploration();
   assert.deepEqual([...field.visits], [['2,-2', 1]]);
   assert.equal(field.heading, 35);
+});
+
+test('directed exploration bounds visit penalties below a backwards turn', () => {
+  assert.ok(explorationScore(0, 1) > explorationScore(45, 0));
+  assert.ok(explorationScore(0, 100) < explorationScore(180, 0));
+  assert.equal(explorationScore(-45, 1), explorationScore(45, 1));
 });
 
 test('long travel extends a productive partial detour instead of reversing it', async () => {

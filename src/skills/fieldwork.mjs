@@ -5,6 +5,10 @@ import { fleeTarget, nearestThreat } from './threats.mjs';
 export const area = p => `${Math.floor(p.x / 16)},${Math.floor(p.z / 16)}`;
 export const sightRange = 64;
 export const temporalStormUnsafe = state => ['imminent', 'active'].includes(state.condition?.temporalStorm?.phase);
+// Failed destinations should rotate a directed search through nearby lateral
+// options, but repeated failures must never make a known goal's exact opposite
+// preferable. Two failures saturate the soft penalty below a 180-degree turn.
+export const explorationScore = (offset, visits = 0) => Math.min(visits, 2) * 1.5 + Math.abs(offset) / 45;
 
 // Shared session guard, observed-resource memory and travel; no transport/lease ownership.
 export class Fieldwork {
@@ -119,7 +123,12 @@ export class Fieldwork {
     // block over uneven ground. Preserve a hard two-minute ceiling, but do not
     // abort a visibly progressing local food leg just before its next viewpoint.
     const timeoutMs = Math.min(120000, Math.max(20000, Math.ceil(horizontal(before.position, target) * 3000)));
-    const result = await this.env.navigate({ ...target, dimension: 0, timeoutMs, sprint: this.sprint }, state => {
+    const food = before.vitals?.hunger;
+    const emergencyFoodSearch = this.recoveringFood && food?.max > 0 &&
+      food.current / food.max < .2 && food.current / food.max >= .1;
+    const result = await this.env.navigate({ ...target, dimension: 0, timeoutMs,
+      sprint: target.sprint ?? (this.sprint || emergencyFoodSearch),
+      ...(emergencyFoodSearch ? { emergency: true } : {}) }, state => {
       this.guard(state);
       return yieldWhen?.(state);
     }, { allowStarvingRecovery: this.recoveringFood });
@@ -173,7 +182,7 @@ export class Fieldwork {
       const q = { x: Math.floor(p.x + Math.sin(radians) * distance) + .5, y: p.y,
         z: Math.floor(p.z + Math.cos(radians) * distance) + .5, horizontalOnly: true,
         arrivalRadius: Math.min(4, Math.max(.75, distance / 12)) };
-      return { q, score: (this.visits.get(area(q)) ?? 0) * 8 + Math.abs(offset) / 90 };
+      return { q, score: explorationScore(offset, this.visits.get(area(q)) ?? 0) };
     });
     for (const { q } of candidates.sort((a, b) => a.score - b.score))
       if (findRoute(this.env.map, p, q, this.latest.body.halfWidth, this.latest.body.height)) return q;

@@ -4,8 +4,8 @@ import { changeBlock } from './blocks.mjs';
 import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, ripeForage, termiteCode } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
-export const foodSightRange = Math.min(16, sightRange);
-export const desperateFoodSightRange = Math.min(32, sightRange);
+export const foodSightRange = Math.min(32, sightRange);
+export const desperateFoodSightRange = Math.min(48, sightRange);
 // Twelve-block steps overlap a 16-block sight cone while covering useful new
 // ground before starvation. Navigation still validates every traversed cell.
 export const foodSearchDistance = Math.min(12, foodSightRange * .75);
@@ -110,12 +110,12 @@ export class Survival {
           Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z) : null);
         if (destination) {
           const result = await field.walk(destination, this.eatWhen);
-          if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 15000);
+          if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 120000);
           continue;
         }
         if (horizontal(field.latest.position, target.point) > 6) {
           const result = await field.walk(field.explore(target.point, foodSearchDistance), this.eatWhen);
-          if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 15000);
+          if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 120000);
           continue;
         }
         field.reject(target, 30000);
@@ -125,12 +125,9 @@ export class Survival {
       const result = await field.walk(destination, this.eatWhen);
       const progress = horizontal(before, field.latest.position);
       this.searchTarget = !['arrived', 'yielded'].includes(result.state) && progress > 2 ? destination : null;
-      // A changed viewpoint needs a fresh deterministic 360-degree sweep;
-      // otherwise later searches only inspect the current forward cone.
-      if (progress > 2) {
-        this.surveyed = false;
-        this.desperateSurveyed = false;
-      }
+      // The initial panorama is retained for this recovery episode. Each moved
+      // viewpoint already refreshes its 32-block forward cone above; repeating
+      // a full panorama every short leg burns the starvation window on RPC.
     }
   }
   async harvest(target) {
