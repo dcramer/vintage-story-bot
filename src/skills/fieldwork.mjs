@@ -9,6 +9,11 @@ export const temporalStormUnsafe = state => ['imminent', 'active'].includes(stat
 // options, but repeated failures must never make a known goal's exact opposite
 // preferable. Two failures saturate the soft penalty below a 180-degree turn.
 export const explorationScore = (offset, visits = 0) => Math.min(visits, 2) * 1.5 + Math.abs(offset) / 45;
+// Keep obstruction bypasses local. A full-range sideways or reverse target can
+// dominate the journey even though only a few blocks were needed to clear a
+// tree line or cliff edge.
+export const explorationDistance = (distance, offset) => distance *
+  (Math.abs(offset) < 1 ? 1 : Math.abs(offset) <= 45 ? .75 : Math.abs(offset) <= 90 ? .4 : .2);
 
 // Shared session guard, observed-resource memory and travel; no transport/lease ownership.
 export class Fieldwork {
@@ -178,10 +183,11 @@ export class Fieldwork {
     const direction = toward ? lookAt(p, toward).yawDegrees : this.heading;
     const distance = toward ? Math.min(maxDistance, horizontal(p, toward)) : maxDistance;
     const candidates = [0, 45, -45, 90, -90, 180].map(offset => {
+      const legDistance = toward ? explorationDistance(distance, offset) : distance;
       const radians = normalize(direction + offset) * Math.PI / 180;
-      const q = { x: Math.floor(p.x + Math.sin(radians) * distance) + .5, y: p.y,
-        z: Math.floor(p.z + Math.cos(radians) * distance) + .5, horizontalOnly: true,
-        arrivalRadius: Math.min(4, Math.max(.75, distance / 12)) };
+      const q = { x: Math.floor(p.x + Math.sin(radians) * legDistance) + .5, y: p.y,
+        z: Math.floor(p.z + Math.cos(radians) * legDistance) + .5, horizontalOnly: true,
+        arrivalRadius: Math.min(4, Math.max(.75, legDistance / 12)) };
       return { q, score: explorationScore(offset, this.visits.get(area(q)) ?? 0) };
     });
     for (const { q } of candidates.sort((a, b) => a.score - b.score))

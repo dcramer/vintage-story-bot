@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
+import { explorationDistance, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
 import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, stalledFoodRoute } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat } from '../src/skills/threats.mjs';
@@ -193,6 +193,13 @@ test('directed exploration bounds visit penalties below a backwards turn', () =>
   assert.ok(explorationScore(0, 1) > explorationScore(45, 0));
   assert.ok(explorationScore(0, 100) < explorationScore(180, 0));
   assert.equal(explorationScore(-45, 1), explorationScore(45, 1));
+});
+
+test('directed exploration keeps lateral and reverse bypasses local', () => {
+  assert.equal(explorationDistance(48, 0), 48);
+  assert.equal(explorationDistance(48, 45), 36);
+  assert.ok(Math.abs(explorationDistance(48, -90) - 19.2) < 1e-9);
+  assert.ok(Math.abs(explorationDistance(48, 180) - 9.6) < 1e-9);
 });
 
 test('long travel extends a productive partial detour instead of reversing it', async () => {
