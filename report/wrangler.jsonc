@@ -1,11 +1,12 @@
 // Fleet reporting service: one Worker + one SQLite-backed Durable Object (free plan) serving the built SPA from dist/.
-// Deploy: `pnpm report:deploy` (workspace package seraph-fleet).
+// Deploys from Cloudflare Workers Builds on every push to main touching report/; `pnpm report:deploy` is the manual path.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "seraph-fleet",
   "main": "worker.mjs",
   "compatibility_date": "2026-08-01",
   "assets": { "directory": "./dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
+  "keep_vars": true,
   "vars": { "RETENTION_HOURS": "6" },
   "durable_objects": { "bindings": [{ "name": "FLEET", "class_name": "SeraphFleet" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SeraphFleet"] }],
