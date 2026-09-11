@@ -83,6 +83,7 @@ test('planner escapes a returning point whose hazard margin spans adjacent cells
   for (let step = 0; step < 8 && !map.dry(at, .3, 1.85); step++) {
     const route = findRoute(map, at, end, .3, 1.85);
     assert.ok(route);
+    assert.ok(Math.hypot(route[0].x - at.x, route[0].z - at.z) >= .75);
     assert.ok(map.hazardDistance(route[0], 1.85) > map.hazardDistance(at, 1.85));
     at = route[0];
   }

@@ -11,7 +11,7 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
   const anchorRadius = escapingMargin ? 6 : 1;
   for (let x = -anchorRadius; x <= anchorRadius; x++) for (let z = -anchorRadius; z <= anchorRadius; z++) {
     const p = map.stand(Math.floor(start.x) + .5 + x, Math.floor(start.z) + .5 + z, start.y, w, h, escapingMargin);
-    if (p) centers.push(p);
+    if (p && (!escapingMargin || horizontal(p, start) >= .75)) centers.push(p);
   }
   const center = centers.sort((a, b) => distance(a, start) - distance(b, start))
     .find(p => map.traverse(start, p, w, h, true, undefined, escapingMargin));
