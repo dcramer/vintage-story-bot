@@ -7,13 +7,19 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
   // but already inside the conservative margin of nearby water or fire. Find
   // the nearest fully safe anchor reachable by one continuously validated
   // ground segment; subsequent route cells still cannot enter the margin.
-  const anchorRadius = typeof map.dry === 'function' && !map.dry(start, w, h) ? 8 : 1;
+  const escapingMargin = typeof map.dry === 'function' && !map.dry(start, w, h);
+  const anchorRadius = escapingMargin ? 6 : 1;
   for (let x = -anchorRadius; x <= anchorRadius; x++) for (let z = -anchorRadius; z <= anchorRadius; z++) {
-    const p = map.stand(Math.floor(start.x) + .5 + x, Math.floor(start.z) + .5 + z, start.y, w, h);
+    const p = map.stand(Math.floor(start.x) + .5 + x, Math.floor(start.z) + .5 + z, start.y, w, h, escapingMargin);
     if (p) centers.push(p);
   }
-  const center = centers.sort((a, b) => distance(a, start) - distance(b, start)).find(p => map.traverse(start, p, w, h, true));
+  const center = centers.sort((a, b) => distance(a, start) - distance(b, start))
+    .find(p => map.traverse(start, p, w, h, true, undefined, escapingMargin));
   if (!center) return null;
+  // Move one verified step farther from the hazard, then resample from the new
+  // position. The native sensor's six-block radius bounds this recovery and a
+  // later plan can continue until the ordinary dry graph is reachable.
+  if (escapingMargin && !map.dry(center, w, h)) return [center];
   const costs = new Map([[key(center), 0]]), previous = new Map(), closed = new Set(), open = [{ p: center, score: 0 }];
   let frontier, best = Infinity;
   const path = end => {

@@ -60,6 +60,16 @@ export class TerrainMemory {
         }
     return true;
   }
+  hazardDistance(p, h) {
+    let nearest = Infinity;
+    for (const cell of this.cells.values()) {
+      if (!cell.hazard || cell.y + 1 < p.y - 2 || cell.y > p.y + h) continue;
+      const dx = Math.max(cell.x - p.x, 0, p.x - cell.x - 1);
+      const dz = Math.max(cell.z - p.z, 0, p.z - cell.z - 1);
+      nearest = Math.min(nearest, Math.hypot(dx, dz));
+    }
+    return nearest;
+  }
   support(p, w, missing) {
     let count = 0;
     for (const dx of [-w, 0, w]) for (const dz of [-w, 0, w]) {
@@ -102,7 +112,7 @@ export class TerrainMemory {
     }
     return count;
   }
-  stand(x, z, nearY, w, h) {
+  stand(x, z, nearY, w, h, allowUnsafe = false) {
     const tops = new Set();
     for (let y = Math.floor(nearY) - 2; y <= Math.floor(nearY) + 1; y++) {
       const cell = this.get(x, y, z);
@@ -110,11 +120,11 @@ export class TerrainMemory {
     }
     for (const y of [...tops].sort((a, b) => Math.abs(a - nearY) - Math.abs(b - nearY))) {
       const p = { x, y, z };
-      if (this.support(p, w) === 9 && this.clear(p, w, h) && this.dry(p, w, h)) return p;
+      if (this.support(p, w) === 9 && this.clear(p, w, h) && (allowUnsafe || this.dry(p, w, h))) return p;
     }
     return null;
   }
-  traverse(from, to, w, h, recenter = false, missing) {
+  traverse(from, to, w, h, recenter = false, missing, allowMarginEscape = false) {
     const rise = to.y - from.y;
     if (Math.abs(rise) > 1.06) return false;
     const jump = rise > .05, travelY = Math.max(from.y, to.y) + (jump ? .25 : 0);
@@ -122,6 +132,7 @@ export class TerrainMemory {
     // A returning point can itself be inside the braking margin while the
     // player's actual body is dry. Permit a direct, supported exit toward a
     // safe endpoint, but never allow a path to re-enter the margin once clear.
+    const startHazardDistance = this.hazardDistance(from, h);
     let support = 0, escapedHazardMargin = this.dry(from, w, h, .55, missing);
     for (let i = 0; i <= steps; i++) {
       const t = i / steps, p = { x: from.x + (to.x - from.x) * t, y: travelY, z: from.z + (to.z - from.z) * t };
@@ -148,7 +159,9 @@ export class TerrainMemory {
     }
     for (const end of [from, to]) for (let y = end.y; y <= travelY + .01; y += .1)
       if (!this.clear({ ...end, y }, w, h, missing)) return false;
-    return escapedHazardMargin && this.support(to, w, missing) === 9;
+    const improvedMargin = allowMarginEscape && !escapedHazardMargin &&
+      this.hazardDistance(to, h) > startHazardDistance + .05;
+    return (escapedHazardMargin || improvedMargin) && this.support(to, w, missing) === 9;
   }
   frontier(p, w, h) {
     const result = new Map();

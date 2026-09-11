@@ -72,10 +72,14 @@ test('planner escapes a returning point whose hazard margin spans adjacent cells
   const start = { x: .5, y: 0, z: .5 }, end = { x: 8.5, y: 0, z: .5 };
   assert.equal(map.dry(start, .3, 1.85), false);
   assert.equal(map.stand(4.5, .5, 0, .3, 1.85), null);
-  const route = findRoute(map, start, end, .3, 1.85);
-  assert.ok(route);
-  assert.equal(map.dry(route[0], .3, 1.85), true);
-  assert.ok(Math.hypot(route[0].x - start.x, route[0].z - start.z) >= 6);
+  let at = start;
+  for (let step = 0; step < 8 && !map.dry(at, .3, 1.85); step++) {
+    const route = findRoute(map, at, end, .3, 1.85);
+    assert.ok(route);
+    assert.ok(map.hazardDistance(route[0], 1.85) > map.hazardDistance(at, 1.85));
+    at = route[0];
+  }
+  assert.equal(map.dry(at, .3, 1.85), true);
 });
 
 test('terrain permits supported recentering off thin partial ground cover', () => {
