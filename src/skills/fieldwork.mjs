@@ -114,12 +114,12 @@ export class Fieldwork {
     else if (result.state !== 'yielded') this.heading = normalize(this.heading + 90);
     return result;
   }
-  approach(object) {
+  approach(object, exclude = null) {
     const { position: p, body: { halfWidth: w, height: h } } = this.latest;
     const candidates = [];
     for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
       const q = this.env.map.stand(Math.floor(object.point.x) + .5 + dx, Math.floor(object.point.z) + .5 + dz, object.point.y, w, h);
-      if (!q || horizontal(p, q) < .5 || object.kind === 'item' && horizontal(q, object.point) > .8) continue;
+      if (!q || horizontal(p, q) < .5 || object.kind === 'item' && horizontal(q, object.point) > .8 || exclude?.(q)) continue;
       const route = findRoute(this.env.map, p, q, w, h, { partial: false });
       if (route) candidates.push({ q, score: route.length + horizontal(q, object.point) * 2 });
     }

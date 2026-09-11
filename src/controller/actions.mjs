@@ -25,6 +25,19 @@ import attackBlock from './actions/attack_block.mjs';
 import digBlock from './actions/dig_block.mjs';
 import placeBlock from './actions/place_block.mjs';
 import stop from './actions/stop.mjs';
+import craftItem from './actions/craft_item.mjs';
+import harvest from './actions/harvest.mjs';
+import fellTree from './actions/fell_tree.mjs';
+import useOnBlock from './actions/use_on_block.mjs';
+import travel from './actions/travel.mjs';
+import explore from './actions/explore.mjs';
+import setPoi from './actions/set_poi.mjs';
+import pois from './actions/pois.mjs';
+import digArea from './actions/dig_area.mjs';
+import build from './actions/build.mjs';
+import selectRecipe from './actions/select_recipe.mjs';
+import knap from './actions/knap.mjs';
+import clayform from './actions/clayform.mjs';
 
 export const actions = [
   api,
@@ -53,5 +66,18 @@ export const actions = [
   attackBlock,
   digBlock,
   placeBlock,
+  craftItem,
+  harvest,
+  fellTree,
+  useOnBlock,
+  travel,
+  explore,
+  setPoi,
+  pois,
+  digArea,
+  build,
+  selectRecipe,
+  knap,
+  clayform,
   stop,
 ];

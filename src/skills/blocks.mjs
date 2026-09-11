@@ -5,7 +5,7 @@ import { ownedSlots } from './inventory.mjs';
 const faces = { north: [0, 0, -1], east: [1, 0, 0], south: [0, 0, 1], west: [-1, 0, 0], up: [0, 1, 0], down: [0, -1, 0] };
 const count = (inventory, code) => ownedSlots(inventory).filter(s => s.code === code).reduce((sum, s) => sum + s.quantity, 0);
 
-export async function changeBlock(field, kind, { target, point, face, slot, expectedItem }) {
+export async function changeBlock(field, kind, { target, point, face, slot, expectedItem, acceptTransform = false }) {
   const [, dimension, x, y, z] = target.split(':');
   const cell = { x: Number(x), y: Number(y), z: Number(z) };
   if (Number(dimension) !== field.latest.position.dimension || Object.values(cell).some(n => !Number.isSafeInteger(n)))
@@ -37,7 +37,7 @@ export async function changeBlock(field, kind, { target, point, face, slot, expe
       return { ok: false, reason: operation.reason, operation };
     if (operation.state === 'changed') {
       field.report('verifying', { target, operation: id, position: operation.position, before: operation.before, after: operation.after });
-      if (kind === 'dig' && operation.after !== 'game:air')
+      if (kind === 'dig' && operation.after !== 'game:air' && !acceptTransform)
         return { ok: false, reason: 'Block transformed, not removed; inspect before another attempt', operation };
       const contents = await field.send({ action: 'inventory' });
       const consumed = kind === 'place' ? count(inventory, held.code) - count(contents, held.code) : 0;

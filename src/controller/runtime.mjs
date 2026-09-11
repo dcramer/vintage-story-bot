@@ -4,13 +4,13 @@ import { z } from 'zod';
 import { actions } from './actions.mjs';
 import { GameClient } from '../game/client.mjs';
 import { Navigation } from '../navigation/navigator.mjs';
-import { goalHandlers } from '../goals/registry.mjs';
+import { goalHandlers, localHandlers } from '../goals/registry.mjs';
 
 const attempt = fn => Effect.tryPromise({ try: fn, catch: error => error instanceof Error ? error : new Error(String(error)) });
 
 export class Controller {
   active = null; last = null; closing = false;
-  session = randomUUID(); history = new Map();
+  session = randomUUID(); history = new Map(); pois = new Map();
   gate = Effect.runSync(Effect.makeSemaphore(1));
   constructor(send, telemetry = null) {
     this.game = new GameClient(send); this.telemetry = telemetry;
@@ -81,6 +81,8 @@ export class Controller {
       if (this.active && !tool.readOnly) throw new Error('Goal active; stop it before another mutation.');
       const handler = goalHandlers.get(tool.name);
       if (handler) return this.launch(tool.name, (record, started) => handler(this, parsed, record, started));
+      const local = localHandlers.get(tool.name);
+      if (local) return local(this, parsed);
       const result = await this.send({ action: tool.action ?? tool.name, ...parsed });
       if (tool.name === 'observe' && result.ok) {
         result.navigation = this.view();
