@@ -4,6 +4,8 @@ import collectStick from './actions/collect_stick.mjs';
 import gatherSticks from './actions/gather_sticks.mjs';
 import forage from './actions/forage.mjs';
 import eat from './actions/eat.mjs';
+import equip from './actions/equip.mjs';
+import collectItem from './actions/collect_item.mjs';
 import observe from './actions/observe.mjs';
 import environment from './actions/environment.mjs';
 import inspectTarget from './actions/inspect_target.mjs';
@@ -31,6 +33,8 @@ export const actions = [
   gatherSticks,
   forage,
   eat,
+  equip,
+  collectItem,
   observe,
   environment,
   inspectTarget,

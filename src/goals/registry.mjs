@@ -2,6 +2,7 @@ import { collectStick } from './collect-stick.mjs';
 import { gather } from './gather.mjs';
 import { forage, eat } from './forage.mjs';
 import { blockGoal } from './blocks.mjs';
+import { equipGoal, collectItemGoal } from './inventory.mjs';
 
 // Public argument contracts live in controller/actions.mjs; handlers compose runtime skills.
 export const goalHandlers = new Map([
@@ -10,6 +11,8 @@ export const goalHandlers = new Map([
   ['gather_sticks', (runtime, args, record, started) => runtime.runTask(gather, args, record, started)],
   ['forage', (runtime, args, record, started) => runtime.runTask(forage, args, record, started)],
   ['eat', (runtime, args, record, started) => runtime.runTask(eat, args, record, started)],
+  ['equip', (runtime, args, record, started) => runtime.runTask(equipGoal, args, record, started)],
+  ['collect_item', (runtime, args, record, started) => runtime.runTask(collectItemGoal, args, record, started)],
   ['dig_block', (runtime, args, record, started) => runtime.runTask((env, options) => blockGoal(env, 'dig', options), args, record, started)],
   ['place_block', (runtime, args, record, started) => runtime.runTask((env, options) => blockGoal(env, 'place', options), args, record, started)],
 ]);

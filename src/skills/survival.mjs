@@ -1,6 +1,7 @@
 import { horizontal, normalize } from '../navigation/terrain.mjs';
 import { sightRange } from './fieldwork.mjs';
-import { consume, emptyHand, foodReserve, hunger, ownedSlots, ripeBerries } from './food.mjs';
+import { consume, emptyHand, foodReserve, hunger, ripeBerries } from './food.mjs';
+import { ownedSlots } from './inventory.mjs';
 
 // Hysteresis: prepare food below 60%, eat to 80%, retain 320 satiety in fresh berries.
 // Navigation checks yieldWhen every sensing tick; food work owns no parallel inputs.

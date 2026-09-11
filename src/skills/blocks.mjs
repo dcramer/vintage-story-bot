@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { distance, lookAt } from '../navigation/terrain.mjs';
-import { ownedSlots } from './food.mjs';
+import { ownedSlots } from './inventory.mjs';
 
 const faces = { north: [0, 0, -1], east: [1, 0, 0], south: [0, 0, 1], west: [-1, 0, 0], up: [0, 1, 0], down: [0, -1, 0] };
 const count = (inventory, code) => ownedSlots(inventory).filter(s => s.code === code).reduce((sum, s) => sum + s.quantity, 0);

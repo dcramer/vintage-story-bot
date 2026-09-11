@@ -1,4 +1,5 @@
 import { normalize } from '../navigation/terrain.mjs';
+import { ownedSlots } from './inventory.mjs';
 
 // Installed survival fruit assets; no inference that arbitrary nutritious items are safe raw.
 export const berryTypes = new Set([
@@ -7,9 +8,6 @@ export const berryTypes = new Set([
 ]);
 export const berryCode = code => typeof code === 'string' && code.startsWith('game:fruit-') && berryTypes.has(code.slice(11));
 export const ripeBerries = object => object.kind === 'block' && object.forage?.ripe === true && berryCode(object.forage.foodCode);
-export const ownedSlots = inventory => inventory.inventories
-  .filter(i => ['hotbar', 'backpack'].includes(i.name))
-  .flatMap(i => i.slots.filter(s => i.name !== 'hotbar' || s.slot < 10).map(s => ({ ...s, inventory: i.name })));
 export const safeFood = slot => berryCode(slot.code) && slot.quantity > 0 &&
   slot.nutrition?.saturation > 0 && slot.nutrition.health >= 0 && slot.freshness?.state === 'fresh';
 export const foodReserve = inventory => ownedSlots(inventory).filter(safeFood)
