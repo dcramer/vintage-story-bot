@@ -10,8 +10,8 @@ import './style.css';
 function Header() {
   const bots = list.value, live = bots.filter(isLive).length;
   const connected = status.value === 'live';
-  return <header class="command-header simple-header">
-    <a href="/" class="brand" aria-label="Seraph mission control"><span class="brand-mark">S</span><span><b>Seraph</b><small>Mission control</small></span></a>
+  return <header class="command-header">
+    <a href="/" class="brand" aria-label="Seraph"><b>Seraph</b></a>
     <div class="header-status"><Pill cls={connected && live ? 'on' : connected ? '' : 'off'}>{connected ? `${live} bot${live === 1 ? '' : 's'} connected` : 'Reconnecting'}</Pill></div>
   </header>;
 }

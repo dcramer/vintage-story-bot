@@ -26,17 +26,17 @@ function Live({ stream }) {
   const player = `${stream}/bot/`;
   return <section class="wide live-view"><h2>Live view <a class="muted" href={player} target="_blank" rel="noopener">open ↗</a></h2>
     <iframe src={player} title="Bot display" allow="autoplay; fullscreen" referrerpolicy="no-referrer" />
-    <small class="muted">HLS from this host's own tunnel, a few seconds behind. Off when the host is not streaming.</small>
+    <small class="muted">A few seconds behind</small>
   </section>;
 }
 export function Bot({ id }) {
   const bot = bots.value[id];
   if (!bot) return <main><div class="empty">Seraph "{id}" has not reported within the retention window.</div></main>;
-  const s = bot.topics.state?.data ?? {}, g = bot.topics.goal?.data, n = bot.topics.navigation?.data, c = bot.topics.controller?.data, scan = bot.topics.scan?.data;
+  const s = bot.topics.state?.data ?? {}, g = bot.topics.goal?.data, n = bot.topics.navigation?.data, scan = bot.topics.scan?.data;
   const p = g?.progress ?? {}, progressRest = p.truncated ? [['progress', 'truncated']] : Object.entries(p).filter(([k]) => !shownProgressKeys.has(k));
   const hotbar = (s.hotbar ?? []).slice(0, 10);
   return <main class="grid detail">
-    <div class="head wide"><b class="title">{bot.id}</b><Seen bot={bot} /><span class="muted">{bot.meta?.host}{bot.meta?.pid ? ` · pid ${bot.meta.pid}` : ''}{c?.session ? ` · session ${c.session.slice(0, 8)}` : ''}</span></div>
+    <div class="head wide"><b class="title">{bot.id}</b><Seen bot={bot} /></div>
     <Live stream={bot.meta?.stream} />
     <section class="wide">
       <h2>Goal</h2><GoalLine g={g} />
@@ -45,10 +45,9 @@ export function Bot({ id }) {
         <Activity bot={bot} /></div>
     </section>
     <section class="wide panel bot-map-panel">
-      <div class="panel-title map-title"><div><span class="eyebrow">Seen by {bot.id}</span><h2>Explored world</h2></div>
+      <div class="panel-title map-title"><h2>Map</h2>
         <span class="panel-count">{bot.nativeMap?.count ? `${bot.nativeMap.count.toLocaleString()} chunks · ${ago(bot.nativeMap.at, now.value)}` : 'Waiting for map sync'}</span></div>
       <WorldMap bots={[bot]} detailed />
-      <div class="map-footer"><span>Native explored chunks</span><span>Retained by this Seraph</span><span>Live trail and objective</span><span>Drag or scroll to navigate</span></div>
     </section>
     <section><h2>Vitals</h2>
       <Meter name="health" vital={s.vitals?.health} lowAt={.3} /><Meter name="hunger" vital={s.vitals?.hunger} lowAt={.2} /><Meter name="oxygen" vital={s.vitals?.oxygen} lowAt={.2} />

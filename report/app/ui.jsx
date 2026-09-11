@@ -31,7 +31,7 @@ export function GoalLine({ g }) {
   const p = g.progress ?? {}, subgoal = p.subgoal, detail = subgoal?.progress ?? p;
   const phase = detail.phase ? `${detail.phase.replace(/_/g, ' ')}${phaseDetail(detail) ? ' — ' + phaseDetail(detail) : ''}` : '';
   return <div class="goal">
-    <div class="headline"><span class="kind">{g.intent ? 'high-level goal' : g.kind.replace(/_/g, ' ')}</span><b>{goalTitle(g)}</b>
+    <div class="headline"><span class="kind">{g.intent ? 'Goal' : g.kind.replace(/_/g, ' ')}</span><b>{goalTitle(g)}</b>
       <span class="tags"><Tag cls={stateClass(g.state)}>{g.state}</Tag>{g.active && <Tag cls="good">active</Tag>}{g.startedAt && <Tag>{elapsed(g.startedAt, g.finishedAt ?? now.value)}</Tag>}</span></div>
     <div class="phase">{subgoal ? <><b>{subgoal.kind.replace(/_/g, ' ')}</b>{goalTitle(subgoal) ? ` — ${goalTitle(subgoal)}` : ''}{phase ? ` · ${phase}` : ''}</>
       : phase ? <b>{phase}</b> : g.reason ? <span class="muted">{g.reason}</span> : null}</div>

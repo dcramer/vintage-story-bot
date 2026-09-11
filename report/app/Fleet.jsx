@@ -5,41 +5,37 @@ import { WorldMap } from './Map.jsx';
 const pct = vital => vital?.max > 0 ? Math.max(0, Math.min(1, vital.current / vital.max)) : null;
 const stateOf = bot => bot.topics.state?.data ?? {};
 const goalOf = bot => bot.topics.goal?.data;
-
-function Vital({ label, value }) {
-  return <div class="connected-vital"><span>{label}<b>{value == null ? '—' : `${Math.round(value * 100)}%`}</b></span>
-    <div><i style={{ width: `${(value ?? 0) * 100}%` }} /></div></div>;
-}
+const percent = value => value == null ? '—' : `${Math.round(value * 100)}%`;
+const Fact = ({ label, children }) => <span><small>{label}</small><b>{children}</b></span>;
 
 function ConnectedBot({ bot, index }) {
   const state = stateOf(bot), goal = goalOf(bot), progress = goal?.progress ?? {};
   const subgoal = progress.subgoal, detailProgress = subgoal?.progress ?? progress;
-  const activity = goal?.active ? goalTitle(goal) || goal.kind.replace(/_/g, ' ') : 'Idle';
+  const activity = goal?.active ? goalTitle(goal) || goal.kind.replace(/_/g, ' ') : 'No active goal';
   const subgoalTitle = subgoal && `${subgoal.kind.replace(/_/g, ' ')}${goalTitle(subgoal) ? ` · ${goalTitle(subgoal)}` : ''}`;
-  const detail = goal?.active ? subgoalTitle ? `Now: ${subgoalTitle}` : goal.intent ? goal.kind.replace(/_/g, ' ') : goalTitle(goal) || 'Working' : 'Standing by';
+  const detail = goal?.active ? subgoalTitle ? `Now: ${subgoalTitle}` : goal.intent ? goal.kind.replace(/_/g, ' ') : null : null;
   const phase = goal?.active && detailProgress.phase ? `${detailProgress.phase.replace(/_/g, ' ')}${phaseDetail(detailProgress) ? ` · ${phaseDetail(detailProgress)}` : ''}` : null;
   return <a href={`/bots/${encodeURIComponent(bot.id)}`} class="connected-bot">
-    <div class="connected-bot-head"><span class={`connected-name agent-${index % 6}`}><i />{bot.id}</span><span class="connected-state">Connected</span></div>
-    <div class="connected-activity"><span>Goal</span><strong>{activity}</strong><p>{detail}</p>{phase && <small>{phase}</small>}</div>
-    <div class="connected-vitals"><Vital label="Health" value={pct(state.vitals?.health)} /><Vital label="Food" value={pct(state.vitals?.hunger)} /></div>
-    <div class="connected-position"><span>Position</span><b>{point(state.position) ?? 'Unknown'}</b><small>{ago(bot.seenAt, now.value)}</small></div>
+    <div class="connected-bot-head"><span class={`connected-name agent-${index % 6}`}><i />{bot.id}</span><span class="connected-seen">{ago(bot.seenAt, now.value)}</span></div>
+    <div class="connected-activity"><small>Goal</small><strong>{activity}</strong>{detail && <p>{detail}</p>}{phase && <p>{phase}</p>}</div>
+    <div class="connected-facts"><Fact label="Health">{percent(pct(state.vitals?.health))}</Fact><Fact label="Food">{percent(pct(state.vitals?.hunger))}</Fact>
+      <Fact label="Position">{point(state.position) ?? 'Unknown'}</Fact></div>
   </a>;
 }
 
 export function Fleet() {
   const bots = list.value, live = bots.filter(isLive);
-  if (!bots.length) return <main class="fleet-overview"><div class="empty-state"><span class="radar-empty" /><h1>Waiting for bots</h1><p>The map will appear when a bot connects.</p></div></main>;
+  if (!bots.length) return <main class="fleet-overview"><div class="empty-state"><h1>No bots connected</h1><p>The map appears after a bot reports.</p></div></main>;
   return <main class="fleet-overview">
     <section class="map-panel panel">
-      <div class="panel-title map-title"><div><span class="eyebrow">Shared exploration</span><h1>World map</h1></div>
-        <div class="map-legend">{live.map((bot, index) => <span key={bot.id}><i class={`agent-${index % 6}`} />{bot.id}</span>)}</div></div>
+      <div class="panel-title map-title"><h1>Map</h1><div class="map-legend">{live.map((bot, index) => <span key={bot.id}><i class={`agent-${index % 6}`} />{bot.id}</span>)}
+        <span class="player-key"><i />Other players</span></div></div>
       <WorldMap bots={bots} />
-      <div class="map-footer"><span>Colored markers are connected bots</span><span>White markers are other visible players</span><span>Drag or scroll to navigate</span></div>
     </section>
     <section class="connected-panel panel">
-      <div class="panel-title"><div><span class="eyebrow">Online now</span><h2>Connected bots</h2></div><span class="panel-count">{live.length}</span></div>
+      <div class="panel-title"><h2>Bots</h2></div>
       {live.length ? <div class="connected-list">{live.map((bot, index) => <ConnectedBot key={bot.id} bot={bot} index={index} />)}</div>
-        : <div class="connected-empty"><strong>No bots connected</strong><span>The last explored map remains available.</span></div>}
+        : <div class="connected-empty">No bots connected. The map remains available.</div>}
     </section>
   </main>;
 }
