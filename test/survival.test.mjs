@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
-import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady } from '../src/skills/survival.mjs';
+import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, stalledFoodRoute } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat } from '../src/skills/threats.mjs';
 import { travel } from '../src/skills/travel.mjs';
 
@@ -78,6 +78,13 @@ test('food exploration uses observed local steps and does not rescan an unchange
   assert.equal(foodViewChanged(view, state(12.1, 10, 30)), true);
   assert.equal(foodViewChanged(view, state(10, 10, 46)), true);
   assert.equal(foodViewChanged(view, state(10, 10, 350)), true);
+});
+
+test('food leads survive productive partial routes but quarantine stalled ones', () => {
+  const blocked = { state: 'blocked' };
+  assert.equal(stalledFoodRoute(blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
+  assert.equal(stalledFoodRoute(blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
+  assert.equal(stalledFoodRoute({ state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
 });
 
 test('threat avoidance is explicit, proximity-bounded and points away', () => {

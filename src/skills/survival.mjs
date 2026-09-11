@@ -21,6 +21,8 @@ export const harvestReady = (object, position, halfWidth = .3) => object.withinP
     position.z + halfWidth > Math.floor(object.point.z) && position.z - halfWidth < Math.floor(object.point.z) + 1));
 export const foodViewChanged = (view, state) => !view || horizontal(view.position, state.position) > 2 ||
   Math.abs(normalize(state.orientation.yawDegrees - view.yawDegrees + 180) - 180) > 15;
+export const stalledFoodRoute = (result, before, after) => !['arrived', 'yielded'].includes(result.state) &&
+  horizontal(before, after) <= 2;
 
 // Hysteresis: prepare food below 20%, eat to 80%, retain 320 satiety in safe fresh forage.
 // Navigation checks yieldWhen every sensing tick; food work owns no parallel inputs.
@@ -109,13 +111,15 @@ export class Survival {
         const destination = field.approach(target, breaksForage(target) ? q =>
           Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z) : null);
         if (destination) {
+          const before = { ...field.latest.position };
           const result = await field.walk(destination, this.eatWhen);
-          if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 120000);
+          if (stalledFoodRoute(result, before, field.latest.position)) field.reject(target, 120000);
           continue;
         }
         if (horizontal(field.latest.position, target.point) > 6) {
+          const before = { ...field.latest.position };
           const result = await field.walk(field.explore(target.point, foodSearchDistance), this.eatWhen);
-          if (!['arrived', 'yielded'].includes(result.state)) field.reject(target, 120000);
+          if (stalledFoodRoute(result, before, field.latest.position)) field.reject(target, 120000);
           continue;
         }
         field.reject(target, 30000);
