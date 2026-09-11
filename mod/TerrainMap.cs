@@ -5,7 +5,8 @@ public readonly record struct Bounds(double X1, double Y1, double Z1, double X2,
 
 public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int radius = 64)
 {
-    private sealed record Observation(Bounds[]? Boxes, bool Hazard, long At, long Sequence);
+    private const long RefreshDeltaMs = 10_000;
+    private sealed record Observation(Bounds[]? Boxes, bool Hazard, long At, long Sequence, long PublishedAt);
     private readonly Dictionary<Cell, Observation> cells = new();
     private long sequence, lostThrough;
     public string Session { get; private set; } = Guid.NewGuid().ToString("N");
@@ -16,12 +17,20 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
     {
         // Forget only knowledge we held; unrelated world updates must not flood the delta stream.
         if (!cells.TryGetValue(cell, out var prior) || prior.Boxes == null) return;
-        cells[cell] = new(null, false, Environment.TickCount64, ++sequence);
+        long now = Environment.TickCount64;
+        cells[cell] = new(null, false, now, ++sequence, now);
         Bound();
     }
     public void Put(Cell cell, Bounds[] boxes, bool hazard, long now)
     {
-        cells[cell] = new(boxes, hazard, now, ++sequence);
+        if (cells.TryGetValue(cell, out var prior) && prior.Boxes != null && prior.Hazard == hazard &&
+            prior.Boxes.AsSpan().SequenceEqual(boxes))
+        {
+            bool publish = now - prior.PublishedAt >= RefreshDeltaMs;
+            cells[cell] = new(prior.Boxes, hazard, now, publish ? ++sequence : prior.Sequence,
+                publish ? now : prior.PublishedAt);
+        }
+        else cells[cell] = new(boxes, hazard, now, ++sequence, now);
         Bound();
     }
     private void Bound()

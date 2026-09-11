@@ -1,4 +1,5 @@
 using VintageStoryAI;
+using System.Text.Json;
 
 static class ControlLeaseTests
 {
@@ -23,11 +24,20 @@ static class ControlLeaseTests
         var map = new TerrainMap();
         map.Put(new(1, 2, 3), [], false, 0);
         Check(map.Fresh(new(1, 2, 3), 1), "observed air");
+        var first = JsonSerializer.SerializeToElement(map.Read(0, map.Session, 1));
+        long cursor = first.GetProperty("cursor").GetInt64();
+        map.Put(new(1, 2, 3), [], false, 100);
+        var unchanged = JsonSerializer.SerializeToElement(map.Read(cursor, map.Session, 100));
+        Check(unchanged.GetProperty("cells").GetArrayLength() == 0 && map.Fresh(new(1, 2, 3), 550),
+            "unchanged terrain refreshes without flooding deltas");
+        map.Put(new(1, 2, 3), [], false, 10_001);
+        var refreshed = JsonSerializer.SerializeToElement(map.Read(cursor, map.Session, 10_001));
+        Check(refreshed.GetProperty("cells").GetArrayLength() == 1, "stable terrain periodically republishes freshness");
         var before = map.Session;
         map.Invalidate(new(1, 2, 3));
         Check(!map.Fresh(new(1, 2, 3), 1), "invalidation");
         map.Clear();
         Check(map.Session != before, "world reset invalidates cursors");
-        Console.WriteLine("13 control/terrain checks passed.");
+        Console.WriteLine("15 control/terrain checks passed.");
     }
 }
