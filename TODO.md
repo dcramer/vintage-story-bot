@@ -2,7 +2,7 @@
 
 Rough spec of the bot API surface, modeled on [Mineflayer](https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md) and [pathfinder](https://github.com/PrismarineJS/mineflayer-pathfinder), scoped to Vintage Story. Purpose: break work into small tasks. Mineflayer is the baseline for API shape only; every item must map to a real Vintage Story mechanic in the installed 1.22.7 assets ([capabilities](docs/capabilities.md)), never Minecraft behavior. See [bot-api-reference](docs/bot-api-reference.md) for the criteria each surface must meet.
 
-Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-broken · `[ ]` missing. Layer: `mod` (C# sensing/input), `game` (RPC client), `ctl` (controller schema/action), `skill`, `goal`. Priority: **P0** blocks day 1–2 of [getting-started](docs/getting-started.md), **P1** blocks day 3–5, **P2** later/quality. Implemented contracts: [actions](src/controller/actions.mjs).
+Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-broken · `[ ]` missing. Layer: `mod` (C# sensing/input), `game` (RPC client), `ctl` (controller schema/action), `skill`, `goal`. Priority: **P0** blocks day 1–2 of [getting-started](docs/getting-started.md), **P1** blocks day 3–5, **P2** later/quality. Implemented contracts: [actions](src/actions/), [goals](src/goals/).
 
 ## 1. State (`bot.entity`, `health`, `food`, `time`, `players`)
 

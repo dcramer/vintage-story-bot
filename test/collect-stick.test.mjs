@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { collectStick } from '../src/goals/collect-stick.mjs';
+import { collectStick } from '../src/goals/collect_stick.mjs';
 
 function fixture({ stale = false, gained = 1, reachable = true, damage = false, low = false } = {}) {
   const calls = [];

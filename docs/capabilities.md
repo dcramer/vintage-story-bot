@@ -1,7 +1,7 @@
 # Game API reference
 
 Target: installed 1.22.7 assemblies/XML/assets. Installed signatures win over online docs.
-Tool contracts: [schemas](../src/controller/actions.mjs); wire protocol: [architecture](architecture.md); operations: [runtime](runtime.md).
+Tool contracts: [tool contracts](../src/actions/) and [goals](../src/goals/); wire protocol: [architecture](architecture.md); operations: [runtime](runtime.md).
 
 ## Local sources
 

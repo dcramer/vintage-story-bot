@@ -1,27 +1,26 @@
-import { Fieldwork } from '../skills/fieldwork.mjs';
-import { consume } from '../skills/food.mjs';
-import { Survival } from '../skills/survival.mjs';
+import { z } from 'zod';
+import { defineGoal } from '../controller/define.mjs';
+import { runField } from '../skills/task.mjs';
 
-export async function forage(env, options = {}) {
-  const field = new Fieldwork(env, options);
-  field.recoveringFood = true;
-  try {
-    await field.start(['forage_state', 'food_freshness', 'block_actions']);
-    const survival = new Survival(field);
+export const schema = z.object({
+  timeoutMs: z.number().int().min(1000).max(3600000).optional(),
+  sprint: z.boolean().optional(),
+}).strict();
+
+export default defineGoal({
+  name: 'forage',
+  schema,
+  destructive: true,
+  description:
+    'Find visible ripe berry bushes, allowlisted safe mushrooms or mature safe-food crops, then harvest and eat verified fresh forage until at least 80% ' +
+    'satiety with 320 satiety in reserve. No default deadline; unavailable food keeps exploration ' +
+    'running. Damage/death/control loss cancels; never respawns or resumes automatically. ' +
+    'Returns START and goal.id; poll goal_status. Needs an empty hotbar slot for harvesting. ' +
+    'Optional sprint=true permits straight level sprinting only while food is at least 60%.',
+  announce: () => 'Foraging for a bite to eat.',
+  run: (env, options) => runField(env, { ...options, manageFood: true }, [], async (field, survival) => {
     await survival.tend({ force: true });
     return { ok: true, goal: 'forage', eaten: survival.eaten, harvested: survival.harvested,
       reserve: survival.reserve, moved: +field.moved.toFixed(1), searched: field.searched };
-  } finally {
-    await env.send({ action: 'stop' });
-  }
-}
-
-export async function eat(env, options = {}) {
-  const field = new Fieldwork(env, options);
-  try {
-    await field.start(['food_freshness']);
-    return { ok: true, goal: 'eat', ...await consume(field) };
-  } finally {
-    await env.send({ action: 'stop' });
-  }
-}
+  }),
+});

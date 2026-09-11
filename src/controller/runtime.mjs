@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Cause, Deferred, Effect, Fiber } from 'effect';
 import { z } from 'zod';
-import { actions } from './actions.mjs';
+import { findTool, goals, tools } from './registry.mjs';
 import { GameClient } from '../game/client.mjs';
 import { Navigation } from '../navigation/navigator.mjs';
-import { goalHandlers, localHandlers } from '../goals/registry.mjs';
 
 const attempt = fn => Effect.tryPromise({ try: fn, catch: error => error instanceof Error ? error : new Error(String(error)) });
 
@@ -60,9 +59,9 @@ export class Controller {
     // Control-plane reads never wait for a game request or an in-flight goal startup.
     if (request.action === 'api' || request.action === 'goal_status') {
       const { action, ...args } = request;
-      const parsed = actions.find(t => t.name === action).schema.parse(args);
-      if (action === 'api') return Promise.resolve({ ok: true, controller: this.info(), actions: actions.map(t => ({
-        name: t.name, action: t.action ?? t.name, execution: goalHandlers.has(t.name) ? 'goal' : t.readOnly ? 'query' : 'command',
+      const parsed = findTool(action).schema.parse(args);
+      if (action === 'api') return Promise.resolve({ ok: true, controller: this.info(), actions: tools.map(t => ({
+        name: t.name, action: t.action ?? t.name, execution: goals.includes(t) ? 'goal' : t.readOnly ? 'query' : 'command',
         description: t.description, inputSchema: z.toJSONSchema(t.schema),
       })) });
       const goal = !parsed.id || parsed.id === this.last?.id ? this.goalView() : this.history.get(parsed.id);
@@ -72,22 +71,21 @@ export class Controller {
     }
     if (request.action === 'stop') {
       const { action, ...args } = request;
-      const { expectedGoal } = actions.find(t => t.name === 'stop').schema.parse(args);
+      const { expectedGoal } = findTool('stop').schema.parse(args);
       if (expectedGoal && this.last?.id !== expectedGoal) return Promise.resolve({ ok: false, error: 'Goal changed; no stop sent.' });
       const hadGoal = !!this.active;
       return this.stop().then(() => hadGoal ? { ok: true, status: 'stopped' } : this.send({ action: 'stop' }));
     }
     return Effect.runPromise(this.gate.withPermits(1)(attempt(async () => {
       if (this.closing) throw new Error('Controller shutting down');
-      const tool = actions.find(t => (t.action ?? t.name) === request.action || t.name === request.action);
+      const tool = findTool(request.action);
       if (!tool) throw new Error('Unknown controller action; screenshots/UI and raw control frames are not exposed.');
       const { action, ...args } = request;
       const parsed = tool.schema.parse(args);
       if (this.active && !tool.readOnly) throw new Error('Goal active; stop it before another mutation.');
-      const handler = goalHandlers.get(tool.name);
-      if (handler) return this.launch(tool.name, parsed, (record, started) => handler(this, parsed, record, started));
-      const local = localHandlers.get(tool.name);
-      if (local) return local(this, parsed);
+      if (tool.launch) return this.launch(tool.name, parsed, (record, started) => tool.launch(this, parsed, record, started));
+      if (tool.run) return this.launch(tool.name, parsed, (record, started) => this.runTask(tool.run, parsed, record, started));
+      if (tool.local) return tool.local(this, parsed);
       const result = await this.send({ action: tool.action ?? tool.name, ...parsed });
       if (tool.name === 'observe' && result.ok) {
         result.navigation = this.view();
@@ -237,30 +235,7 @@ export class Controller {
   }
 }
 
-const cleanName = code => String(code ?? '').split(':').pop().replace(/[-_]/g, ' ').trim() || 'something';
-
 // Short, human-sounding description of a starting goal for server chat.
 export function describeGoal(kind, args = {}) {
-  switch (kind) {
-    case 'move_to': return 'Heading over to take a look.';
-    case 'collect_stick': return 'Grabbing a stick.';
-    case 'gather_sticks': return 'Collecting some sticks.';
-    case 'forage': return 'Foraging for a bite to eat.';
-    case 'eat': return 'Stopping for a bite.';
-    case 'equip': return 'Sorting out my gear.';
-    case 'collect_item': return 'Picking something up.';
-    case 'dig_block': return 'Digging a block.';
-    case 'place_block': return 'Placing a block.';
-    case 'craft_item': return `Crafting ${cleanName(args.output)}.`;
-    case 'harvest': return `Off to gather ${cleanName(args.item ?? args.match)}.`;
-    case 'fell_tree': return 'Chopping down a tree for logs.';
-    case 'use_on_block': return `Working on a block${args.item ? ` with ${cleanName(args.item)}` : ''}.`;
-    case 'travel': return args.poi ? `Traveling to ${args.poi}.` : 'Setting off on a journey.';
-    case 'explore': return 'Exploring the area a bit.';
-    case 'dig_area': return 'Clearing out an area.';
-    case 'build': return `Building a ${(args.preset?.kind ?? 'structure').replace(/[-_]/g, ' ')}.`;
-    case 'knap': return `Knapping ${cleanName(args.output)}.`;
-    case 'clayform': return `Forming ${cleanName(args.output)} out of clay.`;
-    default: return `Starting to ${String(kind).replace(/[-_]/g, ' ')}.`;
-  }
+  return findTool(kind)?.announce?.(args) ?? `Starting to ${String(kind).replace(/[-_]/g, ' ')}.`;
 }

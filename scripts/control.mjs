@@ -1,8 +1,8 @@
-import { actions } from '../src/controller/actions.mjs';
+import { tools } from '../src/controller/registry.mjs';
 import { requestController } from '../src/controller/client.mjs';
 
 const [name = 'observe', ...params] = process.argv.slice(2);
-const tool = actions.find(tool => tool.name === name || tool.action === name);
+const tool = tools.find(tool => tool.name === name || tool.action === name);
 let args = {};
 let expectedParams = 0;
 if (['move', 'interact', 'attack', 'attack_block'].includes(name)) args = { durationMs: Number(params[0]) };

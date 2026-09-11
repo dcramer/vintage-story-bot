@@ -2,7 +2,7 @@
 
 Client C# mod → loopback JSON/TCP → Node controller → stdio MCP/CLI.
 
-- [Tool schemas](../src/controller/actions.mjs): MCP/CLI API contracts.
+- [Actions](../src/actions/) and [goals](../src/goals/): one file per public tool; MCP/CLI API contracts.
 - [Architecture](architecture.md): module ownership and internal wire contract.
 - [Game API reference](capabilities.md): installed sources and entry points.
 - [Runtime](runtime.md): deployment, control, environment constraints.

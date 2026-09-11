@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { requestBridge, bridgePort } from '../src/bridge/client.mjs';
-import { actions } from '../src/controller/actions.mjs';
+import { tools as actions } from '../src/controller/registry.mjs';
 import { uiTools, isBotCommand, validateClick } from '../src/operator/bot-window.mjs';
 
 async function fakeBridge(t, handle) {

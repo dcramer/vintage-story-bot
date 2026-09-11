@@ -6,10 +6,11 @@
 | --- | --- |
 | `src/bridge/` | Bounded game transport; no retries. |
 | `src/game/` | Game RPC client: terrain cursors, scoped control owners/sequences/cleanup. |
-| `src/controller/` | Shared service, public schemas, Effect goal lifecycle/exclusion. |
+| `src/controller/` | Shared service, tool registry, shared zod fragments, Effect goal lifecycle/exclusion. |
+| `src/actions/` | One public query/command per file: schema, description, mod wire alias or controller-local handler. |
 | `src/navigation/` | Terrain memory, route planning, exploration, steering policy; no I/O. |
-| `src/goals/` | Goal registry and task policies; injected game/skill API. |
-| `src/skills/` | Composable fieldwork, harvesting/eating and survival priority; shared session guards/memory. |
+| `src/goals/` | One public goal per file: schema, description, chat announcement, task policy composing skills. |
+| `src/skills/` | Composable fieldwork, harvesting/eating and survival priority; shared session guards/memory; `task.mjs` goal harness. |
 | `src/mcp/` | MCP adapter only. `src/mcp-server.mjs` preserves registrations. |
 | `src/operator/` | Human/operator UI utilities; never import from gameplay or MCP. |
 | `mod/` | Visible sensing, input execution, smooth aiming, guard/expiry enforcement. |
@@ -23,7 +24,7 @@
 - Simulate a real player through the client's own input pipeline. The mod is a cheaper substitute for driving the GUI, not a bypass: it sets input and control state (mouse buttons, keyboard keys, aim, hotbar) so the game runs its normal callbacks and sends the exact client→server packets a human's mouse and keyboard would. Never write blocks, inventory, or entities directly (`IBlockAccessor.SetBlock`, stack writes): on a client that is prediction the server discards, producing a client-only illusion that vanishes on reconnect. Anything that must persist has to go through a real interaction the server re-validates. Consequence: server-authoritative effects need the same preconditions a player has, including control flags the server learns on their own packets — see [held-item interactions](capabilities.md#held-item-interactions).
 - Mod = sensors/actuators, not a planner. Game owns physics, collision, inventory and server validation. Node owns routes, memory, goals and reaction policies; edit/restart Node without reloading the game.
 - Follow [Mineflayer](https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md)'s state/control separation and [pathfinder](https://github.com/PrismarineJS/mineflayer-pathfinder)'s independent goals, movement policy and outcomes; do not reproduce Minecraft physics or assume its world visibility.
-- Skills compose inside one controller-owned goal. Add handlers to `src/goals/registry.mjs` and public contracts to `src/controller/actions.mjs`; MCP/CLI/discovery share those contracts. No arbitrary code-loading RPC.
+- Skills compose inside one controller-owned goal. One file per public tool: `src/actions/<name>.mjs` (query/command) or `src/goals/<name>.mjs` (goal); `src/controller/registry.mjs` discovers them by basename and MCP/CLI/discovery share those contracts. No arbitrary code-loading RPC.
 - Keep the fast loop local: structured observations → Node decision → bounded input frame. LLM/MCP assigns goals, not individual walking ticks. Perception is approximate visible knowledge, not omniscience; unknown ≠ air, stale ≠ safe.
 - Mod owns immediate safety revocation even if Node stalls. Node decides subsequent reactions; cancellation completes cleanup before another goal runs. Do not auto-resume after damage/death/restart.
 - Transport acknowledgement is not gameplay completion. Verify arrival, inventory deltas and life state. Lost replies imply uncertain effects; inspect, never blindly resend.
@@ -48,7 +49,7 @@ Controller → dashboard `POST /ingest` on `127.0.0.1:42159`: one long-lived chu
 
 ## Internal mod protocol
 
-All requests use existing bounded JSON-line transport; game thread executes them. Public tools: [schemas](../src/controller/actions.mjs).
+All requests use existing bounded JSON-line transport; game thread executes them. Public tools: [tool contracts](../src/actions/) and [goals](../src/goals/).
 
 - `sense {session?,after?}` → `{state,terrain:{session,reset,cursor,more,clock,cells}}`. Max 128 cells/page. Rows: `[x,y,z,observedTick,hazard,relativeCollisionBoxes|null]`; boxes `[x1,y1,z1,x2,y2,z2]`; null invalidates. `clock`/timestamps are mod monotonic ms, not UTC. Reset discards old memory; drain `more` before movement. A changed cell invalidates immediately; adjacent shape-dependent cells retain their last geometry while being prioritized for resampling. Unchanged geometry is deduplicated and republishes freshness at most every 10 seconds; changes publish immediately. Air `[]` ≠ unknown. Nearby terrain sampling is camera-independent, range/occlusion bounded.
 - `observe.nearbyEntities`: up to 24 living non-item entities in the loaded 32-block client neighborhood, sorted by distance. Node applies an explicit hostile code allowlist; unknown/modded entities are never treated as hostile by inference.

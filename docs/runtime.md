@@ -40,7 +40,7 @@ Preserve other registrations. These do not configure native Windows clients.
 - F7 / `.aibridge on`: opt in after joining. F8 / `.aibridge off`: release inputs + disable. Never auto-enable.
 - Same OS as bot; unauthenticated loopback `127.0.0.1:42157`. One JSON line/request/connection. Adapter port override: `VINTAGE_STORY_BRIDGE_PORT`; mod port fixed.
 - Shared controller: `127.0.0.1:42158`, override `VINTAGE_STORY_CONTROLLER_PORT`. Public actions are schema-allowlisted; no UI/raw-frame forwarding. [Internal protocol](architecture.md).
-- Tools/arguments: [schemas](../src/controller/actions.mjs). CLI: `node scripts/control.mjs <action> [args]`.
+- Tools/arguments: [tool contracts](../src/actions/) and [goals](../src/goals/). CLI: `node scripts/control.mjs <action> [args]`.
 - Dashboard: `pnpm dashboard` serves `http://127.0.0.1:42159` (override `VINTAGE_STORY_DASHBOARD_PORT`); read-only operator view of streamed controller telemetry. Start/stop independently of the controller; the controller reconnects itself. [Telemetry contract](architecture.md#telemetry).
 - Structured CLI arguments: `node scripts/control.mjs scan --json '{"match":"stick"}'`. Inspect observe.capabilities; versions pinned per conventions.
 - `pnpm goal:stick`: shared `collect_stick` goal, pickup of one reachable/in-view loose stick; verifies inventory gain. Mutates game; never part of unit tests.
