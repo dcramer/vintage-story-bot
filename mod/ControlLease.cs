@@ -14,9 +14,9 @@ public sealed class ControlLease
         Owner = owner; Until = now + 500; Sequence = 0; Reason = null;
         return true;
     }
-    public bool Frame(string owner, long sequence, long now, int duration)
+    public bool Frame(string owner, long sequence, long receivedAt, long now, int duration)
     {
-        if (!Active || owner != Owner || sequence <= Sequence || now >= Until || duration is < 1 or > 500) return false;
+        if (!Active || owner != Owner || sequence <= Sequence || receivedAt >= Until || duration is < 1 or > 500) return false;
         Sequence = sequence; Until = now + duration;
         return true;
     }

@@ -150,7 +150,7 @@ public sealed class AiBridgeMod : ModSystem
                     else
                     {
                         var completion = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
-                        requests.Enqueue(new(Encoding.UTF8.GetString(buffer, 0, length), timeout.Token, completion));
+                        requests.Enqueue(new(Encoding.UTF8.GetString(buffer, 0, length), Environment.TickCount64, timeout.Token, completion));
                         response = await completion.Task.WaitAsync(timeout.Token).ConfigureAwait(false);
                     }
                     byte[] output = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response) + "\n");
@@ -181,6 +181,25 @@ public sealed class AiBridgeMod : ModSystem
             }
         }
         SampleLife();
+
+        // Judge lease refreshes when the bridge received them, before expiring the
+        // owner on a delayed render tick. Requests cancelled by the network timeout
+        // are still discarded and cannot revive control.
+        while (requests.TryDequeue(out var pending))
+        {
+            if (pending.Cancellation.IsCancellationRequested) continue;
+            try { pending.Completion.TrySetResult(Execute(pending.Json, pending.ReceivedAt)); }
+            catch (JsonException) { pending.Completion.TrySetResult(new { ok = false, error = "Invalid JSON request." }); }
+            catch (Exception exception)
+            {
+                ReleaseControl("action_error");
+                StopMovement();
+                StopHandAction();
+                api.Logger.Error($"AI bridge request failed: {exception}");
+                pending.Completion.TrySetResult(new { ok = false, error = "Game action failed; see client log." });
+            }
+        }
+
         if (lifetime != null && CanControl())
         {
             try
@@ -219,23 +238,9 @@ public sealed class AiBridgeMod : ModSystem
                 SetMovement(true);
         }
 
-        while (requests.TryDequeue(out var pending))
-        {
-            if (pending.Cancellation.IsCancellationRequested) continue;
-            try { pending.Completion.TrySetResult(Execute(pending.Json)); }
-            catch (JsonException) { pending.Completion.TrySetResult(new { ok = false, error = "Invalid JSON request." }); }
-            catch (Exception exception)
-            {
-                ReleaseControl("action_error");
-                StopMovement();
-                StopHandAction();
-                api.Logger.Error($"AI bridge request failed: {exception}");
-                pending.Completion.TrySetResult(new { ok = false, error = "Game action failed; see client log." });
-            }
-        }
     }
 
-    private object Execute(string json)
+    private object Execute(string json, long? receivedAt = null)
     {
         using var document = JsonDocument.Parse(json);
         var request = document.RootElement;
@@ -522,7 +527,8 @@ public sealed class AiBridgeMod : ModSystem
                 }
                 if (!CanControl() || ManualInput() || NavigationDanger() || entity.MountedOn != null)
                 { ReleaseControl("control_unavailable"); return new { ok = false, error = "Controls unavailable." }; }
-                if (!control.Frame(frameOwner.GetString()!, sequence, Environment.TickCount64, frameDuration))
+                long frameNow = Environment.TickCount64;
+                if (!control.Frame(frameOwner.GetString()!, sequence, receivedAt ?? frameNow, frameNow, frameDuration))
                     return new { ok = false, error = "Expired, revoked, duplicate or foreign control frame." };
                 StopMovement(); StopHandAction();
                 sensorPriority = focus; controlYaw = frameYaw; controlPitch = framePitch;
@@ -851,5 +857,5 @@ public sealed class AiBridgeMod : ModSystem
         base.Dispose();
     }
 
-    private sealed record PendingRequest(string Json, CancellationToken Cancellation, TaskCompletionSource<object> Completion);
+    private sealed record PendingRequest(string Json, long ReceivedAt, CancellationToken Cancellation, TaskCompletionSource<object> Completion);
 }
