@@ -192,8 +192,10 @@ export class Navigation {
       // direction is itself a valid traversal from here.
       const ahead = { x: p.x + Math.sin(radians) * .6, y: p.y, z: p.z + Math.cos(radians) * .6 };
       const footing = map.stand?.(Math.floor(ahead.x) + .5, Math.floor(ahead.z) + .5, p.y, w, h) ?? ahead;
+      // In a short frame the body covers under a block while the camera
+      // completes most of the turn, so sharper bends are walked through too.
       const bend = Math.abs(angle(desiredYaw, state.orientation.yawDegrees));
-      const forward = bend < 60 &&
+      const forward = (bend < 60 || durationMs === 180 && bend <= 90) &&
         (Math.abs(footing.y - p.y) < .05 ? map.support(ahead, w) === 9 && traverse(p, ahead, recenter) : traverse(p, footing, recenter));
       this.progressAt = now; return { yawDegrees, pitchDegrees: 15, forward, sneak: false, durationMs };
     }

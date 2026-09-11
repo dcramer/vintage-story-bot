@@ -164,7 +164,11 @@ export class TerrainMemory {
       if (dry) escapedHazardMargin = true;
       if (Math.abs(rise) < .05) {
         const n = this.support(p, w, missing);
-        if (recenter ? n === 0 || n < support : n !== 9) return false;
+        // A planned segment needs full support all the way; the live body
+        // re-centring onto its route may pass a hand's width from a step
+        // beside the path, so it needs majority support and a fully
+        // supported endpoint, checked below.
+        if (recenter ? n < 4 : n !== 9) return false;
         support = n;
       }
       if (rise < -.05) {

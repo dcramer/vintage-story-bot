@@ -270,9 +270,11 @@ test('navigation counts camera convergence as bounded progress', () => {
   const nav = new Navigation(map, state, { x: 5.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
   nav.state = 'moving'; nav.route = [{ x: 1.5, y: 0, z: .5 }]; nav.progressAt = 0; nav.lastProgress = state.position;
   const first = nav.tick(state, 2000);
-  assert.equal(first.forward, false);
+  // A 90-degree bend is walked through in a short frame when the footing ahead is valid.
+  assert.equal(first.forward, true);
+  assert.equal(first.durationMs, 180);
   assert.equal(first.yawDegrees, 90);
-  assert.equal(nav.tick({ ...state, orientation: { yawDegrees: 30 } }, 4000).forward, false);
+  assert.equal(nav.tick({ ...state, orientation: { yawDegrees: 30 } }, 4000).forward, true);
   assert.equal(nav.replans, 0);
   assert.equal(nav.progressAt, 4000);
 });
