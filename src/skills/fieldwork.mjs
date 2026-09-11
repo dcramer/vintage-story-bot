@@ -12,6 +12,7 @@ export class Fieldwork {
   searched = 0;
   heading = 0;
   attempts = 0;
+  foodRecoveryAuthorized = false;
   visits = new Map();
   seen = new Map();
   rejected = new Map();
@@ -29,8 +30,10 @@ export class Fieldwork {
     if (this.timeoutMs !== undefined && this.now() - this.started >= this.timeoutMs) throw Error('Requested deadline reached');
   }
   alertsSafe(state) {
-    const starvingRecovery = this.recoveringFood && state.life.alerts.includes('low_food');
-    return state.life.alerts.every(alert => alert === 'low_food' || alert === 'low_health' && starvingRecovery);
+    if (!this.recoveringFood) this.foodRecoveryAuthorized = false;
+    else if (state.life.alerts.includes('low_food')) this.foodRecoveryAuthorized = true;
+    return state.life.alerts.every(alert => alert === 'low_food' ||
+      alert === 'low_health' && this.foodRecoveryAuthorized);
   }
   async send(request) {
     this.check();

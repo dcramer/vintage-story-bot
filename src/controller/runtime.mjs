@@ -153,7 +153,7 @@ export class Controller {
       if (goal.sprint && !initial.capabilities.includes('background_sprint'))
         return yield* Effect.fail(new Error('Update mod: background_sprint required'));
       const alertsSafe = state => state.life.alerts.every(alert => alert === 'low_food' ||
-        alert === 'low_health' && allowStarvingRecovery && state.life.alerts.includes('low_food'));
+        alert === 'low_health' && allowStarvingRecovery);
       if (!initial.controlReady || !initial.alive || !initial.motion.onGround || initial.motion.swimming || initial.motion.feetInLiquid || initial.mounted ||
         !alertsSafe(initial) || initial.position.dimension !== 0 ||
         Math.abs(goal.x - initial.position.x) > 128 || Math.abs(goal.z - initial.position.z) > 128 || Math.abs(goal.y - initial.position.y) > 32)

@@ -78,15 +78,20 @@ test('threat avoidance is explicit, proximity-bounded and points away', () => {
   assert.ok(target.x > player.x + 30 && target.sprint && target.emergency);
 });
 
-test('low health is tolerated only during explicit starving food recovery', () => {
+test('low-health food recovery remains authorized after eating clears low food', () => {
   const field = new Fieldwork({});
   const state = alerts => ({ life: { alerts } });
   assert.equal(field.alertsSafe(state(['low_food'])), true);
   assert.equal(field.alertsSafe(state(['low_food', 'low_health'])), false);
   field.recoveringFood = true;
   assert.equal(field.alertsSafe(state(['low_food', 'low_health'])), true);
-  assert.equal(field.alertsSafe(state(['low_health'])), false);
+  assert.equal(field.alertsSafe(state(['low_health'])), true);
   assert.equal(field.alertsSafe(state(['low_food', 'on_fire'])), false);
+  field.recoveringFood = false;
+  assert.equal(field.alertsSafe(state(['low_health'])), false);
+  const fresh = new Fieldwork({});
+  fresh.recoveringFood = true;
+  assert.equal(fresh.alertsSafe(state(['low_health'])), false);
 });
 
 test('a blocked exploration leg penalizes its destination for the next deterministic choice', async () => {

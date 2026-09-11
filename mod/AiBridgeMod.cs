@@ -714,8 +714,11 @@ public sealed class AiBridgeMod : ModSystem
         }
     }
 
+    // The caller may request this narrow scope only for an explicit food
+    // recovery episode. Keep low health tolerated after eating clears the
+    // low-food alert so that the same episode can finish building a reserve.
     private bool NavigationDanger(bool starvingRecovery = false) => life.Alerts.Any(alert => alert != "low_food" &&
-        !(alert == "low_health" && starvingRecovery && life.Alerts.Contains("low_food")));
+        !(alert == "low_health" && starvingRecovery));
 
     private int? RemainingLives()
     {
