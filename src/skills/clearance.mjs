@@ -48,3 +48,9 @@ export async function clearFoliage(field, toward) {
   field.reject(target, 120000);
   return false;
 }
+
+export async function clearFoliagePath(field, toward, limit = 3) {
+  let cleared = 0;
+  while (cleared < limit && await clearFoliage(field, toward)) cleared++;
+  return cleared;
+}

@@ -1,7 +1,7 @@
 import { horizontal, normalize } from '../navigation/terrain.mjs';
 import { sightRange, temporalStormUnsafe } from './fieldwork.mjs';
 import { changeBlock } from './blocks.mjs';
-import { clearFoliage } from './clearance.mjs';
+import { clearFoliagePath } from './clearance.mjs';
 import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, ripeForage, termiteCode } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
@@ -117,7 +117,7 @@ export class Survival {
           const result = await field.walk(destination, this.eatWhen);
           if (stalledFoodRoute(result, before, field.latest.position)) {
             field.reject(target, 120000);
-            await clearFoliage(field, target.point);
+            await clearFoliagePath(field, target.point);
           }
           continue;
         }
@@ -126,7 +126,7 @@ export class Survival {
           const result = await field.walk(field.explore(target.point, foodSearchDistance), this.eatWhen);
           if (stalledFoodRoute(result, before, field.latest.position)) {
             field.reject(target, 120000);
-            await clearFoliage(field, target.point);
+            await clearFoliagePath(field, target.point);
           }
           continue;
         }
@@ -138,7 +138,7 @@ export class Survival {
       const progress = horizontal(before, field.latest.position);
       this.searchTarget = !['arrived', 'yielded'].includes(result.state) && progress > 2 ? destination : null;
       if (stalledFoodRoute(result, before, field.latest.position)) {
-        if (++this.searchStalls >= 3 && await clearFoliage(field, destination)) {
+        if (++this.searchStalls >= 3 && await clearFoliagePath(field, destination)) {
           this.searchStalls = 0;
           this.surveyed = false;
           this.desperateSurveyed = false;

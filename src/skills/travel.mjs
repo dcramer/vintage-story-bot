@@ -1,7 +1,7 @@
 import { horizontal } from '../navigation/terrain.mjs';
 import { temporalStormUnsafe } from './fieldwork.mjs';
 import { nearestThreat } from './threats.mjs';
-import { clearFoliage } from './clearance.mjs';
+import { clearFoliagePath } from './clearance.mjs';
 
 export const routeRegressed = (best, current, margin = 12) => current > best + margin;
 
@@ -62,7 +62,7 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     if (result.state === 'arrived' || result.state === 'yielded' || progress > 2) stalled = 0;
     else {
       stalled++;
-      if (stalled >= 3 && await clearFoliage(field, goal)) {
+      if (stalled >= 3 && await clearFoliagePath(field, goal)) {
         stalled = 0;
         continuation = null;
         localDetour = false;
