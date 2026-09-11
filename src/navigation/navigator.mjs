@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { angle, distance, horizontal, key, lookAt, normalize } from './terrain.mjs';
+import { angle, horizontal, key, lookAt, normalize, STEP_HEIGHT } from './terrain.mjs';
 import { findRoute } from './planner.mjs';
 import { fleeTarget, nearbyThreats, nearbyUnclearedThreats } from '../skills/threats.mjs';
 
@@ -19,7 +19,7 @@ export class Navigation {
     this.map = map; this.primaryTarget = this.target = goal;
     this.width = state.body.halfWidth; this.height = state.body.height; this.eyeHeight = state.body.eyeHeight;
     this.deadline = now + (goal.timeoutMs ?? 60000); this.surveyAt = this.progressAt = now;
-    this.lastProgress = this.edgeStart = state.position;
+    this.edgeStart = state.position;
   }
   get active() { return ['surveying', 'moving'].includes(this.state); }
   observe() {
@@ -32,14 +32,14 @@ export class Navigation {
   finish(state, reason) { this.state = state; this.reason = reason; this.lookingAt = null; return null; }
   survey(now) {
     this.state = 'surveying'; this.surveyAt = now; this.jumpAt = 0; this.airborne = false;
-    this.lookingAt = null; this.nextPlanAt = 0; this.lastYawError = undefined;
+    this.lookingAt = null; this.nextPlanAt = 0;
   }
   replan(p, now, reason) {
     this.lastReplan = reason;
     if (['stalled', 'jump_failed'].includes(reason) && this.route[this.index])
       this.blocked.add(`${key(this.edgeStart)}>${key(this.route[this.index])}`);
     if (++this.replans > 12) return this.finish('blocked', reason);
-    this.survey(now); this.lastProgress = p; this.progressAt = now;
+    this.survey(now); this.bestNear = undefined; this.progressAt = now;
     return null;
   }
   // Re-plan in this same tick so a changed cell costs no stopped frame, but
@@ -92,7 +92,7 @@ export class Navigation {
         return this.finish('blocked', 'no_observed_route');
       }
       this.route = planned; this.index = 0; this.state = 'moving'; this.lookingAt = null;
-      this.lastProgress = this.edgeStart = p; this.progressAt = now;
+      this.edgeStart = p; this.bestNear = undefined; this.progressAt = now;
     }
     // Advance past checkpoints the body has reached: close by, or crossed
     // along the segment between slow samples.
@@ -107,7 +107,7 @@ export class Navigation {
     };
     while (this.index < this.route.length && reached(this.route[this.index])) {
       this.edgeStart = this.route[this.index++]; this.jumpAt = 0; this.airborne = false;
-      this.progressAt = now; this.lastProgress = p;
+      this.progressAt = now; this.bestNear = undefined;
     }
     if (this.index >= this.route.length) {
       const id = key(p); this.visits.set(id, (this.visits.get(id) ?? 0) + 1);
@@ -120,7 +120,7 @@ export class Navigation {
       const node = this.route[ahead];
       if (node.move !== 'walk' || horizontal(p, node) > 4 || Math.abs(node.y - p.y) > .05 ||
           !map.lineWalkable({ x: p.x, y: node.y, z: p.z }, node)) break;
-      this.index = ahead; this.edgeStart = p;
+      this.index = ahead; this.edgeStart = p; this.bestNear = undefined;
     }
     const next = this.route[this.index];
     this.nextCheckpoint = next;
@@ -133,13 +133,14 @@ export class Navigation {
       this.diagnostics = { kind: 'checkpoint_gone', point: next };
       return grounded ? this.replanNow(state, p, now, 'terrain_changed') : this.finish('blocked', 'landing_changed');
     }
-    if (distance(p, this.lastProgress) > .12) { this.progressAt = now; this.lastProgress = p; this.lastYawError = undefined; }
+    // Progress is getting closer to the checkpoint; sliding along a block
+    // face or jittering in place is not.
+    const near = horizontal(p, next);
+    if (this.bestNear === undefined || this.bestNear - near > .1) { this.bestNear = near; this.progressAt = now; }
     const desiredYaw = lookAt(p, next).yawDegrees;
     this.desiredYaw = desiredYaw;
     this.yawError = angle(desiredYaw, state.orientation.yawDegrees);
     const yawMagnitude = Math.abs(this.yawError);
-    if (this.lastYawError !== undefined && yawMagnitude < this.lastYawError - .5) this.progressAt = now;
-    this.lastYawError = yawMagnitude;
     if (now - this.progressAt > 3000) return this.replan(p, now, 'stalled');
     // Steering: snap large turns, ease small ones, and sample often while turning.
     if (this.steeringYaw === null || now - this.steeringAt > 300) this.steeringYaw = state.orientation.yawDegrees;
@@ -150,10 +151,13 @@ export class Navigation {
     const yawDegrees = this.steeringYaw;
     const following = this.route[this.index + 1];
     const turn = following ? Math.abs(angle(lookAt(next, following).yawDegrees, desiredYaw)) : 0;
-    const near = horizontal(p, next);
-    const tight = near < 2 && (next.move !== 'walk' || turn > 60);
+    // What the next cell asks of the body is decided from where the body
+    // is now, not from the cell the plan came from: a cell a block up is a
+    // jump even if the route reached it on the level.
+    const rise = next.y - p.y;
+    const jumpMove = next.move === 'gap' || rise > STEP_HEIGHT;
+    const tight = near < 2 && (jumpMove || rise < -STEP_HEIGHT || turn > 60);
     const durationMs = tight || yawMagnitude > 30 ? 180 : 500;
-    const jumpMove = next.move === 'jump' || next.move === 'gap';
     // Jumps go straight at the cell from close by; everything else keeps
     // walking through the bend while the head comes round.
     if (jumpMove && grounded && !this.jumpAt && yawMagnitude < 15 && near < (next.move === 'gap' ? 2.2 : 1.3)) this.jumpAt = now;
