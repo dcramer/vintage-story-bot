@@ -9,6 +9,8 @@ Vintage Story bot: client C# mod → Node controller → MCP/CLI.
 - Make the smallest complete fix at the owning layer. Reuse existing paths; avoid speculative abstractions, unrelated cleanup, and workarounds that hide the cause.
 - Check the working tree before edits. Preserve unrelated changes; never revert or overwrite work you did not make.
 - Carry authorized work through implementation and verification. If blocked, finish independent work and report the concrete blocker.
+- Work directly on `main`; do not create branches or pull requests.
+- After each implemented and verified piece of functionality, commit only its changes, push to `main`, and pull/rebase to stay synchronized with collaborators. If the remote advances before a push, pull/rebase and retry; preserve unrelated working-tree changes.
 - Tests: do not write tests unless covering a critical regression. Prefer live gameplay verification and builds; no routine feature, refactor, or speculative tests.
 - Verify the requested outcome, not just command success. In the handoff, state what changed, verification performed, and any remaining uncertainty; distinguish build/mock evidence from live gameplay.
 
