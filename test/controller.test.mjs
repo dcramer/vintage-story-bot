@@ -53,7 +53,7 @@ test('Node geometry preserves step, headroom and hole constraints', () => {
 
 test('planner crosses only a fully observed dry one-cell gap', () => {
   const map = new TerrainMemory(), cells = [];
-  for (let x = -1; x <= 4; x++) for (let z = -1; z <= 1; z++) for (let y = -3; y <= 3; y++) {
+  for (let x = -1; x <= 4; x++) for (let z = -1; z <= 3; z++) for (let y = -3; y <= 3; y++) {
     const support = y === -1 && x !== 1;
     cells.push([x, y, z, 0, false, support ? [[0, 0, 0, 1, 1, 1]] : []]);
   }
@@ -62,6 +62,7 @@ test('planner crosses only a fully observed dry one-cell gap', () => {
   assert.equal(map.traverse(start, landing, .3, 1.85), false);
   assert.equal(map.jumpTraverse(start, landing, .3, 1.85), true);
   assert.equal(map.jumpTraverse(start, { x: 3.5, y: 0, z: .5 }, .3, 1.85), true);
+  assert.equal(map.jumpTraverse(start, { x: 2.5, y: 0, z: 2.5 }, .3, 1.85), true);
   assert.equal(map.jumpTraverse(start, { x: 3.61, y: 0, z: .5 }, .3, 1.85), false);
   const route = findRoute(map, start, { x: 3.5, y: 0, z: .5 }, .3, 1.85, { partial: false });
   assert.equal(route[0].jumpGap, true);
