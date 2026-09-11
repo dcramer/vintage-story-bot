@@ -244,7 +244,13 @@ export class Fieldwork {
     return roughRoute;
   }
   async leg(target, pauseWhen) {
-    const before = await this.observe();
+    let before = await this.observe();
+    // A leg starts from the ground: after a step down or a jump the body can
+    // be airborne for a moment when the previous leg ends.
+    for (let waits = 0; waits < 6 && !before.motion.onGround; waits++) { await this.wait(250); before = await this.observe(true); }
+    // Horizontal-only legs carry a surveyed height that is only a guess at
+    // distance; the navigator ignores it, so give it the real one.
+    if (target.horizontalOnly) target = { ...target, y: before.position.y };
     this.report('walking', { target });
     // Software-rendered remote clients commonly need about three seconds per
     // block over uneven ground. Preserve a hard two-minute ceiling, but do not
