@@ -40,7 +40,21 @@ export class TerrainMemory {
   }
   forget(id) { this.cells.delete(id); this.hazards.delete(id); }
   get(x, y, z) { return this.cells.get(cellKey(Math.floor(x), Math.floor(y), Math.floor(z))); }
-  missing(missing, x, y, z) { missing?.set(cellKey(Math.floor(x), Math.floor(y), Math.floor(z)), { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) }); }
+  // Unknown cells worth looking at. A cell sealed under known solid ground
+  // can never be seen by a sightline, so it is never a frontier: treating
+  // it as one sends the bot to stare at a hillside forever.
+  missing(missing, x, y, z) {
+    if (!missing || this.buried(x, y, z)) return;
+    missing.set(cellKey(Math.floor(x), Math.floor(y), Math.floor(z)), { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) });
+  }
+  buried(x, y, z) {
+    for (let above = Math.floor(y) + 1; above <= Math.floor(y) + 3; above++) {
+      const cell = this.get(x, above, z);
+      if (!cell) continue;
+      return !cell.hazard && cell.boxes.some(b => b[3] - b[0] > .99 && b[5] - b[2] > .99 && b[4] - b[1] > .99);
+    }
+    return false;
+  }
 
   // Highest floor inside cell (x,y,z): null for air/unknown, Infinity for a
   // shape taller than its cell (fences, walls) that cannot be stood on.

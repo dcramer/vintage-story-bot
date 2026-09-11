@@ -112,7 +112,10 @@ export class Navigation {
       this.progressAt = now; this.bestNear = undefined;
     }
     if (this.index >= this.route.length) {
-      const id = key(p); this.visits.set(id, (this.visits.get(id) ?? 0) + 1);
+      // Remember the frontier cell this partial route ended on, by the cell's
+      // own key, so the planner does not pick it again for this goal.
+      const end = this.route.at(-1) ?? p, id = key(end);
+      this.visits.set(id, (this.visits.get(id) ?? 0) + 1);
       if (++this.segments >= 64 || this.visits.get(id) > 3) return this.finish('blocked', 'exploration_exhausted');
       this.survey(now); return null;
     }
