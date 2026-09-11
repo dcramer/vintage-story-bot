@@ -187,6 +187,32 @@ test('food recovery marks safe search legs as emergency sprint between ten and t
   assert.equal(navigationTarget.emergency, true);
 });
 
+test('a grounded route nudge is short, sneaking, deterministic and measured', async () => {
+  const state = x => ({ ok: true, alive: true, controlReady: true, mounted: false,
+    player: { uid: 'test' }, position: { x, y: 1, z: .5, dimension: 0 },
+    body: { halfWidth: .3, height: 1.85 }, motion: { onGround: true, swimming: false, feetInLiquid: false },
+    life: { alerts: [], session: 'test', lastDamageAt: null }, orientation: { yawDegrees: 0 },
+    vitals: { hunger: { current: 1000, max: 1500 } }, nearbyEntities: [] });
+  let latest = state(.1), aimed, movement;
+  const env = {
+    aim: async angles => { aimed = angles; },
+    sync: async () => latest,
+    send: async request => {
+      if (request.action === 'observe') return latest;
+      if (request.action === 'move') movement = request;
+      if (request.action === 'stop') latest = state(.45);
+      return { ok: true };
+    },
+  };
+  const field = new Fieldwork(env, { wait: async () => {}, now: () => 0 });
+  field.initial = field.latest = latest;
+  assert.equal(await field.nudge({ x: 5.5, y: 1, z: .5 }), .35);
+  assert.deepEqual(aimed, { yawDegrees: 90, pitchDegrees: 15 });
+  assert.deepEqual(movement, { action: 'move', durationMs: 400, direction: 'forward',
+    jump: false, sprint: false, sneak: true });
+  assert.equal(field.moved, .35);
+});
+
 test('a blocked exploration leg penalizes its destination for the next deterministic choice', async () => {
   const state = { ok: true, alive: true, controlReady: true, mounted: false,
     player: { uid: 'test' },

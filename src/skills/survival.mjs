@@ -138,11 +138,15 @@ export class Survival {
       const progress = horizontal(before, field.latest.position);
       this.searchTarget = !['arrived', 'yielded'].includes(result.state) && progress > 2 ? destination : null;
       if (stalledFoodRoute(result, before, field.latest.position)) {
-        if (++this.searchStalls >= 3 && await clearFoliagePath(field, destination)) {
-          this.searchStalls = 0;
-          this.surveyed = false;
-          this.desperateSurveyed = false;
-          this.lastFarView = null;
+        if (++this.searchStalls >= 3) {
+          const cleared = await clearFoliagePath(field, destination);
+          const nudged = await field.nudge(destination);
+          if (cleared || nudged > .1) {
+            this.searchStalls = 0;
+            this.surveyed = false;
+            this.desperateSurveyed = false;
+            this.lastFarView = null;
+          }
         }
       } else this.searchStalls = 0;
       // The initial panorama is retained for this recovery episode. Each moved

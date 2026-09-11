@@ -158,6 +158,29 @@ export class Fieldwork {
     else if (result.state !== 'yielded') this.heading = normalize(this.heading + 90);
     return result;
   }
+  async nudge(target, durationMs = 400) {
+    const before = await this.observe(true);
+    if (!before.motion.onGround || nearestThreat(before) || horizontal(before.position, target) < .12) return 0;
+    const look = lookAt(before.position, target);
+    this.report('probing', { target });
+    await this.aim({ yawDegrees: look.yawDegrees, pitchDegrees: 15 });
+    try {
+      // Sneak prevents stepping off an unsupported edge. This is deliberately
+      // shorter than one normal movement frame and never jumps or sprints; it
+      // only enters a nearby corridor after the route planner and foliage
+      // recovery have repeatedly failed from the same grounded position.
+      await this.send({ action: 'move', durationMs, direction: 'forward', jump: false, sprint: false, sneak: true });
+      await this.wait(durationMs + 150);
+    } finally {
+      await this.env.send({ action: 'stop' });
+    }
+    await this.wait(150);
+    const after = await this.observe(true);
+    const progress = horizontal(before.position, after.position);
+    this.moved += progress;
+    if (progress > .1) this.heading = lookAt(before.position, after.position).yawDegrees;
+    return progress;
+  }
   async evadeThreat(clearStall) {
     let fled = false;
     while (true) {
