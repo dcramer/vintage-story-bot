@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { explorationDistance, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
+import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { eatingLooks, forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
 import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, stalledFoodRoute } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat, threatClearRadius, threatStartRadius, threatVerticalRange } from '../src/skills/threats.mjs';
-import { routeRegressed, travel } from '../src/skills/travel.mjs';
+import { elevationDetourDistance, routeRegressed, travel } from '../src/skills/travel.mjs';
 import { foliageBlock, foliageClearCandidate, threatAllowsClearance } from '../src/skills/clearance.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
@@ -265,6 +265,16 @@ test('directed exploration keeps lateral and reverse bypasses local', () => {
   assert.ok(Math.abs(explorationDistance(48, 180) - 9.6) < 1e-9);
 });
 
+test('elevation travel searches beyond a horizontally close cliff face', () => {
+  assert.equal(elevationDetourDistance(1.49), 0);
+  assert.equal(elevationDetourDistance(1.5), 12);
+  assert.equal(elevationDetourDistance(10), 20);
+  assert.equal(elevationDetourDistance(100), 24);
+  assert.equal(explorationReach(4, 48), 4);
+  assert.equal(explorationReach(4, 20, 20), 20);
+  assert.equal(explorationReach(4, 10, 20), 10);
+});
+
 test('long travel extends a productive partial detour instead of reversing it', async () => {
   const initial = { position: { x: .5, y: 1, z: .5 }, condition: {} };
   const detour = { x: .5, y: 1, z: 48.5, horizontalOnly: true, arrivalRadius: 4 };
@@ -311,6 +321,32 @@ test('nearby travel explores after a stationary direct route failure', async () 
   };
   const result = await travel(field, null, { x: 20.5, z: .5 });
   assert.equal(result.ok, true);
+  assert.deepEqual(legs, [destination, detour, destination]);
+});
+
+test('nearby elevated travel gives its detour enough reach to find an ascent', async () => {
+  const initial = { position: { x: .5, y: 1, z: .5 }, condition: {} };
+  const destination = { x: 4.5, y: 11, z: .5, arrivalRadius: 1 };
+  const detour = { x: .5, y: 1, z: 20.5, horizontalOnly: true, arrivalRadius: 2 };
+  const legs = [];
+  let latest = initial, walks = 0, explorationArgs;
+  const field = {
+    moved: 0,
+    get latest() { return latest; },
+    observe: async () => latest,
+    report: () => {},
+    explore: (...args) => { explorationArgs = args; return detour; },
+    walk: async target => {
+      legs.push(target);
+      walks++;
+      if (walks === 2) latest = { ...initial, position: { x: .5, y: 11, z: 20.5 } };
+      if (walks === 3) latest = { ...initial, position: { x: 4.5, y: 11, z: .5 } };
+      return { state: walks === 1 ? 'blocked' : 'arrived' };
+    },
+  };
+  const result = await travel(field, null, destination);
+  assert.equal(result.ok, true);
+  assert.deepEqual(explorationArgs, [{ x: 4.5, y: 11, z: .5 }, 20, 20]);
   assert.deepEqual(legs, [destination, detour, destination]);
 });
 

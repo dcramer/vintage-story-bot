@@ -14,6 +14,8 @@ export const explorationScore = (offset, visits = 0) => Math.min(visits, 2) * 1.
 // tree line or cliff edge.
 export const explorationDistance = (distance, offset) => distance *
   (Math.abs(offset) < 1 ? 1 : Math.abs(offset) <= 45 ? .75 : Math.abs(offset) <= 90 ? .4 : .2);
+export const explorationReach = (towardDistance, maxDistance, minDistance = 0) =>
+  Math.min(maxDistance, Math.max(minDistance, towardDistance));
 
 // Shared session guard, observed-resource memory and travel; no transport/lease ownership.
 export class Fieldwork {
@@ -207,10 +209,13 @@ export class Fieldwork {
     }
     return candidates.sort((a, b) => a.score - b.score)[0]?.q;
   }
-  explore(toward, maxDistance = sightRange * .75) {
+  explore(toward, maxDistance = sightRange * .75, minDistance = 0) {
     const p = this.latest.position;
     const direction = toward ? lookAt(p, toward).yawDegrees : this.heading;
-    const distance = toward ? Math.min(maxDistance, horizontal(p, toward)) : maxDistance;
+    // A horizontally close target may still be high above or below us. Its
+    // caller can request a wider search so directed candidates reach around
+    // the base of a cliff instead of circling inside the same tiny footprint.
+    const distance = toward ? explorationReach(horizontal(p, toward), maxDistance, minDistance) : maxDistance;
     const candidates = [0, 45, -45, 90, -90, 180].map(offset => {
       const legDistance = toward ? explorationDistance(distance, offset) : distance;
       const radians = normalize(direction + offset) * Math.PI / 180;

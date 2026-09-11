@@ -4,6 +4,8 @@ import { nearestThreat } from './threats.mjs';
 import { clearFoliagePath } from './clearance.mjs';
 
 export const routeRegressed = (best, current, margin = 12) => current > best + margin;
+export const elevationDetourDistance = verticalRemaining => verticalRemaining < 1.5 ? 0 :
+  Math.min(24, Math.max(12, verticalRemaining * 2));
 
 const guardStorm = state => {
   if (temporalStormUnsafe(state)) throw Error('Temporal storm active or imminent; travel postponed.');
@@ -30,9 +32,10 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     if (remaining <= arrivalRadius && (y === undefined || Math.abs(state.position.y - y) < 1.5))
       return { ok: true, goal: 'travel', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
     field.report('travelling', { remaining: +remaining.toFixed(1), legs });
+    const elevationDetour = y === undefined ? 0 : elevationDetourDistance(Math.abs(state.position.y - y));
     const leg = remaining <= 48 && !localDetour
       ? (y === undefined ? { x, y: state.position.y, z, horizontalOnly: true, arrivalRadius } : { x, y, z, arrivalRadius })
-      : continuation ?? field.explore(goal, Math.min(48, remaining));
+      : continuation ?? field.explore(goal, Math.min(48, Math.max(remaining, elevationDetour)), elevationDetour);
     const before = state.position;
     const result = await field.walk(leg, current => {
       if (temporalStormUnsafe(current)) return 'temporal_storm';
