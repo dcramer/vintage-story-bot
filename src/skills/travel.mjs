@@ -11,16 +11,6 @@ const guardStorm = state => {
   if (temporalStormUnsafe(state)) throw Error('Temporal storm active or imminent; travel postponed.');
 };
 
-// Survey the landscape toward the goal and return the next corridor leg, or
-// null when the survey is unavailable or shows no way forward.
-async function corridorLeg(field, goal) {
-  const columns = await field.survey?.(goal);
-  if (!columns) return null;
-  const leg = field.corridor(goal);
-  field.report(leg ? 'corridor' : 'no_corridor', { columns, corridor: field.corridorStatus, ...(leg ? { leg: { x: leg.x, y: leg.y, z: leg.z } } : {}) });
-  return leg;
-}
-
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
 export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
   let stalled = 0, legs = 0, routeResets = 0, continuation = null, localDetour = false;
@@ -43,13 +33,12 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
       return { ok: true, goal: 'travel', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
     field.report('travelling', { remaining: +remaining.toFixed(1), legs, corridor: field.corridorStatus });
     const elevationDetour = y === undefined ? 0 : elevationDetourDistance(Math.abs(state.position.y - y));
-    // Far or obstructed destinations: look toward the goal and pick a line
-    // across the visible landscape before walking, as a player would. Only
-    // when nothing visible leads there fall back to blind exploration legs.
+    // walk looks at the landscape and follows corridors on its own; legs here
+    // only choose the destination, and exploration legs remain the fallback
+    // once nothing visible leads toward it.
     const leg = remaining <= 48 && !localDetour
       ? (y === undefined ? { x, y: state.position.y, z, horizontalOnly: true, arrivalRadius } : { x, y, z, arrivalRadius })
-      : continuation ?? await corridorLeg(field, goal) ??
-        field.explore(goal, Math.min(48, Math.max(remaining, elevationDetour)), elevationDetour);
+      : continuation ?? field.explore(goal, Math.min(48, Math.max(remaining, elevationDetour)), elevationDetour);
     const before = state.position;
     const result = await field.walk(leg, current => {
       if (temporalStormUnsafe(current)) return 'temporal_storm';

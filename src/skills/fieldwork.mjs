@@ -5,6 +5,10 @@ import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.mjs
 
 export const area = p => `${Math.floor(p.x / 16)},${Math.floor(p.z / 16)}`;
 export const sightRange = 64;
+// Beyond this the fine navigator's observed disk cannot see the destination;
+// walk looks at the landscape first. Native move_to accepts up to 128 blocks.
+export const sightHorizon = 12;
+export const navigationReach = 48;
 export const temporalStormUnsafe = state => ['imminent', 'active'].includes(state.condition?.temporalStorm?.phase);
 // Failed destinations should rotate a directed search through nearby lateral
 // options, but repeated failures must never make a known goal's exact opposite
@@ -161,7 +165,56 @@ export class Fieldwork {
     return [...this.seen.values()].filter(o => predicate(o) && !this.rejected.has(o.key))
       .sort((a, b) => horizontal(a.point, this.latest.position) - horizontal(b.point, this.latest.position));
   }
+  // Whether long-range sight is available: surface memory in the controller
+  // and a mod that can survey. Without it, walk is a single fine leg.
+  get seeing() { return !!this.env.surface && !!this.latest?.capabilities?.includes('surface_survey'); }
+  // Walk toward a target the way a player does: beyond the fine navigator's
+  // horizon, look at the landscape first and follow a corridor leg by leg,
+  // resurveying from each new viewpoint. Near targets are one fine leg. A far
+  // target with nothing visible leading there ends as no_visible_route so
+  // the caller's stall recovery (clearance, nudges, exploration) takes over.
   async walk(target, yieldWhen) {
+    await this.observe();
+    // Fleeing never pauses to look around; the flee target is already mapped.
+    if (!this.seeing || target.leg || nearestThreat(this.latest)) return this.leg(target, yieldWhen);
+    for (let legs = 0; legs < 8; legs++) {
+      const p = this.latest.position, remaining = horizontal(p, target);
+      if (remaining <= sightHorizon) return this.leg(target, yieldWhen);
+      const corridor = await this.lookAhead(target);
+      if (!corridor) {
+        if (remaining <= navigationReach) return this.leg(target, yieldWhen);
+        this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + 1);
+        this.report('rerouting', { reason: 'no_visible_route', corridor: this.corridorStatus });
+        return { state: 'blocked', reason: 'no_visible_route', corridor: this.corridorStatus };
+      }
+      const result = await this.leg({ ...corridor, leg: true }, yieldWhen);
+      if (result.state !== 'arrived') return result;
+    }
+    return this.leg(target, yieldWhen);
+  }
+  // Survey toward the target; when the straight view shows no full corridor,
+  // glance left and right as well before choosing a line.
+  async lookAhead(target) {
+    const p = this.latest.position;
+    const recent = this.lastSurvey && this.now() - this.lastSurvey.at < 15000 && horizontal(p, this.lastSurvey.position) < 2;
+    if (!recent) {
+      await this.survey(target);
+      this.lastSurvey = { position: p, at: this.now(), sweep: false };
+    }
+    let corridor = this.corridor(target);
+    if ((!corridor || this.corridorStatus.status !== 'success') && !this.lastSurvey.sweep) {
+      this.lastSurvey.sweep = true;
+      const direction = lookAt(p, target).yawDegrees;
+      for (const offset of [-50, 50]) {
+        const radians = normalize(direction + offset) * Math.PI / 180;
+        await this.survey({ x: p.x + Math.sin(radians) * 32, y: p.y, z: p.z + Math.cos(radians) * 32 });
+      }
+      corridor = this.corridor(target);
+    }
+    this.report(corridor ? 'corridor' : 'no_corridor', { corridor: this.corridorStatus, ...(corridor ? { leg: { x: corridor.x, y: corridor.y, z: corridor.z } } : {}) });
+    return corridor;
+  }
+  async leg(target, yieldWhen) {
     const before = await this.observe();
     this.report('walking', { target });
     // Software-rendered remote clients commonly need about three seconds per

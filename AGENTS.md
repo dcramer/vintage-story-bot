@@ -19,6 +19,22 @@ A stand-in for one human's mouse, keyboard and eyes on an ordinary game client. 
 
 Details and rationale: [architecture](docs/architecture.md#design-intent), [game API reference](docs/capabilities.md).
 
+## Where behavior lives
+
+The split is by what a player does in one act, never by convenience.
+
+- **Mod = one player act, sensed or performed.** Every wire action is exactly one of: an act of perception from the current camera (own state, nearby geometry deltas, a sight-verified surface or object sample, the HUD of the aimed target, inventory as the player sees it) or an act of input (hold keys for a bounded duration, aim, select a slot, press or hold a mouse button on the aimed target, move one inventory slot). Each returns what the game shows and finishes on its own. The mod never decides where to look, where to go, what to do next, or whether to retry, and never chains two acts. The only logic it keeps is safety that must hold even if Node dies: the control lease and its expiry, life sampling that releases inputs on damage/death/menus, F8 and manual-input revoke, mutation refusals while a lease is held.
+- **Node = anything with a decision in it.** Memory of what was seen, planning (where to look next, routes, corridors), sequencing (look, walk, then act), verification by observed deltas, retries, food and threat policy, goals. If a behavior needs "then", "until", "unless", "remember" or "toward", it is Node, composed from existing actions.
+- **Test for new work:** "Can a player do this with one look or one input?" Yes → a wire action in `mod/Sensors` or `mod/Actuators`, a capability flag, and a thin `src/actions` tool. No → a skill or goal in Node; add a mod action only for the single act still missing underneath it.
+- **Consequences.** No mod-side pathfinding, target search, auto-collect or multi-step recipes; holding a key until the game itself finishes the act (a block breaks, a survey page fills) is still one act. No Node-side hidden-world reads: Node knows only what mod samples returned. Sensing returns bounded pages, never the whole world; inputs run for bounded durations, never open-ended.
+
+| Player act (mod) | Decision (Node) |
+| --- | --- |
+| `survey`: surface samples the camera can see now | `walk`: aim at the destination, survey, choose a corridor, resurvey per leg |
+| `sense`: collision geometry within 8 blocks | `findRoute`: safe standing points and segments, replans, stall handling |
+| `block_action_begin`: hold click on the aimed cell until it changes or expires | `dig_block`: pick the cell, walk into range, aim, act, verify air, handle drops |
+| `aim_cell`: aim at a cell face by its selection box | `place_block`: choose a standing spot and face, select the item, verify the change |
+
 ## Layout and ownership
 
 | Path | Owns | Touch when |
@@ -72,6 +88,7 @@ Linux, headless, one bot client per profile; flags, phases and constraints in [R
 - [Architecture](docs/architecture.md) — read when changing module boundaries, RPC, control, or goal lifecycle.
 - [Bot API reference](docs/bot-api-reference.md) — read when designing bot APIs, skills, or goals; Mineflayer analogues and design criteria.
 - [Runtime](docs/runtime.md) — read before launching, deploying, configuring MCP, or controlling the bot.
+- [Navigation](docs/navigation.md) — read when changing sensing, terrain memory, route planning or steering; perception layers, planners, walk loop, statuses.
 - [Getting started](docs/getting-started.md) — read when defining or prioritizing goals; survival rules, house/kiln specs, day 1–5 checklists.
 - [Game API reference](docs/capabilities.md) — read when changing game integration or sensing; entry points, source material, perception constraints.
 - [TODO](TODO.md) — read when picking up work; Mineflayer-shaped API surface mapped to Vintage Story mechanics.

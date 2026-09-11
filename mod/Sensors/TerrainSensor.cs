@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
 using Vintagestory.API.MathTools;
 
 namespace VintageStoryAI;
@@ -26,6 +27,8 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
         pending.Clear();
         nextBatch = 0;
     }
+    private static long RefreshMs(Cell cell, EntityPos pos) =>
+        Math.Pow(cell.X + .5 - pos.X, 2) + Math.Pow(cell.Z + .5 - pos.Z, 2) <= 16 ? 500 : 1500;
     public void Sample(long now, Cell? priority = null)
     {
         var player = api.World.Player.Entity;
@@ -43,9 +46,13 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
         if (pending.Count == 0 && now >= nextBatch)
         {
             var cells = new List<Cell>();
-            for (int x = -6; x <= 6; x++) for (int z = -6; z <= 6; z++) for (int y = -2; y <= 4; y++)
-                if (x * x + z * z <= 36) cells.Add(new((int)Math.Floor(pos.X) + x, (int)Math.Floor(pos.Y) + y, (int)Math.Floor(pos.Z) + z));
-            foreach (var cell in cells.OrderBy(c => c == priority ? 0 : map.Fresh(c, now) ? 2 : 1)
+            // The full eight-block awareness disk, three blocks down and six up,
+            // so a slope or ledge is observed before the player stands under it.
+            // Cells within four blocks refresh twice a second, the rest every
+            // 1.5 seconds; a low frame rate then still keeps the body path fresh.
+            for (int x = -8; x <= 8; x++) for (int z = -8; z <= 8; z++) for (int y = -3; y <= 6; y++)
+                if (x * x + z * z <= 64) cells.Add(new((int)Math.Floor(pos.X) + x, (int)Math.Floor(pos.Y) + y, (int)Math.Floor(pos.Z) + z));
+            foreach (var cell in cells.OrderBy(c => c == priority ? 0 : map.Fresh(c, now, RefreshMs(c, pos)) ? 2 : 1)
                 .ThenBy(c => Math.Pow(c.X + .5 - pos.X, 2) + Math.Pow(c.Z + .5 - pos.Z, 2))) pending.Enqueue(cell);
             nextBatch = now + 100;
         }
@@ -56,7 +63,7 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
         while (pending.TryDequeue(out var cell))
         {
             if (++inspected > 256 || rays >= 128 || watch.ElapsedMilliseconds >= 5) { pending.Enqueue(cell); break; }
-            if (map.Fresh(cell, now, 500)) continue;
+            if (map.Fresh(cell, now, RefreshMs(cell, pos))) continue;
             var blockPos = new BlockPos(cell.X, cell.Y, cell.Z, 0);
             if (blocks.GetChunkAtBlockPos(blockPos) == null) { map.Invalidate(cell); continue; }
             var block = blocks.GetBlock(blockPos);
