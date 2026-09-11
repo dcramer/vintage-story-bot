@@ -1,12 +1,12 @@
 import { horizontal, normalize } from '../navigation/terrain.mjs';
 import { sightRange } from './fieldwork.mjs';
 import { changeBlock } from './blocks.mjs';
-import { consume, emptyHand, foodReserve, hunger, mushroomCode, ripeForage } from './food.mjs';
+import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, ripeForage } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
 const foodSightRange = Math.min(24, sightRange);
 const foodSearchDistance = foodSightRange / 2;
-const forageMatches = ['bush', 'mushroom'];
+const forageMatches = ['bush', 'mushroom', 'crop-'];
 
 // Hysteresis: prepare food below 20%, eat to 80%, retain 320 satiety in safe fresh forage.
 // Navigation checks yieldWhen every sensing tick; food work owns no parallel inputs.
@@ -89,13 +89,14 @@ export class Survival {
     if (aimed.target?.key !== target.key) { field.reject(target, 5000); return; }
     const detail = await field.send({ action: 'inspect_target' });
     if (detail.key !== target.key || !ripeForage(detail)) { field.reject(target); return; }
+    const foodCode = forageFoodCode(detail);
     const inventory = await field.send({ action: 'inventory' });
-    const count = contents => ownedSlots(contents).filter(s => s.code === detail.forage.foodCode)
+    const count = contents => ownedSlots(contents).filter(s => s.code === foodCode)
       .reduce((n, s) => n + s.quantity, 0);
     const before = count(inventory);
-    field.report('harvesting', { target: target.key, food: detail.forage.foodCode });
+    field.report('harvesting', { target: target.key, food: foodCode });
     try {
-      if (mushroomCode(detail.forage.foodCode)) {
+      if (mushroomCode(foodCode) || detail.forage.kind === 'crop') {
         const result = await changeBlock(field, 'dig', { target: target.key, point: detail.hit, slot, expectedItem: null });
         if (!result.ok) { field.reject(target, 120000); return; }
       } else {

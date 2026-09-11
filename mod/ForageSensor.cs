@@ -24,6 +24,8 @@ internal static class ForageSensor
                 ripe = block.Variant["state"] == "ripe", foodCode = $"game:fruit-{block.Variant["type"]}" };
         if (block.Code.Path.StartsWith("mushroom-") && block.Variant["state"] == "normal")
             return new { kind = "mushroom", stage = "normal", ripe = true, foodCode = block.Code.ToString() };
+        if (block.Code.Path.StartsWith("crop-") && int.TryParse(block.Variant["stage"], out int stage))
+            return new { kind = "crop", cropType = block.Variant["type"], stage };
         return null;
     }
 }

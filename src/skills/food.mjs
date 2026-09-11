@@ -16,9 +16,33 @@ export const mushroomTypes = new Set([
 ]);
 export const mushroomCode = code => typeof code === 'string' && /^game:mushroom-[a-z0-9]+-normal$/.test(code) &&
   mushroomTypes.has(code.slice(14, -7));
-export const ripeForage = object => object.kind === 'block' && object.forage?.ripe === true &&
-  (berryCode(object.forage.foodCode) || mushroomCode(object.forage.foodCode));
-export const safeFood = slot => (berryCode(slot.code) || mushroomCode(slot.code)) && slot.quantity > 0 &&
+// Minimum installed crop stage that drops an edible raw item. Cassava,
+// soybean, licorice and pineapple are deliberately absent.
+export const cropFoods = new Map([
+  ['amaranth', { stage: 8, code: 'game:grain-amaranth' }],
+  ['cabbage', { stage: 11, code: 'game:vegetable-cabbage' }],
+  ['carrot', { stage: 6, code: 'game:vegetable-carrot' }],
+  ['fennel', { stage: 8, code: 'game:vegetable-fennel' }],
+  ['flax', { stage: 9, code: 'game:grain-flax' }],
+  ['onion', { stage: 6, code: 'game:vegetable-onion' }],
+  ['parsnip', { stage: 7, code: 'game:vegetable-parsnip' }],
+  ['peanut', { stage: 8, code: 'game:legume-peanut' }],
+  ['rice', { stage: 10, code: 'game:grain-rice' }],
+  ['rye', { stage: 9, code: 'game:grain-rye' }],
+  ['spelt', { stage: 9, code: 'game:grain-spelt' }],
+  ['sunflower', { stage: 12, code: 'game:grain-sunflower' }],
+  ['turnip', { stage: 4, code: 'game:vegetable-turnip' }],
+]);
+const cropFoodCodes = new Set([...cropFoods.values()].map(food => food.code));
+export const forageFoodCode = object => {
+  if (object.forage?.kind !== 'crop') return object.forage?.foodCode;
+  const food = cropFoods.get(object.forage.cropType);
+  return food && object.forage.stage >= food.stage ? food.code : null;
+};
+export const ripeForage = object => object.kind === 'block' &&
+  (object.forage?.ripe === true && (berryCode(object.forage.foodCode) || mushroomCode(object.forage.foodCode)) ||
+    cropFoodCodes.has(forageFoodCode(object)));
+export const safeFood = slot => (berryCode(slot.code) || mushroomCode(slot.code) || cropFoodCodes.has(slot.code)) && slot.quantity > 0 &&
   slot.nutrition?.saturation > 0 && slot.nutrition.health >= 0 && slot.freshness?.state === 'fresh';
 export const foodReserve = inventory => ownedSlots(inventory).filter(safeFood)
   .reduce((sum, slot) => sum + slot.quantity * slot.nutrition.saturation, 0);
