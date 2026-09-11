@@ -163,7 +163,6 @@ export class Navigation {
     // Short frames near steps and sharp bends; a diagonal-to-cardinal bend is
     // ordinary walking, not a tight turn.
     const tight = horizontal(p, next) < 3 && (Math.abs(next.y - p.y) > .05 || turn > 60);
-    const descent = next.y < p.y - .05;
     const durationMs = tight ? 180 : 500;
     // Ignore tiny pursuit corrections and ease bends while moving. For a
     // large stationary turn, request the route yaw directly: remote control
@@ -185,8 +184,7 @@ export class Navigation {
       // degrees as long as the ground in the current facing direction is safe.
       const forward = Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 50 && Math.abs(next.y - p.y) < .05 &&
         map.support(ahead, w) === 9 && traverse(p, ahead, recenter);
-      this.progressAt = now; return { yawDegrees, pitchDegrees: 15, forward,
-        sneak: tight && descent && !this.jumpAt && horizontal(p, next) > .8, durationMs };
+      this.progressAt = now; return { yawDegrees, pitchDegrees: 15, forward, sneak: false, durationMs };
     }
     // Once a descending step has left its upper support, release forward and
     // let gravity settle onto the validated lower checkpoint. Continuing to hold
@@ -204,9 +202,8 @@ export class Navigation {
       food?.max > 0 && food.current / food.max >= (emergency || gapSprint ? .1 : .6);
     return { yawDegrees, pitchDegrees: 15, forward: horizontal(p, next) > .12, durationMs,
       jump: !!this.jumpAt && now - this.jumpAt < 200, sprint,
-      // Sneak while lining up at a ledge, then release it so a validated
-      // downward route can actually step off the supporting block.
-      // Climbs and bends walk at full speed; only a ledge is approached sneaking.
-      sneak: tight && descent && !this.jumpAt && horizontal(p, next) > .8 };
+      // Walking never crouches: a validated step down is walked off like a
+      // player does, and the short frames near it bound any overshoot.
+      sneak: false };
   }
 }

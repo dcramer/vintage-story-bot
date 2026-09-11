@@ -335,7 +335,7 @@ test('navigation takes short frames through a nearby sharp checkpoint without cr
   assert.equal(frame.durationMs, 180);
 });
 
-test('navigation releases sneak for a validated descent', () => {
+test('navigation walks a validated descent without crouching and releases forward while airborne', () => {
   const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: () => true,
     views: () => new Map() };
   const state = { position: { x: .5, y: 1, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
@@ -344,7 +344,7 @@ test('navigation releases sneak for a validated descent', () => {
   nav.state = 'moving'; nav.route = [{ x: 1.5, y: 0, z: .5 }]; nav.edgeStart = state.position;
   const frame = nav.tick(state, 500);
   assert.equal(frame.forward, true);
-  assert.equal(frame.sneak, true);
+  assert.equal(frame.sneak, false);
   assert.equal(frame.durationMs, 180);
   const edge = { ...state, position: { x: 1.1, y: 1, z: .5 } };
   assert.equal(nav.tick(edge, 600).sneak, false);
