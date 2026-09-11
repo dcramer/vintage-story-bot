@@ -122,6 +122,7 @@ Tools are discovered by filename: the basename is the public name and the file m
 - Wire changes land mod and Node sides together; public schemas change with behavior. MCP/CLI need no edits.
 - Check the working tree before editing; preserve others' uncommitted changes, never revert or overwrite work you did not make, never stash or rebase over it.
 - Commit one verified slice at a time on `main`, push, then pull/rebase when the tree is clean. No branches or pull requests.
+- Pushing `main` deploys the fleet report: Cloudflare Workers Builds rebuilds and redeploys `report/` on every push that touches it. Never run `pnpm report:deploy` by hand; verify a fleet fix by pushing and then loading the live dashboard.
 
 ## Running the game
 
