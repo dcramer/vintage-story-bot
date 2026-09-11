@@ -1,12 +1,21 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Fieldwork } from '../src/skills/fieldwork.mjs';
+import { Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
 import { accessibleForage, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat } from '../src/skills/threats.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
   freshness: { state: 'fresh', freshHoursLeft: 100 } });
+
+test('survival postpones only imminent and active temporal storms', () => {
+  const state = phase => ({ condition: { temporalStorm: { phase } } });
+  assert.equal(temporalStormUnsafe(state('clear')), false);
+  assert.equal(temporalStormUnsafe(state('approaching')), false);
+  assert.equal(temporalStormUnsafe(state('imminent')), true);
+  assert.equal(temporalStormUnsafe(state('active')), true);
+  assert.equal(temporalStormUnsafe({ condition: {} }), false);
+});
 
 test('deterministic forage allowlist rejects poisonous and psychedelic mushrooms', () => {
   assert.equal(mushroomCode('game:mushroom-chanterelle-normal'), true);

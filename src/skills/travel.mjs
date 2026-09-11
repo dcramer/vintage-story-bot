@@ -1,4 +1,9 @@
 import { horizontal } from '../navigation/terrain.mjs';
+import { temporalStormUnsafe } from './fieldwork.mjs';
+
+const guardStorm = state => {
+  if (temporalStormUnsafe(state)) throw Error('Temporal storm active or imminent; travel postponed.');
+};
 
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
 export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
@@ -6,6 +11,7 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
   const summary = () => ({ moved: +field.moved.toFixed(1), legs, stalled, routeResets });
   while (true) {
     let state = await field.observe(true);
+    guardStorm(state);
     let goal = { x, y: y ?? state.position.y, z };
     await survival?.tend({ toward: goal });
     // Food recovery may travel a meaningful distance and elevation. Resume
@@ -20,7 +26,8 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
       ? (y === undefined ? { x, y: state.position.y, z, horizontalOnly: true, arrivalRadius } : { x, y, z, arrivalRadius })
       : field.explore(goal);
     const before = state.position;
-    const result = await field.walk(leg, survival?.yieldWhen);
+    const result = await field.walk(leg, current => temporalStormUnsafe(current) ? 'temporal_storm' : survival?.yieldWhen(current));
+    guardStorm(field.latest);
     legs++;
     const progress = horizontal(before, field.latest.position);
     if (result.state === 'arrived' || result.state === 'yielded' || progress > 2) stalled = 0;

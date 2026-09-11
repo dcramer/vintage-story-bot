@@ -1,17 +1,36 @@
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
+using Vintagestory.GameContent;
 
 namespace VintageStoryAI;
 
 internal sealed class ContextSensor(ICoreClientAPI api)
 {
+    private readonly SystemTemporalStability? temporalStability = api.ModLoader.GetModSystem<SystemTemporalStability>();
     public FormingAdapter Forming { get; } = new(api);
     internal static double? Number(ITreeAttribute? tree, string key)
     {
         var value = tree?[key]?.GetValue();
         double? number = value switch { float f => f, double d => d, int i => i, long l => l, _ => null };
         return number is { } n && double.IsFinite(n) ? n : null;
+    }
+
+    private object? TemporalStorm()
+    {
+        var system = temporalStability;
+        var storm = system?.StormData;
+        if (storm == null) return null;
+        double startsInDays = storm.nextStormTotalDays - api.World.Calendar.TotalDays;
+        return new
+        {
+            active = storm.nowStormActive,
+            phase = storm.nowStormActive ? "active" : startsInDays <= .02 ? "imminent" : startsInDays <= .35 ? "approaching" : "clear",
+            strength = system!.StormStrength,
+            nextStrength = storm.nextStormStrength.ToString(),
+            startsInDays,
+            remainingDays = storm.nowStormActive ? (double?)Math.Max(0, storm.stormActiveTotalDays - api.World.Calendar.TotalDays) : null
+        };
     }
 
     public object Condition()
@@ -29,6 +48,7 @@ internal sealed class ContextSensor(ICoreClientAPI api)
             tiredness = Number(tiredness, "tiredness"),
             sleeping = Number(tiredness, "isSleeping") is { } sleep ? (bool?)(sleep != 0) : null,
             intoxication = Number(attributes, "intoxication"),
+            temporalStorm = TemporalStorm(),
             nutrition = new { fruit = Number(hunger, "fruitLevel"), vegetable = Number(hunger, "vegetableLevel"),
                 protein = Number(hunger, "proteinLevel"), grain = Number(hunger, "grainLevel"), dairy = Number(hunger, "dairyLevel") }
         };
@@ -60,6 +80,7 @@ internal sealed class ContextSensor(ICoreClientAPI api)
             light = !loaded ? null : new { block = blocks.GetLightLevel(pos, EnumLightLevelType.OnlyBlockLight),
                 sunlight = blocks.GetLightLevel(pos, EnumLightLevelType.TimeOfDaySunLight),
                 maximum = blocks.GetLightLevel(pos, EnumLightLevelType.MaxTimeOfDayLight) },
+            temporalStorm = TemporalStorm(),
             unavailable = !loaded ? "Local chunk unloaded or unsupported dimension." : climate == null ? "Local climate unavailable." : null
         };
     }

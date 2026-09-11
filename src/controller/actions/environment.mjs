@@ -7,7 +7,7 @@ export default defineAction({
   readOnly: true,
   idempotent: true,
   description:
-    'Read local calendar/season/daylight, climate, wind (native vector) and light levels. ' +
+    'Read local calendar/season/daylight, climate, wind (native vector), light levels and temporal-storm phase. ' +
     'Climate: temperature C, precipitation/rainfall, fertility, forest/shrub density, geology, ' +
     'biomeId (-1 absent). Generation densities are search priors, not current plants or resource ' +
     'guarantees. Null/unavailable is unknown. No remote climate/hidden-region queries.',

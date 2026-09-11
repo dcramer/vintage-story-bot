@@ -1,5 +1,5 @@
 import { horizontal, normalize } from '../navigation/terrain.mjs';
-import { sightRange } from './fieldwork.mjs';
+import { sightRange, temporalStormUnsafe } from './fieldwork.mjs';
 import { changeBlock } from './blocks.mjs';
 import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, ripeForage, termiteCode } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
@@ -31,16 +31,18 @@ export class Survival {
   surveyed = false;
   lastFarView = null;
   constructor(field) { this.field = field; }
-  yieldWhen = state => hunger(state) < .2 ? 'food_needed' : null;
-  eatWhen = state => this.reserve > 0 && hunger(state) < .8 ? 'food_available' : null;
+  yieldWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : hunger(state) < .2 ? 'food_needed' : null;
+  eatWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : this.reserve > 0 && hunger(state) < .8 ? 'food_available' : null;
   async tend({ force = false, toward } = {}) {
     const field = this.field;
     await field.observe();
+    if (temporalStormUnsafe(field.latest)) throw Error('Temporal storm active or imminent; food work postponed.');
     if (!this.tending && !force && hunger(field.latest) >= .2) { field.recoveringFood = false; return; }
     this.tending = true;
     field.recoveringFood = true;
     while (this.tending) {
       await field.observe(true);
+      if (temporalStormUnsafe(field.latest)) throw Error('Temporal storm active or imminent; food work postponed.');
       if (await field.evadeThreat()) {
         this.surveyed = false;
         continue;

@@ -4,6 +4,7 @@ import { fleeTarget, nearestThreat } from './threats.mjs';
 
 export const area = p => `${Math.floor(p.x / 16)},${Math.floor(p.z / 16)}`;
 export const sightRange = 64;
+export const temporalStormUnsafe = state => ['imminent', 'active'].includes(state.condition?.temporalStorm?.phase);
 
 // Shared session guard, observed-resource memory and travel; no transport/lease ownership.
 export class Fieldwork {
