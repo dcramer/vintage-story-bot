@@ -136,17 +136,16 @@ export class Fieldwork {
     return result;
   }
   async evadeThreat() {
-    let fled = false, result;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    let fled = false;
+    while (true) {
+      this.check();
       const threat = nearestThreat(this.latest);
       if (!threat) return fled;
       const target = fleeTarget(this.latest.position, threat);
       this.report('evading', { threat: threat.code, distance: +horizontal(this.latest.position, threat.point).toFixed(1), target });
-      result = await this.walk(target);
+      await this.walk(target);
       fled = true;
     }
-    if (!nearestThreat(this.latest)) return fled;
-    throw Error(`Threat evasion failed: ${result?.reason ?? result?.state ?? 'hostile_nearby'}`);
   }
   approach(object, exclude = null) {
     const { position: p, body: { halfWidth: w, height: h } } = this.latest;
