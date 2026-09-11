@@ -164,11 +164,11 @@ export class TerrainMemory {
       if (dry) escapedHazardMargin = true;
       if (Math.abs(rise) < .05) {
         const n = this.support(p, w, missing);
-        // A planned segment needs full support all the way; the live body
-        // re-centring onto its route may pass a hand's width from a step
-        // beside the path, so it needs majority support and a fully
-        // supported endpoint, checked below.
-        if (recenter ? n < 4 : n !== 9) return false;
+        // A planned segment needs full support all the way. The live body is
+        // grounded by the game's own physics, often on the very edge of a
+        // block right after a jump, so its segment needs only some contact
+        // along the way and a fully supported endpoint, checked below.
+        if (recenter ? n === 0 : n !== 9) return false;
         support = n;
       }
       if (rise < -.05) {
@@ -208,7 +208,7 @@ export class TerrainMemory {
       const dry = this.dry(p, w, h);
       if (!dry && escaped) return `${at} re-enters hazard margin`;
       if (dry) escaped = true;
-      if (Math.abs(rise) < .05) { const n = this.support(p, w); if (recenter ? n < 4 : n !== 9) return `${at} support ${n}`; }
+      if (Math.abs(rise) < .05) { const n = this.support(p, w); if (recenter ? n === 0 : n !== 9) return `${at} support ${n}`; }
       if (rise < -.05) {
         if (recenter && -rise <= .125) { if (this.groundSupport(p, w, -rise + .06) <= 0) return `${at} groundSupport`; }
         else if (!this.ground(p, w, -rise + .06)) return `${at} ground`;
