@@ -116,7 +116,9 @@ export class Navigation {
       // own key, so the planner does not pick it again for this goal.
       const end = this.route.at(-1) ?? p, id = key(end);
       this.visits.set(id, (this.visits.get(id) ?? 0) + 1);
-      if (++this.segments >= 64 || this.visits.get(id) > 3) return this.finish('blocked', 'exploration_exhausted');
+      // A leg that needs many partial routes is not getting anywhere; give it
+      // back to the caller, whose rough route and exploration can change course.
+      if (++this.segments >= 10 || this.visits.get(id) > 3) return this.finish('blocked', 'exploration_exhausted');
       this.survey(now); return null;
     }
     // Merge a straight, level run of checkpoints into one so bends are only

@@ -119,7 +119,9 @@ export class Fieldwork {
   roughRoute(goal, { maxDistance = 40 } = {}) {
     if (!this.env.surface) return null;
     const p = this.latest.position;
-    const plan = planRoughRoute(this.env.surface, p, goal, { penalty: column => (this.visits.get(area(column)) ?? 0) * 6 });
+    // An area a leg already failed in costs as much as a thirty-block detour
+    // per failure: the coarse map cannot see the cliff that stopped the leg.
+    const plan = planRoughRoute(this.env.surface, p, goal, { penalty: column => (this.visits.get(area(column)) ?? 0) * 30 });
     const point = plan.checkpoints.length ? nextLeg(plan.checkpoints, p, { maxDistance }) : null;
     this.roughRouteStatus = { status: plan.status, reason: plan.reason, checkpoints: plan.checkpoints.length, explored: plan.explored,
       end: plan.checkpoints.at(-1) ? { x: plan.checkpoints.at(-1).x, z: plan.checkpoints.at(-1).z } : null };
