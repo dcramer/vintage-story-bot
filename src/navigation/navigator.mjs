@@ -126,7 +126,9 @@ export class Navigation {
     if (nextSupport !== 9 || !nextClear) {
       this.diagnostics = { kind: 'checkpoint_invalid', point: next, support: nextSupport, clear: nextClear,
         dry: typeof map.dry !== 'function' || map.dry(next, w, h) };
-      return grounded ? this.replan(p, now, 'terrain_changed') : this.finish('blocked', 'landing_changed');
+      if (!grounded) return this.finish('blocked', 'landing_changed');
+      this.replan(p, now, 'terrain_changed');
+      return this.active ? this.tick(state, now) : null;
     }
     if (this.jumpAt && !grounded) this.airborneDuringJump = true;
     if (this.jumpAt && grounded && this.airborneDuringJump && Math.abs(p.y - next.y) < .06) {
@@ -143,7 +145,9 @@ export class Navigation {
         fromDry: typeof map.dry !== 'function' || map.dry(p, w, h),
         dry: typeof map.dry !== 'function' || map.dry(next, w, h),
         fromHazardDistance: map.hazardDistance?.(p, h), hazardDistance: map.hazardDistance?.(next, h) };
-      return this.replan(p, now, 'terrain_changed');
+      // Re-plan in this same tick so a changed segment costs no stopped frame.
+      this.replan(p, now, 'terrain_changed');
+      return this.active ? this.tick(state, now) : null;
     }
     if (distance(p, this.lastProgress) > .12) { this.progressAt = now; this.lastProgress = p; this.lastYawError = undefined; }
     const desiredYaw = lookAt(p, next).yawDegrees;
@@ -179,11 +183,13 @@ export class Navigation {
     if (grounded && !this.jumpAt && Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) > 10) {
       // Keep walking through gentle bends only when the actual facing direction is supported.
       const radians = state.orientation.yawDegrees * Math.PI / 180;
+      // A player turns while walking: keep going through a bend of up to 60
+      // degrees, on slopes too, as long as one step in the current facing
+      // direction is itself a valid traversal from here.
       const ahead = { x: p.x + Math.sin(radians) * .6, y: p.y, z: p.z + Math.cos(radians) * .6 };
-      // A player turns while walking: keep going through a bend of up to 50
-      // degrees as long as the ground in the current facing direction is safe.
-      const forward = Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 50 && Math.abs(next.y - p.y) < .05 &&
-        map.support(ahead, w) === 9 && traverse(p, ahead, recenter);
+      const footing = map.stand?.(Math.floor(ahead.x) + .5, Math.floor(ahead.z) + .5, p.y, w, h) ?? ahead;
+      const forward = Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 60 &&
+        (Math.abs(footing.y - p.y) < .05 ? map.support(ahead, w) === 9 && traverse(p, ahead, recenter) : traverse(p, footing, recenter));
       this.progressAt = now; return { yawDegrees, pitchDegrees: 15, forward, sneak: false, durationMs };
     }
     // Once a descending step has left its upper support, release forward and
