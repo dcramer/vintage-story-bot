@@ -5,6 +5,7 @@ import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, 
 import { ownedSlots } from './inventory.mjs';
 
 export const foodSightRange = Math.min(16, sightRange);
+export const desperateFoodSightRange = Math.min(32, sightRange);
 // Twelve-block steps overlap a 16-block sight cone while covering useful new
 // ground before starvation. Navigation still validates every traversed cell.
 export const foodSearchDistance = Math.min(12, foodSightRange * .75);
@@ -29,6 +30,7 @@ export class Survival {
   eaten = 0;
   harvested = 0;
   surveyed = false;
+  desperateSurveyed = false;
   lastFarView = null;
   constructor(field) { this.field = field; }
   yieldWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : hunger(state) < .2 ? 'food_needed' : null;
@@ -86,6 +88,19 @@ export class Survival {
           if (field.targets(o => ripeForage(o) && accessibleForage(o)).length) break;
         }
       }
+      // Preserve the fast 16-block path normally. Below 10%, one structured
+      // four-direction panorama is cheaper than exhausting the remaining
+      // hunger window on short legs through a forage-poor pocket.
+      if (!this.desperateSurveyed && hunger(field.latest) < .1 &&
+          !field.targets(o => ripeForage(o) && accessibleForage(o)).length) {
+        this.desperateSurveyed = true;
+        for (const offset of [0, 90, 180, 270]) {
+          await field.aim({ yawDegrees: normalize(field.heading + offset), pitchDegrees: 15 });
+          await field.scan(desperateFoodSightRange, forageMatches, 'blocks');
+          this.lastFarView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
+          if (field.targets(o => ripeForage(o) && accessibleForage(o)).length) break;
+        }
+      }
       const target = field.targets(o => ripeForage(o) && accessibleForage(o))[0];
       if (target) {
         const destination = field.approach(target, breaksForage(target) ? q =>
@@ -106,7 +121,10 @@ export class Survival {
       await field.walk(field.explore(toward, foodSearchDistance), this.eatWhen);
       // A changed viewpoint needs a fresh deterministic 360-degree sweep;
       // otherwise later searches only inspect the current forward cone.
-      if (horizontal(before, field.latest.position) > 2) this.surveyed = false;
+      if (horizontal(before, field.latest.position) > 2) {
+        this.surveyed = false;
+        this.desperateSurveyed = false;
+      }
     }
   }
   async harvest(target) {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
-import { accessibleForage, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady } from '../src/skills/survival.mjs';
+import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat } from '../src/skills/threats.mjs';
 import { travel } from '../src/skills/travel.mjs';
 
@@ -71,6 +71,7 @@ test('breakable forage is harvested beside its drop, never at maximum reach or u
 test('food exploration uses observed local steps and does not rescan an unchanged distant cone', () => {
   assert.equal(foodSearchDistance, 12);
   assert.equal(foodSightRange, 16);
+  assert.equal(desperateFoodSightRange, 32);
   const view = { position: { x: 10, z: 10 }, yawDegrees: 30 };
   const state = (x, z, yawDegrees) => ({ position: { x, z }, orientation: { yawDegrees } });
   assert.equal(foodViewChanged(view, state(11.9, 10, 44.9)), false);
@@ -104,6 +105,20 @@ test('stationary fieldwork accepts a blocked flee leg once the hostile is gone',
   };
   assert.equal(await field.evadeThreat(), true);
   assert.ok(destination.x > 32 && destination.sprint && destination.emergency);
+});
+
+test('stationary evasion yields its explicit flee leg as soon as the perimeter clears', async () => {
+  const wolf = { code: 'game:wolf-male', point: { x: -4.5, y: 1, z: .5 } };
+  const state = { position: { x: .5, y: 1, z: .5 }, nearbyEntities: [wolf] };
+  const field = new Fieldwork({});
+  field.latest = state;
+  field.walk = async (_, yieldWhen) => {
+    assert.equal(yieldWhen(state), null);
+    assert.equal(yieldWhen({ ...state, nearbyEntities: [] }), 'threat_cleared');
+    field.latest = { ...state, nearbyEntities: [] };
+    return { state: 'yielded' };
+  };
+  assert.equal(await field.evadeThreat(), true);
 });
 
 test('low-health food recovery remains authorized after eating clears low food', () => {

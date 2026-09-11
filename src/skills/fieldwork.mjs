@@ -149,7 +149,7 @@ export class Fieldwork {
       if (!threat) return fled;
       const target = fleeTarget(this.latest.position, threat);
       this.report('evading', { threat: threat.code, distance: +horizontal(this.latest.position, threat.point).toFixed(1), target });
-      await this.walk(target);
+      await this.walk(target, state => nearestThreat(state) ? null : 'threat_cleared');
       fled = true;
     }
   }
