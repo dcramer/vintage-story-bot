@@ -7,9 +7,16 @@ const hostileMarkers = ['drifter', 'wolf-', 'bear-', 'locust-', 'bell-', 'bowtor
 export const hostileEntity = entity => typeof entity?.code === 'string' &&
   hostileMarkers.some(marker => entity.code.toLowerCase().includes(marker));
 
+export const threatVerticalRange = code => {
+  const lower = code.toLowerCase();
+  if (lower.includes('bowtorn-')) return 24;
+  if (['bear-', 'wolf-', 'hyena-'].some(marker => lower.includes(marker))) return 12;
+  return 8;
+};
+
 export const nearbyThreats = (state, radius = 32) => (state.nearbyEntities ?? [])
   .filter(entity => hostileEntity(entity) &&
-    Math.abs(state.position.y - entity.point.y) <= (entity.code.toLowerCase().includes('bowtorn-') ? 24 : 8) &&
+    Math.abs(state.position.y - entity.point.y) <= threatVerticalRange(entity.code) &&
     horizontal(state.position, entity.point) <= radius)
   .sort((a, b) => horizontal(state.position, a.point) - horizontal(state.position, b.point));
 
