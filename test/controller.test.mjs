@@ -75,18 +75,25 @@ test('grid: moves step, jump one, drop three, never cut a corner or drop beside 
   assert.equal(to(2, 0), undefined, 'two blocks up is out of reach');
   assert.equal(to(-1, 0)?.node.move, 'drop', 'three blocks down is a drop');
   assert.equal(to(0, -1), undefined, 'four blocks down is never planned');
-  assert.equal(to(1, 1), undefined, 'no diagonal jumps');
+  assert.equal(to(1, 1), undefined, 'diagonal blocked when both corner columns are solid');
   assert.equal(to(-1, -1), undefined, 'no diagonal drops');
-  assert.equal(to(1, -1), undefined, 'no corner cut past the raised block beside the path');
+  assert.equal(to(1, -1)?.node.move, 'walk', 'diagonal allowed when one corner side is open');
   assert.equal(world(3).moves(at(0, 0)).filter(m => m.node.move === 'walk').length, 8, 'open ground walks in all eight directions');
-  // A wall column at (0,1) blocks the diagonal past it, not the cardinal beside it.
-  assert.equal(to(0, 1), undefined);
-  assert.equal(to(-1, 1) && to(0, 1), undefined);
-  const corner = map.moves(at(1, 1)).find(m => Math.floor(m.node.x) === 0 && Math.floor(m.node.z) === 2);
-  assert.equal(corner, undefined, 'diagonal past the wall column is a corner cut');
+  assert.equal(to(0, 1), undefined, 'the tall wall column is not standable');
   const shore = map.moves(at(-2, 2)).find(m => Math.floor(m.node.x) === -3 && Math.floor(m.node.z) === 1);
   assert.ok(shore && shore.cost > 2, 'walking beside water costs more');
   assert.equal(map.moves(at(-2, 2)).find(m => Math.floor(m.node.x) === -3 && Math.floor(m.node.z) === 2), undefined, 'water is a wall');
+});
+
+test('grid: jumps diagonally out of a one-block pocket when a corner side is open', () => {
+  // A pit at (0,0): walls one block high on the west and south, the northeast
+  // is a block one up with the north cell open, so the way out is a diagonal jump.
+  const map = world(3, (x, y, z) =>
+    (x === -1 && z === 0 && y === 0) || (x === 0 && z === -1 && y === 0) ||
+    (x === 1 && z === 1 && y === 0) || (x === 1 && z === 0 && y === 0));
+  const out = map.moves(at(0, 0)).find(m => Math.floor(m.node.x) === 1 && Math.floor(m.node.z) === 1);
+  assert.equal(out?.node.move, 'jump', 'the diagonal block one up is a jump out');
+  assert.equal(Math.round(out.node.y), 1);
 });
 
 test('planner routes around a wall, jumps a hole only as a last resort, and ends partial routes at the frontier', () => {

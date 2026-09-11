@@ -140,19 +140,20 @@ export class TerrainMemory {
         const rise = to.y - t;
         let kind, cost;
         if (rise > STEP_HEIGHT) {
-          if (diagonal || !this.clearBetween(x, z, t, t + JUMP_HEADROOM, missing) ||
+          if (!this.clearBetween(x, z, t, t + JUMP_HEADROOM, missing) ||
               !this.clearBetween(x + dx, z + dz, to.y, to.y + JUMP_HEADROOM - .3, missing)) continue;
+          // A player jumps diagonally onto a block; only skip it if both
+          // corner columns are blocked at the landing height (a true squeeze).
+          if (diagonal && !this.cornerOpen(x, z, dx, dz, to.y, missing)) continue;
           kind = 'jump'; cost = d + 1.5;
         } else if (rise < -STEP_HEIGHT) {
           if (diagonal || this.shore(to) || !this.clearBetween(x + dx, z + dz, to.y, t + BODY_HEIGHT, missing)) continue;
           // Stepping down is cheap; a stair of big drops is not a shortcut.
           kind = 'drop'; cost = d + (-rise > 1.5 ? 1.5 * -rise : .4 * -rise);
         } else {
-          if (diagonal) {
-            const low = Math.min(t, to.y), high = Math.max(t, to.y);
-            if (!this.clearBetween(x + dx, z, low + .01, high + BODY_HEIGHT, missing) ||
-                !this.clearBetween(x, z + dz, low + .01, high + BODY_HEIGHT, missing)) continue;
-          }
+          // Level or step diagonal: don't cut a corner through a solid block;
+          // one open orthogonal side is enough to round it, as a player does.
+          if (diagonal && !this.cornerOpen(x, z, dx, dz, Math.max(t, to.y), missing)) continue;
           kind = rise > .05 ? 'step' : 'walk'; cost = d + Math.abs(rise) * .3;
         }
         if (this.shore(to)) cost += 2;
@@ -160,6 +161,13 @@ export class TerrainMemory {
       }
     }
     return result;
+  }
+  // At least one of the two orthogonal columns beside a diagonal move is
+  // clear through the body at the landing height, so the body can round the
+  // corner on that side instead of clipping a solid block on both.
+  cornerOpen(x, z, dx, dz, top, missing) {
+    return this.clearBetween(x + dx, z, top + .01, top + BODY_HEIGHT, missing) ||
+      this.clearBetween(x, z + dz, top + .01, top + BODY_HEIGHT, missing);
   }
   // Escape edges over a one-cell hole: the far cell stands, the middle one
   // does not, and there is room for the arc. Costly, so only ever a last resort.
