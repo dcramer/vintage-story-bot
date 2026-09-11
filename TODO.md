@@ -16,7 +16,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 
 ## 2. Perception (`blockAt`, `findBlocks`, `canSeeBlock`, `blockAtCursor`, `nearestEntity`)
 
-- [x] `scan` — surroundings ≤8, cone sight ≤64, paged cursors, forage/ripe flags.
+- [x] `scan` — surroundings ≤8, cone sight ≤64, paged cursors, block facts (name, variant, growth).
 - [x] `inspect_target` — crosshair block/entity, HUD text, hints, forming state.
 - [x] `aim_cell` — aim at a cell/face/voxel by coordinates using the block's real selection-box geometry; used by forming placement instead of caller-computed angles.
 - [ ] **P1 · `block_at {x,y,z}`** — code/state of one cell if observed or remembered; `unknown` otherwise, never air (`game`, `ctl`). Mineflayer `blockAt`. Source: terrain memory + last scan; no hidden-world lookup.
@@ -68,13 +68,13 @@ Nothing exists. Blocks day 2 hunting and all threat response.
 - [x] `inventory_move`, `craft` (grid once), `craft_item` (verified loop), `recipes`.
 - [x] `eat` — berries only.
 - [ ] **P0 · bag/basket equipping** — handbasket/backpack into bag slots so capacity grows; today equipment is read-only (`mod`, `ctl`, `skill`). Blocks day 1 (2 handbaskets).
-- [ ] **P0 · `eat` allowlist expansion** — mushrooms (safe list), cooked meat, bread, bowl of meal; per-food verification of satiety + item delta (`skill`).
+- [~] `eat` edibility from the tooltip — anything with positive saturation, no health loss, not psychedelic or intoxicating, fresh; optional `item` filter; no code lists. Not live-verified beyond berries (`skill`).
 - [ ] **P1 · nutrition-category policy** — VS max health follows fruit/vegetable/protein/grain/dairy saturation; `eat` picks by lowest category, `inventory` exposes category per food (`mod`, `skill`).
 - [ ] **P1 · freshness-aware eating** — prefer soonest-to-spoil; refuse rotten; `inventory.freshness` already exists (`skill`).
 - [ ] **P0 · `drop {item,count}`** — toss from own inventory to ground (spare cattails, stones as ground stacks) (`mod`, `ctl`). Mineflayer `toss`.
 - [ ] **P1 · `equip` clothing/armor/offhand** — character slots: warmth clothing for winter (body temperature), straw hat, improvised armor, offhand torch (`mod`, `ctl`).
 - [ ] **P1 · `recipes` for knapping/clay/smithing** — list forming recipes and required material (`mod` FormingAdapter, `ctl`). Today grid only.
-- [ ] **P1 · `item_info {code}`** — handbook facts: nutrition, tool class/tier, durability, fuel value, container capacity (`mod`, `ctl`).
+- [~] `item_info {code}` — handbook facts: nutrition, tool class/tier, durability, bag slots, fuel, drops, harvest yield and page text; `forage` reads it for every seen code (`skills/facts.mjs`). Not live-verified.
 - [ ] **P2 · `sort_inventory`** — consolidate stacks, hotbar layout policy (`skill`).
 
 ## 7. Containers (`openContainer`, `deposit`, `withdraw`, `close`)

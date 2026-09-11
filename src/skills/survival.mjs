@@ -3,7 +3,8 @@ import { sightRange, temporalStormUnsafe } from './fieldwork.mjs';
 import { changeBlock } from './blocks.mjs';
 import { clearLeafPath } from './leaf-clearing.mjs';
 import { collectItem } from './collect-item.mjs';
-import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, ripeForage, termiteCode } from './food.mjs';
+import { learnYields } from './facts.mjs';
+import { consume, emptyHand, foodReserve, forageBreaks, forageFoodCode, forageReady, forageWatch, hunger } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
 export const foodSightRange = Math.min(32, sightRange);
@@ -16,9 +17,8 @@ export const foodElevationDetourDistance = verticalRemaining => verticalRemainin
   Math.min(foodSearchDistance, Math.max(6, verticalRemaining * 2));
 export const foodRecoverySatisfied = (ratio, reserve, eaten) =>
   ratio >= .8 && reserve >= 320 || eaten > 0 && ratio >= .6;
-const forageMatches = ['bush', 'mushroom', 'crop-', 'termitemound-'];
-const breaksForage = object => mushroomCode(forageFoodCode(object)) || termiteCode(forageFoodCode(object)) ||
-  object.forage?.kind === 'crop';
+const breaksForage = forageBreaks;
+const ripeForage = forageReady;
 export const accessibleForage = object => {
   return breaksForage(object) ? object.access?.buildOrBreak !== false : object.access?.use !== false;
 };
@@ -49,11 +49,19 @@ export class Survival {
   searchTarget = null;
   stuckSearches = 0;
   lastFarView = null;
+  watch = forageWatch;
   constructor(field) { this.field = field; }
+  // Look for food, then read the pages of what came into view so its yield can be judged.
+  async study(radius) {
+    const objects = await this.field.scan(radius, this.watch, 'blocks');
+    await learnYields(this.field, objects.map(object => object.code));
+    return objects;
+  }
   pauseWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : hunger(state) < .2 ? 'food_needed' : null;
   eatWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : this.reserve > 0 && hunger(state) < .8 ? 'food_available' : null;
-  async tend({ force = false, toward } = {}) {
+  async tend({ force = false, toward, watch } = {}) {
     const field = this.field;
+    this.watch = watch?.length ? watch : forageWatch;
     await field.observe();
     if (temporalStormUnsafe(field.latest)) throw Error('Temporal storm active or imminent; food work postponed.');
     if (!this.tending && !force && hunger(field.latest) >= .2) { field.recoveringFood = false; return; }
@@ -82,7 +90,7 @@ export class Survival {
         continue;
       }
       // A single paged sweep finds both supported food families without enumerating unrelated blocks.
-      const near = await field.scan(8, forageMatches, 'blocks');
+      const near = await this.study(8);
       const ready = near.find(o => ripeForage(o) && accessibleForage(o) &&
         harvestReady(o, field.latest.position, field.latest.body.halfWidth) && !field.skipped.has(o.key));
       if (ready) {
@@ -93,7 +101,7 @@ export class Survival {
       // Repeating the same paged volume scan cannot reveal new nearby food and
       // used to crowd out the short, known-terrain exploration step.
       if (foodViewChanged(this.lastFarView, field.latest)) {
-        await field.scan(foodSightRange, forageMatches, 'blocks');
+        await this.study(foodSightRange);
         this.lastFarView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
       }
       // One smooth initial look-around; don't walk away from food just behind the initial view.
@@ -101,7 +109,7 @@ export class Survival {
         this.surveyed = true;
         for (const offset of [120, 240]) {
           await field.aim({ yawDegrees: normalize(field.heading + offset), pitchDegrees: 15 });
-          await field.scan(foodSightRange, forageMatches, 'blocks');
+          await this.study(foodSightRange);
           this.lastFarView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
           if (field.targets(o => ripeForage(o) && accessibleForage(o)).length) break;
         }
@@ -115,7 +123,7 @@ export class Survival {
         this.desperateSurveyed = true;
         for (const offset of [0, 90, 180, 270]) {
           await field.aim({ yawDegrees: normalize(field.heading + offset), pitchDegrees: 15 });
-          await field.scan(desperateFoodSightRange, forageMatches, 'blocks');
+          await this.study(desperateFoodSightRange);
           this.lastFarView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
           if (field.targets(o => ripeForage(o) && accessibleForage(o)).length) break;
         }
@@ -179,6 +187,7 @@ export class Survival {
     const aimed = await field.observe();
     if (aimed.target?.key !== target.key) { field.skip(target, 5000); return; }
     const detail = await field.send({ action: 'inspect_target' });
+    await learnYields(field, [detail.code]);
     if (detail.key !== target.key || !ripeForage(detail)) { field.skip(target); return; }
     await field.observe();
     if (await field.evadeThreat(target => clearLeafPath(field, target))) return;
@@ -223,7 +232,7 @@ export class Survival {
       }
       if (needsBreaking) {
         // Broken forage can become a loose stack just outside native pickup
-        // range. Reacquire only the exact allowlisted food drop before giving
+        // range. Reacquire only the exact expected food drop before giving
         // up on a block that the server already verified as changed.
         const drops = matchingFoodDrops(await field.scan(8, foodCode.slice(0, 64), 'items'), foodCode, detail.point);
         for (const drop of drops) {

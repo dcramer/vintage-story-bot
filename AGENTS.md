@@ -56,7 +56,8 @@ Seraph system:
 - **stuck**: moving without progress; triggers a new route or a recovery.
 - **leaf clearing**: breaking up to three leaf blocks to get unstuck; never used to plan routes.
 - **threat**: a hostile seen, heard or recently seen within range; the bot moves away until it is clear.
-- **forage**: picking food from the world (berries, mushrooms, wild crops) from a safe list.
+- **forage**: picking food from the world (berries, mushrooms, wild crops) that the handbook says yields something edible.
+- **facts**: what a player can see or read about a thing: a block's name, variant and growth state (`facts`), an item's handbook page (`item_info`); never what it is for.
 - **pause**: stopping travel for something more urgent (food, storm), then carrying on.
 - **skip**: ignoring a target for a while after a failed attempt.
 - **waypoint**: a named place, like a marker on the game map (`set_waypoint`, `waypoints`).

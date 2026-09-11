@@ -1,55 +1,34 @@
+import { known } from './facts.mjs';
 import { ownedSlots } from './inventory.mjs';
 
-// Installed survival fruit assets; no inference that arbitrary nutritious items are safe raw.
-export const berryTypes = new Set([
-  'beautyberry', 'blueberry', 'cloudberry', 'cranberry', 'blackberry',
-  'blackcurrant', 'raspberry', 'redcurrant', 'whitecurrant', 'strawberry',
-]);
-export const berryCode = code => typeof code === 'string' && code.startsWith('game:fruit-') && berryTypes.has(code.slice(11));
-// Installed 1.22.7 assets with zero raw health penalty and no psychedelic effect.
-export const mushroomTypes = new Set([
-  'fieldmushroom', 'almondmushroom', 'blacktrumpet', 'chanterelle', 'commonmorel',
-  'greencrackedrussula', 'indigomilkcap', 'kingbolete', 'lobster', 'orangeoakbolete',
-  'paddystraw', 'puffball', 'redwinecap', 'saffronmilkcap', 'violetwebcap', 'witchhat',
-  'honeymushroom',
-]);
-export const mushroomCode = code => typeof code === 'string' && /^game:mushroom-[a-z0-9]+-normal$/.test(code) &&
-  mushroomTypes.has(code.slice(14, -7));
-// Unharvested termite mounds in the installed survival assets drop these raw,
-// edible insects with positive satiety and no health penalty.
-export const termiteCode = code => code === 'game:insect-termite';
-// Minimum installed crop stage that drops an edible raw item. Cassava,
-// soybean, licorice and pineapple are deliberately absent.
-export const cropFoods = new Map([
-  ['amaranth', { stage: 8, code: 'game:grain-amaranth' }],
-  ['cabbage', { stage: 11, code: 'game:vegetable-cabbage' }],
-  ['carrot', { stage: 6, code: 'game:vegetable-carrot' }],
-  ['fennel', { stage: 8, code: 'game:vegetable-fennel' }],
-  ['flax', { stage: 9, code: 'game:grain-flax' }],
-  ['onion', { stage: 6, code: 'game:vegetable-onion' }],
-  ['parsnip', { stage: 7, code: 'game:vegetable-parsnip' }],
-  ['peanut', { stage: 8, code: 'game:legume-peanut' }],
-  ['rice', { stage: 10, code: 'game:grain-rice' }],
-  ['rye', { stage: 9, code: 'game:grain-rye' }],
-  ['spelt', { stage: 9, code: 'game:grain-spelt' }],
-  ['sunflower', { stage: 12, code: 'game:grain-sunflower' }],
-  ['turnip', { stage: 4, code: 'game:vegetable-turnip' }],
-]);
-const cropFoodCodes = new Set([...cropFoods.values()].map(food => food.code));
-export const forageFoodCode = object => {
-  if (object.forage?.kind !== 'crop') return object.forage?.foodCode;
-  const food = cropFoods.get(object.forage.cropType);
-  return food && object.forage.stage >= food.stage ? food.code : null;
-};
-export const ripeForage = object => object.kind === 'block' &&
-  (object.forage?.ripe === true && (berryCode(object.forage.foodCode) || mushroomCode(object.forage.foodCode) ||
-    termiteCode(object.forage.foodCode)) ||
-    cropFoodCodes.has(forageFoodCode(object)));
-export const safeFood = slot => (berryCode(slot.code) || mushroomCode(slot.code) || termiteCode(slot.code) ||
-  cropFoodCodes.has(slot.code)) && slot.quantity > 0 &&
-  slot.nutrition?.saturation > 0 && slot.nutrition.health >= 0 && slot.freshness?.state === 'fresh';
+// Prior knowledge a player brings to a new world: where food tends to be
+// found, so the eye watches for it. Everything else is read from the game:
+// the tooltip of what is held, the handbook page of what is seen. Nothing
+// here gates what may be tried.
+export const forageWatch = ['bush', 'mushroom', 'crop-', 'termitemound-'];
+// Edible as the tooltip and handbook show it: feeds, does not hurt, does not
+// alter the mind.
+export const edible = nutrition => nutrition?.saturation > 0 && nutrition.health >= 0 &&
+  !(nutrition.psychedelic > 0) && !(nutrition.intoxication > 0);
+export const safeFood = slot => slot.quantity > 0 && edible(slot.nutrition) && slot.freshness?.state === 'fresh';
 export const foodReserve = inventory => ownedSlots(inventory).filter(safeFood)
   .reduce((sum, slot) => sum + slot.quantity * slot.nutrition.saturation, 0);
+// What a seen block yields as food, by the pages the bot has read: right-click
+// harvest first (the block stays), then what breaking it drops. A harvest that
+// needs a growth state waits until the block shows it. Unread pages yield nothing.
+export const foodYield = (object, page = known(object.code)) => {
+  if (!page) return null;
+  const harvest = page.harvest;
+  if (harvest?.drops?.length && (!harvest.requiresGrowth || object.facts?.growth === harvest.requiresGrowth)) {
+    const drop = harvest.drops.find(d => edible(known(d.code)?.nutrition));
+    if (drop) return { code: drop.code, how: 'use' };
+  }
+  const drop = (page.drops ?? []).find(d => edible(known(d.code)?.nutrition));
+  return drop ? { code: drop.code, how: 'break' } : null;
+};
+export const forageReady = object => object.kind === 'block' && !!foodYield(object);
+export const forageBreaks = object => foodYield(object)?.how === 'break';
+export const forageFoodCode = object => foodYield(object)?.code ?? null;
 export function hunger(state) {
   const vital = state.vitals?.hunger;
   if (!Number.isFinite(vital?.current) || !Number.isFinite(vital?.max) || vital.max <= 0)
@@ -71,12 +50,13 @@ export async function emptyHand(field) {
   return slot.slot;
 }
 
-export async function consume(field) {
+export async function consume(field, { match } = {}) {
   await field.observe();
   let inventory = await field.send({ action: 'inventory' });
   let food = ownedSlots(inventory).filter(safeFood)
+    .filter(slot => !match || slot.code.toLowerCase().includes(match.toLowerCase()))
     .sort((a, b) => a.freshness.freshHoursLeft - b.freshness.freshHoursLeft)[0];
-  if (!food) throw Error('No verified fresh, safe forage in own inventory');
+  if (!food) throw Error(match ? `No fresh edible food matching ${match} in own inventory` : 'No fresh edible food in own inventory');
   if (food.inventory !== 'hotbar') {
     const destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && !s.code);
     if (!destination) throw Error('Eating needs an empty hotbar slot');

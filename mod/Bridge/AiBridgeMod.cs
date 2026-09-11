@@ -30,6 +30,7 @@ public sealed partial class AiBridgeMod : ModSystem
     private LifeTracker life = new();
     private InventoryAdapter inventory = null!;
     private ContextSensor context = null!;
+    private HandbookSensor handbook = null!;
     private BlockActions blockActions = null!;
     private readonly TerrainMap terrain = new(16384, 120000, 64);
     private TerrainSensor terrainSensor = null!;
@@ -48,6 +49,7 @@ public sealed partial class AiBridgeMod : ModSystem
         vision = new VisionSensor(api, surface, sightings);
         inventory = new InventoryAdapter(api);
         context = new ContextSensor(api);
+        handbook = new HandbookSensor(api);
         mapWaypoints = new MapWaypointSensor(api);
         blockActions = new BlockActions(api);
         dialogs = new DialogAdapter(api);
@@ -280,6 +282,7 @@ public sealed partial class AiBridgeMod : ModSystem
             case "ui_activate": return dialogs.Activate(request);
             case "inventory": return inventory.Observe();
             case "recipes": return Recipes(request);
+            case "item_info": return ItemInfo(request);
             case "inventory_move":
             case "craft": return InventoryMove(name, request);
             case "select": return SelectHotbar(request);

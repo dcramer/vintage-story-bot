@@ -140,7 +140,7 @@ internal sealed class SceneSensor(ICoreClientAPI api, Func<bool> canControl)
                     buildOrBreak = client.WorldMap.TestAccess(api.World.Player, candidate.Block, EnumBlockAccessFlags.BuildOrBreak) == EnumWorldAccessResponse.Granted,
                     use = client.WorldMap.TestAccess(api.World.Player, candidate.Block, EnumBlockAccessFlags.Use) == EnumWorldAccessResponse.Granted
                 },
-                forage = candidate.Block == null ? null : ForageSensor.Observe(blocks, candidate.Block, blocks.GetBlock(candidate.Block)),
+                facts = candidate.Block == null ? null : BlockFacts.Observe(api.World, candidate.Block, blocks.GetBlock(candidate.Block)),
                 source = distance <= Math.Min(8, radius) ? "nearby" : "sight",
                 withinPickingRange = distance <= api.World.Player.WorldData.PickingRange,
                 look = new { yawDegrees = Math.Round(look.Yaw, 3), pitchDegrees = Math.Clamp(Math.Round(look.Pitch, 3), -89, 89) }

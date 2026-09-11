@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
-import { eatingLooks, forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
+import { remember } from '../src/skills/facts.mjs';
+import { eatingLooks, edible, foodYield, forageFoodCode, forageReady, safeFood } from '../src/skills/food.mjs';
 import { accessibleForage, desperateFoodSightRange, foodElevationDetourDistance, foodRecoverySatisfied,
   foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, matchingFoodDrops, stuckFoodRoute,
   wideFoodSurveyNeeded } from '../src/skills/survival.mjs';
@@ -22,14 +23,17 @@ test('survival postpones only imminent and active temporal storms', () => {
   assert.equal(temporalStormUnsafe({ condition: {} }), false);
 });
 
-test('deterministic forage allowlist rejects poisonous and psychedelic mushrooms', () => {
-  assert.equal(mushroomCode('game:mushroom-chanterelle-normal'), true);
-  assert.equal(mushroomCode('game:mushroom-deathcap-normal'), false);
-  assert.equal(mushroomCode('game:mushroom-goldcap-normal'), false);
+const page = (code, extra = {}) => remember(code, { ok: true, code, ...extra });
+const food = { saturation: 80, health: 0 };
+
+test('edibility is read from the tooltip, never from a list of codes', () => {
   assert.equal(safeFood(slot('game:mushroom-chanterelle-normal')), true);
-  assert.equal(safeFood(slot('game:mushroom-deathcap-normal')), false);
-  assert.equal(safeFood({ ...slot('game:mushroom-chanterelle-normal'), nutrition: { saturation: 80, health: -1 } }), false);
-  assert.equal(ripeForage({ kind: 'block', forage: { ripe: true, foodCode: 'game:mushroom-chanterelle-normal' } }), true);
+  assert.equal(safeFood(slot('game:bread-spelt-perfect')), true);
+  assert.equal(safeFood({ ...slot('game:mushroom-deathcap-normal'), nutrition: { saturation: 80, health: -2 } }), false);
+  assert.equal(safeFood({ ...slot('game:mushroom-goldcap-normal'), nutrition: { saturation: 80, health: 0, psychedelic: 1 } }), false);
+  assert.equal(safeFood({ ...slot('game:fruit-blueberry'), freshness: { state: 'spoiling' } }), false);
+  assert.equal(safeFood({ ...slot('game:stick'), nutrition: null }), false);
+  assert.equal(edible(undefined), false);
 });
 
 test('eating searches a deterministic three-dimensional clear-air grid', () => {
@@ -45,30 +49,33 @@ test('eating searches a deterministic three-dimensional clear-air grid', () => {
   assert.deepEqual(looks.at(-1), { yawDegrees: 315, pitchDegrees: 60 });
 });
 
-test('only mature crops with verified raw food drops are actionable', () => {
-  const crop = (cropType, stage) => ({ kind: 'block', forage: { kind: 'crop', cropType, stage } });
-  assert.equal(ripeForage(crop('carrot', 5)), false);
-  assert.equal(ripeForage(crop('carrot', 6)), true);
-  assert.equal(forageFoodCode(crop('carrot', 6)), 'game:vegetable-carrot');
-  assert.equal(ripeForage(crop('cassava', 9)), false);
-  assert.equal(ripeForage(crop('soybean', 11)), false);
-  assert.equal(safeFood(slot('game:vegetable-carrot')), true);
-  assert.equal(safeFood(slot('game:rawcassava-raw')), false);
-});
-
-test('installed termite mounds are deterministic safe breakable forage', () => {
-  const termites = { kind: 'block', forage: { kind: 'termites', ripe: true,
-    foodCode: 'game:insect-termite' }, access: { buildOrBreak: true } };
-  assert.equal(termiteCode('game:insect-termite'), true);
-  assert.equal(termiteCode('game:insect-grub'), false);
-  assert.equal(ripeForage(termites), true);
-  assert.equal(accessibleForage(termites), true);
-  assert.equal(safeFood(slot('game:insect-termite')), true);
+test('a block is forage when the pages read say it yields food now', () => {
+  page('game:fruit-blueberry', { nutrition: food });
+  page('game:fruitingbush-grown-blueberry-free', { harvest: { drops: [{ code: 'game:fruit-blueberry' }], requiresGrowth: 'ripe' }, drops: [] });
+  const bush = growth => ({ kind: 'block', code: 'game:fruitingbush-grown-blueberry-free', facts: { growth } });
+  assert.deepEqual(foodYield(bush('ripe')), { code: 'game:fruit-blueberry', how: 'use' });
+  assert.equal(foodYield(bush('flowering')), null);
+  page('game:mushroom-chanterelle-normal', { nutrition: food, drops: [{ code: 'game:mushroom-chanterelle-normal' }] });
+  page('game:mushroom-deathcap-normal', { nutrition: { saturation: 80, health: -2 }, drops: [{ code: 'game:mushroom-deathcap-normal' }] });
+  assert.deepEqual(foodYield({ kind: 'block', code: 'game:mushroom-chanterelle-normal' }), { code: 'game:mushroom-chanterelle-normal', how: 'break' });
+  assert.equal(foodYield({ kind: 'block', code: 'game:mushroom-deathcap-normal' }), null);
+  page('game:seeds-carrot', {});
+  page('game:vegetable-carrot', { nutrition: food });
+  page('game:crop-carrot-5', { drops: [{ code: 'game:seeds-carrot' }] });
+  page('game:crop-carrot-6', { drops: [{ code: 'game:seeds-carrot' }, { code: 'game:vegetable-carrot' }] });
+  assert.equal(forageReady({ kind: 'block', code: 'game:crop-carrot-5' }), false);
+  assert.equal(forageReady({ kind: 'block', code: 'game:crop-carrot-6' }), true);
+  assert.equal(forageFoodCode({ kind: 'block', code: 'game:crop-carrot-6' }), 'game:vegetable-carrot');
+  assert.equal(forageReady({ kind: 'block', code: 'game:crop-cassava-9' }), false, 'an unread page yields nothing');
+  assert.equal(forageReady({ kind: 'item', code: 'game:vegetable-carrot' }), false);
 });
 
 test('forage planning skips targets denied by cached server access', () => {
-  const mushroom = { forage: { kind: 'mushroom', foodCode: 'game:mushroom-chanterelle-normal' } };
-  const berries = { forage: { kind: 'berry', foodCode: 'game:fruit-blueberry' } };
+  page('game:mushroom-chanterelle-normal', { nutrition: food, drops: [{ code: 'game:mushroom-chanterelle-normal' }] });
+  page('game:fruit-blueberry', { nutrition: food });
+  page('game:fruitingbush-grown-blueberry-free', { harvest: { drops: [{ code: 'game:fruit-blueberry' }], requiresGrowth: 'ripe' } });
+  const mushroom = { kind: 'block', code: 'game:mushroom-chanterelle-normal' };
+  const berries = { kind: 'block', code: 'game:fruitingbush-grown-blueberry-free', facts: { growth: 'ripe' } };
   assert.equal(accessibleForage({ ...mushroom, access: { buildOrBreak: false, use: true } }), false);
   assert.equal(accessibleForage({ ...berries, access: { buildOrBreak: true, use: false } }), false);
   assert.equal(accessibleForage({ ...mushroom, access: { buildOrBreak: true, use: false } }), true);
@@ -76,8 +83,8 @@ test('forage planning skips targets denied by cached server access', () => {
 });
 
 test('breakable forage is harvested beside its drop, never at maximum reach or underfoot', () => {
-  const mushroom = { withinPickingRange: true, point: { x: 10.5, y: 2.1, z: 10.5 },
-    forage: { kind: 'mushroom', foodCode: 'game:mushroom-chanterelle-normal' } };
+  page('game:mushroom-chanterelle-normal', { nutrition: food, drops: [{ code: 'game:mushroom-chanterelle-normal' }] });
+  const mushroom = { kind: 'block', code: 'game:mushroom-chanterelle-normal', withinPickingRange: true, point: { x: 10.5, y: 2.1, z: 10.5 } };
   assert.equal(harvestReady(mushroom, { x: 8.9, z: 10.5 }), false);
   assert.equal(harvestReady(mushroom, { x: 9.5, z: 10.5 }), true);
   assert.equal(harvestReady(mushroom, { x: 10.2, z: 10.3 }), false);

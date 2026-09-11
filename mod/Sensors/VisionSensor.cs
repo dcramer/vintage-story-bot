@@ -230,7 +230,7 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
                 if (blockHit != null && !blockHit.Position.Equals(cell)) continue;
                 sightings.Put(SceneSensor.BlockKey(cell, block), "block", block.Code!.ToString(), sample, "seen", new
                 {
-                    forage = ForageSensor.Observe(blocks, cell, block),
+                    facts = BlockFacts.Observe(api.World, cell, block),
                     access = client == null ? null : new
                     {
                         buildOrBreak = client.WorldMap.TestAccess(api.World.Player, cell, EnumBlockAccessFlags.BuildOrBreak) == EnumWorldAccessResponse.Granted,

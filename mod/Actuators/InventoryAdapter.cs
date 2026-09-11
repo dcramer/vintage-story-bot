@@ -74,7 +74,7 @@ public sealed class InventoryAdapter(ICoreClientAPI api)
             maxDurability = stack == null ? (int?)null : stack.Collectible.GetMaxDurability(stack),
             freshness = Freshness(slot),
             nutrition = nutrition == null ? null : new { saturation = nutrition.Satiety, health = nutrition.Health,
-                category = nutrition.FoodCategory.ToString() } };
+                category = nutrition.FoodCategory.ToString(), intoxication = nutrition.Intoxication, psychedelic = nutrition.Psychedelic } };
     }
 
     private object? Freshness(ItemSlot? slot)

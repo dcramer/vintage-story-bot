@@ -1,7 +1,7 @@
 import { Fieldwork } from './fieldwork.mjs';
 import { Survival } from './survival.mjs';
 
-export const foodFeatures = ['forage_state', 'food_freshness', 'block_actions'];
+export const foodFeatures = ['block_facts', 'item_info', 'food_freshness', 'block_actions'];
 
 // Standard goal session: guarded Fieldwork start with required mod feature flags,
 // optional food priority, and input release on every exit path.

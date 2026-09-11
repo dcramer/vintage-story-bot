@@ -252,7 +252,7 @@ test('knowledge survives a round trip through disk and is keyed by world', async
   knowledge.enter('world-a');
   memories.map.apply(terrain(), 1000);
   memories.surface.apply({ clock: 5, sweeps: 1, columns: [[1, 2, 10, 'ground', 1, 'soil', 5]] }, 1000);
-  memories.sightings.apply({ clock: 5, sightings: [['block:1', 'block', 'game:bush', 1.5, 10.5, 2.5, 'seen', 5, { forage: { ripe: true } }], ['entity:9', 'entity', 'game:wolf', 3, 10, 3, 'seen', 5, null]] }, 1000);
+  memories.sightings.apply({ clock: 5, sightings: [['block:1', 'block', 'game:bush', 1.5, 10.5, 2.5, 'seen', 5, { facts: { growth: 'ripe' } }], ['entity:9', 'entity', 'game:wolf', 3, 10, 3, 'seen', 5, null]] }, 1000);
   knowledge.touch();
   assert.equal(knowledge.save(true), true);
   const fresh = { map: new TerrainMemory(), surface: new SurfaceMemory(), sightings: new SightingsMemory() };

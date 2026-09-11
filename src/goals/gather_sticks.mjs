@@ -3,6 +3,7 @@ import { defineGoal } from '../controller/define.mjs';
 import { horizontal } from '../navigation/terrain.mjs';
 import { area, Fieldwork, sightRange } from '../skills/fieldwork.mjs';
 import { Survival } from '../skills/survival.mjs';
+import { foodFeatures } from '../skills/task.mjs';
 
 const loose = o => o.kind === 'block' && /^game:loosestick-(free|snow)$/.test(o.code);
 const dropped = o => o.kind === 'item' && o.code === 'game:stick';
@@ -19,7 +20,7 @@ export async function gather(env, { count = 10, manageFood = false, ...options }
   field.report = (phase, extra = {}) => env.report?.({ phase, count, gained: gained(),
     moved: +field.moved.toFixed(1), searched: field.searched, eaten: survival?.eaten ?? 0, ...extra });
   try {
-    await field.start(manageFood ? ['forage_state', 'food_freshness', 'block_actions'] : []);
+    await field.start(manageFood ? foodFeatures : []);
     await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
     while (true) {
       await field.observe(true);

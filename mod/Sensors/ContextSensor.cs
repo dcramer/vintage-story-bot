@@ -110,7 +110,7 @@ internal sealed class ContextSensor(ICoreClientAPI api)
                     buildOrBreak = client.WorldMap.TestBlockAccess(player, selection, EnumBlockAccessFlags.BuildOrBreak) == EnumWorldAccessResponse.Granted,
                     use = client.WorldMap.TestBlockAccess(player, selection, EnumBlockAccessFlags.Use) == EnumWorldAccessResponse.Granted
                 },
-                forage = ForageSensor.Observe(api.World.BlockAccessor, pos, block),
+                facts = BlockFacts.Observe(api.World, pos, block),
                 forming = Forming.Describe(pos, selection),
                 info = Clip(block.GetPlacedBlockInfo(api.World, pos, player), 2048),
                 interactionHints = Hints(block.GetPlacedBlockInteractionHelp(api.World, selection, player))

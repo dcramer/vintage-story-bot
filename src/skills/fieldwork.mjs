@@ -147,7 +147,7 @@ export class Fieldwork {
       .map(s => {
         const far = distance(eye, s.point);
         return { kind: s.kind, key: s.key, code: s.code, point: s.point, distance: +far.toFixed(2),
-          quantity: s.extra?.quantity ?? null, access: s.extra?.access ?? null, forage: s.extra?.forage ?? null,
+          quantity: s.extra?.quantity ?? null, access: s.extra?.access ?? null, facts: s.extra?.facts ?? null,
           how: s.how, source: far <= 8 ? 'nearby' : 'sight', withinPickingRange: far <= reach, look: lookAt(eye, s.point) };
       })
       .filter(o => o.distance <= radius)

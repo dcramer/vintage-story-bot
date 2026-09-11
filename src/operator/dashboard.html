@@ -169,7 +169,7 @@ const describe = {
   equip: a => a.item === null ? 'empty hand' : a.item ? code(a.item) : `${a.tool}${a.minTier ? ' tier ≥ ' + a.minTier : ''}`,
   dig_block: a => a.target, place_block: a => `${code(a.expectedItem)} on ${a.target}`,
   gather_sticks: a => count(a.count ?? 10, 'sticks'), move_to: a => `to ${point(a)}`,
-  forage: () => 'ripe berries to 80% satiety', eat: () => 'fresh food from inventory', collect_stick: () => 'one visible stick',
+  forage: a => `${(a.match ?? ['forage']).join(', ')} to 80% satiety`, eat: a => a.item ? `fresh ${a.item} from inventory` : 'fresh food from inventory', collect_stick: () => 'one visible stick',
 };
 const goalTitle = g => g?.args ? (describe[g.kind]?.(g.args) ?? fmt(g.args)) : '';
 // Progress detail keys, most specific first; the rest render as rows.
