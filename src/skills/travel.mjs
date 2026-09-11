@@ -71,7 +71,10 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
         const cleared = await clearFoliagePath(field, leg);
         const nudged = await field.nudge(leg);
         if (cleared || nudged > .1) {
-          stalled = 0;
+          // Once a cautious probe proves this corridor is physically
+          // traversable, retry it after one planner failure instead of
+          // waiting through three identical surveys for every half block.
+          stalled = nudged > .1 ? 2 : 0;
           continuation = null;
           localDetour = false;
           field.report('route_cleared', { remaining: +horizontal(field.latest.position, goal).toFixed(1), legs });

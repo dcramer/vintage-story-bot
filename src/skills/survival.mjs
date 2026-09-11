@@ -142,7 +142,7 @@ export class Survival {
           const cleared = await clearFoliagePath(field, destination);
           const nudged = await field.nudge(destination);
           if (cleared || nudged > .1) {
-            this.searchStalls = 0;
+            this.searchStalls = nudged > .1 ? 2 : 0;
             this.surveyed = false;
             this.desperateSurveyed = false;
             this.lastFarView = null;
