@@ -7,7 +7,7 @@ const guardStorm = state => {
 
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
 export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
-  let stalled = 0, legs = 0, routeResets = 0, continuation = null;
+  let stalled = 0, legs = 0, routeResets = 0, continuation = null, localDetour = false;
   const summary = () => ({ moved: +field.moved.toFixed(1), legs, stalled, routeResets });
   while (true) {
     let state = await field.observe(true);
@@ -22,9 +22,9 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     if (remaining <= arrivalRadius && (y === undefined || Math.abs(state.position.y - y) < 1.5))
       return { ok: true, goal: 'travel', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
     field.report('travelling', { remaining: +remaining.toFixed(1), legs });
-    const leg = remaining <= 48
+    const leg = remaining <= 48 && !localDetour
       ? (y === undefined ? { x, y: state.position.y, z, horizontalOnly: true, arrivalRadius } : { x, y, z, arrivalRadius })
-      : continuation ?? field.explore(goal);
+      : continuation ?? field.explore(goal, Math.min(48, remaining));
     const before = state.position;
     const result = await field.walk(leg, current => temporalStormUnsafe(current) ? 'temporal_storm' : survival?.yieldWhen(current));
     guardStorm(field.latest);
@@ -35,6 +35,11 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     // each fresh terrain cache makes real progress; changing compass targets
     // immediately sends the bot back across the cells it just traversed.
     continuation = !['arrived', 'yielded'].includes(result.state) && progress > 2 ? leg : null;
+    // A nearby destination can still sit behind a dense tree line, ridge or
+    // cliff. After one stationary direct attempt, use the same deterministic
+    // forward/lateral frontier search as long travel instead of retrying an
+    // identical unobserved segment forever.
+    localDetour = remaining <= 48 && !['arrived', 'yielded'].includes(result.state) && progress <= 2;
     if (result.state === 'arrived' || result.state === 'yielded' || progress > 2) stalled = 0;
     else if (++stalled >= 6) {
       // A long trip can exhaust every local alternative on a steep ridge even

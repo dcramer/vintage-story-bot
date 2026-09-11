@@ -218,3 +218,28 @@ test('long travel extends a productive partial detour instead of reversing it', 
   assert.equal(explores, 1);
   assert.deepEqual(legs, [detour, detour]);
 });
+
+test('nearby travel explores after a stationary direct route failure', async () => {
+  const initial = { position: { x: .5, y: 1, z: .5 }, condition: {} };
+  const destination = { x: 20.5, y: 1, z: .5, horizontalOnly: true, arrivalRadius: 1 };
+  const detour = { x: .5, y: 1, z: 12.5, horizontalOnly: true, arrivalRadius: 1 };
+  const legs = [];
+  let latest = initial, walks = 0;
+  const field = {
+    moved: 0,
+    get latest() { return latest; },
+    observe: async () => latest,
+    report: () => {},
+    explore: () => detour,
+    walk: async target => {
+      legs.push(target);
+      walks++;
+      if (walks === 2) latest = { ...initial, position: { x: .5, y: 1, z: 12.5 } };
+      if (walks === 3) latest = { ...initial, position: { x: 20.5, y: 1, z: .5 } };
+      return { state: walks === 1 ? 'blocked' : 'arrived' };
+    },
+  };
+  const result = await travel(field, null, { x: 20.5, z: .5 });
+  assert.equal(result.ok, true);
+  assert.deepEqual(legs, [destination, detour, destination]);
+});
