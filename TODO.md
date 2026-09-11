@@ -1,6 +1,6 @@
 # Core bot API TODO
 
-Rough spec of the bot API surface, modeled on [Mineflayer](https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md) and [pathfinder](https://github.com/PrismarineJS/mineflayer-pathfinder), scoped to Vintage Story. Purpose: break work into small tasks. Analogues are design intent, not compatibility targets; see [bot-api-reference](docs/bot-api-reference.md) for the criteria each surface must meet.
+Rough spec of the bot API surface, modeled on [Mineflayer](https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md) and [pathfinder](https://github.com/PrismarineJS/mineflayer-pathfinder), scoped to Vintage Story. Purpose: break work into small tasks. Mineflayer is the baseline for API shape only; every item must map to a real Vintage Story mechanic in the installed 1.22.7 assets ([capabilities](docs/capabilities.md)), never Minecraft behavior. See [bot-api-reference](docs/bot-api-reference.md) for the criteria each surface must meet.
 
 Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-broken · `[ ]` missing. Layer: `mod` (C# sensing/input), `game` (RPC client), `ctl` (controller schema/action), `skill`, `goal`. Priority: **P0** blocks day 1–2 of [getting-started](docs/getting-started.md), **P1** blocks day 3–5, **P2** later/quality. Implemented contracts: [actions](src/controller/actions.mjs).
 
@@ -45,7 +45,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [x] `dig_area`, `build` — multi-cell goals; `build` presets house/pit_kiln.
 - [ ] **P0 · `place_block` on wall face at height** — verify torch-on-wall and gable placement (needs standing spot + up-face reach). Currently unverified for non-ground faces (`skill`).
 - [ ] **P0 · `ignite {target}`** — firestarter/torch on pit kiln or firepit, verified by block-state change to burning (`skill`; probably `use_on_block` + `expectAfter`).
-- [ ] **P1 · `door {target,open}`** — open/close doors and gates; navigation still excludes doors (`skill`, later `nav` movement flag). Mineflayer `openDoor`.
+- [ ] **P1 · `door {target,open}`** — open/close doors and gates; navigation still excludes doors (`skill`, later `nav` movement flag). Mineflayer `openDoor`. Day 1 door is two hay bales, so `place_block`/`dig_block` covers that first.
 - [ ] **P1 · `pickup_ground {target}`** — right-click pickup of ground-stored stacks and loose items other than sticks (generalize `collect_stick`) (`skill`).
 - [ ] **P2 · `dig_block` with drop collection option** — `collect:true` chains `collect_item` for the produced entity (`goal`).
 
@@ -55,7 +55,8 @@ Nothing exists. Blocks day 2 hunting and all threat response.
 
 - [ ] **P0 · `attack_entity {target,expectedKind,weapon?}`** — approach to melee range, aim, left-click until entity gone or fled; verify by entity disappearance + carcass/drop sighting (`mod` aim-at-entity, `skill`, `goal`). Mineflayer `attack`.
 - [ ] **P0 · `throw {target}`** — spear throw: hold right-click with spear aimed at entity, verify spear count drop; pair with `collect_item` for retrieval (`skill`).
-- [ ] **P1 · `activate_entity {target}`** — right-click entity: harvest carcass with knife, shear, milk (`mod`, `skill`). Mineflayer `activateEntity`.
+- [ ] **P1 · `butcher {target}`** — VS `EntityBehaviorHarvestable`: hold right-click with a knife on a dead animal for its harvest time, then take drops from the harvest inventory it opens; depends on container access (§7) (`mod`, `skill`). Mineflayer `activateEntity`.
+- [ ] **P2 · `activate_entity {target}`** — other right-click uses: shear, milk, feed; taming is generational, never instant (`skill`).
 - [x] hostile avoidance during navigation — 12-block detour, emergency sprint, resume after clear ([threats](src/skills/threats.mjs), navigator).
 - [ ] **P1 · `flee {to?}`** — standalone reaction while stationary (waiting, crafting, forming): route to a POI or `fleeTarget`; same allowlist, runs only inside a task (`goal`).
 - [ ] **P2 · sneak approach** — `travel` with `sneak:true` for animal approach (`ctl`, `nav`).
@@ -66,9 +67,11 @@ Nothing exists. Blocks day 2 hunting and all threat response.
 - [x] `inventory_move`, `craft` (grid once), `craft_item` (verified loop), `recipes`.
 - [x] `eat` — berries only.
 - [ ] **P0 · bag/basket equipping** — handbasket/backpack into bag slots so capacity grows; today equipment is read-only (`mod`, `ctl`, `skill`). Blocks day 1 (2 handbaskets).
-- [ ] **P0 · `eat` allowlist expansion** — mushrooms (safe list), cooked meat, bread, bowl of stew; per-food verification of satiety + item delta (`skill`).
+- [ ] **P0 · `eat` allowlist expansion** — mushrooms (safe list), cooked meat, bread, bowl of meal; per-food verification of satiety + item delta (`skill`).
+- [ ] **P1 · nutrition-category policy** — VS max health follows fruit/vegetable/protein/grain/dairy saturation; `eat` picks by lowest category, `inventory` exposes category per food (`mod`, `skill`).
+- [ ] **P1 · freshness-aware eating** — prefer soonest-to-spoil; refuse rotten; `inventory.freshness` already exists (`skill`).
 - [ ] **P0 · `drop {item,count}`** — toss from own inventory to ground (spare cattails, stones as ground stacks) (`mod`, `ctl`). Mineflayer `toss`.
-- [ ] **P1 · `equip` armor/offhand** — straw hat, improvised armor, offhand torch (`mod`, `ctl`).
+- [ ] **P1 · `equip` clothing/armor/offhand** — character slots: warmth clothing for winter (body temperature), straw hat, improvised armor, offhand torch (`mod`, `ctl`).
 - [ ] **P1 · `recipes` for knapping/clay/smithing** — list forming recipes and required material (`mod` FormingAdapter, `ctl`). Today grid only.
 - [ ] **P1 · `item_info {code}`** — handbook facts: nutrition, tool class/tier, durability, fuel value, container capacity (`mod`, `ctl`).
 - [ ] **P2 · `sort_inventory`** — consolidate stacks, hotbar layout policy (`skill`).
@@ -81,9 +84,12 @@ Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 - [ ] **P0 · `container_move {from,to,quantity,expectedState}`** — extend `inventory_move` addresses with `container` while open (`mod`, `ctl`).
 - [ ] **P0 · `close_container`** — explicit close; opening any goal auto-closes (`mod`, `ctl`).
 - [ ] **P0 · `store {target,items[]}` / `take {target,items[]}`** — goal: walk, open, move, verify deltas, close (`skill`, `goal`).
-- [ ] **P1 · firepit** — open, add fuel, add raw food, verify cooking state; extend `open_container` with firepit slots (`mod`, `skill`).
+- [ ] **P1 · firepit** — not a furnace: fuel slot + input slot, or a cooking pot holding up to 4 ingredients making a meal per `recipes/cooking`; needs firestarter to light; verify burning/cooked state (`mod`, `skill`).
+- [ ] **P1 · ground storage piles** — sneak-place stackable items (logs, firewood, stones, cattails) as piles and pick them back up; 182 ground-storable items in assets (`skill`).
+- [ ] **P1 · `open_container` on bags** — handbaskets/backpacks worn in bag slots extend own inventory, they are not world containers; ensure `inventory` addresses cover bag slots (`mod`, `ctl`).
 - [ ] **P1 · pit kiln loading** — pottery, 10 grass, 8 sticks, 4 fuel in order via sneak-place into pit; `build` preset already places the plus (`skill`, `goal`).
-- [ ] **P2 · quern, crock sealing, bloomery** — later stations.
+- [ ] **P2 · barrel recipes** — tanning, pickling, lime; `recipes/barrel` (`skill`).
+- [ ] **P2 · quern, crock sealing, bloomery, crucible/alloy** — later stations.
 
 ## 8. Crafting stations (Vintage Story specific)
 
@@ -91,7 +97,7 @@ Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 - [ ] **P0 · knap output conversion** — reproduce, confirm whether last chip must be server-observed; consider re-inspecting server state after each chip (`mod`).
 - [ ] **P1 · knap efficiency** — clear recipe-adjacent boundary ring first so `tryBfsRemove` floods the bulk (`skill`).
 - [ ] **P1 · `clayform` order policy** — vessel → pot → bowl sequencing helper (`goal`).
-- [ ] **P2 · smithing** — anvil voxel work; same adapter family (`mod`, `skill`).
+- [ ] **P2 · smithing** — anvil voxel work with hammer on a heated ingot; heat state and anvil tier gate it; same adapter family (`mod`, `skill`).
 
 ## 9. Events (`health`, `death`, `entityHurt`, `playerCollect`, `blockUpdate`, `chat`)
 
@@ -108,13 +114,13 @@ Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 - [x] `move_to` — bounded route, level/±1, replan, arrivalRadius.
 - [~] `travel`, `explore` — legs + detours; not live-verified.
 - [x] `set_poi`, `pois` — session memory.
-- [ ] **P0 · `GoalGetToBlock` / interact-range arrival** — `move_to {target:blockKey}` stops when the cell is in reach and visible, not at a coordinate (`nav`, `ctl`). Every block goal re-implements this today.
+- [ ] **P0 · `GoalGetToBlock` / interact-range arrival** — `move_to {target:blockKey}` stops when the cell is within the player's native `pickingrange` and visible, not at a coordinate (`nav`, `ctl`). Every block goal re-implements this today.
 - [ ] **P1 · `GoalFollow` / `follow {target:entity,range}`** — track a moving entity, re-plan on movement (`nav`, `goal`). Hunting, co-op.
 - [ ] **P1 · movement policy flags** — `allowSwim`, `allowJumpGap`, `allowDoors`, `allowDig` per goal; default all off (`nav`, `ctl`). pathfinder `Movements`.
 - [ ] **P1 · `path_update` reasons on `goal_status`** — `noPath|timeout|stuck|replanned` phases with counts (`ctl`).
 - [ ] **P1 · `home` shortcut** — `travel {poi:'home'}` convention plus `return_home` before sunset check (`skill`).
 - [ ] **P2 · terrain memory persistence** — keyed by world identity, invalidated on reset; today session-only (`nav`).
-- [ ] **P2 · ladder/climb, swim** — new movement primitives (`mod`, `nav`).
+- [ ] **P2 · climbable blocks, swim** — VS `Climbable` (ladders, some vines) and water traversal as movement primitives; VS auto-steps sub-block heights via `stepHeight`, full blocks still need jump (`mod`, `nav`).
 
 ## 11. Survival and time
 
@@ -123,7 +129,21 @@ Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 - [ ] **P0 · `wait {untilHour|ms}`** — idle goal that holds position, keeps observing, stops on damage; nights indoors (`goal`).
 - [ ] **P1 · torch cycle** — pick up and re-place torches each morning (`skill`): `dig_block` torch → `place_block`.
 - [ ] **P1 · day plan goal** — composite `day1` goal chaining knap → cattails → chest → house, with per-step `goal_status` progress (`goal`). Decide whether composites live in Node or stay LLM-orchestrated.
-- [ ] **P2 · sit/rest** — hunger reduction indoors; check API availability (`mod`).
+- [ ] **P2 · sit** — VS sitting reduces hunger drain; useful during `wait` indoors (`mod`, `goal`).
+
+## 11b. Vintage Story only (no Mineflayer analogue)
+
+- [x] Temporal stability in `observe`, rust-world attrition classification.
+- [x] Body condition: body temperature, wetness, freezing, tiredness, intoxication.
+- [ ] **P1 · temporal storm awareness** — storm approaching/active in `observe`/`events`; policy: get indoors, no travel during storms (`mod`, `skill`).
+- [ ] **P1 · stability retreat** — when `temporalStability` keeps dropping, leave the low-stability region toward the last stable POI (`skill`).
+- [ ] **P1 · season/winter prep** — days-until-winter from calendar; goals for stored food and clothing warmth (`ctl`, `goal`).
+- [ ] **P1 · rain vs pit kiln** — `environment` precipitation gates kiln firing, or build the full cover (`skill`).
+- [ ] **P2 · respawn point** — temporal gear use sets spawn; expose spawn status (`mod`, `skill`).
+- [ ] **P2 · panning** — pan on sand/gravel for nuggets; day 2 tool (`skill`).
+- [ ] **P2 · trader interaction** — VS traders replace villagers; buy/sell needs its own dialog adapter (`mod`).
+
+Not planned (Minecraft-only): fishing, enchanting, furnace, villager trades, bed sleep (getting-started says never sleep).
 
 ## 12. Cross-cutting
 
