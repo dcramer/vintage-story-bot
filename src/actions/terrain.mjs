@@ -33,7 +33,8 @@ export function terrainView(map, surface, center, radius, now = Date.now()) {
   for (const row of rows) counts[row.kind] = (counts[row.kind] ?? 0) + 1;
   return { ok: true, center: { x: center.x, z: center.z }, radius, known: rows.length,
     unknown: (2 * radius + 1) ** 2 - rows.length, counts,
-    columns: rows.map(row => [row.x, row.z, +row.y.toFixed(3), row.kind, row.source, row.source === 'observed' ? Math.max(0, map.now - row.at) : Math.max(0, now - row.at)]) };
+    // Both memories stamp rows with the mod's monotonic clock, never wall time.
+    columns: rows.map(row => [row.x, row.z, +row.y.toFixed(3), row.kind, row.source, Math.max(0, (row.source === 'observed' ? map.now : surface.now) - row.at)]) };
 }
 
 export default defineAction({

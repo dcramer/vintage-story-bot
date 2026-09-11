@@ -24,6 +24,17 @@ export class TerrainMemory {
   }
   get(x, y, z) { return this.cells.get(cellKey(Math.floor(x), Math.floor(y), Math.floor(z))); }
   missing(missing, x, y, z) { missing?.set(cellKey(Math.floor(x), Math.floor(y), Math.floor(z)), { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) }); }
+  // An unknown cell sealed under known solid ground can never be observed by a
+  // sightline and can never touch a body standing on that ground. Only cells
+  // with air or nothing known above them are exposed and must be seen.
+  buried(x, y, z) {
+    for (let above = Math.floor(y) + 1; above <= Math.floor(y) + 3; above++) {
+      const cell = this.get(x, above, z);
+      if (!cell) continue;
+      return !cell.hazard && cell.boxes.some(b => b[3] - b[0] > .99 && b[5] - b[2] > .99 && b[4] - b[1] > .99);
+    }
+    return false;
+  }
   clear(p, w, h, missing) {
     const body = [p.x - w, p.y + .01, p.z - w, p.x + w, p.y + h, p.z + w];
     let unknown = false;
@@ -53,6 +64,7 @@ export class TerrainMemory {
           // cells are queued when possible but do not strand a freshly joined
           // player; clear() still requires the actual body volume to be known.
           if (!cell) {
+            if (y < feet && this.buried(x, y, z)) continue;
             if (y >= feet || requireKnown) this.missing(missing, x, y, z);
             if (requireKnown) return false;
             continue;

@@ -204,7 +204,7 @@ test('terrain keeps planned standing centers clear of adjacent liquid hazards', 
   assert.equal(map.stand(.5, -.5, 1, .3, 1.85)?.y, 1, 'dry ground outside the margin remains usable');
 });
 
-test('a descent requires its full lower hazard margin to be observed', () => {
+test('a descent requires its exposed lower hazard margin to be observed', () => {
   const map = new TerrainMemory(), cells = [];
   for (let x = -2; x <= 3; x++) for (let z = -2; z <= 2; z++) for (let y = -2; y <= 3; y++) {
     const support = x <= 0 && y === 0 || x >= 1 && y === -1;
@@ -213,8 +213,13 @@ test('a descent requires its full lower hazard margin to be observed', () => {
   map.apply({ session: 'descent-margin', reset: true, cursor: 1, more: false, clock: 0, cells });
   const upper = { x: .5, y: 1, z: .5 }, lower = { x: 1.5, y: 0, z: .5 };
   assert.equal(map.traverse(upper, lower, .3, 1.85), true);
+  // Sealed under the known solid support: unobservable by any sightline, harmless.
   map.apply({ session: 'descent-margin', reset: false, cursor: 2, more: false, clock: 1,
     cells: [[1, -2, 0, 1, false, null]] });
+  assert.equal(map.traverse(upper, lower, .3, 1.85), true);
+  // The support cell itself unknown, with air above it: exposed, must be seen.
+  map.apply({ session: 'descent-margin', reset: false, cursor: 3, more: false, clock: 1,
+    cells: [[2, -1, 0, 1, false, null]] });
   assert.equal(map.traverse(upper, lower, .3, 1.85), false);
 });
 
@@ -229,8 +234,17 @@ test('terrain permits only fully observed dry two-block descents', () => {
   assert.equal(map.stand(1.5, .5, upper.y, .3, 1.85)?.y, -1);
   assert.equal(map.traverse(upper, lower, .3, 1.85), true);
   assert.ok(findRoute(map, upper, lower, .3, 1.85));
-  map.apply({ session: 'two-block-descent', reset: false, cursor: 2, more: false, clock: 1,
-    cells: [[1, -3, 0, 1, true, []]] });
+  // Cells sealed under the known solid landing can never be seen and do not
+  // block the descent; an exposed unknown cell beside the landing still does.
+  const buried = [];
+  for (let x = 1; x <= 3; x++) for (let z = -2; z <= 2; z++) for (let y = -4; y <= -3; y++) buried.push([x, y, z, 1, false, null]);
+  map.apply({ session: 'two-block-descent', reset: false, cursor: 2, more: false, clock: 1, cells: buried });
+  assert.equal(map.traverse(upper, lower, .3, 1.85), true);
+  map.apply({ session: 'two-block-descent', reset: false, cursor: 3, more: false, clock: 1,
+    cells: [[2, -2, 0, 1, false, []], [2, -3, 0, 1, false, null]] });
+  assert.equal(map.traverse(upper, lower, .3, 1.85), false);
+  map.apply({ session: 'two-block-descent', reset: false, cursor: 4, more: false, clock: 1,
+    cells: [[2, -2, 0, 1, false, [[0, 0, 0, 1, 1, 1]]], [1, -3, 0, 1, true, []]] });
   assert.equal(map.traverse(upper, lower, .3, 1.85), false);
 });
 
