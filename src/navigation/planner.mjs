@@ -1,7 +1,9 @@
 import { distance, horizontal, key } from './terrain.mjs';
 const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits = new Map(), partial = true, budget = 512 } = {}) {
+export function findRoute(map, start, goal, w, h,
+  { blocked = new Set(), visits = new Map(), partial = true, budget = 512, avoid = [] } = {}) {
   const remaining = p => goal.horizontalOnly ? horizontal(p, goal) : distance(p, goal);
+  const safe = p => avoid.every(item => horizontal(p, item.point) >= item.minimumDistance);
   const centers = [];
   // A reconnect can place the fresh terrain cache around a player who is dry,
   // but already inside the conservative margin of nearby water or fire. Find
@@ -41,7 +43,8 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
     closed.add(id);
     if (goal.arrivalRadius && horizontal(at, goal) < goal.arrivalRadius && (goal.horizontalOnly || Math.abs(at.y - goal.y) < .1)) return path(at);
     const destination = { ...goal, y: goal.horizontalOnly ? at.y : goal.y };
-    if (Math.abs(at.x - goal.x) < .51 && Math.abs(at.z - goal.z) < .51 && Math.abs(at.y - destination.y) < .15 && map.traverse(at, destination, w, h)) {
+    if (Math.abs(at.x - goal.x) < .51 && Math.abs(at.z - goal.z) < .51 && Math.abs(at.y - destination.y) < .15 &&
+        safe(destination) && map.traverse(at, destination, w, h)) {
       const list = path(at); if (distance(at, destination) > .001) list.push(destination); return list;
     }
     if (partial && distance(start, at) >= 1 && !visits.has(id) && map.frontier(at, w, h).size) {
@@ -50,7 +53,7 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
     }
     for (const [dx, dz] of directions) {
       const next = map.stand(at.x + dx, at.z + dz, at.y, w, h);
-      if (!next || blocked.has(`${id}>${key(next)}`) || !map.traverse(at, next, w, h)) continue;
+      if (!next || !safe(next) || blocked.has(`${id}>${key(next)}`) || !map.traverse(at, next, w, h)) continue;
       const cost = costs.get(id) + 1 + Math.abs(next.y - at.y), nextId = key(next);
       if ((costs.get(nextId) ?? Infinity) <= cost) continue;
       costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: next, score: cost + remaining(next) });

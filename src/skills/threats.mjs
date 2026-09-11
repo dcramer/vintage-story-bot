@@ -7,16 +7,27 @@ const hostileMarkers = ['drifter', 'wolf-', 'bear-', 'locust-', 'bell-', 'bowtor
 export const hostileEntity = entity => typeof entity?.code === 'string' &&
   hostileMarkers.some(marker => entity.code.toLowerCase().includes(marker));
 
-export const nearestThreat = (state, radius = 32) => (state.nearbyEntities ?? [])
+export const nearbyThreats = (state, radius = 32) => (state.nearbyEntities ?? [])
   .filter(entity => hostileEntity(entity) && horizontal(state.position, entity.point) <= radius)
-  .sort((a, b) => horizontal(state.position, a.point) - horizontal(state.position, b.point))[0] ?? null;
+  .sort((a, b) => horizontal(state.position, a.point) - horizontal(state.position, b.point));
+
+export const nearestThreat = (state, radius = 32) => nearbyThreats(state, radius)[0] ?? null;
 
 export const fleeTarget = (position, threat, distance = 32) => {
-  let dx = position.x - threat.point.x, dz = position.z - threat.point.z;
-  const length = Math.hypot(dx, dz);
-  if (length < .01) { dx = 0; dz = 1; }
-  else { dx /= length; dz /= length; }
-  return { x: Math.floor(position.x + dx * distance) + .5, y: position.y,
-    z: Math.floor(position.z + dz * distance) + .5, horizontalOnly: true,
+  const threats = Array.isArray(threat) ? threat : [threat];
+  // Pick the compass heading whose endpoint maximizes clearance from the
+  // entire visible hostile perimeter. Fleeing only the nearest hostile can
+  // route directly into another one, especially at night.
+  const candidates = Array.from({ length: 16 }, (_, index) => {
+    const radians = index * Math.PI / 8;
+    const point = { x: position.x + Math.cos(radians) * distance,
+      z: position.z + Math.sin(radians) * distance };
+    const clearances = threats.map(entity => horizontal(point, entity.point));
+    return { point, minimum: Math.min(...clearances), total: clearances.reduce((sum, value) => sum + value, 0), index };
+  });
+  candidates.sort((a, b) => b.minimum - a.minimum || b.total - a.total || a.index - b.index);
+  const point = candidates[0].point;
+  return { x: Math.floor(point.x) + .5, y: position.y,
+    z: Math.floor(point.z) + .5, horizontalOnly: true,
     arrivalRadius: 3, sprint: true, emergency: true };
 };

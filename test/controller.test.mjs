@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Controller } from '../src/controller/runtime.mjs';
 import { Navigation } from '../src/navigation/navigator.mjs';
-import { TerrainMemory } from '../src/navigation/terrain.mjs';
+import { horizontal, TerrainMemory } from '../src/navigation/terrain.mjs';
 import { findRoute } from '../src/navigation/planner.mjs';
 
 function terrain() {
@@ -308,6 +308,23 @@ test('navigation temporarily routes away from an explicit nearby hostile', () =>
   nav.tick({ ...state, nearbyEntities: [] }, 1);
   assert.equal(nav.evading, false);
   assert.equal(nav.target, goal);
+});
+
+test('evasion route does not approach another visible hostile', () => {
+  const map = new TerrainMemory(); map.apply(terrain());
+  const start = { x: .5, y: 0, z: .5 };
+  const west = { key: 'entity:1', code: 'game:wolf-male', point: { x: -1.5, y: 0, z: .5 } };
+  const east = { key: 'entity:2', code: 'game:bowtorn-surface', point: { x: 2.5, y: 0, z: .5 } };
+  const state = { position: start, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 0 }, vitals: { hunger: { current: 1000, max: 1500 } },
+    nearbyEntities: [west, east] };
+  const nav = new Navigation(map, state, { x: 4.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
+  assert.ok(nav.tick(state, 0));
+  assert.equal(nav.evading, true);
+  assert.equal(nav.threats.length, 2);
+  assert.ok(nav.route.length);
+  assert.ok(nav.route.every(point => horizontal(point, west.point) >= 1.5));
+  assert.ok(nav.route.every(point => horizontal(point, east.point) >= 1.5));
 });
 
 test('shared controller excludes mutations/UI and Effect interruption releases its owner', async () => {
