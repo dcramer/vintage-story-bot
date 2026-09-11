@@ -1,5 +1,8 @@
 import { horizontal } from '../navigation/terrain.mjs';
 import { temporalStormUnsafe } from './fieldwork.mjs';
+import { nearestThreat } from './threats.mjs';
+
+export const routeRegressed = (best, current, margin = 12) => current > best + margin;
 
 const guardStorm = state => {
   if (temporalStormUnsafe(state)) throw Error('Temporal storm active or imminent; travel postponed.');
@@ -8,17 +11,21 @@ const guardStorm = state => {
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
 export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
   let stalled = 0, legs = 0, routeResets = 0, continuation = null, localDetour = false;
+  let bestRemaining = Infinity;
   const summary = () => ({ moved: +field.moved.toFixed(1), legs, stalled, routeResets });
   while (true) {
     let state = await field.observe(true);
     guardStorm(state);
     let goal = { x, y: y ?? state.position.y, z };
+    const beforeFood = state.position;
     await survival?.tend({ toward: goal });
     // Food recovery may travel a meaningful distance and elevation. Resume
     // from its verified final observation rather than planning from stale state.
     state = field.latest;
     goal = { x, y: y ?? state.position.y, z };
     const remaining = horizontal(state.position, goal);
+    if (horizontal(beforeFood, state.position) > 2) bestRemaining = remaining;
+    else bestRemaining = Math.min(bestRemaining, remaining);
     if (remaining <= arrivalRadius && (y === undefined || Math.abs(state.position.y - y) < 1.5))
       return { ok: true, goal: 'travel', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
     field.report('travelling', { remaining: +remaining.toFixed(1), legs });
@@ -26,7 +33,14 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
       ? (y === undefined ? { x, y: state.position.y, z, horizontalOnly: true, arrivalRadius } : { x, y, z, arrivalRadius })
       : continuation ?? field.explore(goal, Math.min(48, remaining));
     const before = state.position;
-    const result = await field.walk(leg, current => temporalStormUnsafe(current) ? 'temporal_storm' : survival?.yieldWhen(current));
+    const result = await field.walk(leg, current => {
+      if (temporalStormUnsafe(current)) return 'temporal_storm';
+      const survivalReason = survival?.yieldWhen(current);
+      if (survivalReason) return survivalReason;
+      const currentRemaining = horizontal(current.position, goal);
+      bestRemaining = Math.min(bestRemaining, currentRemaining);
+      return !nearestThreat(current) && routeRegressed(bestRemaining, currentRemaining) ? 'route_regressed' : null;
+    });
     guardStorm(field.latest);
     legs++;
     const progress = horizontal(before, field.latest.position);
@@ -35,6 +49,10 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     // each fresh terrain cache makes real progress; changing compass targets
     // immediately sends the bot back across the cells it just traversed.
     continuation = !['arrived', 'yielded'].includes(result.state) && progress > 2 ? leg : null;
+    if (result.reason === 'route_regressed') {
+      continuation = null;
+      field.penalize(leg);
+    }
     // A nearby destination can still sit behind a dense tree line, ridge or
     // cliff. After one stationary direct attempt, use the same deterministic
     // forward/lateral frontier search as long travel instead of retrying an

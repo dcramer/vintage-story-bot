@@ -4,7 +4,7 @@ import { explorationDistance, explorationScore, Fieldwork, temporalStormUnsafe }
 import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
 import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, stalledFoodRoute } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat } from '../src/skills/threats.mjs';
-import { travel } from '../src/skills/travel.mjs';
+import { routeRegressed, travel } from '../src/skills/travel.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
   freshness: { state: 'fresh', freshHoursLeft: 100 } });
@@ -249,4 +249,10 @@ test('nearby travel explores after a stationary direct route failure', async () 
   const result = await travel(field, null, { x: 20.5, z: .5 });
   assert.equal(result.ok, true);
   assert.deepEqual(legs, [destination, detour, destination]);
+});
+
+test('travel bounds regression from its best observed destination distance', () => {
+  assert.equal(routeRegressed(100, 112), false);
+  assert.equal(routeRegressed(100, 112.01), true);
+  assert.equal(routeRegressed(100, 108, 8), false);
 });

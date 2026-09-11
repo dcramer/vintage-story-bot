@@ -111,6 +111,9 @@ export class Fieldwork {
     while (this.rejected.size > 1024) this.rejected.delete(this.rejected.keys().next().value);
   }
   reject(object, ms = 30000) { this.rejected.set(object.key, this.now() + ms); }
+  penalize(target, amount = 1) {
+    this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + amount);
+  }
   resetExploration(turn = 45) {
     this.visits.clear();
     this.visits.set(area(this.latest.position), 1);
@@ -141,7 +144,7 @@ export class Fieldwork {
     this.moved += horizontal(before.position, after.position);
     this.visits.set(area(after.position), (this.visits.get(area(after.position)) ?? 0) + 1);
     if (result.state === 'arrived' && area(target) !== area(after.position))
-      this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + 1);
+      this.penalize(target);
     else if (!['arrived', 'yielded'].includes(result.state))
       // A failed exploration leg is evidence about that destination, even if
       // the player never left the current 16x16 area. Penalize it so the next
