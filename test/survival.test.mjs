@@ -121,6 +121,20 @@ test('stationary fieldwork accepts a blocked flee leg once the hostile is gone',
   assert.ok(destination.x > 32 && destination.sprint && destination.emergency);
 });
 
+test('stationary evasion invokes its supplied deterministic clearance hook', async () => {
+  const wolf = { code: 'game:wolf-male', point: { x: -4.5, y: 1, z: .5 } };
+  const state = { position: { x: .5, y: 1, z: .5 }, nearbyEntities: [wolf] };
+  const field = new Fieldwork({});
+  field.latest = state;
+  field.walk = async () => {
+    field.latest = { ...state, nearbyEntities: [] };
+    return { state: 'blocked', reason: 'no_observed_route' };
+  };
+  let cleared = 0;
+  await field.evadeThreat(() => { cleared++; });
+  assert.equal(cleared, 1);
+});
+
 test('stationary evasion yields its explicit flee leg as soon as the perimeter clears', async () => {
   const wolf = { code: 'game:wolf-male', point: { x: -4.5, y: 1, z: .5 } };
   const state = { position: { x: .5, y: 1, z: .5 }, nearbyEntities: [wolf] };

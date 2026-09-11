@@ -50,7 +50,7 @@ export class Survival {
     while (this.tending) {
       await field.observe(true);
       if (temporalStormUnsafe(field.latest)) throw Error('Temporal storm active or imminent; food work postponed.');
-      if (await field.evadeThreat()) {
+      if (await field.evadeThreat(target => clearFoliagePath(field, target))) {
         this.surveyed = false;
         this.searchTarget = null;
         continue;
@@ -153,7 +153,7 @@ export class Survival {
   async harvest(target) {
     const field = this.field;
     await field.observe();
-    if (await field.evadeThreat()) return;
+    if (await field.evadeThreat(target => clearFoliagePath(field, target))) return;
     const slot = await emptyHand(field);
     await field.aim(target.look);
     const aimed = await field.observe();
@@ -161,7 +161,7 @@ export class Survival {
     const detail = await field.send({ action: 'inspect_target' });
     if (detail.key !== target.key || !ripeForage(detail)) { field.reject(target); return; }
     await field.observe();
-    if (await field.evadeThreat()) return;
+    if (await field.evadeThreat(target => clearFoliagePath(field, target))) return;
     const foodCode = forageFoodCode(detail);
     const needsBreaking = breaksForage(detail);
     if (needsBreaking && detail.access?.buildOrBreak === false || !needsBreaking && detail.access?.use === false) {

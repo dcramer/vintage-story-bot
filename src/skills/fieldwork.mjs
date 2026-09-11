@@ -158,7 +158,7 @@ export class Fieldwork {
     else if (result.state !== 'yielded') this.heading = normalize(this.heading + 90);
     return result;
   }
-  async evadeThreat() {
+  async evadeThreat(clearStall) {
     let fled = false;
     while (true) {
       this.check();
@@ -166,7 +166,10 @@ export class Fieldwork {
       if (!threat) return fled;
       const target = fleeTarget(this.latest.position, threat);
       this.report('evading', { threat: threat.code, distance: +horizontal(this.latest.position, threat.point).toFixed(1), target });
-      await this.walk(target, state => nearestThreat(state) ? null : 'threat_cleared');
+      const before = { ...this.latest.position };
+      const result = await this.walk(target, state => nearestThreat(state) ? null : 'threat_cleared');
+      if (!['arrived', 'yielded'].includes(result.state) && horizontal(before, this.latest.position) <= 2)
+        await clearStall?.(target);
       fled = true;
     }
   }
