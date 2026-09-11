@@ -115,6 +115,12 @@ export class Fieldwork {
     this.visits.set(area(after.position), (this.visits.get(area(after.position)) ?? 0) + 1);
     if (result.state === 'arrived' && area(target) !== area(after.position))
       this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + 1);
+    else if (!['arrived', 'yielded'].includes(result.state))
+      // A failed exploration leg is evidence about that destination, even if
+      // the player never left the current 16x16 area. Penalize it so the next
+      // deterministic attempt tries a different heading instead of replaying
+      // the same blocked leg six times.
+      this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + 1);
     while (this.visits.size > 4096) this.visits.delete(this.visits.keys().next().value);
     if (result.state === 'cancelled') throw Error(`Navigation interrupted: ${result.reason}`);
     if (result.state !== 'arrived' && result.state !== 'yielded') this.report('rerouting', { reason: result.reason });

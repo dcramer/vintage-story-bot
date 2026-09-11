@@ -14,9 +14,17 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
     public void Reset() { pending.Clear(); map.Clear(); nextBatch = 0; lastPosition = lastPriority = null; }
     public void Changed(BlockPos pos, Block oldBlock)
     {
-        // Neighbor-dependent shapes (doors/fences) must also be re-observed.
+        // The changed cell is unknown until observed again. Neighbor-dependent
+        // shapes (doors/fences) become stale and are resampled promptly without
+        // making an otherwise unchanged local route disappear in the meantime.
         for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++)
-            map.Invalidate(new(pos.X + x, pos.Y + y, pos.Z + z));
+        {
+            var cell = new Cell(pos.X + x, pos.Y + y, pos.Z + z);
+            if (x == 0 && y == 0 && z == 0) map.Invalidate(cell);
+            else map.Stale(cell);
+        }
+        pending.Clear();
+        nextBatch = 0;
     }
     public void Sample(long now, Cell? priority = null)
     {

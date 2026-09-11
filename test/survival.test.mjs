@@ -55,3 +55,19 @@ test('low health is tolerated only during explicit starving food recovery', () =
   assert.equal(field.alertsSafe(state(['low_health'])), false);
   assert.equal(field.alertsSafe(state(['low_food', 'on_fire'])), false);
 });
+
+test('a blocked exploration leg penalizes its destination for the next deterministic choice', async () => {
+  const state = { ok: true, alive: true, controlReady: true, mounted: false,
+    player: { uid: 'test' },
+    position: { x: .5, y: 1, z: .5, dimension: 0 }, body: { halfWidth: .3, height: 1.85 },
+    motion: { onGround: true, swimming: false, feetInLiquid: false },
+    life: { alerts: [], session: 'test', lastDamageAt: null },
+    orientation: { yawDegrees: 0 } };
+  const env = { send: async () => state, sync: async () => state,
+    navigate: async () => ({ state: 'blocked', reason: 'terrain_changed' }) };
+  const field = new Fieldwork(env, { now: () => 0 });
+  field.latest = field.initial = state;
+  const target = { x: 20.5, y: 1, z: .5 };
+  await field.walk(target);
+  assert.equal(field.visits.get('1,0'), 1);
+});

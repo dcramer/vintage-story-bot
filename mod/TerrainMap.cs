@@ -21,6 +21,14 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
         cells[cell] = new(null, false, now, ++sequence, now);
         Bound();
     }
+    public void Stale(Cell cell)
+    {
+        // Neighbor-dependent shapes need prompt resampling after an adjacent
+        // block update, but their last observed geometry is still safer than a
+        // burst of synthetic "unknown" deltas. Put() publishes if it changed.
+        if (cells.TryGetValue(cell, out var prior) && prior.Boxes != null)
+            cells[cell] = prior with { At = 0 };
+    }
     public void Put(Cell cell, Bounds[] boxes, bool hazard, long now)
     {
         if (cells.TryGetValue(cell, out var prior) && prior.Boxes != null && prior.Hazard == hazard &&

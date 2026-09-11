@@ -34,10 +34,17 @@ static class ControlLeaseTests
         var refreshed = JsonSerializer.SerializeToElement(map.Read(cursor, map.Session, 10_001));
         Check(refreshed.GetProperty("cells").GetArrayLength() == 1, "stable terrain periodically republishes freshness");
         var before = map.Session;
+        map.Put(new(4, 5, 6), [new(4, 5, 6, 5, 6, 7)], false, 10_001);
+        map.Stale(new(4, 5, 6));
+        Check(!map.Fresh(new(4, 5, 6), 10_001), "stale neighbor queued for resampling");
+        var staleCursor = JsonSerializer.SerializeToElement(map.Read(0, map.Session, 10_001)).GetProperty("cursor").GetInt64();
+        map.Put(new(4, 5, 6), [new(4, 5, 6, 5, 6, 7)], false, 10_002);
+        Check(JsonSerializer.SerializeToElement(map.Read(staleCursor, map.Session, 10_002)).GetProperty("cells").GetArrayLength() == 0,
+            "unchanged stale neighbor does not publish an unknown/geometry pair");
         map.Invalidate(new(1, 2, 3));
         Check(!map.Fresh(new(1, 2, 3), 1), "invalidation");
         map.Clear();
         Check(map.Session != before, "world reset invalidates cursors");
-        Console.WriteLine("15 control/terrain checks passed.");
+        Console.WriteLine("17 control/terrain checks passed.");
     }
 }
