@@ -88,6 +88,8 @@ test('threat avoidance is explicit, proximity-bounded and points away', () => {
   assert.equal(nearestThreat({ position: player, nearbyEntities: [wolf] }), wolf);
   assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...wolf, point: { x: -22, z: 10.5 } }] }), null);
   assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...wolf, point: { x: 8.5, y: -7, z: 10.5 } }] }), null);
+  const bowtorn = { code: 'game:bowtorn-surface', point: { x: 8.5, y: 22, z: 10.5 } };
+  assert.equal(nearestThreat({ position: player, nearbyEntities: [bowtorn] }), bowtorn);
   const target = fleeTarget(player, wolf);
   assert.ok(target.x > player.x + 30 && target.sprint && target.emergency);
 });
