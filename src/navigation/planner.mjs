@@ -1,5 +1,6 @@
 import { distance, horizontal, key } from './terrain.mjs';
 const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const jumpDirections = [[2, 0], [-2, 0], [0, 2], [0, -2]];
 export function findRoute(map, start, goal, w, h,
   { blocked = new Set(), visits = new Map(), partial = true, budget = 512, avoid = [] } = {}) {
   const remaining = p => goal.horizontalOnly ? horizontal(p, goal) : distance(p, goal);
@@ -33,7 +34,9 @@ export function findRoute(map, start, goal, w, h,
     // The grid center is a planning anchor, not a mandatory physical waypoint.
     // Slow samples can leave the player well off-center while still safely
     // connected to the first real step.
-    if (!recentering && list.length > 1 && map.traverse(start, list[1], w, h, true)) list.shift();
+    if (!recentering && list.length > 1 && (list[1].jumpGap
+      ? map.jumpTraverse?.(start, list[1], w, h)
+      : map.traverse(start, list[1], w, h, true))) list.shift();
     return list;
   };
   while (open.length && closed.size < budget) {
@@ -55,6 +58,19 @@ export function findRoute(map, start, goal, w, h,
       const next = map.stand(at.x + dx, at.z + dz, at.y, w, h);
       if (!next || !safe(next) || blocked.has(`${id}>${key(next)}`) || !map.traverse(at, next, w, h)) continue;
       const cost = costs.get(id) + 1 + Math.abs(next.y - at.y), nextId = key(next);
+      if ((costs.get(nextId) ?? Infinity) <= cost) continue;
+      costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: next, score: cost + remaining(next) });
+    }
+    // A single observed hole or gap must not strand the bot on a terrain
+    // island. Gap edges carry an explicit marker so execution jumps only the
+    // exact segment whose landing and arc were validated by TerrainMemory.
+    if (typeof map.jumpTraverse === 'function') for (const [dx, dz] of jumpDirections) {
+      const landing = map.stand(at.x + dx, at.z + dz, at.y, w, h);
+      if (!landing || !safe(landing) || !map.jumpTraverse(at, landing, w, h)) continue;
+      // Prefer a same-length supported detour; jumping is an escape edge, not
+      // a shortcut across ordinary walkable terrain.
+      const next = { ...landing, jumpGap: true }, cost = costs.get(id) + 5 + Math.abs(next.y - at.y);
+      const nextId = key(next);
       if ((costs.get(nextId) ?? Infinity) <= cost) continue;
       costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: next, score: cost + remaining(next) });
     }

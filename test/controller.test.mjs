@@ -51,6 +51,39 @@ test('Node geometry preserves step, headroom and hole constraints', () => {
   assert.equal(map.clear(start, .3, 1.85), false);
 });
 
+test('planner crosses only a fully observed dry one-cell gap', () => {
+  const map = new TerrainMemory(), cells = [];
+  for (let x = -1; x <= 4; x++) for (let z = -1; z <= 1; z++) for (let y = -3; y <= 3; y++) {
+    const support = y === -1 && x !== 1;
+    cells.push([x, y, z, 0, false, support ? [[0, 0, 0, 1, 1, 1]] : []]);
+  }
+  map.apply({ session: 'gap', reset: true, cursor: 1, more: false, clock: 0, cells });
+  const start = { x: .5, y: 0, z: .5 }, landing = { x: 2.5, y: 0, z: .5 };
+  assert.equal(map.traverse(start, landing, .3, 1.85), false);
+  assert.equal(map.jumpTraverse(start, landing, .3, 1.85), true);
+  const route = findRoute(map, start, { x: 3.5, y: 0, z: .5 }, .3, 1.85, { partial: false });
+  assert.equal(route[0].jumpGap, true);
+  assert.equal(route[0].x, landing.x);
+  map.apply({ session: 'gap', reset: false, cursor: 2, more: false, clock: 1,
+    cells: [[1, -2, 0, 1, true, []]] });
+  assert.equal(map.jumpTraverse(start, landing, .3, 1.85), false);
+});
+
+test('navigation holds a validated gap jump until airborne', () => {
+  const map = { cells: new Map(), support: () => 9, clear: () => true, dry: () => true,
+    traverse: () => true, jumpTraverse: () => true, views: () => new Map() };
+  const state = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals: { hunger: { current: 1000, max: 1500 } },
+    nearbyEntities: [] };
+  const nav = new Navigation(map, state, { x: 3.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
+  nav.state = 'moving'; nav.route = [{ x: 2.5, y: 0, z: .5, jumpGap: true }]; nav.edgeStart = state.position;
+  assert.equal(nav.tick(state, 100).jump, true);
+  assert.equal(nav.tick(state, 250).jump, true, 'a slow first frame must not look like a landing');
+  const airborne = { ...state, position: { x: 1.2, y: .4, z: .5 }, motion: { onGround: false } };
+  assert.equal(nav.tick(airborne, 350).forward, true);
+  assert.equal(nav.airborneDuringJump, true);
+});
+
 test('planner reuses an observed corridor beyond 32 blocks', () => {
   const map = new TerrainMemory(), cells = [];
   for (let x = -1; x <= 50; x++) for (let z = -1; z <= 1; z++) for (let y = -1; y <= 2; y++)

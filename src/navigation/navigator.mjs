@@ -9,6 +9,7 @@ export class Navigation {
   blocked = new Set(); visits = new Map();
   lookingAt = null;
   jumpAt = 0; landing = false; nextPlanAt = 0;
+  airborneDuringJump = false;
   steeringYaw = null; steeringAt = 0;
   evading = false; threat = null; threats = []; avoid = [];
   constructor(map, state, goal, now = Date.now()) {
@@ -28,6 +29,7 @@ export class Navigation {
   finish(state, reason) { this.state = state; this.reason = reason; this.lookingAt = null; return null; }
   survey(now) {
     this.state = 'surveying'; this.surveyAt = now; this.jumpAt = 0; this.landing = false;
+    this.airborneDuringJump = false;
     this.lookingAt = null; this.nextPlanAt = 0; this.lastYawError = undefined;
   }
   replan(p, now, reason) {
@@ -80,8 +82,10 @@ export class Navigation {
       this.route = planned; this.index = 0; this.state = 'moving'; this.lookingAt = null;
       this.lastProgress = this.edgeStart = p; this.progressAt = now;
     }
-    const traverse = (from, to, recenter = false) => map.traverse(from, to, w, h, recenter, undefined,
-      typeof map.dry === 'function' && !map.dry(from, w, h));
+    const traverse = (from, to, recenter = false) => to.jumpGap && typeof map.jumpTraverse === 'function'
+      ? map.jumpTraverse(from, to, w, h)
+      : map.traverse(from, to, w, h, recenter, undefined,
+        typeof map.dry === 'function' && !map.dry(from, w, h));
     const reached = waypoint => {
       if (distance(p, waypoint) < (waypoint.recenter ? .1 : .3)) return true;
       if (waypoint.recenter) return false;
@@ -124,7 +128,10 @@ export class Navigation {
         dry: typeof map.dry !== 'function' || map.dry(next, w, h) };
       return grounded ? this.replan(p, now, 'terrain_changed') : this.finish('blocked', 'landing_changed');
     }
-    if (this.jumpAt && grounded && Math.abs(p.y - next.y) < .06) { this.jumpAt = 0; this.landing = true; }
+    if (this.jumpAt && !grounded) this.airborneDuringJump = true;
+    if (this.jumpAt && grounded && this.airborneDuringJump && Math.abs(p.y - next.y) < .06) {
+      this.jumpAt = 0; this.landing = true; this.airborneDuringJump = false;
+    }
     const recenter = advancedWaypoint || skippedAhead || this.landing || this.index === 0 ||
       Math.floor(p.x) === Math.floor(next.x) && Math.floor(p.z) === Math.floor(next.z);
     if (grounded && !this.jumpAt && !traverse(p, next, recenter)) {
@@ -172,7 +179,7 @@ export class Navigation {
     // forward while airborne can carry one bounded frame past a narrow shore.
     if (!grounded && next.y < this.edgeStart.y - .05)
       return { yawDegrees, pitchDegrees: 15, forward: false, jump: false, sprint: false, sneak: false, durationMs: 180 };
-    if (next.y > p.y + .05 && grounded && !this.jumpAt) this.jumpAt = now;
+    if ((next.jumpGap || next.y > p.y + .05) && grounded && !this.jumpAt) this.jumpAt = now;
     if (this.jumpAt && now - this.jumpAt > 2500) return this.replan(p, now, 'jump_failed');
     const food = state.vitals?.hunger;
     const emergency = this.evading || this.target.emergency;
