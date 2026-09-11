@@ -31,6 +31,7 @@ export class Survival {
   harvested = 0;
   surveyed = false;
   desperateSurveyed = false;
+  searchTarget = null;
   lastFarView = null;
   constructor(field) { this.field = field; }
   yieldWhen = state => temporalStormUnsafe(state) ? 'temporal_storm' : hunger(state) < .2 ? 'food_needed' : null;
@@ -47,6 +48,7 @@ export class Survival {
       if (temporalStormUnsafe(field.latest)) throw Error('Temporal storm active or imminent; food work postponed.');
       if (await field.evadeThreat()) {
         this.surveyed = false;
+        this.searchTarget = null;
         continue;
       }
       const inventory = await field.send({ action: 'inventory' });
@@ -103,6 +105,7 @@ export class Survival {
       }
       const target = field.targets(o => ripeForage(o) && accessibleForage(o))[0];
       if (target) {
+        this.searchTarget = null;
         const destination = field.approach(target, breaksForage(target) ? q =>
           Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z) : null);
         if (destination) {
@@ -118,10 +121,13 @@ export class Survival {
         field.reject(target, 30000);
       }
       const before = { ...field.latest.position };
-      await field.walk(field.explore(toward, foodSearchDistance), this.eatWhen);
+      const destination = this.searchTarget ?? field.explore(toward, foodSearchDistance);
+      const result = await field.walk(destination, this.eatWhen);
+      const progress = horizontal(before, field.latest.position);
+      this.searchTarget = !['arrived', 'yielded'].includes(result.state) && progress > 2 ? destination : null;
       // A changed viewpoint needs a fresh deterministic 360-degree sweep;
       // otherwise later searches only inspect the current forward cone.
-      if (horizontal(before, field.latest.position) > 2) {
+      if (progress > 2) {
         this.surveyed = false;
         this.desperateSurveyed = false;
       }
