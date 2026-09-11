@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Fieldwork } from '../src/skills/fieldwork.mjs';
-import { forageFoodCode, mushroomCode, ripeForage, safeFood } from '../src/skills/food.mjs';
+import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
 import { accessibleForage, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat } from '../src/skills/threats.mjs';
 
@@ -27,6 +27,16 @@ test('only mature crops with verified raw food drops are actionable', () => {
   assert.equal(ripeForage(crop('soybean', 11)), false);
   assert.equal(safeFood(slot('game:vegetable-carrot')), true);
   assert.equal(safeFood(slot('game:rawcassava-raw')), false);
+});
+
+test('installed termite mounds are deterministic safe breakable forage', () => {
+  const termites = { kind: 'block', forage: { kind: 'termites', ripe: true,
+    foodCode: 'game:insect-termite' }, access: { buildOrBreak: true } };
+  assert.equal(termiteCode('game:insect-termite'), true);
+  assert.equal(termiteCode('game:insect-grub'), false);
+  assert.equal(ripeForage(termites), true);
+  assert.equal(accessibleForage(termites), true);
+  assert.equal(safeFood(slot('game:insect-termite')), true);
 });
 
 test('forage planning skips targets denied by cached server access', () => {

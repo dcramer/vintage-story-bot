@@ -24,6 +24,10 @@ internal static class ForageSensor
                 ripe = block.Variant["state"] == "ripe", foodCode = $"game:fruit-{block.Variant["type"]}" };
         if (block.Code.Path.StartsWith("mushroom-") && block.Variant["state"] == "normal")
             return new { kind = "mushroom", stage = "normal", ripe = true, foodCode = block.Code.ToString() };
+        // Installed survival assets guarantee that an unharvested mound drops
+        // game:insect-termite. Harvested mounds deliberately do not match.
+        if (block.Code.Path.StartsWith("termitemound-") && !block.Code.Path.StartsWith("termitemound-harvested-"))
+            return new { kind = "termites", stage = "unharvested", ripe = true, foodCode = "game:insect-termite" };
         if (block.Code.Path.StartsWith("crop-") && int.TryParse(block.Variant["stage"], out int stage))
             return new { kind = "crop", cropType = block.Variant["type"], stage };
         return null;

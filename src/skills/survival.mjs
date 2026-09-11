@@ -1,15 +1,16 @@
 import { horizontal, normalize } from '../navigation/terrain.mjs';
 import { sightRange } from './fieldwork.mjs';
 import { changeBlock } from './blocks.mjs';
-import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, ripeForage } from './food.mjs';
+import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, ripeForage, termiteCode } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
 export const foodSightRange = Math.min(16, sightRange);
 // Twelve-block steps overlap a 16-block sight cone while covering useful new
 // ground before starvation. Navigation still validates every traversed cell.
 export const foodSearchDistance = Math.min(12, foodSightRange * .75);
-const forageMatches = ['bush', 'mushroom', 'crop-'];
-const breaksForage = object => mushroomCode(forageFoodCode(object)) || object.forage?.kind === 'crop';
+const forageMatches = ['bush', 'mushroom', 'crop-', 'termitemound-'];
+const breaksForage = object => mushroomCode(forageFoodCode(object)) || termiteCode(forageFoodCode(object)) ||
+  object.forage?.kind === 'crop';
 export const accessibleForage = object => {
   return breaksForage(object) ? object.access?.buildOrBreak !== false : object.access?.use !== false;
 };

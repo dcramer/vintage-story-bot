@@ -16,6 +16,9 @@ export const mushroomTypes = new Set([
 ]);
 export const mushroomCode = code => typeof code === 'string' && /^game:mushroom-[a-z0-9]+-normal$/.test(code) &&
   mushroomTypes.has(code.slice(14, -7));
+// Unharvested termite mounds in the installed survival assets drop these raw,
+// edible insects with positive satiety and no health penalty.
+export const termiteCode = code => code === 'game:insect-termite';
 // Minimum installed crop stage that drops an edible raw item. Cassava,
 // soybean, licorice and pineapple are deliberately absent.
 export const cropFoods = new Map([
@@ -40,9 +43,11 @@ export const forageFoodCode = object => {
   return food && object.forage.stage >= food.stage ? food.code : null;
 };
 export const ripeForage = object => object.kind === 'block' &&
-  (object.forage?.ripe === true && (berryCode(object.forage.foodCode) || mushroomCode(object.forage.foodCode)) ||
+  (object.forage?.ripe === true && (berryCode(object.forage.foodCode) || mushroomCode(object.forage.foodCode) ||
+    termiteCode(object.forage.foodCode)) ||
     cropFoodCodes.has(forageFoodCode(object)));
-export const safeFood = slot => (berryCode(slot.code) || mushroomCode(slot.code) || cropFoodCodes.has(slot.code)) && slot.quantity > 0 &&
+export const safeFood = slot => (berryCode(slot.code) || mushroomCode(slot.code) || termiteCode(slot.code) ||
+  cropFoodCodes.has(slot.code)) && slot.quantity > 0 &&
   slot.nutrition?.saturation > 0 && slot.nutrition.health >= 0 && slot.freshness?.state === 'fresh';
 export const foodReserve = inventory => ownedSlots(inventory).filter(safeFood)
   .reduce((sum, slot) => sum + slot.quantity * slot.nutrition.saturation, 0);
