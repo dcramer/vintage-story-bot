@@ -41,6 +41,10 @@ export class Survival {
     field.recoveringFood = true;
     while (this.tending) {
       await field.observe(true);
+      if (await field.evadeThreat()) {
+        this.surveyed = false;
+        continue;
+      }
       const inventory = await field.send({ action: 'inventory' });
       this.reserve = foodReserve(inventory);
       field.report('food', { hunger: hunger(field.latest), reserve: this.reserve, eaten: this.eaten, harvested: this.harvested });
@@ -105,12 +109,16 @@ export class Survival {
   }
   async harvest(target) {
     const field = this.field;
+    await field.observe();
+    if (await field.evadeThreat()) return;
     const slot = await emptyHand(field);
     await field.aim(target.look);
     const aimed = await field.observe();
     if (aimed.target?.key !== target.key) { field.reject(target, 5000); return; }
     const detail = await field.send({ action: 'inspect_target' });
     if (detail.key !== target.key || !ripeForage(detail)) { field.reject(target); return; }
+    await field.observe();
+    if (await field.evadeThreat()) return;
     const foodCode = forageFoodCode(detail);
     const needsBreaking = breaksForage(detail);
     if (needsBreaking && detail.access?.buildOrBreak === false || !needsBreaking && detail.access?.use === false) {

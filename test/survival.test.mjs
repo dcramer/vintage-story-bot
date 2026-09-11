@@ -80,6 +80,17 @@ test('threat avoidance is explicit, proximity-bounded and points away', () => {
   assert.ok(target.x > player.x + 30 && target.sprint && target.emergency);
 });
 
+test('stationary fieldwork routes away from a nearby hostile before acting', async () => {
+  const wolf = { code: 'game:wolf-male', point: { x: -4.5, y: 1, z: .5 } };
+  const state = { position: { x: .5, y: 1, z: .5 }, nearbyEntities: [wolf] };
+  let destination;
+  const field = new Fieldwork({});
+  field.latest = state;
+  field.walk = async target => { destination = target; return { state: 'arrived' }; };
+  assert.equal(await field.evadeThreat(), true);
+  assert.ok(destination.x > 32 && destination.sprint && destination.emergency);
+});
+
 test('low-health food recovery remains authorized after eating clears low food', () => {
   const field = new Fieldwork({});
   const state = alerts => ({ life: { alerts } });

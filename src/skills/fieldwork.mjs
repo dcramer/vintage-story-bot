@@ -1,5 +1,6 @@
 import { horizontal, lookAt, normalize } from '../navigation/terrain.mjs';
 import { findRoute } from '../navigation/planner.mjs';
+import { fleeTarget, nearestThreat } from './threats.mjs';
 
 export const area = p => `${Math.floor(p.x / 16)},${Math.floor(p.z / 16)}`;
 export const sightRange = 64;
@@ -133,6 +134,15 @@ export class Fieldwork {
     if (horizontal(before.position, after.position) > 1) this.heading = lookAt(before.position, after.position).yawDegrees;
     else if (result.state !== 'yielded') this.heading = normalize(this.heading + 90);
     return result;
+  }
+  async evadeThreat() {
+    const threat = nearestThreat(this.latest);
+    if (!threat) return false;
+    const target = fleeTarget(this.latest.position, threat);
+    this.report('evading', { threat: threat.code, distance: +horizontal(this.latest.position, threat.point).toFixed(1), target });
+    const result = await this.walk(target);
+    if (result.state !== 'arrived') throw Error(`Threat evasion failed: ${result.reason ?? result.state}`);
+    return true;
   }
   approach(object, exclude = null) {
     const { position: p, body: { halfWidth: w, height: h } } = this.latest;
