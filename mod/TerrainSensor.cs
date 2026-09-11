@@ -9,9 +9,9 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
 {
     private readonly Queue<Cell> pending = new();
     private long nextBatch;
-    private double lastYaw = double.NaN, lastPitch = double.NaN;
+    private Cell? lastPosition;
     private Cell? lastPriority;
-    public void Reset() { pending.Clear(); map.Clear(); nextBatch = 0; }
+    public void Reset() { pending.Clear(); map.Clear(); nextBatch = 0; lastPosition = lastPriority = null; }
     public void Changed(BlockPos pos, Block oldBlock)
     {
         // Neighbor-dependent shapes (doors/fences) must also be re-observed.
@@ -23,11 +23,11 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
         var player = api.World.Player.Entity;
         if (player.Pos.Dimension != 0) { Reset(); return; }
         var pos = player.Pos;
-        double yaw = SceneGeometry.Normalize(pos.Yaw * 180 / Math.PI), pitch = (pos.Pitch - Math.PI) * 180 / Math.PI;
         if (priority != lastPriority) { pending.Clear(); nextBatch = 0; lastPriority = priority; }
-        if (!double.IsFinite(lastYaw) || Math.Abs(SceneGeometry.Normalize(yaw - lastYaw + 180) - 180) > 45 || Math.Abs(pitch - lastPitch) > 30)
+        var position = new Cell((int)Math.Floor(pos.X), (int)Math.Floor(pos.Y), (int)Math.Floor(pos.Z));
+        if (position != lastPosition)
         {
-            pending.Clear(); nextBatch = 0; lastYaw = yaw; lastPitch = pitch;
+            pending.Clear(); nextBatch = 0; lastPosition = position;
         }
         var foot = new Point3(pos.X, pos.Y, pos.Z);
         var blocks = api.World.BlockAccessor;
@@ -57,7 +57,7 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
             bool visible = false;
             foreach (var target in samples)
             {
-                if (!SceneGeometry.InCone(origin, target, yaw, pitch, 8)) continue;
+                if (SceneGeometry.Distance(origin, target) > 8) continue;
                 if (++rays > 128) break;
                 bool loaded = true;
                 for (int i = 0, n = (int)Math.Ceiling(SceneGeometry.Distance(origin, target) * 4); i <= n; i++)

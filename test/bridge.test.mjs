@@ -42,7 +42,7 @@ test('validates bridge ports and bounded action inputs', () => {
   assert.equal(move.safeParse({ durationMs: 250, direction: 'teleport' }).success, false);
   assert.equal(actions.find(tool => tool.name === 'look').schema.safeParse({ yawDegrees: 0, pitchDegrees: 90 }).success, false);
   const scan = actions.find(tool => tool.name === 'scan').schema;
-  for (const args of [{ radius: 9 }, { radius: 0 }, { limit: 33 }, { kind: 'hidden' }, { match: 'x'.repeat(65) }]) assert.equal(scan.safeParse(args).success, false);
+  for (const args of [{ radius: 65 }, { radius: 0 }, { limit: 33 }, { kind: 'hidden' }, { match: 'x'.repeat(65) }]) assert.equal(scan.safeParse(args).success, false);
   assert.equal(scan.safeParse({ match: 'stick' }).success, true);
   assert.equal(actions.find(tool => tool.name === 'interact').schema.safeParse({ durationMs: 250, expectedTarget: '' }).success, false);
   const schema = name => actions.find(tool => tool.name === name).schema;

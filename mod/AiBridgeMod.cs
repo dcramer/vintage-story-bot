@@ -28,6 +28,7 @@ public sealed class AiBridgeMod : ModSystem
     private SceneSensor sensor = null!;
     private LifeTracker life = new();
     private InventoryAdapter inventory = null!;
+    private ContextSensor context = null!;
     private bool? priorWorldInteraction;
     private readonly TerrainMap terrain = new(16384, 120000, 64);
     private readonly ControlLease control = new();
@@ -46,6 +47,7 @@ public sealed class AiBridgeMod : ModSystem
         api.Input.InWorldAction += RetainOwnedJump;
         sensor = new SceneSensor(api, CanControl);
         inventory = new InventoryAdapter(api);
+        context = new ContextSensor(api);
         api.ChatCommands.Create("aibridge")
             .WithDescription("Control the local AI bridge")
             .HandleWith(_ => TextCommandResult.Success("Use .aibridge on to enable, or .aibridge off to stop. F7 enables; F8 stops."))
@@ -79,6 +81,7 @@ public sealed class AiBridgeMod : ModSystem
 
     private void OnLevelReady()
     {
+        sensor.Reset();
         terrainSensor.Reset();
         control.Revoke("world_changed");
         life = new LifeTracker();
@@ -241,7 +244,7 @@ public sealed class AiBridgeMod : ModSystem
                 return new
                 {
                     ok = true,
-                    capabilities = new[] { "target_guard", "directional_move", "scan", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump" },
+                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump" },
                     observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
                     world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString() },
@@ -255,7 +258,11 @@ public sealed class AiBridgeMod : ModSystem
                     alive = entity.Alive,
                     life = LifeState(),
                     vitals = new { health = Vital("health", "currenthealth", "maxhealth"), hunger = Vital("hunger", "currentsaturation", "maxsaturation"), oxygen = Vital("oxygen", "currentoxygen", "maxoxygen") },
-                    motion = new { onGround = entity.OnGround, swimming = entity.Swimming, feetInLiquid = entity.FeetInLiquid, collided = entity.CollidedHorizontally },
+                    motion = new { onGround = entity.OnGround, swimming = entity.Swimming, feetInLiquid = entity.FeetInLiquid,
+                        collided = entity.CollidedHorizontally, collidedVertically = entity.CollidedVertically,
+                        engineMotion = new { x = pos.Motion.X, y = pos.Motion.Y, z = pos.Motion.Z },
+                        climbing = entity.Controls.IsClimbing, sneaking = entity.Controls.Sneak, sprinting = entity.Controls.Sprint },
+                    condition = context.Condition(),
                     paused = api.IsGamePaused,
                     mouseGrabbed = api.Input.MouseGrabbed,
                     controlReady = CanControl(),
@@ -290,6 +297,10 @@ public sealed class AiBridgeMod : ModSystem
                     request.TryGetProperty("limit", out _) && (!TryInteger(request, "limit", out recipeLimit) || recipeLimit < 1 || recipeLimit > 8))
                     return new { ok = false, error = "offset: 0–100000; limit: 1–8." };
                 return inventory.Recipes(recipeMatch.GetString()!, offset, recipeLimit);
+            case "environment":
+                return context.Environment(life.Session);
+            case "inspect_target":
+                return CanControl() ? context.InspectTarget(life.Session) : new { ok = false, error = "Close menus and unpause before inspecting." };
             case "events":
                 long after = 0;
                 if (request.TryGetProperty("after", out var afterField) &&
@@ -319,10 +330,10 @@ public sealed class AiBridgeMod : ModSystem
                 game.Respawn();
                 return new { ok = true, status = "requested", deathId = life.DeathId };
             case "scan":
-                int radius = 6, limit = 16;
-                if (request.TryGetProperty("radius", out _) && (!TryInteger(request, "radius", out radius) || radius < 1 || radius > 8) ||
+                int radius = 8, limit = 16;
+                if (request.TryGetProperty("radius", out _) && (!TryInteger(request, "radius", out radius) || radius < 1 || radius > 64) ||
                     request.TryGetProperty("limit", out _) && (!TryInteger(request, "limit", out limit) || limit < 1 || limit > 32))
-                    return new { ok = false, error = "radius: integer 1–8; limit: integer 1–32." };
+                    return new { ok = false, error = "radius: integer 1–64; limit: integer 1–32." };
                 string kind = "all", match = "";
                 if (request.TryGetProperty("kind", out var kindField))
                 {
@@ -336,7 +347,14 @@ public sealed class AiBridgeMod : ModSystem
                     match = matchField.GetString()!;
                 }
                 if (kind is not ("all" or "blocks" or "items" or "entities")) return new { ok = false, error = "Invalid scan kind." };
-                return sensor.Scan(radius, limit, kind, match);
+                string? scanCursor = null;
+                if (request.TryGetProperty("cursor", out var scanCursorField))
+                {
+                    if (scanCursorField.ValueKind != JsonValueKind.String || !Guid.TryParseExact(scanCursorField.GetString(), "N", out _))
+                        return new { ok = false, error = "cursor must be a returned scan cursor." };
+                    scanCursor = scanCursorField.GetString();
+                }
+                return sensor.Scan(radius, limit, kind, match, scanCursor);
             case "look":
                 if (!TryNumber(request, "yawDegrees", out double yaw) ||
                     !TryNumber(request, "pitchDegrees", out double pitch) || pitch < -89 || pitch > 89 || Math.Abs(yaw) > 36000)
@@ -671,6 +689,7 @@ public sealed class AiBridgeMod : ModSystem
     {
         ReleaseControl("bridge_off");
         terrainSensor?.Reset();
+        sensor?.Reset();
         StopMovement();
         StopHandAction();
         if (priorWorldInteraction.HasValue)

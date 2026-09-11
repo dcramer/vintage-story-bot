@@ -1,6 +1,7 @@
-import { distance, key } from './terrain.mjs';
+import { distance, horizontal, key } from './terrain.mjs';
 const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits = new Map(), partial = true, budget = 512 } = {}) {
+  const remaining = p => goal.horizontalOnly ? horizontal(p, goal) : distance(p, goal);
   const centers = [];
   for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
     const p = map.stand(Math.floor(start.x) + .5 + x, Math.floor(start.z) + .5 + z, start.y, w, h);
@@ -16,11 +17,12 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
     const at = open.pop().p, id = key(at);
     if (closed.has(id)) continue;
     closed.add(id);
-    if (Math.abs(at.x - goal.x) < .51 && Math.abs(at.z - goal.z) < .51 && Math.abs(at.y - goal.y) < .15 && map.traverse(at, goal, w, h)) {
-      const list = path(at); if (distance(at, goal) > .001) list.push(goal); return list;
+    const destination = { ...goal, y: goal.horizontalOnly ? at.y : goal.y };
+    if (Math.abs(at.x - goal.x) < .51 && Math.abs(at.z - goal.z) < .51 && Math.abs(at.y - destination.y) < .15 && map.traverse(at, destination, w, h)) {
+      const list = path(at); if (distance(at, destination) > .001) list.push(destination); return list;
     }
     if (partial && distance(start, at) >= 1 && !visits.has(id) && map.frontier(at, w, h).size) {
-      const score = distance(at, goal) + costs.get(id) * .15;
+      const score = remaining(at) + costs.get(id) * .15;
       if (score < best) { best = score; frontier = at; }
     }
     for (const [dx, dz] of directions) {
@@ -29,7 +31,7 @@ export function findRoute(map, start, goal, w, h, { blocked = new Set(), visits 
       if (!next || blocked.has(`${id}>${key(next)}`) || !map.traverse(at, next, w, h)) continue;
       const cost = costs.get(id) + 1 + Math.abs(next.y - at.y), nextId = key(next);
       if ((costs.get(nextId) ?? Infinity) <= cost) continue;
-      costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: next, score: cost + distance(next, goal) });
+      costs.set(nextId, cost); previous.set(nextId, at); open.push({ p: next, score: cost + remaining(next) });
     }
   }
   return frontier ? path(frontier) : null;

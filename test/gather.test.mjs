@@ -6,7 +6,7 @@ function fixture({ gain = true, interruptAfter = Infinity } = {}) {
   const calls = [], reports = [];
   let walks = 0, scans = 0, inventory = 0, picked = false, target;
   const cancellation = new AbortController();
-  const state = () => ({ ok: true, player: { uid: 'bot' }, alive: true, controlReady: true,
+  const state = () => ({ ok: true, capabilities: ['nearby_awareness'], player: { uid: 'bot' }, alive: true, controlReady: true,
     position: { x: walks * 3, y: 0, z: .5, dimension: 0 }, orientation: { yawDegrees: 90 },
     life: { session: 'world', lastDamageAt: null, alerts: ['low_food'] }, motion: { onGround: true },
     body: { halfWidth: .3, height: 1.85 }, hotbar: [{ code: 'game:stick', quantity: inventory }], backpack: [], target });

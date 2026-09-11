@@ -38,23 +38,38 @@ public sealed class InventoryAdapter(ICoreClientAPI api)
 
     public object Observe() => new
     {
-        ok = true, state = State(),
+        ok = true, observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), state = State(),
         inventories = Inventories().Select(pair => new
         {
             name = pair.name,
             slots = Enumerable.Range(0, pair.inventory.Count).Select(index => SlotInfo(pair.inventory[index], index)).ToArray()
         }).ToArray(),
+        equipment = new
+        {
+            character = CharacterSlots(), offhand = SlotInfo(Manager.OffhandHotbarSlot, -1)
+        },
         crafting = new { width = 3, inputSlots = Enumerable.Range(0, 9), outputSlot = 9,
             recipeId = (Manager.GetOwnInventory("craftinggrid") as InventoryCraftingGrid)?.MatchingRecipe?.RecipeId }
     };
+
+    private object[]? CharacterSlots()
+    {
+        var character = Manager.GetOwnInventory("character");
+        return character == null ? null : Enumerable.Range(0, Math.Min(character.Count, 64))
+            .Select(index => SlotInfo(character[index], index)).ToArray();
+    }
 
     private object SlotInfo(ItemSlot? slot, int index)
     {
         var stack = slot?.Itemstack;
         var nutrition = stack?.Collectible.GetNutritionProperties(api.World, stack, api.World.Player.Entity);
         return new { slot = index, code = stack?.Collectible.Code.ToString(), quantity = slot?.StackSize ?? 0,
+            dressType = (slot as ItemSlotCharacter)?.Type.ToString(),
+            tool = stack?.Collectible.Tool?.ToString(), toolTier = stack?.Collectible.ToolTier,
             durability = stack == null ? (int?)null : stack.Collectible.GetRemainingDurability(stack),
-            nutrition = nutrition == null ? null : new { saturation = nutrition.Satiety, health = nutrition.Health } };
+            maxDurability = stack == null ? (int?)null : stack.Collectible.GetMaxDurability(stack),
+            nutrition = nutrition == null ? null : new { saturation = nutrition.Satiety, health = nutrition.Health,
+                category = nutrition.FoodCategory.ToString() } };
     }
 
     private ItemSlot? Resolve(JsonElement request, string field, bool allowGrid)

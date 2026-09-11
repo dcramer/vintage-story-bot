@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { angle, distance, horizontal, key, lookAt } from './terrain.mjs';
+import { angle, distance, horizontal, key, lookAt, normalize } from './terrain.mjs';
 import { findRoute } from './planner.mjs';
 
 export class Navigation {
   id = randomUUID(); state = 'surveying'; reason = null;
   route = []; index = 0; replans = 0; segments = 0;
-  blocked = new Set(); visits = new Map(); inspected = new Set();
-  lookingAt = null; focusAt = 0; surveyPhase = 0; surveyStableAt = 0;
+  blocked = new Set(); visits = new Map();
+  lookingAt = null;
   jumpAt = 0; landing = false; nextPlanAt = 0;
+  steeringYaw = null; steeringAt = 0;
   constructor(map, state, goal, now = Date.now()) {
     this.map = map; this.target = goal;
     this.width = state.body.halfWidth; this.height = state.body.height; this.eyeHeight = state.body.eyeHeight;
@@ -23,7 +24,7 @@ export class Navigation {
   finish(state, reason) { this.state = state; this.reason = reason; this.lookingAt = null; return null; }
   survey(now) {
     this.state = 'surveying'; this.surveyAt = now; this.jumpAt = 0; this.landing = false;
-    this.surveyPhase = 0; this.surveyStableAt = 0; this.lookingAt = null; this.inspected.clear(); this.focusAt = 0; this.nextPlanAt = 0;
+    this.lookingAt = null; this.nextPlanAt = 0;
   }
   replan(p, now, reason) {
     if (['stalled', 'jump_failed'].includes(reason)) this.blocked.add(`${key(this.edgeStart)}>${key(this.route[this.index])}`);
@@ -35,39 +36,21 @@ export class Navigation {
     if (!this.active) return null;
     if (now >= this.deadline) return this.finish('blocked', 'deadline');
     const p = state.position, grounded = state.motion.onGround, map = this.map, w = this.width, h = this.height;
-    const facing = look => Math.abs(angle(look.yawDegrees, state.orientation.yawDegrees)) < 5 && Math.abs(look.pitchDegrees - state.orientation.pitchDegrees) < 5;
-    if (grounded && distance(p, this.target) < .18 && map.support(p, w) === 9) return this.finish('arrived', 'destination_reached');
+    if (grounded && horizontal(p, this.target) < .3 && (this.target.horizontalOnly || Math.abs(p.y - this.target.y) < .1) && map.support(p, w) === 9)
+      return this.finish('arrived', 'destination_reached');
     if (this.state === 'surveying') {
       if (!grounded) return now - this.surveyAt > 1000 ? this.finish('blocked', 'lost_support') : null;
       let planned = null;
       if (now >= this.nextPlanAt) {
         this.nextPlanAt = now + 300;
         planned = findRoute(map, p, this.target, w, h, this);
-        if (planned && distance(planned.at(-1), this.target) >= distance(p, this.target) - .25 && this.surveyPhase < 8) planned = null;
       }
       if (!planned) {
-        if (this.lookingAt && (map.get(this.lookingAt.x, this.lookingAt.y, this.lookingAt.z) || this.focusAt && now - this.focusAt >= 400)) {
-          this.inspected.add(key(this.lookingAt)); this.lookingAt = null; this.focusAt = 0;
-        }
-        if (!this.lookingAt && this.inspected.size < 12) {
-          this.lookingAt = [...map.views(p, w, h).values()].filter(c => !this.inspected.has(key(c)))
+        if (now - this.surveyAt < 2500) {
+          this.lookingAt = [...map.views(p, w, h).values()]
             .sort((a, b) => horizontal(a, this.target) - horizontal(b, this.target))[0] ?? null;
-        }
-        if (this.lookingAt) {
-          const cell = this.lookingAt;
-          const look = lookAt({ ...p, y: p.y + this.eyeHeight }, { x: cell.x + .5, y: cell.y + .5, z: cell.z + .5 });
-          look.pitchDegrees = Math.max(-60, Math.min(80, look.pitchDegrees));
-          if (!facing(look)) this.focusAt = 0;
-          else if (!this.focusAt) this.focusAt = now;
-          return { ...look, focus: cell };
-        }
-        if (this.surveyPhase < 8) {
-          const look = { yawDegrees: lookAt(p, this.target).yawDegrees + this.surveyPhase % 4 * 90,
-            pitchDegrees: this.surveyPhase < 4 ? 30 : -10 };
-          if (!facing(look)) this.surveyStableAt = 0;
-          else if (!this.surveyStableAt) this.surveyStableAt = now;
-          else if (now - this.surveyStableAt >= 250) { this.surveyPhase++; this.surveyStableAt = 0; }
-          return look;
+          // Nearby geometry samples independently of the camera; focus only changes sample priority.
+          return { yawDegrees: lookAt(p, this.target).yawDegrees, pitchDegrees: 15, focus: this.lookingAt };
         }
         planned = findRoute(map, p, this.target, w, h, this);
       }
@@ -78,7 +61,7 @@ export class Navigation {
       this.route = planned; this.index = 0; this.state = 'moving'; this.lookingAt = null;
       this.lastProgress = this.edgeStart = p; this.progressAt = now;
     }
-    while (this.index < this.route.length && grounded && distance(p, this.route[this.index]) < .17) {
+    while (this.index < this.route.length && grounded && distance(p, this.route[this.index]) < .3) {
       this.edgeStart = this.route[this.index++]; this.jumpAt = 0; this.landing = false; this.progressAt = now; this.lastProgress = p;
     }
     if (this.index >= this.route.length) {
@@ -88,7 +71,7 @@ export class Navigation {
     }
     if (grounded && !this.jumpAt && !this.landing) for (let ahead = this.index + 1; ahead < this.route.length; ahead++) {
       const next = this.route[ahead];
-      if (distance(p, next) > 3 || Math.abs(next.y - p.y) > .05 || !map.traverse(p, next, w, h) || this.blocked.has(`${key(p)}>${key(next)}`)) break;
+      if (distance(p, next) > 5 || Math.abs(next.y - p.y) > .05 || !map.traverse(p, next, w, h) || this.blocked.has(`${key(p)}>${key(next)}`)) break;
       this.index = ahead; this.edgeStart = p;
     }
     const next = this.route[this.index];
@@ -98,12 +81,18 @@ export class Navigation {
     if (grounded && !this.jumpAt && !map.traverse(p, next, w, h, recenter)) return this.replan(p, now, 'terrain_changed');
     if (distance(p, this.lastProgress) > .12) { this.progressAt = now; this.lastProgress = p; }
     if (now - this.progressAt > 1400) return this.replan(p, now, 'stalled');
-    const yawDegrees = lookAt(p, next).yawDegrees;
-    if (grounded && !this.jumpAt && Math.abs(angle(yawDegrees, state.orientation.yawDegrees)) > 10) {
-      this.progressAt = now; return { yawDegrees, pitchDegrees: 20 };
+    const desiredYaw = lookAt(p, next).yawDegrees;
+    // Ignore tiny pursuit corrections; ease larger changes instead of retargeting the camera every sample.
+    if (this.steeringYaw === null || now - this.steeringAt > 300) this.steeringYaw = state.orientation.yawDegrees;
+    const delta = angle(desiredYaw, this.steeringYaw), dt = Math.min(.15, Math.max(.01, (now - this.steeringAt) / 1000));
+    if (Math.abs(delta) > 2) this.steeringYaw = normalize(this.steeringYaw + Math.sign(delta) * Math.min(Math.abs(delta), 120 * dt));
+    this.steeringAt = now;
+    const yawDegrees = this.steeringYaw;
+    if (grounded && !this.jumpAt && Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) > 10) {
+      this.progressAt = now; return { yawDegrees, pitchDegrees: 15 };
     }
     if (next.y > p.y + .05 && grounded && !this.jumpAt) this.jumpAt = now;
     if (this.jumpAt && now - this.jumpAt > 1200) return this.replan(p, now, 'jump_failed');
-    return { yawDegrees, pitchDegrees: 20, forward: horizontal(p, next) > .12, jump: !!this.jumpAt && now - this.jumpAt < 200 };
+    return { yawDegrees, pitchDegrees: 15, forward: horizontal(p, next) > .12, jump: !!this.jumpAt && now - this.jumpAt < 200 };
   }
 }

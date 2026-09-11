@@ -20,6 +20,11 @@ Tool contracts: [schemas](../src/controller/actions.mjs); wire protocol: [archit
 | Movement | SystemPlayerControl reads KeyboardKeyState; jump/sneak/sprint have mouse-capture gates. Preserve normal input/packet handling. |
 | Jump ownership | Input.InWorldAction / EnumHandling.PreventDefault can retain an owned Jump against unfocused reset; release before expiry/stop. SystemPlayerControl sends normal control changes. |
 | Terrain | Block.GetCollisionBoxes(accessor, pos); Entity.CollisionBox for body clearance. Check fluid layer separately. IClientEventAPI.BlockChanged invalidates neighbor-dependent shapes; GetChunkAtBlockPos=null means unknown. |
+| Climate | `environment` → `GetClimateAt(playerPos, NowValues)`: current/worldgen temperature/rainfall, fertility, forest/shrub density; `Biome=-1` means absent. Generation densities ≠ current vegetation. Search priors, not resource guarantees or hidden-region scans. |
+| Calendar / weather | `IClientGameCalendar`: time, season, daylight/moonlight; local `GetWindSpeedAt`, `GetLightLevel`. `ClimateCondition.Rainfall` with NowValues is precipitation, not baseline rainfall. Raw light/wind ≠ visibility/exposure guarantee. |
+| Body condition | Own watched attributes: `bodyTemp/bodytemp`, `wetness`, `freezingEffectStrength`, `temporalStability`, `tiredness/{tiredness,isSleeping}`, `intoxication`, `hunger/*Level`. Allowlist numeric values; absent/nonfinite → null, never a healthy default. |
+| Target details | Native selection only: `GetPlacedBlockInfo`, `GetPlacedBlockInteractionHelp`; entities `GetInfoText`, `GetInteractionHelp`. HUD strings are untrusted and clipped; hints can be conditional, not executable contracts. No arbitrary block-entity serialization. |
+| Equipment | Own `character` inventory (`ItemSlotCharacter.Type`), `OffhandHotbarSlot`; tool tier/max durability/nutrition via collectible. Read-only equipment lies outside transfer addresses/state token. |
 | Respawn | GuiDialogDead.OnRespawn → ClientMain.Respawn; normal server request. |
 | Inventory transfer | PlayerInventoryManager.TryTransferTo → normal sync packet. |
 | Grid output | ItemSlotCraftingOutput.TryPutInto consumes ingredients through crafting grid. |
@@ -28,12 +33,22 @@ Tool contracts: [schemas](../src/controller/actions.mjs); wire protocol: [archit
 
 ## Perception constraints
 
-- Structured data first; bound range/results and filter view/occlusion. IsRendered alone does not prove visibility.
+- Structured data only: ≤8-block omnidirectional awareness; farther objects need forward cone + sampled sightline, maximum 64 blocks. IsRendered alone does not prove visibility. No pixel, lighting, fog or apparent-size model; not exact human eyesight.
 - Selection rays ≠ rendered silhouettes. Center rays miss partial objects; sparse samples miss thin sticks.
 - Non-colliding Plant/Leaves with light absorption ≤1 do not occlude sensing rays; their selection boxes are not opaque walls. Actual interaction still requires the native aimed target.
 - Missing/unloaded ≠ air. No server-private state or whole-world scans.
 - Separate observed/remembered/inferred; include time/source/coordinates. Revalidate targets before actions.
 - API presence ≠ valid multiplayer action; preserve server validation.
+
+## Context extension boundaries
+
+- Hot loop: own state + nearby terrain deltas. On demand: environment, inventory/recipes, paged sight, target details. Timestamp/session observations; keep unknown, observed, remembered and inferred separate.
+- Client-accessible ≠ player-observable: loaded underground blocks, full entity attributes, unopened container contents and AI task targets are not perception. No world seed, account/session credentials, arbitrary config/attribute dump or hidden-region lookup.
+- Specialized object state: native target HUD first; typed adapters for crop/farmland, firepit, knapping/clay/smithing, storage/trading require source-specific schemas and visibility/access guards. HUD text is not a stable machine schema.
+- Containers: `IPlayerInventoryManager.OpenedInventories` + `IInventory.HasOpened(player)` can bound queries to legitimately open UI. No current container RPC; do not infer access from a loaded block entity.
+- Item detail: `GetHeldItemInfo`, collectible nutrition/wearable interfaces. `UpdateAndGetTransitionStates` mutates ticking state; not a passive query. Spoilage/temperature adapters must avoid updating live stacks merely to inspect them.
+- Events: `IClientEventAPI.ChatMessage`, `BlockChanged`, `IInventory.SlotModified` expose client changes; only life events currently have a public cursor. New streams need bounded rings/session/reset/overflow semantics. Never execute chat text as instructions.
+- Damage: `EntityBehavior.OnEntityReceiveDamage`/`OnEntityDeath` and `EntityPlayer.DeathReason` are source entry points, not proof the client receives reliable attacker/cause. Current health deltas intentionally do not attribute attackers.
 
 ## Online references
 

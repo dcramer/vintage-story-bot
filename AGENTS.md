@@ -3,5 +3,6 @@
 - [Conventions](docs/conventions.md) — read first; repo-wide agent-first, minimal-token rules.
 - [Development](docs/development.md) — read when changing code or running tests.
 - [Architecture](docs/architecture.md) — design intent, ownership, RPC contracts, goal lifecycle.
+- [Bot API reference](docs/bot-api-reference.md) — Mineflayer analogues and core API design criteria.
 - [Runtime](docs/runtime.md) — read before launching, deploying, configuring MCP, or controlling the bot.
 - [Game API reference](docs/capabilities.md) — read for game API entry points, source material, and perception constraints.

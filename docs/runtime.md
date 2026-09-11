@@ -10,6 +10,7 @@
 - Deploy only after normal save/quit: copy rebuilt `mod/bin/Release/net10.0/{VintageStoryAI.dll,modinfo.json}` into `.runtime/bot-data/Mods/VintageStoryAI/`, then relaunch. Never kill an active world or overwrite a loaded DLL.
 - Preserve launcher environment: `XDG_SESSION_TYPE=wayland`, `OPENTK_4_USE_WAYLAND=0`, no `WAYLAND_DISPLAY`; Mesa D3D12/NVIDIA. Wayland stalled in SwapBuffers; automatic graphics selection used CPU.
 - Read `.runtime/bot-data/Logs`; Open logs crashes without xdg-open.
+- OpenAL backend failure (`Unable to get sourceId`): launch with `ALSOFT_DRIVERS=null` for process-local silent audio; no system audio changes. Gameplay sensing does not depend on sound output.
 - Legacy Windows profile: `%APPDATA%\VintagestoryAI`; `setup-bot.ps1` installs there. Current desktop shortcut uses WSL.
 - Generic launcher: `node scripts/launch-bot.mjs <game-path> [--dry-run]`; uses isolated profile and compiled mod. Still graphical, not headless.
 

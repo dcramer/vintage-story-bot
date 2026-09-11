@@ -14,6 +14,8 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
         cells.TryGetValue(cell, out var value) && value.Boxes != null && now - value.At <= Math.Min(age, ttlMs);
     public void Invalidate(Cell cell)
     {
+        // Forget only knowledge we held; unrelated world updates must not flood the delta stream.
+        if (!cells.TryGetValue(cell, out var prior) || prior.Boxes == null) return;
         cells[cell] = new(null, false, Environment.TickCount64, ++sequence);
         Bound();
     }

@@ -21,7 +21,7 @@ export class Controller {
     if (!record) return null;
     return { id: record.id, kind: record.kind, state: record.kind === 'move_to' ? record.nav?.state ?? record.state : record.state,
       active: this.active === record, startedAt: record.startedAt, finishedAt: record.finishedAt,
-      reason: record.reason ?? record.nav?.reason, progress: record.progress, result: record.result, cleanupError: record.cleanupError };
+      reason: record.reason ?? (record.kind === 'move_to' ? record.nav?.reason : undefined), progress: record.progress, result: record.result, cleanupError: record.cleanupError };
   }
   async stop(reason = 'stopped') {
     const active = this.active;
