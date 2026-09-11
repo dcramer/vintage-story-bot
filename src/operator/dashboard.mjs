@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { bridgePort } from '../bridge/client.mjs';
 import { superviseStream } from './stream.mjs';
+import { superviseWorldMap } from './world-map.mjs';
 
 // Operator dashboard: producers stream NDJSON `{topic,at?,data,log?}` lines to POST /ingest; browsers read
 // GET / (page), GET /state (snapshot) and GET /events (SSE). Read-only; no gameplay or controller imports.
@@ -11,9 +12,10 @@ const port = bridgePort(process.env.VINTAGE_STORY_DASHBOARD_PORT ?? '42159');
 const pageUrl = new URL('./dashboard.html', import.meta.url);
 const startedAt = Date.now(), latest = new Map(), log = [], clients = new Set(), producers = new Set();
 const maxLine = 65536, maxLog = 500;
-let stream = null;
+let stream = null, worldMap = null;
 
-const snapshot = () => ({ startedAt, producers: producers.size, topics: Object.fromEntries(latest), log, stream: stream?.status() ?? null });
+const snapshot = () => ({ startedAt, producers: producers.size, topics: Object.fromEntries(latest), log,
+  stream: stream?.status() ?? null, worldMap: worldMap?.status() ?? null });
 function broadcast(event, data) {
   const chunk = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const client of clients) client.write(chunk);
@@ -67,10 +69,13 @@ server.listen(port, '127.0.0.1');
 await once(server, 'listening');
 console.error(`Dashboard on http://127.0.0.1:${port} (ingest POST /ingest, stream GET /events)`);
 stream = superviseStream({ onChange: status => broadcast('stream', status), log: line => console.error(`[stream] ${line}`) });
+if (process.env.VINTAGE_STORY_REPORT_URL && process.env.VINTAGE_STORY_REPORT_TOKEN && process.env.VINTAGE_STORY_BOT_ID)
+  worldMap = superviseWorldMap({ onChange: status => broadcast('worldmap', status), log: line => console.error(`[worldmap] ${line}`) });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => {
   clearInterval(heartbeat);
   for (const client of clients) client.end();
   for (const producer of producers) producer.destroy();
+  worldMap?.stop();
   await stream.stop();
   server.close(() => process.exit(0));
 });

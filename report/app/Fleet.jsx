@@ -93,7 +93,7 @@ export function Fleet() {
     <section class="map-panel panel">
       <div class="panel-title map-title"><div><span class="eyebrow">Seen by the fleet</span><h2>World map</h2></div><div class="map-legend">{bots.map((bot, index) => <span key={bot.id}><i class={`agent-${index % 6}`} />{bot.id}</span>)}</div></div>
       <WorldMap bots={bots} />
-      <div class="map-footer"><span>Terrain colors come from the game</span><span>Solid: recent path</span><span>Dashed: objective</span><span>Unknown ground stays blank</span></div>
+      <div class="map-footer"><span>Actual Vintage Story World Map capture</span><span>Choose a Seraph's explored view</span><span>Solid: recent path</span><span>Dashed: objective</span></div>
     </section>
     <div class="command-rail"><Attention bots={bots} /><MissionBoard bots={bots} /></div>
     <FleetRoster bots={bots} />

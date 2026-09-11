@@ -31,8 +31,8 @@ export const uiTools = [
     description: 'Capture only the WSL bot window. Works in menus without the bridge. Use before menu input; never capture login secrets.' },
   { name: 'ui_click', schema: z.object({ x: z.number().int().min(0), y: z.number().int().min(0) }).strict(),
     description: 'Left-click bot menu at screenshot pixel coordinates; one targeted click, no retries. Inspect screenshot first. Not for world interaction.' },
-  { name: 'ui_key', schema: z.object({ key: z.enum(['Escape', 'Return', 'Tab', 'Up', 'Down', 'Left', 'Right']) }).strict(),
-    description: 'Send a key directly to the bot. Escape opens/closes the pause menu. No retries.' },
+  { name: 'ui_key', schema: z.object({ key: z.enum(['Escape', 'Return', 'Tab', 'Up', 'Down', 'Left', 'Right', 'm']) }).strict(),
+    description: 'Send a key directly to the bot. Escape opens/closes the pause menu; m opens/closes the World Map. No retries.' },
 ];
 
 async function xdo(args, env) {

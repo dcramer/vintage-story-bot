@@ -292,6 +292,7 @@ public sealed partial class AiBridgeMod : ModSystem
             case "chat": return Chat(request);
             case "map_waypoints": return mapWaypoints.Observe();
             case "map_waypoint_remove": return MapWaypointRemove(request);
+            case "map_view": return MapView();
             case "look": return Look(request);
             case "aim_cell": return AimCell(request);
             case "move": return Move(request);

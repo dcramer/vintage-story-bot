@@ -3,13 +3,14 @@ import { writeFileSync } from 'node:fs';
 import { callUi, typeText } from '../src/operator/bot-window.mjs';
 import { displayStatus, ensureDisplay, stopDisplay } from '../src/operator/display.mjs';
 import { botProcesses, gameStatus, importWorld, listWorlds, startGame, stopGame } from '../src/operator/game.mjs';
+import { captureWorldMap } from '../src/operator/world-map.mjs';
 
 const usage = `Usage: game.mjs <command>
   start [--world NAME | --new NAME [--play-style STYLE] | --server HOST[:PORT]] [--display :N] [--size WxH] [--no-wait] [--timeout SEC]
   stop [--force]            window-close request = game's own saving exit path; --force SIGKILLs after the timeout
   status | worlds | import <file.vcdbs> [NAME]
   display start|stop|status [--display :N] [--size WxH]
-  screenshot [FILE.png] | click X Y | key KEY | type   (type reads one line from stdin; operator sign-in only)`;
+  screenshot [FILE.png] | map | click X Y | key KEY | type   (type reads one line from stdin; operator sign-in only)`;
 
 const [command, ...rest] = process.argv.slice(2);
 const flags = {}, positional = [];
@@ -52,6 +53,10 @@ async function run() {
       const file = positional[0] ?? `${process.cwd()}/bot-window.png`;
       writeFileSync(file, image);
       return print({ ...JSON.parse(result.content[0].text), file });
+    }
+    case 'map': {
+      const { image: _image, ...result } = await captureWorldMap();
+      return print(result);
     }
     case 'click': return print(JSON.parse((await callUi('ui_click', { x: Number(positional[0]), y: Number(positional[1]) })).content[0].text));
     case 'key': return print(JSON.parse((await callUi('ui_key', { key: positional[0] })).content[0].text));

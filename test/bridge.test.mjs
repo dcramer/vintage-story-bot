@@ -8,6 +8,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { requestBridge, bridgePort } from '../src/bridge/client.mjs';
 import { tools as actions } from '../src/controller/registry.mjs';
 import { uiTools, isBotCommand, validateClick } from '../src/operator/bot-window.mjs';
+import { normalizeMapView } from '../src/operator/world-map.mjs';
 
 async function fakeBridge(t, handle) {
   const sockets = new Set();
@@ -156,5 +157,13 @@ test('UI restricts bot identity, keys and click bounds without touching a displa
   }
   const key = uiTools.find(tool => tool.name === 'ui_key').schema;
   assert.equal(key.safeParse({ key: 'Escape' }).success, true);
+  assert.equal(key.safeParse({ key: 'm' }).success, true);
   assert.equal(key.safeParse({ key: 'Alt+F4' }).success, false);
+});
+
+test('normalizes native World Map calibration to the captured game window', () => {
+  const view = normalizeMapView({ opened: true, world: { x: 512000, z: 512000, dimension: 0 },
+    view: { here: [640, 360], east100: [740, 360], south100: [640, 460] } }, 1280, 720);
+  assert.deepEqual(view, { world: { x: 512000, z: 512000, dimension: 0 }, here: [.5, .5], east100: [740 / 1280, .5], south100: [.5, 460 / 720] });
+  assert.equal(normalizeMapView({ opened: false }, 1280, 720), null);
 });

@@ -1,127 +1,73 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { atlases, positionHistory } from './store.js';
-import { code, point } from './format.js';
+import { useEffect, useMemo, useState } from 'preact/hooks';
+import { positionHistory } from './store.js';
 
-const finitePoint = p => p && Number.isFinite(p.x) && Number.isFinite(p.z);
+const finitePoint = point => point && Number.isFinite(point.x) && Number.isFinite(point.z);
 const stateOf = bot => bot.topics.state?.data ?? {};
 const goalOf = bot => bot.topics.goal?.data;
 const navOf = bot => bot.topics.navigation?.data;
 const targetOf = bot => finitePoint(goalOf(bot)?.args) ? goalOf(bot).args : finitePoint(navOf(bot)?.target) ? navOf(bot).target : null;
-const fallback = { water: '#426f86', hazard: '#c5623d', canopy: '#496d3d', ground: '#746c57' };
-const rgb = row => Number.isInteger(row[7]) ? `#${row[7].toString(16).padStart(6, '0')}` : fallback[row[3]];
 
-function fit(points, aspect) {
-  const xs = points.map(p => p.x), ys = points.map(p => -p.z);
-  let minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-  let width = Math.max(48, maxX - minX), height = Math.max(48, maxY - minY);
-  const pad = Math.max(10, Math.max(width, height) * .06);
-  width += pad * 2; height += pad * 2;
-  if (width / height < aspect) width = height * aspect; else height = width / aspect;
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  return { minX: cx - width / 2, minY: cy - height / 2, width, height };
+function project(point, view, height) {
+  if (!finitePoint(point) || !view?.world || !view.here || !view.east100 || !view.south100) return null;
+  const dx = (point.x - view.world.x) / 100, dz = (point.z - view.world.z) / 100;
+  return {
+    x: (view.here[0] + dx * (view.east100[0] - view.here[0]) + dz * (view.south100[0] - view.here[0])) * 1000,
+    y: (view.here[1] + dx * (view.east100[1] - view.here[1]) + dz * (view.south100[1] - view.here[1])) * height,
+  };
 }
 
-const niceStep = span => {
-  const rough = Math.max(1, span / 7), power = 10 ** Math.floor(Math.log10(rough)), unit = rough / power;
-  return (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * power;
-};
-
-export function atlasStats(rows) {
-  if (!rows.length) return { known: 0, oldest: null, newest: null };
-  const times = rows.map(row => row[6]).filter(Number.isFinite);
-  return { known: rows.length, oldest: Math.min(...times), newest: Math.max(...times) };
+const inside = (point, height) => point && point.x > -40 && point.x < 1040 && point.y > -40 && point.y < height + 40;
+function contiguousTrails(points) {
+  const trails = [];
+  for (const point of points) {
+    const trail = trails.at(-1), prior = trail?.at(-1);
+    if (!prior || Math.hypot(point.x - prior.x, point.z - prior.z) > 128) trails.push([point]);
+    else trail.push(point);
+  }
+  return trails;
 }
 
 export function WorldMap({ bots, detailed = false }) {
-  const atlasState = atlases.value, root = useRef(), canvas = useRef(), [aspect, setAspect] = useState(detailed ? 2.1 : 1.6), [hover, setHover] = useState(null);
+  const sources = bots.filter(bot => bot.mapImage?.at).sort((a, b) => b.mapImage.at - a.mapImage.at);
+  const [selected, setSelected] = useState(null);
   useEffect(() => {
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0) setAspect(width / height);
-    });
-    if (root.current) observer.observe(root.current);
-    return () => observer.disconnect();
-  }, []);
-
-  const terrain = useMemo(() => {
-    const merged = new Map();
-    for (const bot of bots) for (const row of atlasState[bot.id] ?? []) {
-      if (!Array.isArray(row) || !Number.isFinite(row[0]) || !Number.isFinite(row[1])) continue;
-      const key = `${row[0]},${row[1]}`, prior = merged.get(key);
-      if (!prior || (row[6] ?? 0) >= (prior[6] ?? 0)) merged.set(key, row);
-    }
-    return merged;
-  }, [bots, atlasState]);
-  const agents = useMemo(() => bots.map((bot, index) => {
+    if (!sources.some(bot => bot.id === selected)) setSelected(sources[0]?.id ?? null);
+  }, [sources.map(bot => `${bot.id}:${bot.mapImage.at}`).join('|'), selected]);
+  const source = sources.find(bot => bot.id === selected) ?? sources[0];
+  const viewHeight = source ? 1000 * source.mapImage.height / source.mapImage.width : 562.5;
+  const agents = useMemo(() => !source?.mapImage?.view ? [] : bots.map((bot, index) => {
     const state = stateOf(bot), dimension = state.position?.dimension ?? 0;
-    const trail = positionHistory(bot).filter(p => finitePoint(p) && (p.dimension ?? 0) === dimension);
-    return { bot, index, state, trail, current: finitePoint(state.position) ? state.position : trail.at(-1), target: targetOf(bot) };
-  }).filter(agent => agent.current), [bots]);
-  const points = [...terrain.values()].map(row => ({ x: row[0], z: row[1] }));
-  for (const agent of agents) points.push(...[...agent.trail, agent.current, agent.target].filter(finitePoint));
-  const hasPoints = points.length > 0, bounds = fit(hasPoints ? points : [{ x: 0, z: 0 }], aspect);
-  const step = niceStep(Math.max(bounds.width, bounds.height)), scale = bounds.width / 760;
+    if (dimension !== source.mapImage.view.world.dimension) return null;
+    const trail = positionHistory(bot).filter(point => finitePoint(point) && (point.dimension ?? 0) === dimension);
+    const current = finitePoint(state.position) ? state.position : trail.at(-1), target = targetOf(bot);
+    return current ? { bot, index, state, current: project(current, source.mapImage.view, viewHeight), target: project(target, source.mapImage.view, viewHeight),
+      trails: contiguousTrails(trail).map(points => points.map(point => project(point, source.mapImage.view, viewHeight)).filter(Boolean)) } : null;
+  }).filter(Boolean), [bots, source, viewHeight]);
 
-  useEffect(() => {
-    const element = canvas.current;
-    if (!element) return;
-    const draw = () => {
-      const box = element.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
-      if (!box.width || !box.height) return;
-      element.width = Math.round(box.width * dpr); element.height = Math.round(box.height * dpr);
-      const context = element.getContext('2d'); context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      context.fillStyle = '#071014'; context.fillRect(0, 0, box.width, box.height);
-      const sx = box.width / bounds.width, sy = box.height / bounds.height;
-      const elevations = [...terrain.values()].map(row => row[2]), middle = elevations.length ? elevations.reduce((a, b) => a + b, 0) / elevations.length : 0;
-      for (const row of terrain.values()) {
-        const size = row[4] || 1, x = (row[0] - bounds.minX) * sx, y = (-row[1] - size - bounds.minY) * sy;
-        const width = Math.max(1, size * sx + .35), height = Math.max(1, size * sy + .35);
-        context.fillStyle = rgb(row); context.fillRect(x, y, width, height);
-        const relief = Math.max(-.2, Math.min(.18, (row[2] - middle) * .012));
-        if (relief) { context.fillStyle = relief > 0 ? `rgba(255,255,255,${relief})` : `rgba(0,0,0,${-relief})`; context.fillRect(x, y, width, height); }
-      }
-      context.lineWidth = 1; context.strokeStyle = 'rgba(145,196,197,.16)'; context.beginPath();
-      for (let x = Math.ceil(bounds.minX / step) * step; x < bounds.minX + bounds.width; x += step) {
-        const px = (x - bounds.minX) * sx; context.moveTo(px, 0); context.lineTo(px, box.height);
-      }
-      for (let y = Math.ceil(bounds.minY / step) * step; y < bounds.minY + bounds.height; y += step) {
-        const py = (y - bounds.minY) * sy; context.moveTo(0, py); context.lineTo(box.width, py);
-      }
-      context.stroke();
-    };
-    draw(); const observer = new ResizeObserver(draw); observer.observe(element); return () => observer.disconnect();
-  }, [terrain, bounds.minX, bounds.minY, bounds.width, bounds.height, step]);
-
-  if (!hasPoints) return <div class="map-empty"><span>Awaiting terrain telemetry</span><small>The atlas fills with ground the Seraph has actually seen.</small></div>;
-
-  const inspect = event => {
-    const box = root.current.getBoundingClientRect(), left = event.clientX - box.left, top = event.clientY - box.top;
-    const x = Math.floor(bounds.minX + left / box.width * bounds.width);
-    const z = Math.floor(-(bounds.minY + top / box.height * bounds.height));
-    const row = terrain.get(`${x},${z}`) ?? terrain.get(`${Math.floor(x / 2) * 2},${Math.floor(z / 2) * 2}`) ??
-      terrain.get(`${Math.floor(x / 4) * 4},${Math.floor(z / 4) * 4}`);
-    setHover(row ? { row, left, top } : null);
-  };
-
-  return <div class={`world-map ${detailed ? 'detailed-map' : ''}`} ref={root} onPointerMove={inspect} onPointerLeave={() => setHover(null)}>
-    <canvas ref={canvas} class="terrain-canvas" />
-    <svg viewBox={`${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`} role="img" aria-label="Game-colored terrain seen by Seraphs, with recent paths and mission targets">
-      {agents.map(({ bot, index, state, trail, current, target }) => {
-        const path = trail.map(p => `${p.x},${-p.z}`).join(' '), yaw = state.orientation?.yawDegrees ?? 0, unit = Math.max(.45, scale);
+  if (!source) return <div class="map-empty"><span>Awaiting a World Map capture</span><small>The host will lift the next idle snapshot from Vintage Story itself.</small></div>;
+  const image = `/api/map-image/${encodeURIComponent(source.id)}?v=${source.mapImage.at}`;
+  return <div class={`world-map native-world-map ${detailed ? 'detailed-map' : ''}`}
+    style={{ aspectRatio: `${source.mapImage.width} / ${source.mapImage.height}` }}>
+    <img src={image} alt={`${source.id}'s Vintage Story World Map`} />
+    <svg viewBox={`0 0 1000 ${viewHeight}`} role="img" aria-label={`Telemetry over ${source.id}'s captured Vintage Story World Map`}>
+      {agents.map(({ bot, index, state, trails, current, target }) => {
+        const yaw = state.orientation?.yawDegrees ?? 0;
         return <g key={bot.id} class={`map-agent agent-${index % 6}`}>
-          {trail.length > 1 && <polyline points={path} class="map-trail map-trail-shadow" />}
-          {trail.length > 1 && <polyline points={path} class="map-trail" />}
-          {finitePoint(target) && <><line x1={current.x} y1={-current.z} x2={target.x} y2={-target.z} class="target-line" />
-            <g transform={`translate(${target.x} ${-target.z}) scale(${unit})`} class="target-marker"><circle r={2.4} /><path d="M-4 0H4M0-4V4" /></g></>}
-          <a href={`/bots/${encodeURIComponent(bot.id)}`} aria-label={`Open ${bot.id}`}>
-            <g transform={`translate(${current.x} ${-current.z}) rotate(${yaw}) scale(${unit})`} class="agent-marker"><circle r={4.8} /><path d="M0 -7 L3.2 1.5 L0 .3 L-3.2 1.5 Z" /></g>
-            <text x={current.x + 7 * unit} y={-current.z - 5 * unit} class="map-label" style={{ fontSize: `${8 * unit}px`, strokeWidth: 2.6 * unit }}>{bot.id}</text>
-          </a>
+          {trails.map((trail, trailIndex) => trail.length > 1 && <g key={trailIndex}>
+            <polyline points={trail.map(point => `${point.x},${point.y}`).join(' ')} class="map-trail map-trail-shadow" />
+            <polyline points={trail.map(point => `${point.x},${point.y}`).join(' ')} class="map-trail" />
+          </g>)}
+          {inside(current, viewHeight) && inside(target, viewHeight) && <><line x1={current.x} y1={current.y} x2={target.x} y2={target.y} class="target-line" />
+            <g transform={`translate(${target.x} ${target.y})`} class="target-marker"><circle r="5" /><path d="M-9 0H9M0-9V9" /></g></>}
+          {inside(current, viewHeight) && <a href={`/bots/${encodeURIComponent(bot.id)}`} aria-label={`Open ${bot.id}`}>
+            <g transform={`translate(${current.x} ${current.y}) rotate(${yaw})`} class="agent-marker"><circle r="9" /><path d="M0 -13 L6 3 L0 1 L-6 3 Z" /></g>
+            <text x={current.x + 13} y={current.y - 10} class="map-label">{bot.id}</text>
+          </a>}
         </g>;
       })}
     </svg>
-    <div class="map-axis map-axis-x">X →</div><div class="map-axis map-axis-z">Z ↑</div>
-    <div class="map-scale"><i style={{ width: `${Math.max(28, Math.min(100, step / bounds.width * 100))}%` }} />{Math.round(step)} blocks</div>
-    {hover && <div class="map-readout" style={{ left: hover.left, top: hover.top }}><b>{code(hover.row[5]) ?? hover.row[3]}</b><span>{point({ x: hover.row[0], y: hover.row[2], z: hover.row[1] })}</span></div>}
+    <div class="native-map-source">Captured from {source.id}</div>
+    {sources.length > 1 && <div class="map-source-picker" aria-label="World Map source">{sources.map(bot =>
+      <button key={bot.id} class={bot.id === source.id ? 'selected' : ''} onClick={() => setSelected(bot.id)}>{bot.id}</button>)}</div>}
   </div>;
 }

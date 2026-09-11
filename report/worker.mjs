@@ -5,7 +5,7 @@ import { DurableObject } from 'cloudflare:workers';
 // and pushes updates to browser WebSockets. Reads (API and the static SPA in dist/, see app/) require VIEW_TOKEN when set;
 // writes require REPORT_TOKEN.
 const topicRe = /^[a-z][a-z0-9_]{0,63}$/, idRe = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
-const maxBody = 131072, maxLog = 200, maxTrail = 540, maxAtlas = 65536, sharedAtlas = 12000;
+const maxBody = 131072, maxMapImage = 92160, maxLog = 200, maxTrail = 540, maxAtlas = 65536, sharedAtlas = 12000;
 const maxMeta = 128, persistMs = 30000, sweepMs = 900000, mapKinds = new Set(['ground', 'canopy', 'water', 'hazard']);
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -52,11 +52,34 @@ function mapDelta(entry, now) {
   return rows;
 }
 
+const mapPoint = value => Array.isArray(value) && value.length === 2 && value.every(item => Number.isFinite(item) && item >= -8 && item <= 8)
+  ? value : null;
+function mapCapture(body, now) {
+  if (!body || typeof body !== 'object' || typeof body.id !== 'string' || !idRe.test(body.id) ||
+    !Number.isInteger(body.width) || body.width < 320 || body.width > 4096 || !Number.isInteger(body.height) || body.height < 180 || body.height > 2160 ||
+    typeof body.image !== 'string' || body.image.length > 123000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(body.image)) return null;
+  let bytes;
+  try { bytes = Uint8Array.from(atob(body.image), character => character.charCodeAt(0)); } catch { return null; }
+  if (bytes.byteLength > maxMapImage || bytes.byteLength < 16 || String.fromCharCode(...bytes.slice(0, 4)) !== 'RIFF' ||
+    String.fromCharCode(...bytes.slice(8, 12)) !== 'WEBP') return null;
+  const view = body.view, here = mapPoint(view?.here), east100 = mapPoint(view?.east100), south100 = mapPoint(view?.south100);
+  const world = view?.world;
+  return { id: body.id, bytes, meta: { at: now, width: body.width, height: body.height,
+    view: here && east100 && south100 && Number.isFinite(world?.x) && Number.isFinite(world?.z) && Number.isInteger(world?.dimension)
+      ? { world: { x: world.x, z: world.z, dimension: world.dimension }, here, east100, south100 } : null } };
+}
+
 export default {
   fetch(request, env) {
     const url = new URL(request.url);
     const fleet = env.FLEET.get(env.FLEET.idFromName('fleet'));
     if (url.pathname === '/api/report') {
+      if (request.method !== 'POST') return json(405, { ok: false, error: 'POST only' });
+      if (!env.REPORT_TOKEN || !equal(bearer(request), env.REPORT_TOKEN)) return json(401, { ok: false, error: 'Bad report token' });
+      if (Number(request.headers.get('content-length')) > maxBody) return json(413, { ok: false, error: `Body over ${maxBody} bytes` });
+      return fleet.fetch(request);
+    }
+    if (url.pathname === '/api/map-image') {
       if (request.method !== 'POST') return json(405, { ok: false, error: 'POST only' });
       if (!env.REPORT_TOKEN || !equal(bearer(request), env.REPORT_TOKEN)) return json(401, { ok: false, error: 'Bad report token' });
       if (Number(request.headers.get('content-length')) > maxBody) return json(413, { ok: false, error: `Body over ${maxBody} bytes` });
@@ -72,7 +95,8 @@ export default {
           'set-cookie': `view=${encodeURIComponent(env.VIEW_TOKEN)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000` } });
       }
     }
-    if (url.pathname === '/api/state' || url.pathname === '/api/ws' || url.pathname === '/api/maps' || url.pathname.startsWith('/api/maps/')) return fleet.fetch(request);
+    if (url.pathname === '/api/state' || url.pathname === '/api/ws' || url.pathname === '/api/maps' || url.pathname.startsWith('/api/maps/') ||
+      url.pathname.startsWith('/api/map-image/')) return fleet.fetch(request);
     if (url.pathname.startsWith('/api/')) return json(404, { ok: false, error: 'Unknown route' });
     return env.ASSETS.fetch(request);
   },
@@ -121,11 +145,19 @@ export class SeraphFleet extends DurableObject {
   async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname === '/api/report') return this.report(request);
+    if (url.pathname === '/api/map-image') return this.captureMap(request);
     if (url.pathname === '/api/state') return json(200, this.snapshot());
     if (url.pathname === '/api/maps') return json(200, this.maps([...this.bots.keys()], sharedAtlas));
     if (url.pathname.startsWith('/api/maps/')) {
       const id = decodeURIComponent(url.pathname.slice('/api/maps/'.length));
       return idRe.test(id) ? json(200, this.maps([id], maxAtlas)) : json(400, { ok: false, error: 'Bad Seraph id' });
+    }
+    if (url.pathname.startsWith('/api/map-image/')) {
+      const id = decodeURIComponent(url.pathname.slice('/api/map-image/'.length));
+      if (!idRe.test(id)) return json(400, { ok: false, error: 'Bad Seraph id' });
+      const image = await this.ctx.storage.get(`map-image:${id}`), meta = this.bots.get(id)?.mapImage;
+      return image && meta ? new Response(image, { headers: { 'content-type': 'image/webp', 'cache-control': 'private, no-cache', etag: `"${meta.at}"` } })
+        : json(404, { ok: false, error: 'No World Map capture' });
     }
     if (url.pathname === '/api/ws') {
       if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') return json(426, { ok: false, error: 'WebSocket upgrade required' });
@@ -135,6 +167,19 @@ export class SeraphFleet extends DurableObject {
       return new Response(null, { status: 101, webSocket: client });
     }
     return json(404, { ok: false, error: 'Unknown route' });
+  }
+  async captureMap(request) {
+    let body;
+    try { body = await request.json(); } catch { return json(400, { ok: false, error: 'JSON body required' }); }
+    const capture = mapCapture(body, Date.now());
+    if (!capture) return json(400, { ok: false, error: 'Invalid World Map capture' });
+    const bot = this.bots.get(capture.id);
+    if (!bot) return json(404, { ok: false, error: 'Seraph must report before its World Map' });
+    await this.ctx.storage.put(`map-image:${capture.id}`, capture.bytes);
+    bot.mapImage = capture.meta; this.dirty.add(capture.id);
+    await this.persist(capture.meta.at, true);
+    this.broadcast({ type: 'bot', bot });
+    return json(200, { ok: true, at: capture.meta.at, bytes: capture.bytes.byteLength });
   }
   async report(request) {
     let body;
@@ -181,6 +226,7 @@ export class SeraphFleet extends DurableObject {
       if (bot.seenAt >= cutoff) continue;
       this.bots.delete(id); this.dirty.delete(id); this.persisted.delete(id);
       await this.ctx.storage.delete('bot:' + id);
+      await this.ctx.storage.delete('map-image:' + id);
       this.sql.exec('DELETE FROM atlas WHERE bot_id = ?', id);
       this.broadcast({ type: 'gone', id });
     }

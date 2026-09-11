@@ -8,6 +8,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
+using Vintagestory.GameContent;
 
 namespace VintageStoryAI;
 
@@ -22,7 +23,7 @@ public sealed partial class AiBridgeMod
         return new
         {
             ok = true,
-            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "map_waypoints" },
+            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "map_waypoints", "map_view" },
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
             world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString() },
@@ -62,6 +63,36 @@ public sealed partial class AiBridgeMod
             activeSlot = api.World.Player.InventoryManager.ActiveHotbarSlotNumber,
             hotbar = ObserveInventory("hotbar"),
             backpack = ObserveInventory("backpack")
+        };
+    }
+
+    // Pixel/world calibration for the game-rendered World Map. The operator capture opens the native map,
+    // takes the same window screenshot a human sees, then uses these three points for dashboard overlays.
+    private object MapView()
+    {
+        var manager = api.ModLoader.GetModSystem<WorldMapManager>();
+        if (manager?.IsOpened != true) return new { ok = true, opened = false };
+        var position = api.World.Player.Entity.Pos;
+        var origin = new Vec3d(position.X, position.Y, position.Z);
+        var here = new Vec2f(); var east = new Vec2f(); var south = new Vec2f();
+        manager.TranslateWorldPosToViewPos(origin, ref here);
+        manager.TranslateWorldPosToViewPos(new Vec3d(origin.X + 100, origin.Y, origin.Z), ref east);
+        manager.TranslateWorldPosToViewPos(new Vec3d(origin.X, origin.Y, origin.Z + 100), ref south);
+        var bounds = manager.worldMapDlg?.SingleComposer?.GetElement("mapElem")?.Bounds;
+        if (bounds == null) return new { ok = true, opened = false };
+        float offsetX = (float)bounds.absX, offsetY = (float)bounds.absY;
+        return new
+        {
+            ok = true,
+            opened = true,
+            observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            world = new { x = origin.X, z = origin.Z, dimension = position.Dimension },
+            view = new
+            {
+                here = new[] { here.X + offsetX, here.Y + offsetY },
+                east100 = new[] { east.X + offsetX, east.Y + offsetY },
+                south100 = new[] { south.X + offsetX, south.Y + offsetY }
+            }
         };
     }
 
