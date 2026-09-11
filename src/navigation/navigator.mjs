@@ -88,8 +88,10 @@ export class Navigation {
         horizontal(p, waypoint) < overshoot && lateral < w + .2 && dx * dx + dz * dz > .01 &&
         (p.x - waypoint.x) * dx + (p.z - waypoint.z) * dz >= 0 && traverse(this.edgeStart, p);
     };
+    let advancedWaypoint = false;
     while (this.index < this.route.length && grounded && map.support(p, w) === 9 && reached(this.route[this.index])) {
       this.edgeStart = this.route[this.index++]; this.jumpAt = 0; this.landing = false; this.progressAt = now; this.lastProgress = p;
+      advancedWaypoint = true;
     }
     if (this.index >= this.route.length) {
       const id = key(p); this.visits.set(id, (this.visits.get(id) ?? 0) + 1);
@@ -112,7 +114,7 @@ export class Navigation {
       return grounded ? this.replan(p, now, 'terrain_changed') : this.finish('blocked', 'landing_changed');
     }
     if (this.jumpAt && grounded && Math.abs(p.y - next.y) < .06) { this.jumpAt = 0; this.landing = true; }
-    const recenter = skippedAhead || this.landing || this.index === 0 ||
+    const recenter = advancedWaypoint || skippedAhead || this.landing || this.index === 0 ||
       Math.floor(p.x) === Math.floor(next.x) && Math.floor(p.z) === Math.floor(next.z);
     if (grounded && !this.jumpAt && !traverse(p, next, recenter)) {
       this.diagnostics = { kind: 'segment_invalid', from: p, point: next, recenter,
