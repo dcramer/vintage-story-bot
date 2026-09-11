@@ -14,5 +14,10 @@ export const empty = z.object({}).strict();
 
 export const hand = z.object({
   durationMs,
-  expectedTarget: z.string().min(1).max(160).optional(),
+  expectedTarget: z.string().min(1).max(160).nullable().optional(),
+  expectedState: expectedState.optional(),
+  expectedItem: z.object({
+    slot: z.number().int().min(0).max(9),
+    code: z.string().min(1).max(160).nullable(),
+  }).strict().optional(),
 }).strict();

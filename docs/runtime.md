@@ -41,9 +41,9 @@ Preserve other registrations. These do not configure native Windows clients.
 - Tools/arguments: [schemas](../src/controller/actions.mjs). CLI: `node scripts/control.mjs <action> [args]`.
 - Structured CLI arguments: `node scripts/control.mjs scan --json '{"match":"stick"}'`. Inspect observe.capabilities; versions pinned per conventions.
 - `pnpm goal:stick`: shared `collect_stick` goal, pickup of one reachable/in-view loose stick; verifies inventory gain. Mutates game; never part of unit tests.
-- `pnpm goal:gather [count=10]`: shared ground-stick goal; no default time/step limit. MCP `gather_sticks` returns START; poll observe.goal by id for progress/result. Inventory gain defines success. Failed routes keep searching; damage, death, control/session loss or explicit cancellation interrupt. No leaf harvesting/screenshots. Other mutations are refused during a goal.
+- `pnpm goal:gather [count=10]`: shared ground-stick goal with food priority (opt out: `manageFood=false`); no default time/step limit. Returns START; poll goal_status by id. Inventory gain defines success. Failed routes keep searching; damage, death, control/session loss or cancellation interrupt. No leaf harvesting/screenshots. Other mutations are refused during a goal.
 - Observe identity/world first; one controlling agent at a time. Start with 250 ms bursts, then observe.
-- `background_control`: use observe.controlReady, not mouseGrabbed. Gameplay leaves OS focus/pointer alone; menus/death/pause block control. `background_jump` permits owned jump holds without capture; minimized rendering is not guaranteed.
+- `background_control`: use observe.controlReady, not mouseGrabbed. Gameplay leaves OS focus/pointer alone; menus/death/pause block control. `background_jump` / `background_sprint` retain bounded owned inputs without capture; minimized rendering is not guaranteed.
 - Acknowledged ≠ completed. After timeout inspect state; never blindly retry.
 - Primitive holds ≤2000ms; release on next game tick. Node `move_to` goals ≤120s, backed by mod control frames ≤500ms; poll observe.navigation by id. Stop/controller shutdown cancels; restart never resumes goals. Mod requests expire after 3s. Frozen threads delay cleanup; elapsed leases expire when ticks resume.
 - Terrain memory is session-local, bounded and expiring; changed/unloaded cells invalidate routes. Cached geometry is observation, not proof that terrain is unchanged. Unknown cells are blocked. No persistent POI store.
@@ -52,7 +52,8 @@ Preserve other registrations. These do not configure native Windows clients.
 
 ## Life / inventory
 
-- Game tick (~20 ms request, frame/thread bounded): sample health/vitals; damage/death/low-vital entry release owned inputs. Navigation may continue on hunger alone. Pausing singleplayer suspends this tick/bridge responses. No auto-flee/eat/combat/respawn.
+- Game tick (~20 ms request, frame/thread bounded): sample health/vitals; damage/death/low-vital entry release owned inputs. Navigation may continue on hunger alone. Pausing singleplayer suspends this tick/bridge responses. Food policy runs in assigned Node tasks only; no idle auto-flee/eat/combat/respawn.
+- `forage`: ripe berries → empty-hand harvest → fresh-food equip/eat → satiety/reserve verification. `eat`: one verified consumption from inventory. Both use normal right-click and stop on damage. Unknown/spoiling food is refused; no mushrooms/raw meat. Food in backpack needs a free ordinary hotbar slot.
 - Low health ≤30%; food/oxygen ≤20%; clear 5 percentage points above entry. Events edge-triggered; health drops can coalesce within one sample; attacker/cause unknown. Missing vitals do not infer healthy.
 - `events` holds 128 entries, pages 64; UTC ms, session/cursor; `missed` requires observe/resync. Passive MCP polling does not wake idle agents.
 - Death: observe.life.deathId/canRespawn → respawn once → observe alive → replan. Uses GuiDialogDead's ClientMain.Respawn path, checks lives/dialog. Pending timeout needs inspection, not resubmission. No revive/teleport/delete-world APIs.

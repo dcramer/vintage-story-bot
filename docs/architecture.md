@@ -9,6 +9,7 @@
 | `src/controller/` | Shared service, public schemas, Effect goal lifecycle/exclusion. |
 | `src/navigation/` | Terrain memory, route planning, exploration, steering policy; no I/O. |
 | `src/goals/` | Goal registry and task policies; injected game/skill API. |
+| `src/skills/` | Composable fieldwork, harvesting/eating and survival priority; shared session guards/memory. |
 | `src/mcp/` | MCP adapter only. `src/mcp-server.mjs` preserves registrations. |
 | `src/operator/` | Human/operator UI utilities; never import from gameplay or MCP. |
 | `mod/` | Visible sensing, input execution, smooth aiming, guard/expiry enforcement. |
@@ -27,6 +28,7 @@
 - Transport acknowledgement is not gameplay completion. Verify arrival, inventory deltas and life state. Lost replies imply uncertain effects; inspect, never blindly resend.
 - Memory must be session-scoped, bounded and invalidatable. Share observations across skills; geometry, resource sightings and failed approaches have different expiry rules. No persistence until world identity/invalidation are defined.
 - Prefer this small client/skills/goals split over a second game engine, screenshot loops, or a generic workflow framework.
+- Survival runs only inside an assigned task, not an idle autonomous process. Food priority yields navigation on supported ground; lease cleanup precedes eating/foraging. Planned yields preserve parent progress; damage/death/session changes abort the entire task. Thresholds/allowlists live in `src/skills/`.
 
 ## Controller RPC
 
@@ -46,6 +48,6 @@ All requests use existing bounded JSON-line transport; game thread executes them
 - `sense {session?,after?}` → `{state,terrain:{session,reset,cursor,more,clock,cells}}`. Max 128 cells/page. Rows: `[x,y,z,observedTick,hazard,relativeCollisionBoxes|null]`; boxes `[x1,y1,z1,x2,y2,z2]`; null invalidates. `clock`/timestamps are mod monotonic ms, not UTC. Reset discards old memory; drain `more` before movement. Air `[]` ≠ unknown. Nearby terrain sampling is camera-independent, range/occlusion bounded.
 - `scan`: nearby awareness ≤8 blocks, distant 120×90° sight ≤64. Both require loaded sightlines. Pages target ≤12ms/128 rays/32768 cells; native calls can exceed budget. Cursor fixes origin/filter/view, expires after 30s, movement >2 or distant-view rotation >15°. Four cursors, ≤4096 results each. `more` continues enumeration; `incomplete` also flags unloaded/truncated data. Not a world snapshot; revalidate before interaction. Distant object sightings do not imply a traversable route.
 - `control_begin {owner,session,epoch}`: owner 32-hex UUID; observed life session/control epoch; exclusive 500ms initial lease.
-- `control_frame {owner,sequence,durationMs,yawDegrees,pitchDegrees,forward,jump,focus?}`: increasing sequence, duration 1–500ms; atomic inputs/aim. Optional focus `{x,y,z}` only prioritizes a nearby visible sample. Never bypasses sightlines. Expired/revoked owners cannot resume.
+- `control_frame {owner,sequence,durationMs,yawDegrees,pitchDegrees,forward,jump,sprint?,focus?}`: increasing sequence, duration 1–500ms; atomic inputs/aim. Optional focus `{x,y,z}` only prioritizes a nearby visible sample. Never bypasses sightlines. Expired/revoked owners cannot resume.
 - `control_end {owner}`: releases only that owner. `stop` revokes globally. Manual movement, damage, critical health/oxygen, menu/death/world exit/F8 revoke control. Primitive actions refused while leased.
 - Controller refreshes ≤400ms frames; missing process/network/game ticks cannot authorize indefinite input. Frozen game threads enforce expiry on resumption.

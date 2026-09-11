@@ -10,6 +10,7 @@ public sealed class LifeTracker
     private bool initialized;
     private bool alive;
     private float? health;
+    private float? maximumHealth;
     private readonly Dictionary<string, bool> alerts = new();
     public string Session { get; } = Guid.NewGuid().ToString("N");
     public string? DeathId { get; private set; }
@@ -21,7 +22,11 @@ public sealed class LifeTracker
     public bool Sample(bool nextAlive, float? nextHealth, Point3 position, long now,
         float? maxHealth = null, float? food = null, float? maxFood = null, float? oxygen = null, float? maxOxygen = null)
     {
-        bool hurt = initialized && alive && health.HasValue && nextHealth.HasValue && nextHealth < health;
+        // EntityBehaviorHealth.UpdateMaxHealth moves a full health bar with its nutrition cap.
+        // Exclude only that exact full→full adjustment; even tiny losses below the cap interrupt.
+        bool capAdjustment = maximumHealth.HasValue && maxHealth.HasValue && maxHealth < maximumHealth &&
+            health == maximumHealth && nextHealth == maxHealth;
+        bool hurt = initialized && alive && health.HasValue && nextHealth.HasValue && nextHealth < health && !capAdjustment;
         if (hurt)
         {
             LastDamageAt = now;
@@ -43,6 +48,7 @@ public sealed class LifeTracker
         initialized = true;
         alive = nextAlive;
         health = nextHealth;
+        maximumHealth = maxHealth;
         bool low = false;
         if (nextAlive)
         {

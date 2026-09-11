@@ -98,10 +98,21 @@ export class Navigation {
     this.steeringAt = now;
     const yawDegrees = this.steeringYaw;
     if (grounded && !this.jumpAt && Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) > 10) {
-      this.progressAt = now; return { yawDegrees, pitchDegrees: 15 };
+      // Keep walking through gentle bends only when the actual facing direction is supported.
+      const radians = state.orientation.yawDegrees * Math.PI / 180;
+      const ahead = { x: p.x + Math.sin(radians) * .6, y: p.y, z: p.z + Math.cos(radians) * .6 };
+      const forward = Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 30 && Math.abs(next.y - p.y) < .05 &&
+        map.support(ahead, w) === 9 && map.traverse(p, ahead, w, h);
+      this.progressAt = now; return { yawDegrees, pitchDegrees: 15, forward };
     }
     if (next.y > p.y + .05 && grounded && !this.jumpAt) this.jumpAt = now;
     if (this.jumpAt && now - this.jumpAt > 1200) return this.replan(p, now, 'jump_failed');
-    return { yawDegrees, pitchDegrees: 15, forward: horizontal(p, next) > .12, jump: !!this.jumpAt && now - this.jumpAt < 200 };
+    const food = state.vitals?.hunger;
+    const sprint = !!this.target.sprint && grounded && !this.jumpAt && !this.landing &&
+      Math.abs(next.y - p.y) < .05 && horizontal(p, next) > 3 &&
+      Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 5 &&
+      food?.max > 0 && food.current / food.max >= .6;
+    return { yawDegrees, pitchDegrees: 15, forward: horizontal(p, next) > .12,
+      jump: !!this.jumpAt && now - this.jumpAt < 200, sprint };
   }
 }

@@ -54,6 +54,14 @@ static class LifeTests
         Check(life.Read(next.cursor, next.session).events.Length == 0, "read does not duplicate");
         var unknown = new LifeTracker();
         Check(!unknown.Sample(true, null, p, 0, 0, float.NaN, 100), "unknown vitals safe");
+        var nutrition = new LifeTracker();
+        nutrition.Sample(true, 15.12f, p, 0, 15.12f);
+        Check(!nutrition.Sample(true, 15.119649f, p, 1, 15.119649f) && nutrition.LastDamageAt == null,
+            "full health following nutrition cap decay is not damage");
+        Check(nutrition.Sample(true, 15.119f, p, 2, 15.119649f) && nutrition.LastDamageAt == 2,
+            "tiny real damage below the cap still interrupts");
+        Check(nutrition.Sample(true, 15.118f, p, 3, 15.119f),
+            "damage is not hidden by a simultaneous cap reduction");
         Console.WriteLine($"{checks} lifecycle checks passed.");
     }
 }

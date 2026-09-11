@@ -98,7 +98,7 @@ export class Controller {
     return Effect.scoped(Effect.gen(function* () {
       const initial = yield* self.io({ action: 'observe' });
       const control = yield* self.game.control(initial, error => { record.cleanupError = error.message; });
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 60; i++) {
         yield* control.frame({ ...angles, forward: false, jump: false });
         yield* Effect.sleep('50 millis');
         const state = yield* self.io({ action: 'observe' });
@@ -111,10 +111,12 @@ export class Controller {
       return yield* Effect.fail(new Error('Camera did not settle'));
     }));
   }
-  navigate(goal, record, started) {
+  navigate(goal, record, started, yieldWhen) {
     const self = this;
     return Effect.scoped(Effect.gen(function* () {
       const initial = yield* self.snapshot();
+      if (goal.sprint && !initial.capabilities.includes('background_sprint'))
+        return yield* Effect.fail(new Error('Update mod: background_sprint required'));
       if (!initial.controlReady || !initial.alive || !initial.motion.onGround || initial.motion.swimming || initial.motion.feetInLiquid || initial.mounted ||
         initial.life.alerts.some(a => a !== 'low_food') || initial.position.dimension !== 0 ||
         Math.abs(goal.x - initial.position.x) > 128 || Math.abs(goal.z - initial.position.z) > 128 || Math.abs(goal.y - initial.position.y) > 32)
@@ -136,10 +138,16 @@ export class Controller {
           nav.finish('cancelled', state.control.reason ?? 'identity_life_or_control_changed'); break;
         }
         if (reset) nav.survey(Date.now());
+        const yielding = yieldWhen?.(state);
+        // Yield only on supported ground; a food task must not take over mid-jump.
+        if (yielding && state.motion.onGround && self.map.support(state.position, state.body.halfWidth) === 9) {
+          nav.finish('yielded', yielding);
+          break;
+        }
         const frame = batch.terrain.more ? null : nav.tick(state);
         yield* control.frame({
           yawDegrees: frame?.yawDegrees ?? state.orientation.yawDegrees, pitchDegrees: frame?.pitchDegrees ?? 15,
-          forward: frame?.forward ?? false, jump: frame?.jump ?? false, focus: frame?.focus ?? null });
+          forward: frame?.forward ?? false, jump: frame?.jump ?? false, sprint: frame?.sprint ?? false, focus: frame?.focus ?? null });
         if (!nav.active) { yield* Effect.sleep('250 millis'); break; }
         yield* Effect.sleep(batch.terrain.more ? '5 millis' : '50 millis');
       }
@@ -166,7 +174,7 @@ export class Controller {
       const run = effect => Effect.runPromise(effect, { signal: cancellation.signal });
       running = policy({
         send, map: self.map, sync: () => run(self.snapshot()),
-        aim: angles => run(self.aim(angles, record)), navigate: goal => run(self.navigate(goal, record)),
+        aim: angles => run(self.aim(angles, record)), navigate: (goal, yieldWhen) => run(self.navigate(goal, record, undefined, yieldWhen)),
         report: progress => { record.progress = progress; },
       }, { ...args, signal: cancellation.signal });
       record.result = yield* attempt(() => running);

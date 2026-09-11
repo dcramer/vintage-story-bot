@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Datastructures;
 using Vintagestory.Common;
 
 namespace VintageStoryAI;
@@ -36,6 +37,8 @@ public sealed class InventoryAdapter(ICoreClientAPI api)
         return Convert.ToHexString(SHA256.HashData(bytes.ToArray())).ToLowerInvariant();
     }
 
+    public bool Matches(string? expected) => expected == State();
+
     public object Observe() => new
     {
         ok = true, observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), state = State(),
@@ -68,8 +71,31 @@ public sealed class InventoryAdapter(ICoreClientAPI api)
             tool = stack?.Collectible.Tool?.ToString(), toolTier = stack?.Collectible.ToolTier,
             durability = stack == null ? (int?)null : stack.Collectible.GetRemainingDurability(stack),
             maxDurability = stack == null ? (int?)null : stack.Collectible.GetMaxDurability(stack),
+            freshness = Freshness(slot),
             nutrition = nutrition == null ? null : new { saturation = nutrition.Satiety, health = nutrition.Health,
                 category = nutrition.FoodCategory.ToString() } };
+    }
+
+    private object? Freshness(ItemSlot? slot)
+    {
+        var stack = slot?.Itemstack;
+        if (stack == null) return null;
+        var properties = stack.Collectible.GetTransitionableProperties(api.World, stack, api.World.Player.Entity);
+        int index = Array.FindIndex(properties ?? [], property => property.Type == EnumTransitionType.Perish);
+        if (index < 0) return new { state = "nonperishable", freshHoursLeft = (double?)null };
+        var tree = stack.Attributes.GetTreeAttribute("transitionstate");
+        var fresh = (tree?["freshHours"] as FloatArrayAttribute)?.value;
+        var elapsed = (tree?["transitionedHours"] as FloatArrayAttribute)?.value;
+        if (fresh == null || elapsed == null || index >= fresh.Length || index >= elapsed.Length ||
+            tree?.HasAttribute("lastUpdatedTotalHours") != true) return null;
+        // Mirror elapsed-age arithmetic without updating stacks or drawing random freshness values.
+        double age = api.World.Calendar.TotalHours - tree.GetDouble("lastUpdatedTotalHours");
+        // Rate lookup can cool temperature attributes; isolate those writes on a clone.
+        var copy = new ItemSlot(slot!.Inventory) { Itemstack = stack.Clone() };
+        double rate = stack.Collectible.GetTransitionRateMul(api.World, copy, EnumTransitionType.Perish);
+        double left = fresh[index] - elapsed[index] - Math.Max(0, age) * rate;
+        if (!double.IsFinite(left) || !double.IsFinite(rate) || rate < 0 || age < 0) return null;
+        return new { state = left > 0 ? "fresh" : "spoiling", freshHoursLeft = (double?)Math.Max(0, left) };
     }
 
     private ItemSlot? Resolve(JsonElement request, string field, bool allowGrid)

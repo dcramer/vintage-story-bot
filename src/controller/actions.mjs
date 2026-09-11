@@ -2,6 +2,8 @@ import api from './actions/api.mjs';
 import goalStatus from './actions/goal_status.mjs';
 import collectStick from './actions/collect_stick.mjs';
 import gatherSticks from './actions/gather_sticks.mjs';
+import forage from './actions/forage.mjs';
+import eat from './actions/eat.mjs';
 import observe from './actions/observe.mjs';
 import environment from './actions/environment.mjs';
 import inspectTarget from './actions/inspect_target.mjs';
@@ -25,6 +27,8 @@ export const actions = [
   goalStatus,
   collectStick,
   gatherSticks,
+  forage,
+  eat,
   observe,
   environment,
   inspectTarget,

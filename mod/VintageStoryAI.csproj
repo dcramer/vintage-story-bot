@@ -16,6 +16,10 @@
       <HintPath>$(VintageStoryPath)/VintagestoryLib.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="VSSurvivalMod">
+      <HintPath>$(VintageStoryPath)/Mods/VSSurvivalMod.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <None Update="modinfo.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="CheckGamePath" BeforeTargets="ResolveReferences">

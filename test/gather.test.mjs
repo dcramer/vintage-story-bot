@@ -34,7 +34,7 @@ function fixture({ gain = true, interruptAfter = Infinity } = {}) {
 
 test('persistent ground-only goal reroutes and verifies ten inventory gains', async () => {
   const f = fixture();
-  const result = await gather(f.env, { count: 10, wait: async () => {} });
+  const result = await gather(f.env, { count: 10, manageFood: false, wait: async () => {} });
   assert.equal(result.ok, true); assert.equal(result.gained, 10);
   assert.equal(f.calls.filter(c => c.action === 'interact').length, 10);
   assert.ok(f.reports.some(p => p.phase === 'rerouting'));
@@ -43,7 +43,7 @@ test('persistent ground-only goal reroutes and verifies ten inventory gains', as
 
 test('acknowledgements do not count as sticks; cancellation stops continued search', async () => {
   const f = fixture({ gain: false, interruptAfter: 16 });
-  await assert.rejects(gather(f.env, { count: 10, signal: f.cancellation.signal, wait: async () => {} }), /cancelled/);
+  await assert.rejects(gather(f.env, { count: 10, manageFood: false, signal: f.cancellation.signal, wait: async () => {} }), /cancelled/);
   assert.equal(f.picked(), true);
   assert.ok(f.reports.every(p => p.gained === 0));
   assert.equal(f.calls.at(-1).action, 'stop');
@@ -57,7 +57,7 @@ test('damage interrupts before another action even with no goal deadline', async
     if (request.action === 'observe') r.life.lastDamageAt = 100;
     return r;
   };
-  await assert.rejects(gather(f.env, { wait: async () => {} }), /damage/);
+  await assert.rejects(gather(f.env, { manageFood: false, wait: async () => {} }), /damage/);
   assert.equal(f.picked(), false);
   assert.equal(f.calls.at(-1).action, 'stop');
 });

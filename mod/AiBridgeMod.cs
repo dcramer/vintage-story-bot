@@ -21,9 +21,12 @@ public sealed class AiBridgeMod : ModSystem
     private int[] movingKeys = [];
     private string moveDirection = "forward";
     private bool moveJump;
+    private bool moveSprint;
     private long stopAt;
     private string? handAction;
     private string? handTarget;
+    private int? handSlot;
+    private string? handItem;
     private long handStopAt;
     private SceneSensor sensor = null!;
     private LifeTracker life = new();
@@ -44,7 +47,7 @@ public sealed class AiBridgeMod : ModSystem
         control.Revoke("world_changed");
         terrainSensor = new TerrainSensor(api, terrain);
         api.Event.BlockChanged += terrainSensor.Changed;
-        api.Input.InWorldAction += RetainOwnedJump;
+        api.Input.InWorldAction += RetainOwnedMovement;
         sensor = new SceneSensor(api, CanControl);
         inventory = new InventoryAdapter(api);
         context = new ContextSensor(api);
@@ -89,7 +92,9 @@ public sealed class AiBridgeMod : ModSystem
         SampleLife();
         bool registered = api.ChatCommands.Get("aibridge") != null;
         api.Logger.Notification($"[AI bridge] World ready; command registered: {registered}");
-        api.ShowChatMessage("AI bridge loaded. F7 enables control; F8 stops. Chat: .aibridge on (starts with a dot).");
+        api.ShowChatMessage(lifetime == null
+            ? "Diggy bridge ready. F7 enables bot control; F8 stops and disables it."
+            : "Diggy bridge enabled. F8 stops and disables bot control.");
     }
 
     private TextCommandResult StartBridge()
@@ -190,7 +195,9 @@ public sealed class AiBridgeMod : ModSystem
         {
             if (Environment.TickCount64 >= handStopAt || api.IsGamePaused ||
                 !CanControl() ||
-                (handTarget != null && handTarget != CurrentTargetKey()))
+                handTarget != CurrentTargetKey() ||
+                (handSlot != null && (handSlot != api.World.Player.InventoryManager.ActiveHotbarSlotNumber ||
+                    handItem != api.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible.Code.ToString())))
                 StopHandAction();
             else
                 SetHandButtons();
@@ -244,7 +251,7 @@ public sealed class AiBridgeMod : ModSystem
                 return new
                 {
                     ok = true,
-                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump" },
+                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint" },
                     observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
                     world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString() },
@@ -381,18 +388,29 @@ public sealed class AiBridgeMod : ModSystem
                 if (!CanControl())
                     return new { ok = false, error = "Close menus and enter the world before interacting." };
                 if (request.TryGetProperty("expectedTarget", out var expected) &&
-                    (expected.ValueKind != JsonValueKind.String || expected.GetString() != CurrentTargetKey()))
+                    (expected.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) || expected.GetString() != CurrentTargetKey()))
                 {
                     StopMovement();
                     StopHandAction();
                     return new { ok = false, error = "Target changed; observe and aim again." };
                 }
+                if (request.TryGetProperty("expectedState", out var expectedInventory) &&
+                    (expectedInventory.ValueKind != JsonValueKind.String || !inventory.Matches(expectedInventory.GetString())))
+                    return new { ok = false, error = "Inventory changed; inspect before interacting." };
+                if (request.TryGetProperty("expectedItem", out var expectedItem) &&
+                    (expectedItem.ValueKind != JsonValueKind.Object || !TryInteger(expectedItem, "slot", out int itemSlot) ||
+                     itemSlot != api.World!.Player.InventoryManager.ActiveHotbarSlotNumber ||
+                     !expectedItem.TryGetProperty("code", out var itemCode) || itemCode.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) ||
+                     itemCode.GetString() != api.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible.Code.ToString()))
+                    return new { ok = false, error = "Held item changed; inspect before interacting." };
                 if (action.GetString() == "attack" && api.World!.Player.CurrentBlockSelection == null)
                     return new { ok = false, error = "Aim at a block before attacking; entity combat is not supported yet." };
                 StopMovement();
                 StopHandAction();
                 handAction = action.GetString();
                 handTarget = CurrentTargetKey();
+                handSlot = api.World!.Player.InventoryManager.ActiveHotbarSlotNumber;
+                handItem = api.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible.Code.ToString();
                 handStopAt = Environment.TickCount64 + handMilliseconds;
                 SetHandButtons();
                 return new { ok = true, status = "started", durationMs = handMilliseconds };
@@ -432,6 +450,13 @@ public sealed class AiBridgeMod : ModSystem
                     !request.TryGetProperty("jump", out var frameJump) || frameJump.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
                     return new { ok = false, error = "Invalid control frame." };
                 Cell? focus = null;
+                bool sprinting = false;
+                if (request.TryGetProperty("sprint", out var frameSprint))
+                {
+                    if (frameSprint.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                        return new { ok = false, error = "sprint must be boolean." };
+                    sprinting = frameSprint.GetBoolean();
+                }
                 if (request.TryGetProperty("focus", out var focusField) && focusField.ValueKind != JsonValueKind.Null)
                 {
                     if (!TryInteger(focusField, "x", out int fx) || !TryInteger(focusField, "y", out int fy) || !TryInteger(focusField, "z", out int fz) ||
@@ -447,13 +472,14 @@ public sealed class AiBridgeMod : ModSystem
                 sensorPriority = focus; controlYaw = frameYaw; controlPitch = framePitch;
                 bool frameForward = forwardField.GetBoolean(), jumping = frameJump.GetBoolean();
                 string[] frameMappings = frameForward ? (jumping ? ["walkforward", "jump"] : ["walkforward"]) : jumping ? ["jump"] : [];
+                if (sprinting && frameForward) frameMappings = [..frameMappings, "sprint"];
                 var frameKeys = frameMappings.Select(name => api.Input.GetHotKeyByCode(name)?.CurrentMapping.KeyCode ?? -1).ToArray();
                 if (frameKeys.Any(key => key < 0 || key >= api.Input.KeyboardKeyState.Length))
                 { ReleaseControl("binding_unavailable"); return new { ok = false, error = "Movement binding unavailable." }; }
                 if (frameKeys.Length > 0)
                 {
                     movingKeys = frameKeys; movingControls = entity.Controls; moveDirection = frameForward ? "forward" : "none";
-                    moveJump = jumping; stopAt = control.Until; SetMovement(true);
+                    moveJump = jumping; moveSprint = sprinting && frameForward; stopAt = control.Until; SetMovement(true);
                 }
                 return new { ok = true, sequence };
             case "move":
@@ -464,6 +490,7 @@ public sealed class AiBridgeMod : ModSystem
                     return new { ok = false, error = "Cannot move while dead, paused, or in menus." };
                 string direction = "forward";
                 bool jump = false;
+                bool sprintMove = false;
                 if (request.TryGetProperty("direction", out var directionField))
                 {
                     if (directionField.ValueKind != JsonValueKind.String) return new { ok = false, error = "direction must be a string." };
@@ -477,13 +504,21 @@ public sealed class AiBridgeMod : ModSystem
                 }
                 StopHandAction();
                 StopMovement();
+                if (request.TryGetProperty("sprint", out var sprintField))
+                {
+                    if (sprintField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                        return new { ok = false, error = "sprint must be boolean." };
+                    sprintMove = sprintField.GetBoolean();
+                }
                 string[] mappings = jump ? ["walk" + direction, "jump"] : ["walk" + direction];
+                if (sprintMove) mappings = [..mappings, "sprint"];
                 var keys = mappings.Select(name => api.Input.GetHotKeyByCode(name)?.CurrentMapping.KeyCode ?? -1).ToArray();
                 if (keys.Any(key => key < 0 || key >= api.Input.KeyboardKeyState.Length || api.Input.KeyboardKeyState[key]))
                     return new { ok = false, error = "Movement binding unavailable or manually pressed." };
                 movingKeys = keys;
                 moveDirection = direction;
                 moveJump = jump;
+                moveSprint = sprintMove;
                 movingControls = entity.Controls;
                 stopAt = Environment.TickCount64 + milliseconds;
                 SetMovement(true);
@@ -503,17 +538,18 @@ public sealed class AiBridgeMod : ModSystem
         !api.Gui.OpenedGuis.Any(dialog => dialog.IsOpened() &&
             (dialog.DialogType == EnumDialogType.Dialog || dialog.CaptureAllInputs() || dialog.DisableMouseGrab));
 
-    private void RetainOwnedJump(EnumEntityAction action, bool on, ref EnumHandling handling)
+    private void RetainOwnedMovement(EnumEntityAction action, bool on, ref EnumHandling handling)
     {
-        // Keep only our bounded jump through the engine's unfocused-key reset. Its normal control packet path remains active.
-        if (action == EnumEntityAction.Jump && !on && moveJump && movingControls != null &&
-            Environment.TickCount64 < stopAt && CanControl() && api.World.Player.Entity.PrevFrameCanStandUp &&
+        // Retain only leased inputs against unfocused reset; normal control packets remain active.
+        bool owned = action == EnumEntityAction.Jump && moveJump && api.World.Player.Entity.PrevFrameCanStandUp ||
+            action == EnumEntityAction.Sprint && moveSprint;
+        if (owned && !on && movingControls != null && Environment.TickCount64 < stopAt && CanControl() &&
             handling == EnumHandling.PassThrough) handling = EnumHandling.PreventDefault;
     }
 
     private bool ManualInput()
     {
-        foreach (string name in new[] { "walkforward", "walkbackward", "walkleft", "walkright", "jump" })
+        foreach (string name in new[] { "walkforward", "walkbackward", "walkleft", "walkright", "jump", "sprint" })
         {
             int key = api.Input.GetHotKeyByCode(name)?.CurrentMapping.KeyCode ?? -1;
             if (key >= 0 && key < api.Input.KeyboardKeyStateRaw.Length && api.Input.KeyboardKeyStateRaw[key]) return true;
@@ -529,11 +565,12 @@ public sealed class AiBridgeMod : ModSystem
     private void ApplyCamera(float dt)
     {
         var entity = api.World.Player.Entity;
-        double turn = 360 * Math.Clamp(dt, 0, .1);
+        double elapsed = Math.Clamp(dt, 0, .05);
+        double turn = 180 * elapsed, blend = 1 - Math.Exp(-12 * elapsed);
         double yaw = entity.Pos.Yaw * 180 / Math.PI, pitch = (entity.Pos.Pitch - Math.PI) * 180 / Math.PI;
         double delta = SceneGeometry.Normalize(controlYaw - yaw + 180) - 180;
-        api.Input.MouseYaw = entity.Pos.Yaw = (float)((yaw + Math.Clamp(delta, -turn, turn)) * Math.PI / 180);
-        api.Input.MousePitch = entity.Pos.Pitch = (float)(Math.PI + (pitch + Math.Clamp(controlPitch - pitch, -turn, turn)) * Math.PI / 180);
+        api.Input.MouseYaw = entity.Pos.Yaw = (float)((yaw + Math.Clamp(delta * blend, -turn, turn)) * Math.PI / 180);
+        api.Input.MousePitch = entity.Pos.Pitch = (float)(Math.PI + (pitch + Math.Clamp((controlPitch - pitch) * blend, -turn, turn)) * Math.PI / 180);
     }
 
     private object? Vital(string tree, string current, string maximum)
@@ -658,14 +695,19 @@ public sealed class AiBridgeMod : ModSystem
         }
         handAction = null;
         handTarget = null;
+        handSlot = null;
+        handItem = null;
     }
 
     private void StopMovement()
     {
         bool jumping = moveJump;
+        bool sprinting = moveSprint;
         moveJump = false;
+        moveSprint = false;
         SetMovement(false);
         if (jumping && movingControls != null) movingControls.Jump = false;
+        if (sprinting && movingControls != null) movingControls.Sprint = false;
         movingControls = null;
         movingKeys = [];
         moveJump = false;
@@ -683,6 +725,7 @@ public sealed class AiBridgeMod : ModSystem
             case "right": movingControls.Right = pressed; break;
         }
         if (moveJump) movingControls.Jump = pressed;
+        if (moveSprint) movingControls.Sprint = pressed;
     }
 
     private void StopBridge()
@@ -714,7 +757,7 @@ public sealed class AiBridgeMod : ModSystem
             api.Event.LevelFinalize -= OnLevelReady;
             api.Event.LeaveWorld -= StopBridge;
             api.Event.BlockChanged -= terrainSensor.Changed;
-            api.Input.InWorldAction -= RetainOwnedJump;
+            api.Input.InWorldAction -= RetainOwnedMovement;
         }
         base.Dispose();
     }

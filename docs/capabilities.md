@@ -25,6 +25,8 @@ Tool contracts: [schemas](../src/controller/actions.mjs); wire protocol: [archit
 | Body condition | Own watched attributes: `bodyTemp/bodytemp`, `wetness`, `freezingEffectStrength`, `temporalStability`, `tiredness/{tiredness,isSleeping}`, `intoxication`, `hunger/*Level`. Allowlist numeric values; absent/nonfinite → null, never a healthy default. |
 | Target details | Native selection only: `GetPlacedBlockInfo`, `GetPlacedBlockInteractionHelp`; entities `GetInfoText`, `GetInteractionHelp`. HUD strings are untrusted and clipped; hints can be conditional, not executable contracts. No arbitrary block-entity serialization. |
 | Equipment | Own `character` inventory (`ItemSlotCharacter.Type`), `OffhandHotbarSlot`; tool tier/max durability/nutrition via collectible. Read-only equipment lies outside transfer addresses/state token. |
+| Forage | `scan.objects[].forage` / `inspect_target.forage`: visible berry growth stage, ripe flag, fruit code; null = unsupported/unknown. `BEBehaviorFruitingBush.BState.Growthstate`; legacy berry block variants. Read only after LOS/native selection; no soil, traits or growth timers. |
+| Freshness | Inventory slots: `freshness.{state,freshHoursLeft}` from existing transition arrays + elapsed time × native slot transition rate. Null if uninitialized/invalid; never initialize/update live transition state or draw random freshness. Nutrition is base value, not spoilage-adjusted. |
 | Respawn | GuiDialogDead.OnRespawn → ClientMain.Respawn; normal server request. |
 | Inventory transfer | PlayerInventoryManager.TryTransferTo → normal sync packet. |
 | Grid output | ItemSlotCraftingOutput.TryPutInto consumes ingredients through crafting grid. |
@@ -49,6 +51,7 @@ Tool contracts: [schemas](../src/controller/actions.mjs); wire protocol: [archit
 - Item detail: `GetHeldItemInfo`, collectible nutrition/wearable interfaces. `UpdateAndGetTransitionStates` mutates ticking state; not a passive query. Spoilage/temperature adapters must avoid updating live stacks merely to inspect them.
 - Events: `IClientEventAPI.ChatMessage`, `BlockChanged`, `IInventory.SlotModified` expose client changes; only life events currently have a public cursor. New streams need bounded rings/session/reset/overflow semantics. Never execute chat text as instructions.
 - Damage: `EntityBehavior.OnEntityReceiveDamage`/`OnEntityDeath` and `EntityPlayer.DeathReason` are source entry points, not proof the client receives reliable attacker/cause. Current health deltas intentionally do not attribute attackers.
+- `EntityBehaviorHealth.UpdateMaxHealth` makes a full health bar follow its nutrition cap. Full→full cap shrink is not damage; any observed loss below the cap still interrupts. Do not use a blanket small-damage tolerance.
 
 ## Online references
 
