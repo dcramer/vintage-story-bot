@@ -17,20 +17,25 @@ public sealed class LifeTracker
     public long DeadSince { get; private set; }
     public long? RespawnRequestedAt { get; private set; }
     public long? LastDamageAt { get; private set; }
+    public long? LastAttritionAt { get; private set; }
     public string[] Alerts => alerts.Where(pair => pair.Value).Select(pair => pair.Key).ToArray();
 
     public bool Sample(bool nextAlive, float? nextHealth, Point3 position, long now,
-        float? maxHealth = null, float? food = null, float? maxFood = null, float? oxygen = null, float? maxOxygen = null)
+        float? maxHealth = null, float? food = null, float? maxFood = null, float? oxygen = null, float? maxOxygen = null,
+        float? stability = null)
     {
         // EntityBehaviorHealth.UpdateMaxHealth moves a full health bar with its nutrition cap.
         // Exclude only that exact full→full adjustment; even tiny losses below the cap interrupt.
         bool capAdjustment = maximumHealth.HasValue && maxHealth.HasValue && maxHealth < maximumHealth &&
             health == maximumHealth && nextHealth == maxHealth;
-        bool hurt = initialized && alive && health.HasValue && nextHealth.HasValue && nextHealth < health && !capAdjustment;
-        if (hurt)
+        bool lost = initialized && alive && health.HasValue && nextHealth.HasValue && nextHealth < health && !capAdjustment;
+        // Rust-world attrition: tiny periodic losses while temporal stability is near zero. Not an attack; navigation may continue.
+        bool attrition = lost && stability.HasValue && float.IsFinite(stability.Value) && stability < 0.15f && health!.Value - nextHealth!.Value <= 0.5f;
+        bool hurt = lost && !attrition;
+        if (lost)
         {
-            LastDamageAt = now;
-            Add(now, "health_lost", new { amount = health!.Value - nextHealth!.Value, health = nextHealth });
+            if (hurt) LastDamageAt = now; else LastAttritionAt = now;
+            Add(now, "health_lost", new { amount = health!.Value - nextHealth!.Value, health = nextHealth, cause = attrition ? "instability" : null });
         }
         if (!nextAlive && (!initialized || alive))
         {

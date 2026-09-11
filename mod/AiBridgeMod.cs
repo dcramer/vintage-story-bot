@@ -22,6 +22,8 @@ public sealed class AiBridgeMod : ModSystem
     private string moveDirection = "forward";
     private bool moveJump;
     private bool moveSprint;
+    private bool moveSneak;
+    private bool handSneak;
     private long stopAt;
     private string? handAction;
     private string? handTarget;
@@ -243,7 +245,7 @@ public sealed class AiBridgeMod : ModSystem
         if (lifetime == null || entity == null)
             return new { ok = false, error = "Bridge requires an active world." };
 
-        if (action.GetString() is "move_to" or "move" or "look" or "select" or "interact" or "attack" or "stop" or "respawn" or "craft" or "inventory_move" or "block_action_begin" or "block_action_continue")
+        if (action.GetString() is "move_to" or "move" or "look" or "select" or "interact" or "attack" or "stop" or "respawn" or "craft" or "inventory_move" or "block_action_begin" or "block_action_continue" or "select_recipe")
         {
             if (action.GetString() != "stop" && control.Active)
                 return new { ok = false, error = "Controller owns inputs; stop it before another mutation." };
@@ -257,7 +259,7 @@ public sealed class AiBridgeMod : ModSystem
                 return new
                 {
                     ok = true,
-                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions" },
+                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming" },
                     observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
                     world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString() },
@@ -313,6 +315,8 @@ public sealed class AiBridgeMod : ModSystem
                 return inventory.Recipes(recipeMatch.GetString()!, offset, recipeLimit);
             case "environment":
                 return context.Environment(life.Session);
+            case "select_recipe":
+                return context.Forming.SelectRecipe(request);
             case "inspect_target":
                 return CanControl() ? context.InspectTarget(life.Session) : new { ok = false, error = "Close menus and unpause before inspecting." };
             case "block_action_begin":
@@ -421,8 +425,16 @@ public sealed class AiBridgeMod : ModSystem
                     return new { ok = false, error = "Held item changed; inspect before interacting." };
                 if (action.GetString() == "attack" && api.World!.Player.CurrentBlockSelection == null)
                     return new { ok = false, error = "Aim at a block before attacking; entity combat is not supported yet." };
+                bool sneakHand = false;
+                if (request.TryGetProperty("sneak", out var handSneakField))
+                {
+                    if (handSneakField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                        return new { ok = false, error = "sneak must be boolean." };
+                    sneakHand = handSneakField.GetBoolean();
+                }
                 StopMovement();
                 StopHandAction();
+                handSneak = sneakHand;
                 handAction = action.GetString();
                 handTarget = CurrentTargetKey();
                 handSlot = api.World!.Player.InventoryManager.ActiveHotbarSlotNumber;
@@ -466,12 +478,18 @@ public sealed class AiBridgeMod : ModSystem
                     !request.TryGetProperty("jump", out var frameJump) || frameJump.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
                     return new { ok = false, error = "Invalid control frame." };
                 Cell? focus = null;
-                bool sprinting = false;
+                bool sprinting = false, frameSneak = false;
                 if (request.TryGetProperty("sprint", out var frameSprint))
                 {
                     if (frameSprint.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
                         return new { ok = false, error = "sprint must be boolean." };
                     sprinting = frameSprint.GetBoolean();
+                }
+                if (request.TryGetProperty("sneak", out var frameSneakField))
+                {
+                    if (frameSneakField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                        return new { ok = false, error = "sneak must be boolean." };
+                    frameSneak = frameSneakField.GetBoolean();
                 }
                 if (request.TryGetProperty("focus", out var focusField) && focusField.ValueKind != JsonValueKind.Null)
                 {
@@ -488,14 +506,15 @@ public sealed class AiBridgeMod : ModSystem
                 sensorPriority = focus; controlYaw = frameYaw; controlPitch = framePitch;
                 bool frameForward = forwardField.GetBoolean(), jumping = frameJump.GetBoolean();
                 string[] frameMappings = frameForward ? (jumping ? ["walkforward", "jump"] : ["walkforward"]) : jumping ? ["jump"] : [];
-                if (sprinting && frameForward) frameMappings = [..frameMappings, "sprint"];
+                if (sprinting && frameForward && !frameSneak) frameMappings = [..frameMappings, "sprint"];
+                if (frameSneak) frameMappings = [..frameMappings, "sneak"];
                 var frameKeys = frameMappings.Select(name => api.Input.GetHotKeyByCode(name)?.CurrentMapping.KeyCode ?? -1).ToArray();
                 if (frameKeys.Any(key => key < 0 || key >= api.Input.KeyboardKeyState.Length))
                 { ReleaseControl("binding_unavailable"); return new { ok = false, error = "Movement binding unavailable." }; }
                 if (frameKeys.Length > 0)
                 {
                     movingKeys = frameKeys; movingControls = entity.Controls; moveDirection = frameForward ? "forward" : "none";
-                    moveJump = jumping; moveSprint = sprinting && frameForward; stopAt = control.Until; SetMovement(true);
+                    moveJump = jumping; moveSprint = sprinting && frameForward && !frameSneak; moveSneak = frameSneak; stopAt = control.Until; SetMovement(true);
                 }
                 return new { ok = true, sequence };
             case "move":
@@ -526,8 +545,17 @@ public sealed class AiBridgeMod : ModSystem
                         return new { ok = false, error = "sprint must be boolean." };
                     sprintMove = sprintField.GetBoolean();
                 }
+                bool sneakMove = false;
+                if (request.TryGetProperty("sneak", out var sneakField))
+                {
+                    if (sneakField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                        return new { ok = false, error = "sneak must be boolean." };
+                    sneakMove = sneakField.GetBoolean();
+                }
+                if (sneakMove) sprintMove = false;
                 string[] mappings = jump ? ["walk" + direction, "jump"] : ["walk" + direction];
                 if (sprintMove) mappings = [..mappings, "sprint"];
+                if (sneakMove) mappings = [..mappings, "sneak"];
                 var keys = mappings.Select(name => api.Input.GetHotKeyByCode(name)?.CurrentMapping.KeyCode ?? -1).ToArray();
                 if (keys.Any(key => key < 0 || key >= api.Input.KeyboardKeyState.Length || api.Input.KeyboardKeyState[key]))
                     return new { ok = false, error = "Movement binding unavailable or manually pressed." };
@@ -535,6 +563,7 @@ public sealed class AiBridgeMod : ModSystem
                 moveDirection = direction;
                 moveJump = jump;
                 moveSprint = sprintMove;
+                moveSneak = sneakMove;
                 movingControls = entity.Controls;
                 stopAt = Environment.TickCount64 + milliseconds;
                 SetMovement(true);
@@ -557,15 +586,18 @@ public sealed class AiBridgeMod : ModSystem
     private void RetainOwnedMovement(EnumEntityAction action, bool on, ref EnumHandling handling)
     {
         // Retain only leased inputs against unfocused reset; normal control packets remain active.
-        bool owned = action == EnumEntityAction.Jump && moveJump && api.World.Player.Entity.PrevFrameCanStandUp ||
-            action == EnumEntityAction.Sprint && moveSprint;
-        if (owned && !on && movingControls != null && Environment.TickCount64 < stopAt && CanControl() &&
-            handling == EnumHandling.PassThrough) handling = EnumHandling.PreventDefault;
+        long now = Environment.TickCount64;
+        bool moving = movingControls != null && now < stopAt;
+        bool sneakOwned = action is EnumEntityAction.Sneak or EnumEntityAction.ShiftKey &&
+            (moveSneak && moving || handSneak && handAction != null && now < handStopAt);
+        bool owned = sneakOwned || moving && (action == EnumEntityAction.Jump && moveJump && api.World.Player.Entity.PrevFrameCanStandUp ||
+            action == EnumEntityAction.Sprint && moveSprint);
+        if (owned && !on && CanControl() && handling == EnumHandling.PassThrough) handling = EnumHandling.PreventDefault;
     }
 
     private bool ManualInput()
     {
-        foreach (string name in new[] { "walkforward", "walkbackward", "walkleft", "walkright", "jump", "sprint" })
+        foreach (string name in new[] { "walkforward", "walkbackward", "walkleft", "walkright", "jump", "sprint", "sneak" })
         {
             int key = api.Input.GetHotKeyByCode(name)?.CurrentMapping.KeyCode ?? -1;
             if (key >= 0 && key < api.Input.KeyboardKeyStateRaw.Length && api.Input.KeyboardKeyStateRaw[key]) return true;
@@ -607,7 +639,7 @@ public sealed class AiBridgeMod : ModSystem
         if (life.Sample(entity.Alive, health?.TryGetFloat("currenthealth"), new(entity.Pos.X, entity.Pos.Y, entity.Pos.Z),
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), health?.TryGetFloat("maxhealth"),
             hunger?.TryGetFloat("currentsaturation"), hunger?.TryGetFloat("maxsaturation"),
-            oxygen?.TryGetFloat("currentoxygen"), oxygen?.TryGetFloat("maxoxygen")))
+            oxygen?.TryGetFloat("currentoxygen"), oxygen?.TryGetFloat("maxoxygen"), (float?)ContextSensor.Number(entity.WatchedAttributes, "temporalStability")))
         {
             if (!entity.Alive || life.LastDamageAt != previousDamage || NavigationDanger()) ReleaseControl("danger");
             StopMovement();
@@ -631,7 +663,7 @@ public sealed class AiBridgeMod : ModSystem
     {
         state = api.World.Player.Entity.Alive ? "alive" : life.RespawnRequestedAt != null ? "respawn_pending" : "dead",
         session = life.Session, deathId = life.DeathId, canRespawn = CanRespawn(),
-        alerts = life.Alerts, lastDamageAt = life.LastDamageAt,
+        alerts = life.Alerts, lastDamageAt = life.LastDamageAt, lastAttritionAt = life.LastAttritionAt,
         livesRemaining = RemainingLives(), respawnRequestedAt = life.RespawnRequestedAt,
         revivableMinutes = api.World.Player.Entity.Alive ? (double?)null : Math.Max(0, api.World.Player.Entity.RevivableIngameHoursLeft() * 60)
     };
@@ -700,6 +732,14 @@ public sealed class AiBridgeMod : ModSystem
         // item/block callbacks and multiplayer packets, including break duration.
         api.Input.InWorldMouseButton.Left = handAction == "attack";
         api.Input.InWorldMouseButton.Right = handAction == "interact";
+        if (handSneak) SetSneak(api.World.Player.Entity.Controls, true);
+    }
+
+    private static void SetSneak(EntityControls controls, bool pressed)
+    {
+        // ShiftKey is the interaction modifier (ground placement, knapping, clay forming); Sneak is the motion state.
+        controls.Sneak = pressed;
+        controls.ShiftKey = pressed;
     }
 
     private void StopHandAction()
@@ -709,7 +749,9 @@ public sealed class AiBridgeMod : ModSystem
         {
             api.Input.InWorldMouseButton.Left = false;
             api.Input.InWorldMouseButton.Right = false;
+            if (handSneak && !moveSneak && api.World?.Player?.Entity != null) SetSneak(api.World.Player.Entity.Controls, false);
         }
+        handSneak = false;
         handAction = null;
         handTarget = null;
         handSlot = null;
@@ -720,11 +762,14 @@ public sealed class AiBridgeMod : ModSystem
     {
         bool jumping = moveJump;
         bool sprinting = moveSprint;
+        bool sneaking = moveSneak;
         moveJump = false;
         moveSprint = false;
+        moveSneak = false;
         SetMovement(false);
         if (jumping && movingControls != null) movingControls.Jump = false;
         if (sprinting && movingControls != null) movingControls.Sprint = false;
+        if (sneaking && movingControls != null && !(handSneak && handAction != null)) SetSneak(movingControls, false);
         movingControls = null;
         movingKeys = [];
         moveJump = false;
@@ -743,6 +788,7 @@ public sealed class AiBridgeMod : ModSystem
         }
         if (moveJump) movingControls.Jump = pressed;
         if (moveSprint) movingControls.Sprint = pressed;
+        if (moveSneak) SetSneak(movingControls, pressed);
     }
 
     private void StopBridge()

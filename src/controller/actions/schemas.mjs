@@ -20,6 +20,7 @@ export const blockPoint = z.object({ x: z.number().finite(), y: z.number().finit
 
 export const hand = z.object({
   durationMs,
+  sneak: z.boolean().optional().describe('Hold sneak (shift modifier) during the action: ground placement, knapping/clay surfaces, firepit creation.'),
   expectedTarget: z.string().min(1).max(160).nullable().optional(),
   expectedState: expectedState.optional(),
   expectedItem: z.object({

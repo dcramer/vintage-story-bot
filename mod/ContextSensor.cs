@@ -6,7 +6,8 @@ namespace VintageStoryAI;
 
 internal sealed class ContextSensor(ICoreClientAPI api)
 {
-    private static double? Number(ITreeAttribute? tree, string key)
+    public FormingAdapter Forming { get; } = new(api);
+    internal static double? Number(ITreeAttribute? tree, string key)
     {
         var value = tree?[key]?.GetValue();
         double? number = value switch { float f => f, double d => d, int i => i, long l => l, _ => null };
@@ -83,6 +84,7 @@ internal sealed class ContextSensor(ICoreClientAPI api)
                 material = block.GetBlockMaterial(api.World.BlockAccessor, pos).ToString(),
                 resistance = block.GetResistance(api.World.BlockAccessor, pos), requiredMiningTier = block.GetRequiredMiningTier(api.World, pos),
                 forage = ForageSensor.Observe(api.World.BlockAccessor, pos, block),
+                forming = Forming.Describe(pos, selection),
                 info = Clip(block.GetPlacedBlockInfo(api.World, pos, player), 2048),
                 interactionHints = Hints(block.GetPlacedBlockInteractionHelp(api.World, selection, player))
             };

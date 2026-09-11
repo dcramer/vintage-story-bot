@@ -7,6 +7,7 @@ export const schema = z.object({
   direction: z.enum(['forward', 'backward', 'left', 'right']).optional(),
   jump: z.boolean().optional(),
   sprint: z.boolean().optional(),
+  sneak: z.boolean().optional().describe('Sneak-walk; disables sprint.'),
 }).strict();
 
 export default defineAction({
