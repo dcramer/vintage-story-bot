@@ -32,7 +32,7 @@ export class GameClient {
       return yield* Effect.fail(new Error('Terrain snapshot did not catch up'));
     });
   }
-  control(initial, onCleanupError) {
+  control(initial, onCleanupError, { allowStarvingRecovery = false } = {}) {
     return Effect.gen(this, function* () {
       const owner = randomUUID().replaceAll('-', '');
       let sequence = 0;
@@ -40,7 +40,8 @@ export class GameClient {
       yield* Effect.acquireRelease(Effect.succeed(owner), () =>
         this.io({ action: 'control_end', owner }).pipe(Effect.catchAll(error => Effect.sync(() => onCleanupError?.(error)))),
       );
-      yield* this.io({ action: 'control_begin', owner, session: initial.life.session, epoch: initial.control.epoch });
+      yield* this.io({ action: 'control_begin', owner, session: initial.life.session, epoch: initial.control.epoch,
+        allowStarvingRecovery });
       return {
         owner,
         frame: frame => this.io({ ...frame, action: 'control_frame', owner, sequence: ++sequence, durationMs: 500 }),

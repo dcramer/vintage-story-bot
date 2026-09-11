@@ -29,7 +29,7 @@ export async function changeBlock(field, kind, { target, point, face, slot, expe
   const id = randomUUID().replaceAll('-', '');
   field.report(kind === 'dig' ? 'digging' : 'placing', { target, operation: id });
   let operation = await field.send({ action: 'block_action_begin', id, kind, target, ...(face ? { face } : {}),
-    slot: held.slot, item: held.code, expectedState: inventory.state });
+    slot: held.slot, item: held.code, expectedState: inventory.state, allowStarvingRecovery: field.recoveringFood });
   let sequence = 0;
   while (true) {
     await field.observe();

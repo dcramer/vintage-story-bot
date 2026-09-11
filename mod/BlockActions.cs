@@ -16,8 +16,9 @@ internal sealed class BlockActions(ICoreClientAPI api)
     private int slot, quantity;
     private long expires, sequence, changedAt, observedAt;
     public bool Digging => state == "working" && kind == "dig";
+    public bool StarvingRecovery { get; private set; }
 
-    public void Reset() { Cancel("world_changed"); id = null; position = null; }
+    public void Reset() { Cancel("world_changed"); id = null; position = null; StarvingRecovery = false; }
 
     public void Cancel(string why)
     {
@@ -25,7 +26,7 @@ internal sealed class BlockActions(ICoreClientAPI api)
         if (state is "working" or "changed") { state = "cancelled"; reason = why; }
     }
 
-    public object Begin(JsonElement request, InventoryAdapter inventory)
+    public object Begin(JsonElement request, InventoryAdapter inventory, bool starvingRecovery = false)
     {
         var player = api.World.Player;
         if (player.WorldData.CurrentGameMode is not (EnumGameMode.Survival or EnumGameMode.Creative))
@@ -73,6 +74,7 @@ internal sealed class BlockActions(ICoreClientAPI api)
                 return Error("Selected tool mining tier is insufficient.");
         }
         Cancel("replaced");
+        StarvingRecovery = starvingRecovery;
         id = nextId; kind = nextKind; target = String("target"); slot = selectedSlot;
         item = stack?.Collectible.Code.ToString(); quantity = stack?.StackSize ?? 0;
         position = destination; origin = player.Entity.Pos.XYZ.Clone();

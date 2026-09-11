@@ -67,7 +67,7 @@ export class Fieldwork {
   }
   async aim(angles) {
     await this.observe();
-    await this.env.aim(angles);
+    await this.env.aim(angles, { allowStarvingRecovery: this.recoveringFood });
     await this.observe();
   }
   async scan(radius, match, kind = 'all') {

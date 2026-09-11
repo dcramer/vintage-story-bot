@@ -129,11 +129,11 @@ export class Controller {
     return Effect.runPromise(Deferred.await(started)).then(result => ({ ...result, goal: this.goalView(record), controller: this.info() }));
   }
   snapshot() { return this.game.snapshot(); }
-  aim(angles, record) {
+  aim(angles, record, safety) {
     const self = this;
     return Effect.scoped(Effect.gen(function* () {
       const initial = yield* self.io({ action: 'observe' });
-      const control = yield* self.game.control(initial, error => { record.cleanupError = error.message; });
+      const control = yield* self.game.control(initial, error => { record.cleanupError = error.message; }, safety);
       for (let i = 0; i < 60; i++) {
         const batch = yield* control.step({ ...angles, forward: false, jump: false });
         const state = batch.state;
@@ -158,7 +158,7 @@ export class Controller {
         !alertsSafe(initial) || initial.position.dimension !== 0 ||
         Math.abs(goal.x - initial.position.x) > 128 || Math.abs(goal.z - initial.position.z) > 128 || Math.abs(goal.y - initial.position.y) > 32)
         return yield* Effect.fail(new Error('Navigation needs grounded/dry/ready player and destination within 128 horizontal/32 vertical blocks.'));
-      const control = yield* self.game.control(initial, error => { record.cleanupError = error.message; });
+      const control = yield* self.game.control(initial, error => { record.cleanupError = error.message; }, { allowStarvingRecovery });
       const nav = record.nav = new Navigation(self.map, initial, goal);
       if (started) {
         nav.id = record.id; record.state = 'running';
@@ -226,7 +226,7 @@ export class Controller {
       const run = effect => Effect.runPromise(effect, { signal: cancellation.signal });
       running = policy({
         send, map: self.map, sync: () => run(self.snapshot()),
-        aim: angles => run(self.aim(angles, record)),
+        aim: (angles, safety) => run(self.aim(angles, record, safety)),
         navigate: (goal, yieldWhen, safety) => run(self.navigate(goal, record, undefined, yieldWhen, safety)),
         report: progress => { record.progress = progress; self.track(record, true); },
       }, { ...args, signal: cancellation.signal });

@@ -7,6 +7,7 @@ static class ControlLeaseTests
         void Check(bool value, string name) { if (!value) throw new Exception(name); }
         var lease = new ControlLease();
         Check(lease.Begin("a", 0, 100), "acquire");
+        Check(!lease.StarvingRecovery, "ordinary lease safety");
         Check(!lease.Begin("b", 0, 101), "exclusive owner");
         Check(!lease.Frame("b", 1, 101, 101, 400), "foreign frame");
         Check(lease.Frame("a", 1, 101, 101, 400), "owned frame");
@@ -15,8 +16,9 @@ static class ControlLeaseTests
         Check(lease.Frame("a", 2, 500, 600, 400), "timely queued frame survives a delayed tick");
         Check(lease.Expire(1000) && !lease.Active, "tick releases expired owner");
         Check(!lease.Begin("b", 0, 1001), "stale acquisition epoch");
-        Check(lease.Begin("b", lease.Epoch, 1001), "new explicit acquisition");
+        Check(lease.Begin("b", lease.Epoch, 1001, true) && lease.StarvingRecovery, "scoped starving recovery acquisition");
         lease.Revoke("manual_input");
+        Check(!lease.StarvingRecovery, "revocation clears recovery scope");
         Check(!lease.Frame("b", 2, 1002, 1002, 400), "revoked frame cannot resume");
         var map = new TerrainMap();
         map.Put(new(1, 2, 3), [], false, 0);

@@ -217,7 +217,7 @@ public sealed class AiBridgeMod : ModSystem
             }
         }
         else if (control.Active) ReleaseControl("control_unavailable");
-        blockActions.Tick(CanControl() && !ManualInput() && !NavigationDanger() &&
+        blockActions.Tick(CanControl() && !ManualInput() && !NavigationDanger(blockActions.StarvingRecovery) &&
             api.World.Player.Entity.OnGround && !api.World.Player.Entity.FeetInLiquid);
         if (handAction != null)
         {
@@ -326,10 +326,15 @@ public sealed class AiBridgeMod : ModSystem
             case "inspect_target":
                 return CanControl() ? context.InspectTarget(life.Session) : new { ok = false, error = "Close menus and unpause before inspecting." };
             case "block_action_begin":
-                if (!CanControl() || ManualInput() || NavigationDanger() || !entity.OnGround || entity.FeetInLiquid || entity.MountedOn != null)
+                bool blockRecovery = request.TryGetProperty("allowStarvingRecovery", out var blockRecoveryField) &&
+                    blockRecoveryField.ValueKind == JsonValueKind.True;
+                if (request.TryGetProperty("allowStarvingRecovery", out blockRecoveryField) &&
+                    blockRecoveryField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                    return new { ok = false, error = "allowStarvingRecovery must be boolean." };
+                if (!CanControl() || ManualInput() || NavigationDanger(blockRecovery) || !entity.OnGround || entity.FeetInLiquid || entity.MountedOn != null)
                     return new { ok = false, error = "Block actions need grounded, dry, ready controls." };
                 StopMovement(); StopHandAction();
-                return blockActions.Begin(request, inventory);
+                return blockActions.Begin(request, inventory, blockRecovery);
             case "block_action_continue":
                 return blockActions.Read(request, true);
             case "block_action_status":
@@ -480,9 +485,14 @@ public sealed class AiBridgeMod : ModSystem
                     !request.TryGetProperty("session", out var controlSession) || controlSession.GetString() != life.Session ||
                     !request.TryGetProperty("epoch", out var epochField) || !epochField.TryGetInt64(out long epoch))
                     return new { ok = false, error = "Supply owner UUID, observed life session and control epoch." };
-                if (!CanControl() || ManualInput() || NavigationDanger() || entity.MountedOn != null)
+                bool controlRecovery = request.TryGetProperty("allowStarvingRecovery", out var controlRecoveryField) &&
+                    controlRecoveryField.ValueKind == JsonValueKind.True;
+                if (request.TryGetProperty("allowStarvingRecovery", out controlRecoveryField) &&
+                    controlRecoveryField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                    return new { ok = false, error = "allowStarvingRecovery must be boolean." };
+                if (!CanControl() || ManualInput() || NavigationDanger(controlRecovery) || entity.MountedOn != null)
                     return new { ok = false, error = "Controls unavailable." };
-                if (!control.Begin(ownerField.GetString()!, epoch, Environment.TickCount64))
+                if (!control.Begin(ownerField.GetString()!, epoch, Environment.TickCount64, controlRecovery))
                     return new { ok = false, error = "Control epoch changed or another controller owns inputs." };
                 StopMovement(); StopHandAction();
                 controlYaw = entity.Pos.Yaw * 180 / Math.PI; controlPitch = (entity.Pos.Pitch - Math.PI) * 180 / Math.PI;
@@ -533,7 +543,7 @@ public sealed class AiBridgeMod : ModSystem
                         return new { ok = false, error = "Focus must be a nearby cell; it never bypasses visibility." };
                     focus = new(fx, fy, fz);
                 }
-                if (!CanControl() || ManualInput() || NavigationDanger() || entity.MountedOn != null)
+                if (!CanControl() || ManualInput() || NavigationDanger(control.StarvingRecovery) || entity.MountedOn != null)
                 { ReleaseControl("control_unavailable"); return new { ok = false, error = "Controls unavailable." }; }
                 long frameNow = Environment.TickCount64;
                 if (!control.Frame(frameOwner.GetString()!, sequence, receivedAt ?? frameNow, frameNow, frameDuration))
@@ -680,13 +690,14 @@ public sealed class AiBridgeMod : ModSystem
             hunger?.TryGetFloat("currentsaturation"), hunger?.TryGetFloat("maxsaturation"),
             oxygen?.TryGetFloat("currentoxygen"), oxygen?.TryGetFloat("maxoxygen"), (float?)ContextSensor.Number(entity.WatchedAttributes, "temporalStability")))
         {
-            if (!entity.Alive || life.LastDamageAt != previousDamage || NavigationDanger()) ReleaseControl("danger");
+            if (!entity.Alive || life.LastDamageAt != previousDamage || NavigationDanger(control.StarvingRecovery)) ReleaseControl("danger");
             StopMovement();
             StopHandAction();
         }
     }
 
-    private bool NavigationDanger() => life.Alerts.Any(alert => alert != "low_food");
+    private bool NavigationDanger(bool starvingRecovery = false) => life.Alerts.Any(alert => alert != "low_food" &&
+        !(alert == "low_health" && starvingRecovery && life.Alerts.Contains("low_food")));
 
     private int? RemainingLives()
     {
