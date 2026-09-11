@@ -71,7 +71,8 @@ async function focusBot(window) {
     const { stdout } = await exec('wslpath', ['-w', `${root}/scripts/focus-bot.ps1`], { timeout: 3000 });
     await exec(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', stdout.trim()], { timeout: 5000, maxBuffer: 65536 });
   } else {
-    await xdo(['windowactivate', '--sync', window.id]);
+    try { await xdo(['windowactivate', '--sync', window.id]); }
+    catch { await xdo(['windowfocus', '--sync', window.id]); }
   }
   if (await xdo(['getwindowfocus']) !== window.id) throw new Error('Bot did not retain focus. No click sent.');
 }
