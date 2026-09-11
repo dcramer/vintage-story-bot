@@ -80,13 +80,17 @@ test('threat avoidance is explicit, proximity-bounded and points away', () => {
   assert.ok(target.x > player.x + 30 && target.sprint && target.emergency);
 });
 
-test('stationary fieldwork routes away from a nearby hostile before acting', async () => {
+test('stationary fieldwork accepts a blocked flee leg once the hostile is gone', async () => {
   const wolf = { code: 'game:wolf-male', point: { x: -4.5, y: 1, z: .5 } };
   const state = { position: { x: .5, y: 1, z: .5 }, nearbyEntities: [wolf] };
   let destination;
   const field = new Fieldwork({});
   field.latest = state;
-  field.walk = async target => { destination = target; return { state: 'arrived' }; };
+  field.walk = async target => {
+    destination = target;
+    field.latest = { ...state, nearbyEntities: [] };
+    return { state: 'blocked', reason: 'terrain_changed' };
+  };
   assert.equal(await field.evadeThreat(), true);
   assert.ok(destination.x > 32 && destination.sprint && destination.emergency);
 });
