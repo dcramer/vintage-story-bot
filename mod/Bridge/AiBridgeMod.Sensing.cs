@@ -71,7 +71,21 @@ public sealed partial class AiBridgeMod
     private object MapView()
     {
         var manager = api.ModLoader.GetModSystem<WorldMapManager>();
-        if (manager?.IsOpened != true) return new { ok = true, opened = false };
+        var tracking = api.ModLoader.GetModSystem<SystemRemotePlayerTracking>();
+        var players = tracking?.GetAllTrackedPlayerPositions().Select(packet =>
+        {
+            var player = packet.AssociatedPlayer ?? api.World.PlayerByUid(packet.PlayerUid);
+            return new
+            {
+                name = player?.PlayerName ?? "Unknown player",
+                x = packet.PosX,
+                z = packet.PosZ,
+                yawDegrees = NormalizeDegrees(packet.Yaw * 180 / Math.PI),
+                self = packet.PlayerUid == api.World.Player.PlayerUID
+            };
+        }).ToArray() ?? [];
+        var map = new { id = api.World.SavegameIdentifier, chunkSize = 32 };
+        if (manager?.IsOpened != true) return new { ok = true, opened = false, map, players };
         var position = api.World.Player.Entity.Pos;
         var origin = new Vec3d(position.X, position.Y, position.Z);
         var here = new Vec2f(); var east = new Vec2f(); var south = new Vec2f();
@@ -79,12 +93,14 @@ public sealed partial class AiBridgeMod
         manager.TranslateWorldPosToViewPos(new Vec3d(origin.X + 100, origin.Y, origin.Z), ref east);
         manager.TranslateWorldPosToViewPos(new Vec3d(origin.X, origin.Y, origin.Z + 100), ref south);
         var bounds = manager.worldMapDlg?.SingleComposer?.GetElement("mapElem")?.Bounds;
-        if (bounds == null) return new { ok = true, opened = false };
+        if (bounds == null) return new { ok = true, opened = false, map, players };
         float offsetX = (float)bounds.absX, offsetY = (float)bounds.absY;
         return new
         {
             ok = true,
             opened = true,
+            map,
+            players,
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             world = new { x = origin.X, z = origin.Z, dimension = position.Dimension },
             view = new

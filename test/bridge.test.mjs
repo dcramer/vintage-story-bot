@@ -9,6 +9,7 @@ import { requestBridge, bridgePort } from '../src/bridge/client.mjs';
 import { tools as actions } from '../src/controller/registry.mjs';
 import { uiTools, isBotCommand, validateClick } from '../src/operator/bot-window.mjs';
 import { normalizeMapView } from '../src/operator/world-map.mjs';
+import { decodeChunkIndex, decodeMapPiece } from '../src/operator/native-map.mjs';
 
 async function fakeBridge(t, handle) {
   const sockets = new Set();
@@ -166,4 +167,18 @@ test('normalizes native World Map calibration to the captured game window', () =
     view: { here: [640, 360], east100: [740, 360], south100: [640, 460] } }, 1280, 720);
   assert.deepEqual(view, { world: { x: 512000, z: 512000, dimension: 0 }, here: [.5, .5], east100: [740 / 1280, .5], south100: [.5, 460 / 720] });
   assert.equal(normalizeMapView({ opened: false }, 1280, 720), null);
+});
+
+test('decodes Vintage Story native map chunk keys and protobuf RGBA pixels', () => {
+  const mask = (1n << 27n) - 1n, encoded = ((BigInt(-11) & mask) << 27n) | (BigInt(17) & mask);
+  assert.deepEqual(decodeChunkIndex(encoded), { x: 17, z: -11 });
+  const parts = [], expected = Buffer.alloc(4096);
+  for (let index = 0; index < 1024; index++) {
+    const color = (0xff000000 | index * 7919) >>> 0; expected.writeUInt32LE(color, index * 4);
+    let value = BigInt.asUintN(64, BigInt(color | 0)); parts.push(Buffer.from([8]));
+    const bytes = [];
+    while (value >= 128n) { bytes.push(Number(value & 127n) | 128); value >>= 7n; }
+    bytes.push(Number(value)); parts.push(Buffer.from(bytes));
+  }
+  assert.deepEqual(decodeMapPiece(Buffer.concat(parts)), expected);
 });

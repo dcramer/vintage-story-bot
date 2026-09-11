@@ -4,6 +4,7 @@ import { callUi, typeText } from '../src/operator/bot-window.mjs';
 import { displayStatus, ensureDisplay, stopDisplay } from '../src/operator/display.mjs';
 import { botProcesses, gameStatus, importWorld, listWorlds, startGame, stopGame } from '../src/operator/game.mjs';
 import { captureWorldMap } from '../src/operator/world-map.mjs';
+import { syncNativeMap } from '../src/operator/native-map.mjs';
 
 const usage = `Usage: game.mjs <command>
   start [--world NAME | --new NAME [--play-style STYLE] | --server HOST[:PORT]] [--display :N] [--size WxH] [--no-wait] [--timeout SEC]
@@ -56,7 +57,7 @@ async function run() {
     }
     case 'map': {
       const { image: _image, ...result } = await captureWorldMap();
-      return print(result);
+      return print({ ...result, native: result.captured ? await syncNativeMap() : null });
     }
     case 'click': return print(JSON.parse((await callUi('ui_click', { x: Number(positional[0]), y: Number(positional[1]) })).content[0].text));
     case 'key': return print(JSON.parse((await callUi('ui_key', { key: positional[0] })).content[0].text));

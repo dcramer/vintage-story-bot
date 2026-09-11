@@ -121,7 +121,7 @@ section, .card { display: block; padding: 18px; }
 .map-legend span { align-items: center; color: var(--ink2); display: inline-flex; gap: 5px; }
 .map-legend i, .roster-name i, .agent-swatch { background: currentColor; display: inline-block; height: 6px; width: 6px; }
 .world-map { aspect-ratio: 16 / 9; background: #071014; overflow: hidden; position: relative; }
-.world-map img, .world-map svg { height: 100%; inset: 0; position: absolute; width: 100%; }
+.world-map img, .world-map svg, .world-map canvas { height: 100%; inset: 0; position: absolute; width: 100%; }
 .world-map img { display: block; object-fit: fill; z-index: 0; }
 .world-map svg { pointer-events: none; z-index: 2; }
 .world-map svg a { pointer-events: auto; }
@@ -142,10 +142,23 @@ section, .card { display: block; padding: 18px; }
 .agent-marker path { fill: currentColor; stroke: #081216; stroke-width: .8; vector-effect: non-scaling-stroke; }
 .map-label { fill: currentColor; font: 500 8px/1 "DM Mono", monospace; paint-order: stroke; stroke: #081216; stroke-width: 2.6px; stroke-linejoin: round; }
 .native-world-map .map-label { font-size: 12px; stroke-width: 3px; }
+.global-map-wrap { position: relative; }
+.global-world-map { cursor: grab; touch-action: none; user-select: none; }
+.global-world-map:active { cursor: grabbing; }
+.global-map-terrain { image-rendering: pixelated; z-index: 0; }
+.global-world-map .map-label { font-size: 12px; stroke-width: 3px; }
+.world-player { color: #fff; filter: drop-shadow(0 0 5px #000); }
+.world-player circle { fill: #171b1e; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.world-player path { fill: #fff; stroke: #171b1e; stroke-width: 1; }
+.world-player text { fill: #fff; font: 600 12px/1 "DM Mono", monospace; paint-order: stroke; stroke: #071014; stroke-width: 3px; stroke-linejoin: round; }
 .native-map-source { background: rgba(7,10,13,.82); border: 1px solid rgba(255,255,255,.18); color: var(--ink2); font: 10px/1 "DM Mono", monospace; left: 12px; padding: 7px 9px; position: absolute; text-transform: uppercase; top: 12px; z-index: 3; }
 .map-source-picker { bottom: 12px; display: flex; flex-wrap: wrap; gap: 5px; left: 12px; max-width: calc(100% - 24px); position: absolute; z-index: 3; }
 .map-source-picker button { background: rgba(7,10,13,.86); border: 1px solid rgba(255,255,255,.2); color: var(--ink2); cursor: pointer; font: 10px/1 "DM Mono", monospace; padding: 7px 9px; }
 .map-source-picker button:hover, .map-source-picker button.selected { border-color: var(--cyan); color: var(--ink); }
+.world-picker { bottom: 12px; left: 50%; transform: translateX(-50%); }
+.map-controls { display: flex; gap: 4px; position: absolute; right: 12px; top: 12px; z-index: 4; }
+.map-controls button { align-items: center; background: rgba(7,10,13,.88); border: 1px solid rgba(255,255,255,.24); color: var(--ink); cursor: pointer; display: flex; font: 600 14px/1 "DM Mono", monospace; height: 32px; justify-content: center; min-width: 32px; padding: 0 9px; }
+.map-controls button:hover { border-color: var(--cyan); color: var(--cyan); }
 .map-axis { color: #91a7aa; font: 10px/1 "DM Mono", monospace; pointer-events: none; position: absolute; text-shadow: 0 1px 2px #071014; text-transform: uppercase; z-index: 3; }
 .map-axis-x { bottom: 14px; right: 16px; }
 .map-axis-z { left: 16px; top: 16px; }

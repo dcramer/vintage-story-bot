@@ -46,9 +46,9 @@ export function Bot({ id }) {
     </section>
     <section class="wide panel bot-map-panel">
       <div class="panel-title map-title"><div><span class="eyebrow">Seen by {bot.id}</span><h2>Explored world</h2></div>
-        <span class="panel-count">{bot.mapImage?.at ? `Game capture · ${ago(bot.mapImage.at, now.value)}` : 'Waiting for capture'}</span></div>
+        <span class="panel-count">{bot.nativeMap?.count ? `${bot.nativeMap.count.toLocaleString()} chunks · ${ago(bot.nativeMap.at, now.value)}` : 'Waiting for map sync'}</span></div>
       <WorldMap bots={[bot]} detailed />
-      <div class="map-footer"><span>Vintage Story World Map</span><span>Accumulated exploration from this Seraph</span><span>Telemetry overlays are live</span></div>
+      <div class="map-footer"><span>Native explored chunks</span><span>Retained by this Seraph</span><span>Live trail and objective</span><span>Drag or scroll to navigate</span></div>
     </section>
     <section><h2>Vitals</h2>
       <Meter name="health" vital={s.vitals?.health} lowAt={.3} /><Meter name="hunger" vital={s.vitals?.hunger} lowAt={.2} /><Meter name="oxygen" vital={s.vitals?.oxygen} lowAt={.2} />

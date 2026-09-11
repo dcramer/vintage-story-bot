@@ -7,6 +7,6 @@ export default defineAction({
   readOnly: true,
   idempotent: true,
   description:
-    'Read pixel/world calibration from the currently open native World Map. Returns opened:false when it is closed. ' +
-    'This is operator support for placing telemetry over a real game-window capture; it does not read terrain pixels.',
+    'Read the native map id and the game server-filtered player positions. When the World Map is open, also returns ' +
+    'pixel/world calibration for a real game-window capture. Terrain pixels remain in the operator-owned game map database.',
 });

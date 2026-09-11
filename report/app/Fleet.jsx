@@ -29,8 +29,10 @@ function goalTarget(bot) {
 
 function pathDistance(rows) {
   let distance = 0;
-  for (let i = 1; i < rows.length; i++) if ((rows[i].dimension ?? 0) === (rows[i - 1].dimension ?? 0))
-    distance += Math.hypot(rows[i].x - rows[i - 1].x, rows[i].z - rows[i - 1].z);
+  for (let i = 1; i < rows.length; i++) if ((rows[i].dimension ?? 0) === (rows[i - 1].dimension ?? 0)) {
+    const step = Math.hypot(rows[i].x - rows[i - 1].x, rows[i].z - rows[i - 1].z);
+    if (step <= 128) distance += step;
+  }
   return distance;
 }
 
@@ -93,7 +95,7 @@ export function Fleet() {
     <section class="map-panel panel">
       <div class="panel-title map-title"><div><span class="eyebrow">Seen by the fleet</span><h2>World map</h2></div><div class="map-legend">{bots.map((bot, index) => <span key={bot.id}><i class={`agent-${index % 6}`} />{bot.id}</span>)}</div></div>
       <WorldMap bots={bots} />
-      <div class="map-footer"><span>Actual Vintage Story World Map capture</span><span>Choose a Seraph's explored view</span><span>Solid: recent path</span><span>Dashed: objective</span></div>
+      <div class="map-footer"><span>Native game map chunks</span><span>Merged across Seraphs</span><span>White: server-visible players</span><span>Drag or scroll to navigate</span></div>
     </section>
     <div class="command-rail"><Attention bots={bots} /><MissionBoard bots={bots} /></div>
     <FleetRoster bots={bots} />
