@@ -63,9 +63,9 @@ test('threat avoidance is explicit, proximity-bounded and points away', () => {
   assert.equal(hostileEntity(wolf), true);
   assert.equal(hostileEntity({ ...wolf, code: 'game:chicken-hen' }), false);
   assert.equal(nearestThreat({ position: player, nearbyEntities: [wolf] }), wolf);
-  assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...wolf, point: { x: 1, z: 1 } }] }), null);
+  assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...wolf, point: { x: -6, z: 10.5 } }] }), null);
   const target = fleeTarget(player, wolf);
-  assert.ok(target.x > player.x && target.sprint && target.emergency);
+  assert.ok(target.x > player.x + 20 && target.sprint && target.emergency);
 });
 
 test('low health is tolerated only during explicit starving food recovery', () => {

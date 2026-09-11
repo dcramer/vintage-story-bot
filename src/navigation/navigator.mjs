@@ -148,7 +148,7 @@ export class Navigation {
     if (this.jumpAt && now - this.jumpAt > 2500) return this.replan(p, now, 'jump_failed');
     const food = state.vitals?.hunger;
     const sprint = !!this.target.sprint && grounded && !this.jumpAt && !this.landing &&
-      Math.abs(next.y - p.y) < .05 && horizontal(p, next) > 3 &&
+      Math.abs(next.y - p.y) < .05 && horizontal(p, next) > (this.evading ? .8 : 3) &&
       Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 5 &&
       food?.max > 0 && food.current / food.max >= (this.evading ? .1 : .6);
     return { yawDegrees, pitchDegrees: 15, forward: horizontal(p, next) > .12, durationMs,

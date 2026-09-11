@@ -26,7 +26,7 @@ internal sealed class SceneSensor(ICoreClientAPI api, Func<bool> canControl)
     private readonly Dictionary<string, ScanJob> jobs = new();
     public void Reset() => jobs.Clear();
 
-    public object[] NearbyEntities(int radius = 8, int limit = 24)
+    public object[] NearbyEntities(int radius = 16, int limit = 24)
     {
         var player = api.World.Player.Entity;
         var eye = player.Pos.XYZ.Add(player.LocalEyePos);
