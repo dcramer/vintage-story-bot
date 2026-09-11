@@ -15,7 +15,7 @@ public readonly record struct Column(int X, int Z);
 // attention changes; SeenAt drives what counts as seen right now.
 public sealed class SurfaceMap(long ttlMs = 30000, int radius = 96)
 {
-    private sealed record Observation(double Y, string Kind, int Step, string? Code, long SeenAt, long CheckedAt);
+    private sealed record Observation(double Y, string Kind, int Step, string? Code, int Color, long SeenAt, long CheckedAt);
     private readonly Dictionary<Column, Observation> columns = new();
     public int Count => columns.Count;
     public void Clear() => columns.Clear();
@@ -26,8 +26,8 @@ public sealed class SurfaceMap(long ttlMs = 30000, int radius = 96)
     {
         foreach (var (column, value) in columns.ToArray()) columns[column] = value with { CheckedAt = 0 };
     }
-    public void Put(Column column, double y, string kind, int step, string? code, long now) =>
-        columns[column] = new(y, kind, step, code, now, now);
+    public void Put(Column column, double y, string kind, int step, string? code, int color, long now) =>
+        columns[column] = new(y, kind, step, code, color, now, now);
     public void Prune(double x, double z, long now)
     {
         foreach (var (column, value) in columns.ToArray())
@@ -43,7 +43,7 @@ public sealed class SurfaceMap(long ttlMs = 30000, int radius = 96)
             double bearing = SceneGeometry.Normalize(Math.Atan2(p.Key.X + .5 - eye.X, p.Key.Z + .5 - eye.Z) * 180 / Math.PI);
             return Math.Abs(SceneGeometry.Normalize(bearing - yaw + 180) - 180) <= halfYaw;
         })
-        .Select(p => new object?[] { p.Key.X, p.Key.Z, Math.Round(p.Value.Y, 3), p.Value.Kind, p.Value.Step, p.Value.Code, p.Value.SeenAt })
+        .Select(p => new object?[] { p.Key.X, p.Key.Z, Math.Round(p.Value.Y, 3), p.Value.Kind, p.Value.Step, p.Value.Code, p.Value.SeenAt, p.Value.Color })
         .ToArray();
 }
 
@@ -167,7 +167,7 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
             // The rain map only says where to start looking down the column;
             // the descent stops at the first surface and the line of sight decides.
             int top = Math.Min(blocks.GetRainMapHeightAt(x, z), (int)Math.Floor(eye.Y) + radius);
-            string? kind = null, code = null; double surface = 0; BlockPos? target = null;
+            string? kind = null, code = null; double surface = 0; BlockPos? target = null; Block? surfaceBlock = null;
             bool canopy = false, loaded = true;
             for (int y = top; y >= Math.Max(0, top - 12); y--)
             {
@@ -177,14 +177,14 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
                 if (fluid.IsLiquid())
                 {
                     kind = fluid.Code?.Path.Contains("lava") == true ? "hazard" : "water";
-                    code = fluid.Code?.Path; surface = y + 1; target = cell; break;
+                    code = fluid.Code?.Path; surface = y + 1; target = cell; surfaceBlock = fluid; break;
                 }
                 var block = blocks.GetBlock(cell);
                 var boxes = block.GetCollisionBoxes(blocks, cell);
                 if (boxes is { Length: > 0 })
                 {
                     kind = block.Code?.Path.Contains("fire") == true ? "hazard" : canopy ? "canopy" : "ground";
-                    code = block.Code?.Path; surface = y + boxes.Max(b => b.Y2); target = cell; break;
+                    code = block.Code?.Path; surface = y + boxes.Max(b => b.Y2); target = cell; surfaceBlock = block; break;
                 }
                 if (block.Id != 0 && block.BlockMaterial == EnumBlockMaterial.Leaves) canopy = true;
             }
@@ -209,7 +209,9 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
             api.World.RayTraceForSelection(origin, end, ref hit, ref entityHit,
                 (at, b) => at.Equals(target) || SceneSensor.Occludes(blocks, at, b), _ => false);
             if (hit != null && !hit.Position.Equals(target)) continue;
-            map.Put(column, surface, kind, Step(Math.Sqrt(Math.Pow(x + .5 - eye.X, 2) + Math.Pow(z + .5 - eye.Z, 2))), code, now);
+            int mapColor = surfaceBlock!.GetColor(api, target);
+            int rgb = ColorUtil.ColorR(mapColor) << 16 | ColorUtil.ColorG(mapColor) << 8 | ColorUtil.ColorB(mapColor);
+            map.Put(column, surface, kind, Step(Math.Sqrt(Math.Pow(x + .5 - eye.X, 2) + Math.Pow(z + .5 - eye.Z, 2))), code, rgb, now);
             // Blocks Node is looking for, on or just around the visible surface.
             if (Watch.Length == 0) continue;
             for (int dy = -3; dy <= 3 && rays < 64; dy++)

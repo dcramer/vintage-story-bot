@@ -1,6 +1,7 @@
 import { list, now, isLive, positionHistory } from './store.js';
 import { ago, elapsed, goalTitle, phaseDetail, point, stateClass } from './format.js';
 import { Seen, Tag } from './ui.jsx';
+import { WorldMap } from './Map.jsx';
 
 const pct = vital => vital?.max > 0 ? Math.max(0, Math.min(1, vital.current / vital.max)) : null;
 const finitePoint = p => p && Number.isFinite(p.x) && Number.isFinite(p.z);
@@ -31,57 +32,6 @@ function pathDistance(rows) {
   for (let i = 1; i < rows.length; i++) if ((rows[i].dimension ?? 0) === (rows[i - 1].dimension ?? 0))
     distance += Math.hypot(rows[i].x - rows[i - 1].x, rows[i].z - rows[i - 1].z);
   return distance;
-}
-
-const niceStep = span => {
-  const rough = Math.max(1, span / 6), power = 10 ** Math.floor(Math.log10(rough)), unit = rough / power;
-  return (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * power;
-};
-
-function WorldMap({ bots }) {
-  const agents = bots.map((bot, index) => {
-    const state = latestState(bot), dimension = state.position?.dimension ?? 0;
-    const trail = positionHistory(bot).filter(p => finitePoint(p) && (p.dimension ?? 0) === dimension);
-    return { bot, index, state, trail, current: finitePoint(state.position) ? state.position : trail.at(-1), target: goalTarget(bot) };
-  }).filter(agent => agent.current);
-  if (!agents.length) return <div class="map-empty"><span>Awaiting position telemetry</span><small>The map appears when a Seraph reports its location.</small></div>;
-
-  const plotted = agents.flatMap(agent => [...agent.trail, agent.current, agent.target].filter(finitePoint));
-  const xs = plotted.map(p => p.x), ys = plotted.map(p => -p.z);
-  let minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-  const span = Math.max(48, maxX - minX, maxY - minY), pad = Math.max(12, span * .12);
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  minX = cx - span / 2 - pad; maxX = cx + span / 2 + pad;
-  minY = cy - span / 2 - pad; maxY = cy + span / 2 + pad;
-  const width = maxX - minX, height = maxY - minY, step = niceStep(span);
-  const gridX = [], gridY = [];
-  for (let x = Math.ceil(minX / step) * step; x <= maxX; x += step) gridX.push(x);
-  for (let y = Math.ceil(minY / step) * step; y <= maxY; y += step) gridY.push(y);
-
-  return <div class="world-map">
-    <svg viewBox={`${minX} ${minY} ${width} ${height}`} role="img" aria-label="Recent Seraph positions and mission targets">
-      <defs><pattern id="micro-grid" width={step / 5} height={step / 5} patternUnits="userSpaceOnUse"><path d={`M ${step / 5} 0 L 0 0 0 ${step / 5}`} /></pattern></defs>
-      <rect x={minX} y={minY} width={width} height={height} class="map-field" />
-      <rect x={minX} y={minY} width={width} height={height} fill="url(#micro-grid)" class="map-micro" />
-      <g class="map-grid">{gridX.map(x => <line key={`x${x}`} x1={x} x2={x} y1={minY} y2={maxY} />)}
-        {gridY.map(y => <line key={`y${y}`} x1={minX} x2={maxX} y1={y} y2={y} />)}</g>
-      {agents.map(({ bot, index, state, trail, current, target }) => {
-        const points = trail.map(p => `${p.x},${-p.z}`).join(' '), yaw = state.orientation?.yawDegrees ?? 0;
-        return <g key={bot.id} class={`map-agent agent-${index % 6}`}>
-          {trail.length > 1 && <polyline points={points} class="map-trail map-trail-shadow" />}
-          {trail.length > 1 && <polyline points={points} class="map-trail" />}
-          {finitePoint(target) && <><line x1={current.x} y1={-current.z} x2={target.x} y2={-target.z} class="target-line" />
-            <g transform={`translate(${target.x} ${-target.z})`} class="target-marker"><circle r={2.4} /><path d="M-4 0H4M0-4V4" /></g></>}
-          <a href={`/bots/${encodeURIComponent(bot.id)}`} aria-label={`Open ${bot.id}`}>
-            <g transform={`translate(${current.x} ${-current.z}) rotate(${yaw})`} class="agent-marker"><circle r={4.8} /><path d="M0 -7 L3.2 1.5 L0 .3 L-3.2 1.5 Z" /></g>
-            <text x={current.x + 7} y={-current.z - 5} class="map-label">{bot.id}</text>
-          </a>
-        </g>;
-      })}
-    </svg>
-    <div class="map-axis map-axis-x">X →</div><div class="map-axis map-axis-z">Z ↑</div>
-    <div class="map-scale"><i style={{ width: `${Math.max(28, Math.min(100, step / width * 100))}%` }} />{Math.round(step)} blocks</div>
-  </div>;
 }
 
 function Metric({ label, value, note, tone = '' }) {
@@ -141,9 +91,9 @@ export function Fleet() {
       <Metric label="Mapped movement" value={tracked >= 1000 ? `${(tracked / 1000).toFixed(1)}k` : Math.round(tracked)} note="blocks in retained trails" />
     </div>
     <section class="map-panel panel">
-      <div class="panel-title map-title"><div><span class="eyebrow">Shared world plot</span><h2>Operations map</h2></div><div class="map-legend">{bots.map((bot, index) => <span key={bot.id}><i class={`agent-${index % 6}`} />{bot.id}</span>)}</div></div>
+      <div class="panel-title map-title"><div><span class="eyebrow">Seen by the fleet</span><h2>World map</h2></div><div class="map-legend">{bots.map((bot, index) => <span key={bot.id}><i class={`agent-${index % 6}`} />{bot.id}</span>)}</div></div>
       <WorldMap bots={bots} />
-      <div class="map-footer"><span>Solid line: recent movement</span><span>Dashed line: current objective</span><span>Coordinates are client-observed</span></div>
+      <div class="map-footer"><span>Terrain colors come from the game</span><span>Solid: recent path</span><span>Dashed: objective</span><span>Unknown ground stays blank</span></div>
     </section>
     <div class="command-rail"><Attention bots={bots} /><MissionBoard bots={bots} /></div>
     <FleetRoster bots={bots} />

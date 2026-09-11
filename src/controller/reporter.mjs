@@ -30,6 +30,17 @@ function bounded(data, limit) {
   const text = JSON.stringify(data);
   return text === undefined || text.length <= limit ? data : { truncated: true, bytes: text.length };
 }
+function mergeMapColumns(before = [], after = [], limit = 1024, bytes = 65536) {
+  const merged = new Map();
+  for (const row of [...before, ...after]) {
+    if (!Array.isArray(row) || !Number.isFinite(row[0]) || !Number.isFinite(row[1])) continue;
+    const key = `${row[0]},${row[1]}`;
+    merged.delete(key); merged.set(key, row);
+  }
+  let columns = [...merged.values()].slice(-limit);
+  while (columns.length && JSON.stringify({ columns }).length > bytes) columns = columns.slice(Math.min(64, columns.length));
+  return columns;
+}
 
 export class Reporter {
   latest = new Map(); log = []; inflight = null; closed = false; failures = 0;
@@ -38,13 +49,20 @@ export class Reporter {
     return new Reporter({ url: env.VINTAGE_STORY_REPORT_URL, token: env.VINTAGE_STORY_REPORT_TOKEN ?? '', id: env.VINTAGE_STORY_BOT_ID || os.hostname(),
       intervalMs: Number(env.VINTAGE_STORY_REPORT_INTERVAL_MS) || 10000, stream: env.VINTAGE_STORY_STREAM_URL });
   }
-  constructor({ url, token, id, stream = null, intervalMs = 10000, maxLog = 100, maxBytes = 98304, topicBytes = 16384, timeoutMs = 8000, fetch = globalThis.fetch }) {
+  constructor({ url, token, id, stream = null, intervalMs = 10000, maxLog = 100, maxBytes = 98304, topicBytes = 16384,
+    mapColumns = 1024, mapBytes = 65536, timeoutMs = 8000, fetch = globalThis.fetch }) {
     if (!idPattern.test(id)) throw new Error('VINTAGE_STORY_BOT_ID must match ' + idPattern.source);
-    Object.assign(this, { url: new URL('/api/report', url).href, token, id, stream: streamOrigin(stream), intervalMs, maxLog, maxBytes, topicBytes, timeoutMs, fetch });
+    Object.assign(this, { url: new URL('/api/report', url).href, token, id, stream: streamOrigin(stream), intervalMs,
+      maxLog, maxBytes, topicBytes, mapColumns, mapBytes, timeoutMs, fetch });
     this.timer = setInterval(() => this.flush(), Math.max(1000, intervalMs)).unref();
   }
   publish(topic, data, { coalesce = false } = {}) {
     if (this.closed || !/^[a-z][a-z0-9_]{0,63}$/.test(topic)) return;
+    if (topic === 'map') {
+      const at = Date.now(), columns = mergeMapColumns(this.latest.get(topic)?.data?.columns, data?.columns, this.mapColumns, this.mapBytes);
+      if (columns.length) this.latest.set(topic, { at, data: { columns } });
+      return;
+    }
     const reduced = topic in reduce ? reduce[topic](data) : data;
     if (reduced === undefined) return;
     const entry = { at: Date.now(), data: bounded(reduced ?? null, this.topicBytes) };
@@ -64,7 +82,12 @@ export class Reporter {
     this.inflight = this.fetch(this.url, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${this.token}` }, body: text, signal: AbortSignal.timeout(this.timeoutMs) })
       .then(async response => { await response.body?.cancel(); if (!response.ok) throw new Error(`HTTP ${response.status}`); })
       .then(() => { if (this.failures) console.error(`Fleet report recovered after ${this.failures} failures`); this.failures = 0; },
-        error => { if (!this.failures++) console.error(`Fleet report failed: ${error.message}`); for (const [topic, entry] of Object.entries(topics)) if (!this.latest.has(topic)) this.latest.set(topic, entry); })
+        error => { if (!this.failures++) console.error(`Fleet report failed: ${error.message}`); for (const [topic, entry] of Object.entries(topics)) {
+          const current = this.latest.get(topic);
+          if (topic === 'map' && current) this.latest.set(topic, { at: current.at, data: { columns: mergeMapColumns(
+            entry.data?.columns, current.data?.columns, this.mapColumns, this.mapBytes) } });
+          else if (!current) this.latest.set(topic, entry);
+        } })
       .finally(() => { this.inflight = null; });
     return this.inflight;
   }

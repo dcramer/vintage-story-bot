@@ -24,12 +24,17 @@ export class Controller {
   // Operator telemetry only: never awaited, never affects gameplay.
   trace(request, result) {
     const { action, ...args } = request;
-    if (action === 'sense') { if (result.ok) this.telemetry.publish('state', result.state, { coalesce: true }); return; }
+    const perception = () => {
+      if (!result.ok) return;
+      this.telemetry.publish('state', result.state, { coalesce: true });
+      if (result.surface?.columns?.length) this.telemetry.publish('map', { columns: result.surface.columns }, { coalesce: true });
+    };
+    if (action === 'sense') { perception(); return; }
     if (action === 'observe') { if (result.ok) this.telemetry.publish('state', result, { coalesce: true }); return; }
     if (action === 'control_frame' || action === 'control_step') {
       const { owner, session, after, ...frame } = args;
       this.telemetry.publish('frame', frame, { coalesce: true });
-      if (action === 'control_step' && result.ok) this.telemetry.publish('state', result.state, { coalesce: true });
+      if (action === 'control_step') perception();
       return;
     }
     if (action === 'scan' && result.ok) { this.telemetry.publish('scan', { match: args.match, kind: args.kind, radius: args.radius, objects: result.objects }, { coalesce: true }); return; }

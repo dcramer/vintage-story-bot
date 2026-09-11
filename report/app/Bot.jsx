@@ -1,6 +1,8 @@
-import { bots, now, vitalHistory } from './store.js';
-import { fmt, time, code, point, phaseDetail, shownProgressKeys, stateClass, goalTitle } from './format.js';
+import { useEffect } from 'preact/hooks';
+import { atlasFor, bots, loadAtlas, now, vitalHistory } from './store.js';
+import { ago, fmt, time, code, point, phaseDetail, shownProgressKeys, stateClass, goalTitle } from './format.js';
 import { Meter, Seen, GoalLine, Completion, StateTags, Dl, LogTable, logRows, Tag } from './ui.jsx';
+import { atlasStats, WorldMap } from './Map.jsx';
 
 function Sparkline({ rows }) {
   if (rows.length < 2) return <div class="muted" style={{ height: 96 }}>collecting…</div>;
@@ -29,9 +31,11 @@ function Live({ stream }) {
   </section>;
 }
 export function Bot({ id }) {
+  useEffect(() => loadAtlas(id), [id]);
   const bot = bots.value[id];
-  if (!bot) return <main><div class="empty">Bot "{id}" has not reported within the retention window.</div></main>;
+  if (!bot) return <main><div class="empty">Seraph "{id}" has not reported within the retention window.</div></main>;
   const s = bot.topics.state?.data ?? {}, g = bot.topics.goal?.data, n = bot.topics.navigation?.data, c = bot.topics.controller?.data, scan = bot.topics.scan?.data;
+  const atlas = atlasFor(id), mapStats = atlasStats(atlas);
   const p = g?.progress ?? {}, progressRest = p.truncated ? [['progress', 'truncated']] : Object.entries(p).filter(([k]) => !shownProgressKeys.has(k));
   const hotbar = (s.hotbar ?? []).slice(0, 10);
   return <main class="grid detail">
@@ -42,6 +46,12 @@ export function Bot({ id }) {
       <div class="body"><div><Completion g={g} />
         <Dl rows={[...progressRest, ['started', g?.startedAt ? time(g.startedAt) : null], ['finished', g?.finishedAt ? time(g.finishedAt) : null], ['reason', g?.reason], ['result', g?.result], ['cleanup', g?.cleanupError], ['id', g?.id?.slice(0, 8)]]} /></div>
         <Activity bot={bot} /></div>
+    </section>
+    <section class="wide panel bot-map-panel">
+      <div class="panel-title map-title"><div><span class="eyebrow">Seen by {bot.id}</span><h2>Explored world</h2></div>
+        <span class="panel-count">{mapStats.known.toLocaleString()} columns{mapStats.oldest ? ` · ${ago(mapStats.oldest, now.value)}` : ''}</span></div>
+      <WorldMap bots={[bot]} detailed />
+      <div class="map-footer"><span>Game map colors</span><span>Long-horizon sight history</span><span>Blank ground is unknown</span></div>
     </section>
     <section><h2>Vitals</h2>
       <Meter name="health" vital={s.vitals?.health} lowAt={.3} /><Meter name="hunger" vital={s.vitals?.hunger} lowAt={.2} /><Meter name="oxygen" vital={s.vitals?.oxygen} lowAt={.2} />

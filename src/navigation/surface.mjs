@@ -16,8 +16,8 @@ export class SurfaceMemory {
     this.now = snapshot.clock ?? this.now;
     // Completed passes of the mod's eye over the current view.
     this.sweeps = snapshot.sweeps ?? this.sweeps;
-    for (const [x, z, y, kind, step, code, at] of snapshot.columns ?? [])
-      this.columns.set(columnKey(x, z), { x, z, y, kind, step, code, at: at ?? this.now });
+    for (const [x, z, y, kind, step, code, at, color] of snapshot.columns ?? [])
+      this.columns.set(columnKey(x, z), { x, z, y, kind, step, code, color, at: at ?? this.now });
     for (const [id, column] of this.columns) if (this.now - column.at > this.ttlMs) this.columns.delete(id);
     while (this.columns.size > this.capacity) this.columns.delete(this.columns.keys().next().value);
     return snapshot.columns?.length ?? 0;
