@@ -6,6 +6,7 @@ using System.Text.Json;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
+using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
 
 namespace VintageStoryAI;
@@ -25,6 +26,10 @@ public sealed class AiBridgeMod : ModSystem
     private bool moveSprint;
     private bool moveSneak;
     private bool handSneak;
+    private long handSneakArmedAt;
+    // Ticks are 20ms; hold the interaction button this long after pressing shift so the ShiftKey control packet
+    // reaches the server first (see SetHandButtons). A few ticks of margin because our tick trails SystemPlayerControl.
+    private const long SneakArmMs = 60;
     private long stopAt;
     private string? handAction;
     private string? handTarget;
@@ -265,7 +270,7 @@ public sealed class AiBridgeMod : ModSystem
         if (lifetime == null || entity == null)
             return new { ok = false, error = "Bridge requires an active world." };
 
-        if (action.GetString() is "move_to" or "move" or "look" or "select" or "interact" or "attack" or "stop" or "respawn" or "craft" or "inventory_move" or "block_action_begin" or "block_action_continue" or "select_recipe")
+        if (action.GetString() is "move_to" or "move" or "look" or "aim_cell" or "select" or "interact" or "attack" or "stop" or "respawn" or "craft" or "inventory_move" or "block_action_begin" or "block_action_continue" or "select_recipe")
         {
             if (action.GetString() != "stop" && control.Active)
                 return new { ok = false, error = "Controller owns inputs; stop it before another mutation." };
@@ -279,7 +284,7 @@ public sealed class AiBridgeMod : ModSystem
                 return new
                 {
                     ok = true,
-                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat" },
+                    capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "forage_state", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell" },
                     observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
                     world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString() },
@@ -426,6 +431,54 @@ public sealed class AiBridgeMod : ModSystem
                 api.Input.MouseYaw = entity.Pos.Yaw = (float)(NormalizeDegrees(yaw) * Math.PI / 180);
                 api.Input.MousePitch = entity.Pos.Pitch = (float)(Math.PI + pitch * Math.PI / 180);
                 return new { ok = true, status = "looking", yawDegrees = NormalizeDegrees(yaw), pitchDegrees = pitch };
+            case "aim_cell":
+            {
+                if (!TryInteger(request, "x", out int ax) || !TryInteger(request, "y", out int ay) || !TryInteger(request, "z", out int az))
+                    return new { ok = false, error = "Supply integer cell x, y, z." };
+                if (!CanControl()) return new { ok = false, error = "Close menus and enter the world before aiming." };
+                if (!entity.Alive || api.IsGamePaused) return new { ok = false, error = "Cannot aim while dead or paused." };
+                var cellPos = new BlockPos(ax, ay, az, 0);
+                if (api.World.BlockAccessor.GetChunkAtBlockPos(cellPos) == null)
+                    return new { ok = false, error = "Target cell unloaded." };
+                var eyeVec = entity.Pos.XYZ.Add(entity.LocalEyePos);
+                var aimEye = new Point3(eyeVec.X, eyeVec.Y, eyeVec.Z);
+                if (SceneGeometry.Distance(aimEye, new Point3(ax + 0.5, ay + 0.5, az + 0.5)) > 8)
+                    return new { ok = false, error = "Target cell out of reach." };
+                string? aimFace = request.TryGetProperty("face", out var faceField) && faceField.ValueKind == JsonValueKind.String ? faceField.GetString() : null;
+                Point3 aimTarget;
+                if (request.TryGetProperty("voxel", out var voxelField) && voxelField.ValueKind == JsonValueKind.Array)
+                {
+                    var v = voxelField.EnumerateArray().Select(e => e.TryGetInt32(out int n) ? n : -1).ToArray();
+                    if (v.Length != 3 || v.Any(n => n < 0 || n > 15)) return new { ok = false, error = "voxel must be three integers 0-15." };
+                    // Voxel top-centre, for aiming at knapping/clay surface voxels.
+                    aimTarget = new Point3(ax + (v[0] + 0.5) / 16.0, ay + (v[1] + 0.95) / 16.0, az + (v[2] + 0.5) / 16.0);
+                }
+                else
+                {
+                    // Aim at the centre of the requested face of the block's actual selection box, so the ray lands on it.
+                    var aimBlock = api.World.BlockAccessor.GetBlock(cellPos);
+                    var aimBoxes = aimBlock.GetSelectionBoxes(api.World.BlockAccessor, cellPos);
+                    var box = aimBoxes is { Length: > 0 } ? aimBoxes[0] : new Cuboidf(0, 0, 0, 1, 1, 1);
+                    double mx = (box.X1 + box.X2) / 2, my = (box.Y1 + box.Y2) / 2, mz = (box.Z1 + box.Z2) / 2;
+                    aimTarget = aimFace switch
+                    {
+                        "up" => new Point3(ax + mx, ay + box.Y2 - 0.02, az + mz),
+                        "down" => new Point3(ax + mx, ay + box.Y1 + 0.02, az + mz),
+                        "north" => new Point3(ax + mx, ay + my, az + box.Z1 + 0.02),
+                        "south" => new Point3(ax + mx, ay + my, az + box.Z2 - 0.02),
+                        "west" => new Point3(ax + box.X1 + 0.02, ay + my, az + mz),
+                        "east" => new Point3(ax + box.X2 - 0.02, ay + my, az + mz),
+                        _ => new Point3(ax + mx, ay + my, az + mz),
+                    };
+                }
+                var (aimYaw, aimPitch) = SceneGeometry.LookAt(aimEye, aimTarget);
+                aimPitch = Math.Clamp(aimPitch, -89, 89);
+                StopHandAction();
+                api.Input.MouseYaw = entity.Pos.Yaw = (float)(SceneGeometry.Normalize(aimYaw) * Math.PI / 180);
+                api.Input.MousePitch = entity.Pos.Pitch = (float)(Math.PI + aimPitch * Math.PI / 180);
+                return new { ok = true, status = "aiming", yawDegrees = SceneGeometry.Normalize(aimYaw), pitchDegrees = aimPitch,
+                    target = new { x = aimTarget.X, y = aimTarget.Y, z = aimTarget.Z } };
+            }
             case "select":
                 var hotbar = api.World!.Player.InventoryManager.GetHotbarInventory();
                 if (!TryInteger(request, "slot", out int slot) || hotbar == null || slot < 0 || slot > 9 || slot >= hotbar.Count)
@@ -469,11 +522,14 @@ public sealed class AiBridgeMod : ModSystem
                 StopMovement();
                 StopHandAction();
                 handSneak = sneakHand;
+                handSneakArmedAt = sneakHand ? Environment.TickCount64 : 0;
                 handAction = action.GetString();
                 handTarget = CurrentTargetKey();
                 handSlot = api.World!.Player.InventoryManager.ActiveHotbarSlotNumber;
                 handItem = api.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible.Code.ToString();
-                handStopAt = Environment.TickCount64 + handMilliseconds;
+                // For sneak interactions the button press is delayed until shift has synced (SneakArmMs), so extend
+                // the deadline to preserve the requested hold once the button actually goes down.
+                handStopAt = Environment.TickCount64 + handMilliseconds + (sneakHand ? SneakArmMs : 0);
                 SetHandButtons();
                 return new { ok = true, status = "started", durationMs = handMilliseconds };
             case "chat":
@@ -799,18 +855,35 @@ public sealed class AiBridgeMod : ModSystem
 
     private void SetHandButtons()
     {
-        // The game's interaction system reads these states and performs the usual
-        // item/block callbacks and multiplayer packets, including break duration.
-        api.Input.InWorldMouseButton.Left = handAction == "attack";
-        api.Input.InWorldMouseButton.Right = handAction == "interact";
+        // We simulate a real player, so interactions must go through the game's own input pipeline: setting these
+        // states makes SystemMouseInWorldInteractions run the normal item/block callbacks and, crucially, send the
+        // same client->server packets a human's click sends. We never write blocks/inventory directly (that is
+        // client-only prediction the server discards). The mod is only a cheaper substitute for driving the GUI.
+        //
+        // Shift-gated interactions (knapping/clay surface placement, ground storage) need the server to already know
+        // ShiftKey is held. ShiftKey syncs on its own packet (MoveKeyChange, id 21) that SystemPlayerControl emits a
+        // tick before our tick; the held-use "start" packet (id 25) is emitted the same tick we press the button. If
+        // we pressed shift and the button together, the server would apply the interaction before it learned shift
+        // was down and silently skip the shift branch. So arm shift first and hold the button until it has synced.
+        bool sneakArmed = !handSneak || (handSneakArmedAt != 0 && Environment.TickCount64 - handSneakArmedAt >= SneakArmMs);
         if (handSneak) SetSneak(api.World.Player.Entity.Controls, true);
+        api.Input.InWorldMouseButton.Left = handAction == "attack" && sneakArmed;
+        api.Input.InWorldMouseButton.Right = handAction == "interact" && sneakArmed;
     }
 
-    private static void SetSneak(EntityControls controls, bool pressed)
+    private int shiftKeyCode = -2;
+
+    private void SetSneak(EntityControls controls, bool pressed)
     {
         // ShiftKey is the interaction modifier (ground placement, knapping, clay forming); Sneak is the motion state.
         controls.Sneak = pressed;
         controls.ShiftKey = pressed;
+        // SystemPlayerControl overwrites these from the keyboard every tick and only syncs a control flag to the
+        // server when it changes. Setting the controls directly is clobbered before it reaches the server, so drive
+        // the shift key in the keyboard state; the game's own control sync then tells the server ShiftKey is held.
+        if (shiftKeyCode == -2) shiftKeyCode = api.Input.GetHotKeyByCode("shift")?.CurrentMapping.KeyCode ?? -1;
+        if (shiftKeyCode >= 0 && shiftKeyCode < api.Input.KeyboardKeyState.Length)
+            api.Input.KeyboardKeyState[shiftKeyCode] = pressed;
     }
 
     private void StopHandAction()

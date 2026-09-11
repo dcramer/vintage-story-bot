@@ -19,7 +19,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 
 - [x] `scan` — awareness ≤8, cone sight ≤64, paged cursors, forage/ripe flags.
 - [x] `inspect_target` — crosshair block/entity, HUD text, hints, forming state.
-- [~] `aim_cell` — aim at cell/face/voxel by coordinates (uncommitted; verify on MP).
+- [x] `aim_cell` — aim at a cell/face/voxel by coordinates using the block's real selection-box geometry; used by forming placement instead of caller-computed angles.
 - [ ] **P1 · `block_at {x,y,z}`** — code/state of one cell if observed or remembered; `unknown` otherwise, never air (`game`, `ctl`). Mineflayer `blockAt`. Source: terrain memory + last scan; no hidden-world lookup.
 - [ ] **P1 · `can_see {x,y,z}`** — sampled sightline from eye to cell (`mod`). Mineflayer `canSeeBlock`. Prerequisite for interact-range goals.
 - [ ] **P1 · `find_blocks {match,radius,limit}`** — thin alias over `scan` with `kind:blocks` and remembered sightings merged, tagged observed/remembered (`ctl`). Mineflayer `findBlocks`.
@@ -41,7 +41,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 
 - [x] `dig_block`, `place_block` — guarded single-cell, verified by client-observed change.
 - [x] `attack_block`, `interact` — raw hold left/right click.
-- [~] `use_on_block` — till/plant/water/ignite/sneak ground placement; not live-verified.
+- [~] `use_on_block` — till/plant/water/ignite/sneak ground placement; not live-verified. Sneak (shift) variants share the held-item shift-arming fix and the knap PAUSE until verified on MP.
 - [x] `dig_area`, `build` — multi-cell goals; `build` presets house/pit_kiln.
 - [ ] **P0 · `place_block` on wall face at height** — verify torch-on-wall and gable placement (needs standing spot + up-face reach). Currently unverified for non-ground faces (`skill`).
 - [ ] **P0 · `ignite {target}`** — firestarter/torch on pit kiln or firepit, verified by block-state change to burning (`skill`; probably `use_on_block` + `expectAfter`).
@@ -93,9 +93,9 @@ Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 
 ## 8. Crafting stations (Vintage Story specific)
 
-- [~] `knap`, `clayform`, `select_recipe` — surface place + recipe select verified on MP; **knap does not convert to output at remaining 0** (client/server voxel desync suspected). Fix first (`mod`).
-- [ ] **P0 · knap output conversion** — reproduce, confirm whether last chip must be server-observed; consider re-inspecting server state after each chip (`mod`).
-- [ ] **P1 · knap efficiency** — clear recipe-adjacent boundary ring first so `tryBfsRemove` floods the bulk (`skill`).
+- [~] `knap`, `clayform`, `select_recipe` — **PAUSED, unverified. Do not rely on these yet.** Root cause of the earlier "client-only" behavior found: held-item interactions were a shift-key control-packet race — the surface-placement/select packets reached the server before it learned ShiftKey was held, so it silently skipped the shift branch and nothing persisted (flint refunded on reconnect). Fix implemented (`SetHandButtons` arms shift `SneakArmMs` before the button; `select_recipe` applies the selection like the native dialog; border-first chipping; `aim_cell` cell-based aiming). **Not live-verified**: singleplayer cannot reproduce the race (one process), and every multiplayer/story test world spawned hostile (rust-zone attrition, night mobs, starvation) so the bot died before a run completed. See docs/capabilities.md "Held-item interactions" and memory `held-item-mp-shift-race`.
+- [ ] **P0 · verify knap end-to-end on multiplayer** — fed, daytime, stable spawn: place surface → reconnect → confirm it persists and flint is consumed → carve → knife blade in inventory. Same path validates `clayform` and `use_on_block` (shared shift arming).
+- [x] **knap efficiency** — border-first chipping so `tryBfsRemove` floods the bulk; verified 74→20 chips client-side.
 - [ ] **P1 · `clayform` order policy** — vessel → pot → bowl sequencing helper (`goal`).
 - [ ] **P2 · smithing** — anvil voxel work with hammer on a heated ingot; heat state and anvil tier gate it; same adapter family (`mod`, `skill`).
 

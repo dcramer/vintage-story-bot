@@ -1,6 +1,6 @@
 import { horizontal, lookAt, normalize } from '../navigation/terrain.mjs';
 import { equip, itemCount, ownedSlots } from './inventory.mjs';
-import { parseBlockKey, selectCell, useOnBlock } from './use.mjs';
+import { parseBlockKey, replaceablePlant, useOnBlock } from './use.mjs';
 
 export const kinds = {
   knapping: { surface: 'knappingsurface', materials: s => s.code === 'game:flint' || /^game:stone-/.test(s.code) },
@@ -25,15 +25,29 @@ async function inspectSurface(field, cell, point) {
   return null;
 }
 
-// Ground block one step ahead with a free cell above it, as observed terrain memory.
-function groundAhead(field) {
-  const p = field.latest.position, w = field.latest.body.halfWidth, h = field.latest.body.height;
-  for (const offset of [0, 45, -45, 90, -90, 135, -135, 180]) {
-    const radians = normalize(field.latest.orientation.yawDegrees + offset) * Math.PI / 180;
-    const x = Math.floor(p.x + Math.sin(radians) * 1.5), z = Math.floor(p.z + Math.cos(radians) * 1.5), y = Math.floor(p.y) - 1;
-    const ground = field.env.map.get(x, y, z), above = field.env.map.get(x, y + 1, z);
-    if (ground && !ground.hazard && ground.boxes.some(b => Math.abs(b[4] - (y + 1)) < .01) && above && !above.hazard && !above.boxes.length &&
-        !(Math.floor(p.x) === x && Math.floor(p.z) === z)) return { x, y, z };
+// Find a solid ground cell with an exposed top face to place a forming surface on, aiming by cell id
+// (the mod aims at the block's real selection box) rather than caller-computed angles. Forest floor is
+// uneven, so several nearby cells are tried; grass above the cell is replaced by the surface on placement.
+async function aimGround(field) {
+  const state = await field.observe();
+  const p = state.position;
+  const tried = new Set();
+  for (const offset of [0, 25, -25, 50, -50, 90, -90]) for (const dist of [1.3, 1.0, 1.7]) {
+    const radians = normalize(state.orientation.yawDegrees + offset) * Math.PI / 180;
+    const x = Math.floor(p.x + Math.sin(radians) * dist), z = Math.floor(p.z + Math.cos(radians) * dist), y = Math.floor(p.y) - 1;
+    const id = `${x},${y},${z}`;
+    if (tried.has(id) || (Math.floor(p.x) === x && Math.floor(p.z) === z)) continue;
+    tried.add(id);
+    const aim = await field.send({ action: 'aim_cell', x, y, z, face: 'up' });
+    if (!aim.ok) continue;
+    await field.observe();
+    const sel = await field.send({ action: 'inspect_target' });
+    if (!sel.key?.startsWith('block:') || sel.face !== 'up' || replaceablePlant(sel.code)) continue;
+    const hit = parseBlockKey(sel.key);
+    if (hit.x !== x || hit.y !== y || hit.z !== z) continue; // occluded or grazed a neighbour
+    const above = field.env.map.get(hit.x, hit.y + 1, hit.z);
+    if (above && above.boxes.length) continue; // top not free for a surface
+    return sel;
   }
   return null;
 }
@@ -58,10 +72,9 @@ export async function form(field, { kind, output, material }) {
     if (detail?.forming && detail.forming.material === material && (!detail.forming.recipe || detail.forming.recipe.output === output)) { cell = candidate; break; }
   }
   if (!cell) {
-    const ground = groundAhead(field);
-    if (!ground) throw Error('No free flat ground block ahead for a surface; move to level ground');
-    const groundDetail = await selectCell(field, ground, { point: { x: ground.x + .5, y: ground.y + .999, z: ground.z + .5 }, face: 'up', clearPlants: true });
-    if (!groundDetail) throw Error('Ground block ahead not selectable');
+    const groundDetail = await aimGround(field);
+    if (!groundDetail) throw Error('No selectable flat ground ahead for a surface; move to level ground');
+    const ground = parseBlockKey(groundDetail.key);
     field.report('placing_surface', summary({ ground: groundDetail.key }));
     const placed = await useOnBlock(field, { target: groundDetail.key, item: material, sneak: true, holdMs: 300, consume: true, expectDialog: true });
     if (!placed.ok) return { ok: false, reason: 'surface_not_created', ...summary(), detail: placed };

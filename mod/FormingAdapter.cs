@@ -25,11 +25,21 @@ public sealed class FormingAdapter(ICoreClientAPI api)
     {
         var recipe = be.SelectedRecipe;
         var extra = new List<int[]>();
-        if (recipe != null)
-            for (int x = 0; x < 16 && extra.Count < Cap; x++) for (int z = 0; z < 16 && extra.Count < Cap; z++)
-                if (be.Voxels[x, z] && !recipe.Voxels[x, 0, z]) extra.Add([x, 0, z]);
         int remaining = 0;
-        if (recipe != null) for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) if (be.Voxels[x, z] != recipe.Voxels[x, 0, z]) remaining++;
+        if (recipe != null)
+        {
+            // A recipe voxel horizontally adjacent to (x,z); chipping these border voxels first severs the
+            // surrounding block from the final piece so the game's flood removal (tryBfsRemove) clears the rest.
+            bool Keep(int x, int z) => x >= 0 && x < 16 && z >= 0 && z < 16 && recipe.Voxels[x, 0, z];
+            bool Border(int x, int z) => Keep(x - 1, z) || Keep(x + 1, z) || Keep(x, z - 1) || Keep(x, z + 1);
+            for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++)
+            {
+                if (be.Voxels[x, z] != recipe.Voxels[x, 0, z]) remaining++;
+                if (be.Voxels[x, z] && !recipe.Voxels[x, 0, z]) extra.Add([x, 0, z]);
+            }
+            // Border voxels first; the remaining bulk then falls away in a few flood chips.
+            extra = extra.OrderByDescending(v => Border(v[0], v[2])).Take(Cap).ToList();
+        }
         return new
         {
             kind = "knapping", material = be.BaseMaterial?.Collectible?.Code?.ToString(), layer = 0,
@@ -141,7 +151,40 @@ public sealed class FormingAdapter(ICoreClientAPI api)
             flag.SetValue(dialog, true);
             dialog.TryClose();
         }
+        // Apply the selection on the client exactly as the native dialog's onSelectedRecipe does (set the field
+        // and regenerate the surface), then send the same packet to the server. Packet alone does not update this client.
+        switch (be)
+        {
+            case BlockEntityKnappingSurface:
+                SetPrivateField(be, "selectedRecipeId", recipeId);
+                InvokePrivate(be, "RegenMeshAndSelectionBoxes");
+                break;
+            case BlockEntityClayForm:
+                InvokePrivate(be, "setSelectedRecipe", recipeId);
+                break;
+        }
         api.Network.SendBlockEntityPacket(pos, 1001, SerializerUtil.Serialize(recipeId));
-        return new { ok = true, status = "submitted", recipe = recipeId, target = targetField.GetString() };
+        // Report the real outcome: only claim success once the surface actually holds the recipe.
+        int? applied = be switch
+        {
+            BlockEntityKnappingSurface k => k.SelectedRecipe?.RecipeId,
+            BlockEntityClayForm c => c.SelectedRecipe?.RecipeId,
+            _ => null,
+        };
+        if (applied != recipeId)
+            return new { ok = false, error = "Recipe did not apply to the surface; it may be out of reach or protected by a land claim." };
+        return new { ok = true, status = "selected", recipe = recipeId, target = targetField.GetString() };
+    }
+
+    private static void SetPrivateField(object target, string name, object value)
+    {
+        var field = target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        field?.SetValue(target, value);
+    }
+
+    private static void InvokePrivate(object target, string name, params object[] args)
+    {
+        var method = target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        method?.Invoke(target, args);
     }
 }

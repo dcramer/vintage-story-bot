@@ -54,6 +54,15 @@ Tool contracts: [schemas](../src/controller/actions.mjs); wire protocol: [archit
 - Damage: `EntityBehavior.OnEntityReceiveDamage`/`OnEntityDeath` and `EntityPlayer.DeathReason` are source entry points, not proof the client receives reliable attacker/cause. Current health deltas intentionally do not attribute attackers.
 - `EntityBehaviorHealth.UpdateMaxHealth` makes a full health bar follow its nutrition cap. Full→full cap shrink is not damage; any observed loss below the cap still interrupts. Do not use a blanket small-damage tolerance. Bounded environmental exceptions are losses ≤0.5 hp while own `temporalStability` <0.15 or food is zero (`health_lost.cause="instability"|"starvation"`, `life.lastAttritionAt`), never `lastDamageAt`; low-health alerts still apply.
 
+## Held-item interactions
+
+Native block break/place go through the game's mining/placement path and apply server-side. Held-item use (right/left click with an item) is different and multiplayer-fragile:
+
+- The client sends the interaction as a hand-interaction packet (`SendHandInteraction`, packet id 25); the server re-runs the collectible's `OnHeldInteractStart`/`OnHeldAttackStop` on its own `player.Entity`, using the server's copy of the entity controls, not anything in the packet. So client-only prediction (the surface appears, voxels carve) does not mean the server did anything; verify by reconnecting or by a downstream server effect (item consumed/produced).
+- Shift-gated interactions (knapping/clay surface placement, ground storage) read `Controls.ShiftKey` server-side. ShiftKey reaches the server only on its own control packet (`MoveKeyChange`, id 21), sent when the flag changes, and `SystemPlayerControl` ticks before the mod each frame. Pressing shift and the interaction button on the same tick makes the server apply the interaction before it learns shift is held, and it silently skips the shift branch with no audit line. The mod arms shift a few ticks before pressing the button (`SneakArmMs`, `SetHandButtons`); keep that ordering for any new shift interaction.
+- ShiftKey is driven by writing the shift key in `KeyboardKeyState` (what `SystemPlayerControl` reads), not by setting `Controls.ShiftKey`, which is overwritten from the keyboard each tick. `Sneak` (motion) is additionally gated by mouse-grab and stays off for an ungrabbed bot; the interaction modifier the game checks is `ShiftKey`.
+- Singleplayer runs client and server in one process, so this control-packet race cannot occur there; it reproduces and must be verified on a multiplayer server.
+
 ## Online references
 
 - [World queries/rays/recipes](https://apidocs.vintagestory.at/api/Vintagestory.API.Common.IWorldAccessor.html)

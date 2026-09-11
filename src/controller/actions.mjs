@@ -39,6 +39,7 @@ import selectRecipe from './actions/select_recipe.mjs';
 import knap from './actions/knap.mjs';
 import clayform from './actions/clayform.mjs';
 import chat from './actions/chat.mjs';
+import aimCell from './actions/aim_cell.mjs';
 
 export const actions = [
   api,
@@ -81,5 +82,6 @@ export const actions = [
   knap,
   clayform,
   chat,
+  aimCell,
   stop,
 ];
