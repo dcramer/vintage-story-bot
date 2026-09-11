@@ -8,16 +8,18 @@
   },
   "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "controller": "node src/controller/server.mjs",
-    "controller:dev": "node --watch src/controller/server.mjs",
+    "controller": "node --env-file-if-exists=.env src/controller/server.mjs",
+    "controller:dev": "node --watch --env-file-if-exists=.env src/controller/server.mjs",
     "dashboard": "node src/operator/dashboard.mjs",
     "mcp": "node src/mcp-server.mjs",
     "test": "node --test test/*.test.mjs",
-    "test:mod": "DOTNET_CLI_HOME=$PWD/.runtime/dotnet-home .dotnet/dotnet run --project test/GeometryTests.csproj",
+    "test:mod": "DOTNET_CLI_HOME=$PWD/.runtime/dotnet-home .dotnet/dotnet run --project test/mod/ModTests.csproj",
     "control": "node scripts/control.mjs",
     "goal:stick": "node scripts/collect-stick.mjs",
     "goal:gather": "node scripts/gather.mjs",
-    "mcp:smoke": "node scripts/mcp-smoke.mjs"
+    "mcp:smoke": "node scripts/mcp-smoke.mjs",
+    "report:dev": "pnpm dlx wrangler@4 dev -c report/wrangler.jsonc",
+    "report:deploy": "pnpm dlx wrangler@4 deploy -c report/wrangler.jsonc"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

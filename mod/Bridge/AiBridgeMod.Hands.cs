@@ -1,0 +1,171 @@
+using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+using Vintagestory.API.Client;
+using Vintagestory.API.Common;
+using Vintagestory.API.Config;
+using Vintagestory.API.MathTools;
+using Vintagestory.Client.NoObf;
+
+namespace VintageStoryAI;
+
+// Hotbar, held-item and block interactions through the vanilla mouse-button and shift-key pipeline.
+public sealed partial class AiBridgeMod
+{
+    private bool handSneak;
+    private long handSneakArmedAt;
+    // Ticks are 20ms; hold the interaction button this long after pressing shift so the ShiftKey control packet
+    // reaches the server first (see SetHandButtons). A few ticks of margin because our tick trails SystemPlayerControl.
+    private const long SneakArmMs = 60;
+    private string? handAction;
+    private string? handTarget;
+    private int? handSlot;
+    private string? handItem;
+    private long handStopAt;
+    private SystemMouseInWorldInteractions? worldInteractions;
+    private bool? priorWorldInteraction;
+
+    private object SelectHotbar(JsonElement request)
+    {
+        var entity = api.World!.Player.Entity;
+        var hotbar = api.World!.Player.InventoryManager.GetHotbarInventory();
+        if (!TryInteger(request, "slot", out int slot) || hotbar == null || slot < 0 || slot > 9 || slot >= hotbar.Count)
+            return new { ok = false, error = "Select ordinary hotbar slots 0–9; extra/offhand slots are not selection indices." };
+        if (!entity.Alive || api.IsGamePaused)
+            return new { ok = false, error = "Cannot select while dead or paused." };
+        StopHandAction();
+        api.World.Player.InventoryManager.ActiveHotbarSlotNumber = slot;
+        return new { ok = true, activeSlot = slot };
+    }
+
+    private object HandAction(string action, JsonElement request)
+    {
+        if (!TryInteger(request, "durationMs", out int handMilliseconds) || handMilliseconds < 1 || handMilliseconds > 2000)
+            return new { ok = false, error = "durationMs must be an integer from 1 to 2000." };
+        if (!CanControl())
+            return new { ok = false, error = "Close menus and enter the world before interacting." };
+        if (request.TryGetProperty("expectedTarget", out var expected) &&
+            (expected.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) || expected.GetString() != CurrentTargetKey()))
+        {
+            StopMovement();
+            StopHandAction();
+            return new { ok = false, error = "Target changed; observe and aim again." };
+        }
+        if (request.TryGetProperty("expectedState", out var expectedInventory) &&
+            (expectedInventory.ValueKind != JsonValueKind.String || !inventory.Matches(expectedInventory.GetString())))
+            return new { ok = false, error = "Inventory changed; inspect before interacting." };
+        if (request.TryGetProperty("expectedItem", out var expectedItem) &&
+            (expectedItem.ValueKind != JsonValueKind.Object || !TryInteger(expectedItem, "slot", out int itemSlot) ||
+             itemSlot != api.World!.Player.InventoryManager.ActiveHotbarSlotNumber ||
+             !expectedItem.TryGetProperty("code", out var itemCode) || itemCode.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) ||
+             itemCode.GetString() != api.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible.Code.ToString()))
+            return new { ok = false, error = "Held item changed; inspect before interacting." };
+        if (action == "attack" && api.World!.Player.CurrentBlockSelection == null)
+            return new { ok = false, error = "Aim at a block before attacking; entity combat is not supported yet." };
+        bool sneakHand = false;
+        if (request.TryGetProperty("sneak", out var handSneakField))
+        {
+            if (handSneakField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return new { ok = false, error = "sneak must be boolean." };
+            sneakHand = handSneakField.GetBoolean();
+        }
+        StopMovement();
+        StopHandAction();
+        handSneak = sneakHand;
+        handSneakArmedAt = sneakHand ? Environment.TickCount64 : 0;
+        handAction = action;
+        handTarget = CurrentTargetKey();
+        handSlot = api.World!.Player.InventoryManager.ActiveHotbarSlotNumber;
+        handItem = api.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible.Code.ToString();
+        // For sneak interactions the button press is delayed until shift has synced (SneakArmMs), so extend
+        // the deadline to preserve the requested hold once the button actually goes down.
+        handStopAt = Environment.TickCount64 + handMilliseconds + (sneakHand ? SneakArmMs : 0);
+        SetHandButtons();
+        return new { ok = true, status = "started", durationMs = handMilliseconds };
+    }
+
+    private object InventoryMove(string action, JsonElement request)
+    {
+        StopMovement();
+        StopHandAction();
+        return inventory.Move(request, action == "craft");
+    }
+
+    private object BlockActionBegin(JsonElement request)
+    {
+        var entity = api.World!.Player.Entity;
+        bool blockRecovery = request.TryGetProperty("allowStarvingRecovery", out var blockRecoveryField) &&
+            blockRecoveryField.ValueKind == JsonValueKind.True;
+        if (request.TryGetProperty("allowStarvingRecovery", out blockRecoveryField) &&
+            blockRecoveryField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            return new { ok = false, error = "allowStarvingRecovery must be boolean." };
+        if (!CanControl() || ManualInput() || NavigationDanger(blockRecovery) || !entity.OnGround || entity.FeetInLiquid || entity.MountedOn != null)
+            return new { ok = false, error = "Block actions need grounded, dry, ready controls." };
+        StopMovement(); StopHandAction();
+        return blockActions.Begin(request, inventory, blockRecovery);
+    }
+
+    private object Chat(JsonElement request)
+    {
+        if (!request.TryGetProperty("message", out var chatField) || chatField.ValueKind != JsonValueKind.String)
+            return new { ok = false, error = "Supply a message string." };
+        var chatText = chatField.GetString()!.Replace('\n', ' ').Replace('\r', ' ').Trim();
+        // Never let generated status text be interpreted as a chat command.
+        while (chatText.Length > 0 && (chatText[0] == '/' || chatText[0] == '.')) chatText = chatText[1..].TrimStart();
+        if (chatText.Length == 0) return new { ok = false, error = "Empty chat message." };
+        if (chatText.Length > 256) chatText = chatText[..256];
+        api.SendChatMessage(chatText, GlobalConstants.GeneralChatGroup, null);
+        return new { ok = true, status = "sent", message = chatText };
+    }
+
+    private void SetHandButtons()
+    {
+        // We simulate a real player, so interactions must go through the game's own input pipeline: setting these
+        // states makes SystemMouseInWorldInteractions run the normal item/block callbacks and, crucially, send the
+        // same client->server packets a human's click sends. We never write blocks/inventory directly (that is
+        // client-only prediction the server discards). The mod is only a cheaper substitute for driving the GUI.
+        //
+        // Shift-gated interactions (knapping/clay surface placement, ground storage) need the server to already know
+        // ShiftKey is held. ShiftKey syncs on its own packet (MoveKeyChange, id 21) that SystemPlayerControl emits a
+        // tick before our tick; the held-use "start" packet (id 25) is emitted the same tick we press the button. If
+        // we pressed shift and the button together, the server would apply the interaction before it learned shift
+        // was down and silently skip the shift branch. So arm shift first and hold the button until it has synced.
+        bool sneakArmed = !handSneak || (handSneakArmedAt != 0 && Environment.TickCount64 - handSneakArmedAt >= SneakArmMs);
+        if (handSneak) SetSneak(api.World.Player.Entity.Controls, true);
+        api.Input.InWorldMouseButton.Left = handAction == "attack" && sneakArmed;
+        api.Input.InWorldMouseButton.Right = handAction == "interact" && sneakArmed;
+    }
+
+    private int shiftKeyCode = -2;
+
+    private void SetSneak(EntityControls controls, bool pressed)
+    {
+        // ShiftKey is the interaction modifier (ground placement, knapping, clay forming); Sneak is the motion state.
+        controls.Sneak = pressed;
+        controls.ShiftKey = pressed;
+        // SystemPlayerControl overwrites these from the keyboard every tick and only syncs a control flag to the
+        // server when it changes. Setting the controls directly is clobbered before it reaches the server, so drive
+        // the shift key in the keyboard state; the game's own control sync then tells the server ShiftKey is held.
+        if (shiftKeyCode == -2) shiftKeyCode = api.Input.GetHotKeyByCode("shift")?.CurrentMapping.KeyCode ?? -1;
+        if (shiftKeyCode >= 0 && shiftKeyCode < api.Input.KeyboardKeyState.Length)
+            api.Input.KeyboardKeyState[shiftKeyCode] = pressed;
+    }
+
+    private void StopHandAction()
+    {
+        blockActions?.Cancel("stopped");
+        if (handAction != null)
+        {
+            api.Input.InWorldMouseButton.Left = false;
+            api.Input.InWorldMouseButton.Right = false;
+            if (handSneak && !moveSneak && api.World?.Player?.Entity != null) SetSneak(api.World.Player.Entity.Controls, false);
+        }
+        handSneak = false;
+        handAction = null;
+        handTarget = null;
+        handSlot = null;
+        handItem = null;
+    }
+}

@@ -1,0 +1,352 @@
+using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+using Vintagestory.API.Client;
+using Vintagestory.API.Common;
+using Vintagestory.API.Config;
+using Vintagestory.API.MathTools;
+using Vintagestory.Client.NoObf;
+
+namespace VintageStoryAI;
+
+// Lifecycle, loopback transport and request dispatch. Game access happens on the game tick only.
+public sealed partial class AiBridgeMod : ModSystem
+{
+    private const int Port = 42157;
+    private readonly ConcurrentQueue<PendingRequest> requests = new();
+    private ICoreClientAPI api = null!;
+    private CancellationTokenSource? lifetime;
+    private TcpListener? listener;
+    private long tickListener;
+    private SceneSensor sensor = null!;
+    private LifeTracker life = new();
+    private InventoryAdapter inventory = null!;
+    private ContextSensor context = null!;
+    private BlockActions blockActions = null!;
+    private readonly TerrainMap terrain = new(16384, 120000, 64);
+    private TerrainSensor terrainSensor = null!;
+
+    public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Client;
+
+    public override void StartClientSide(ICoreClientAPI api)
+    {
+        this.api = api;
+        control.Revoke("world_changed");
+        terrainSensor = new TerrainSensor(api, terrain);
+        api.Event.BlockChanged += terrainSensor.Changed;
+        api.Input.InWorldAction += RetainOwnedMovement;
+        sensor = new SceneSensor(api, CanControl);
+        inventory = new InventoryAdapter(api);
+        context = new ContextSensor(api);
+        blockActions = new BlockActions(api);
+        api.Event.BlockChanged += blockActions.Changed;
+        api.ChatCommands.Create("aibridge")
+            .WithDescription("Control the local AI bridge")
+            .HandleWith(_ => TextCommandResult.Success("Use .aibridge on to enable, or .aibridge off to stop. F7 enables; F8 stops."))
+            .BeginSubCommand("on")
+                .WithDescription("Enable control of this client's player")
+                .HandleWith(_ => StartBridge())
+            .EndSubCommand()
+            .BeginSubCommand("off")
+                .WithDescription("Stop movement and disable the bridge")
+                .HandleWith(_ => { StopBridge(); return TextCommandResult.Success("AI bridge off."); })
+            .EndSubCommand();
+
+        api.Input.RegisterHotKey("aibridgestart", "Enable AI bridge", GlKeys.F7, HotkeyType.GUIOrOtherControls);
+        api.Input.SetHotKeyHandler("aibridgestart", _ =>
+        {
+            api.ShowChatMessage(StartBridge().StatusMessage);
+            return true;
+        });
+        api.Input.RegisterHotKey("aibridgestop", "Stop AI bridge", GlKeys.F8, HotkeyType.GUIOrOtherControls);
+        api.Input.SetHotKeyHandler("aibridgestop", _ =>
+        {
+            StopBridge();
+            api.ShowChatMessage("AI bridge off.");
+            return true;
+        });
+        tickListener = api.Event.RegisterGameTickListener(OnTick, 20);
+        api.Logger.Notification("[AI bridge] Registered .aibridge, F7 enable, F8 stop.");
+        api.Event.LevelFinalize += OnLevelReady;
+        api.Event.LeaveWorld += StopBridge;
+    }
+
+    private void OnLevelReady()
+    {
+        worldInteractions = (api.World as ClientMain)?.clientSystems
+            .OfType<SystemMouseInWorldInteractions>().FirstOrDefault();
+        sensor.Reset();
+        terrainSensor.Reset();
+        control.Revoke("world_changed");
+        life = new LifeTracker();
+        inventory = new InventoryAdapter(api);
+        blockActions.Reset();
+        SampleLife();
+        bool registered = api.ChatCommands.Get("aibridge") != null;
+        api.Logger.Notification($"[AI bridge] World ready; command registered: {registered}");
+        api.ShowChatMessage(lifetime == null
+            ? "Diggy bridge ready. F7 enables bot control; F8 stops and disables it."
+            : "Diggy bridge enabled. F8 stops and disables bot control.");
+    }
+
+    private TextCommandResult StartBridge()
+    {
+        if (api.World?.Player?.Entity == null)
+            return TextCommandResult.Error("Join your server or enter a test world first.");
+        if (lifetime != null) return TextCommandResult.Success("AI bridge is already on.");
+
+        var server = new TcpListener(IPAddress.Loopback, Port);
+        try { server.Start(); }
+        catch (SocketException exception)
+        {
+            return TextCommandResult.Error($"Cannot open AI bridge: {exception.Message}");
+        }
+        listener = server;
+        lifetime = new CancellationTokenSource();
+        _ = ServeAsync(server, lifetime.Token);
+        return TextCommandResult.Success($"AI bridge listening on 127.0.0.1:{Port}. F8 stops it.");
+    }
+
+    // Networking only queues requests. All game access happens in OnTick.
+    private async Task ServeAsync(TcpListener server, CancellationToken stopped)
+    {
+        try
+        {
+            while (!stopped.IsCancellationRequested)
+            {
+                using var client = await server.AcceptTcpClientAsync(stopped).ConfigureAwait(false);
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stopped);
+                timeout.CancelAfter(TimeSpan.FromSeconds(3));
+                try
+                {
+                    var stream = client.GetStream();
+                    // One small JSON line per connection; cap memory and connection lifetime.
+                    var buffer = new byte[1024];
+                    int length = 0;
+                    while (length < buffer.Length)
+                    {
+                        int count = await stream.ReadAsync(buffer.AsMemory(length, 1), timeout.Token).ConfigureAwait(false);
+                        if (count == 0 || buffer[length] == (byte)'\n') break;
+                        length++;
+                    }
+                    object response;
+                    if (length == buffer.Length)
+                        response = new { ok = false, error = "Request exceeds 1023 bytes." };
+                    else
+                    {
+                        var completion = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+                        requests.Enqueue(new(Encoding.UTF8.GetString(buffer, 0, length), Environment.TickCount64, timeout.Token, completion));
+                        response = await completion.Task.WaitAsync(timeout.Token).ConfigureAwait(false);
+                    }
+                    byte[] output = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response) + "\n");
+                    await stream.WriteAsync(output, timeout.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { }
+                catch (IOException) { }
+                catch (SocketException) { }
+            }
+        }
+        catch (OperationCanceledException) when (stopped.IsCancellationRequested) { }
+        catch (SocketException) when (stopped.IsCancellationRequested) { }
+        catch (ObjectDisposedException) when (stopped.IsCancellationRequested) { }
+    }
+
+    private void OnTick(float dt)
+    {
+        if (lifetime != null)
+        {
+            priorWorldInteraction ??= api.Input.MouseWorldInteractAnyway;
+            bool ready = CanControl();
+            api.Input.MouseWorldInteractAnyway = ready;
+            if (ready && api.World is ClientMain client)
+            {
+                // Center the game's picking ray, not the OS pointer. Normal interactions/packets still apply.
+                client.MouseCurrentX = client.Width / 2;
+                client.MouseCurrentY = client.Height / 2;
+            }
+        }
+        SampleLife();
+
+        // Judge lease refreshes when the bridge received them, before expiring the
+        // owner on a delayed render tick. Requests cancelled by the network timeout
+        // are still discarded and cannot revive control.
+        while (requests.TryDequeue(out var pending))
+        {
+            if (pending.Cancellation.IsCancellationRequested) continue;
+            try { pending.Completion.TrySetResult(Execute(pending.Json, pending.ReceivedAt)); }
+            catch (JsonException) { pending.Completion.TrySetResult(new { ok = false, error = "Invalid JSON request." }); }
+            catch (Exception exception)
+            {
+                ReleaseControl("action_error");
+                StopMovement();
+                StopHandAction();
+                api.Logger.Error($"AI bridge request failed: {exception}");
+                pending.Completion.TrySetResult(new { ok = false, error = "Game action failed; see client log." });
+            }
+        }
+
+        if (lifetime != null && CanControl())
+        {
+            try
+            {
+                long now = Environment.TickCount64;
+                if (control.Active && (ManualInput() || control.Expire(now))) ReleaseControl(ManualInput() ? "manual_input" : "expired");
+                terrainSensor.Sample(now, sensorPriority);
+                if (control.Active) ApplyCamera(dt);
+            }
+            catch (Exception exception)
+            {
+                ReleaseControl("sensor_error");
+                StopMovement();
+                api.Logger.Error($"AI navigation failed: {exception}");
+            }
+        }
+        else if (control.Active) ReleaseControl("control_unavailable");
+        blockActions.Tick(CanControl() && !ManualInput() && !NavigationDanger(blockActions.StarvingRecovery) &&
+            api.World.Player.Entity.OnGround && !api.World.Player.Entity.FeetInLiquid);
+        if (handAction != null)
+        {
+            if (Environment.TickCount64 >= handStopAt || api.IsGamePaused ||
+                !CanControl() ||
+                handTarget != CurrentTargetKey() ||
+                (handSlot != null && (handSlot != api.World.Player.InventoryManager.ActiveHotbarSlotNumber ||
+                    handItem != api.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible.Code.ToString())))
+                StopHandAction();
+            else
+                SetHandButtons();
+        }
+        // Vanilla advances block/hand interactions from its final render pass. On a
+        // software-rendered or occluded client that pass can run far below the game
+        // tick rate, leaving a normal held click unable to make progress. Drive the
+        // same vanilla interaction system from the game tick while the bridge owns a
+        // hand action; elapsed game time still determines break/use speed and the
+        // usual callbacks, access checks and multiplayer packets remain authoritative.
+        if ((blockActions.Digging || handAction != null) && api.World is ClientMain interactionClient)
+        {
+            worldInteractions ??= interactionClient.clientSystems.OfType<SystemMouseInWorldInteractions>().FirstOrDefault();
+            worldInteractions?.OnFinalizeFrame(dt);
+        }
+        if (movingControls != null)
+        {
+            if (Environment.TickCount64 >= stopAt || !CanControl())
+                StopMovement();
+            else
+                SetMovement(true);
+        }
+
+    }
+
+    private object Execute(string json, long? receivedAt = null)
+    {
+        using var document = JsonDocument.Parse(json);
+        var request = document.RootElement;
+        if (request.ValueKind != JsonValueKind.Object || !request.TryGetProperty("action", out var action) || action.ValueKind != JsonValueKind.String)
+            return new { ok = false, error = "Expected an action string." };
+        if (lifetime == null || api.World?.Player?.Entity == null)
+            return new { ok = false, error = "Bridge requires an active world." };
+        string name = action.GetString()!;
+        if (Mutations.Contains(name))
+        {
+            if (name != "stop" && control.Active)
+                return new { ok = false, error = "Controller owns inputs; stop it before another mutation." };
+            if (name == "stop") ReleaseControl("stopped");
+        }
+        // One case per wire action; bodies live in the partial file owning that concern.
+        switch (name)
+        {
+            case "observe": return Observe();
+            case "sense": return Sense(request);
+            case "scan": return Scan(request);
+            case "inspect_target": return CanControl() ? context.InspectTarget(life.Session) : new { ok = false, error = "Close menus and unpause before inspecting." };
+            case "environment": return context.Environment(life.Session);
+            case "events": return Events(request);
+            case "respawn": return Respawn(request);
+            case "inventory": return inventory.Observe();
+            case "recipes": return Recipes(request);
+            case "inventory_move":
+            case "craft": return InventoryMove(name, request);
+            case "select": return SelectHotbar(request);
+            case "select_recipe": return context.Forming.SelectRecipe(request);
+            case "interact":
+            case "attack": return HandAction(name, request);
+            case "block_action_begin": return BlockActionBegin(request);
+            case "block_action_continue": return blockActions.Read(request, true);
+            case "block_action_status": return blockActions.Read(request, false);
+            case "chat": return Chat(request);
+            case "look": return Look(request);
+            case "aim_cell": return AimCell(request);
+            case "move": return Move(request);
+            case "control_begin": return ControlBegin(request);
+            case "control_end": return ControlEnd(request);
+            case "control_frame":
+            case "control_step": return ControlFrame(name, request, receivedAt);
+            case "stop":
+                StopMovement();
+                StopHandAction();
+                return new { ok = true, status = "stopped" };
+            default:
+                return new { ok = false, error = "Unknown action. Use observe, events, respawn, scan, look, select, move, interact, attack, or stop." };
+        }
+    }
+
+    // Wire actions refused while a control lease owns the inputs; stop releases it first.
+    private static readonly HashSet<string> Mutations = ["move_to", "move", "look", "aim_cell", "select", "interact", "attack", "stop", "respawn", "craft", "inventory_move", "block_action_begin", "block_action_continue", "select_recipe"];
+
+    private bool CanControl() => lifetime != null && api.World?.Player?.Entity?.Alive == true && !api.IsGamePaused &&
+        !api.Gui.OpenedGuis.Any(dialog => dialog.IsOpened() &&
+            (dialog.DialogType == EnumDialogType.Dialog || dialog.CaptureAllInputs() || dialog.DisableMouseGrab));
+
+    private void StopBridge()
+    {
+        ReleaseControl("bridge_off");
+        terrainSensor?.Reset();
+        sensor?.Reset();
+        StopMovement();
+        StopHandAction();
+        if (priorWorldInteraction.HasValue)
+        {
+            api.Input.MouseWorldInteractAnyway = priorWorldInteraction.Value;
+            priorWorldInteraction = null;
+        }
+        lifetime?.Cancel();
+        listener?.Stop();
+        lifetime?.Dispose();
+        lifetime = null;
+        listener = null;
+        while (requests.TryDequeue(out var pending)) pending.Completion.TrySetCanceled();
+    }
+
+    public override void Dispose()
+    {
+        StopBridge();
+        if (api != null)
+        {
+            api.Event.UnregisterGameTickListener(tickListener);
+            api.Event.LevelFinalize -= OnLevelReady;
+            api.Event.LeaveWorld -= StopBridge;
+            api.Event.BlockChanged -= terrainSensor.Changed;
+            api.Event.BlockChanged -= blockActions.Changed;
+            api.Input.InWorldAction -= RetainOwnedMovement;
+        }
+        base.Dispose();
+    }
+
+    private static bool TryNumber(JsonElement request, string name, out double value)
+    {
+        value = 0;
+        return request.TryGetProperty(name, out var field) && field.ValueKind == JsonValueKind.Number &&
+            field.TryGetDouble(out value) && double.IsFinite(value);
+    }
+
+    private static bool TryInteger(JsonElement request, string name, out int value)
+    {
+        value = 0;
+        return request.TryGetProperty(name, out var field) && field.ValueKind == JsonValueKind.Number && field.TryGetInt32(out value);
+    }
+
+    private static double NormalizeDegrees(double degrees) => (degrees % 360 + 360) % 360;
+
+    private sealed record PendingRequest(string Json, long ReceivedAt, CancellationToken Cancellation, TaskCompletionSource<object> Completion);
+}

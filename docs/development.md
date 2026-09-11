@@ -22,5 +22,5 @@ DOTNET_CLI_HOME="$PWD/.runtime/dotnet-home" .dotnet/dotnet build mod/VintageStor
 pnpm mcp:smoke
 ```
 
-Tests use temporary loopback mocks; require listener permission. Never target live game.
+Tests use temporary loopback mocks; require listener permission. Never target live game. C# checks compile selected `mod/` files into `test/mod/ModTests.csproj`.
 Smoke performs live MCP discovery + observe only. Distinguish mock/build/singleplayer/multiplayer evidence in handoff, not a documentation log.

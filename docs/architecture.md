@@ -13,7 +13,9 @@
 | `src/skills/` | Composable fieldwork, harvesting/eating and survival priority; shared session guards/memory; `task.mjs` goal harness. |
 | `src/mcp/` | MCP adapter only. `src/mcp-server.mjs` preserves registrations. |
 | `src/operator/` | Human/operator UI utilities; never import from gameplay or MCP. |
-| `mod/` | Visible sensing, input execution, smooth aiming, guard/expiry enforcement. |
+| `mod/Bridge/` | `AiBridgeMod` partials: lifecycle/transport/dispatch, `Sensing`, `Movement`, `Hands`; control lease and life tracker. |
+| `mod/Sensors/` | Read-only perception: scene/terrain/context/forage sensors, terrain memory, geometry. |
+| `mod/Actuators/` | Input-driven mutations: block actions, inventory transfer/craft, knapping/clay forming. |
 
 - Controller/goals/navigation cannot use screenshots, UI tools, OS focus, or hidden world queries.
 - One shared controller, one active goal. START ≠ completion; observe ids. Restart cancels goals; never auto-resume. Memory is ephemeral.
@@ -46,6 +48,8 @@ Loopback JSON line: `{action,...args}` → `{ok,...result}` or `{ok:false,error,
 ## Telemetry
 
 Controller → dashboard `POST /ingest` on `127.0.0.1:42159`: one long-lived chunked request of NDJSON lines `{topic,at,data,log}`; `at` is UTC ms, `log:true` appends to the dashboard event log, otherwise only the latest value per topic is kept. Fire-and-forget: bounded queue, coalesced fast topics, 2s reconnect, never awaited by gameplay and never a substitute for `goal_status`/`observe`. Topics: `controller` (info), `state` (observe/sense state), `frame` (control inputs), `navigation`, `scan`, `goal` (goal view), `action` (other game requests with `ok/error`). Dashboard consumers: `GET /state` snapshot, `GET /events` SSE (`snapshot|update|producers`). Any process may push lines to `/ingest`; the dashboard never sends game or controller requests.
+
+Fleet report (optional, `VINTAGE_STORY_REPORT_URL`): the controller also batches the same topics to the Cloudflare service in [report/](../report/worker.mjs) as `POST /api/report` `{bot:{id,host,pid,version},at,topics:{[topic]:{at,data}},log:[{topic,at,data}]}` with `authorization: Bearer <REPORT_TOKEN>`, one request per `VINTAGE_STORY_REPORT_INTERVAL_MS` (default 10s), body ≤128 KB. [Reporter](../src/controller/reporter.mjs) trims payloads: `frame` dropped, `scan` to the 12 nearest, `state` to identity/position/vitals/life/condition/hotbar/nearest entities, `goal` fields bounded, `action` log lines only for failures and non-polling requests. Same fire-and-forget rules as the dashboard: a failed batch keeps only the latest topics. Service state: one Durable Object holding latest topic per bot plus the last 200 log lines, evicting bots unseen for `RETENTION_HOURS` (default 6); no history beyond that. Consumers: `GET /` page, `GET /api/state` snapshot `{now,retentionMs,bots:[{id,meta,firstSeenAt,seenAt,topics,log}]}`, `GET /api/ws` WebSocket (`snapshot|bot|gone`). Reads require `VIEW_TOKEN` when set (`?token=` once, then cookie).
 
 ## Internal mod protocol
 
