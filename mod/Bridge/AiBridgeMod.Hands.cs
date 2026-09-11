@@ -93,6 +93,13 @@ public sealed partial class AiBridgeMod
         return inventory.Move(request, action == "craft");
     }
 
+    private object InventoryDrop(JsonElement request)
+    {
+        StopMovement();
+        StopHandAction();
+        return inventory.Drop(request);
+    }
+
     private object BlockActionBegin(JsonElement request)
     {
         var entity = api.World!.Player.Entity;
