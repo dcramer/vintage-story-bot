@@ -159,10 +159,16 @@ export class Navigation {
     const tight = horizontal(p, next) < 3 && (Math.abs(next.y - p.y) > .05 || turn > 20);
     const descent = next.y < p.y - .05;
     const durationMs = tight ? 180 : 500;
-    // Ignore tiny pursuit corrections; ease larger changes instead of retargeting the camera every sample.
+    // Ignore tiny pursuit corrections and ease bends while moving. For a
+    // large stationary turn, request the route yaw directly: remote control
+    // samples can be several seconds apart, and applying only 150ms worth of
+    // rotation per sample otherwise spends tens of seconds standing still.
+    // The branch below keeps forward released until the observed yaw catches
+    // up, so this does not weaken route validation.
     if (this.steeringYaw === null || now - this.steeringAt > 300) this.steeringYaw = state.orientation.yawDegrees;
     const delta = angle(desiredYaw, this.steeringYaw), dt = Math.min(.15, Math.max(.01, (now - this.steeringAt) / 1000));
-    if (Math.abs(delta) > 2) this.steeringYaw = normalize(this.steeringYaw + Math.sign(delta) * Math.min(Math.abs(delta), 120 * dt));
+    if (yawMagnitude > 30) this.steeringYaw = desiredYaw;
+    else if (Math.abs(delta) > 2) this.steeringYaw = normalize(this.steeringYaw + Math.sign(delta) * Math.min(Math.abs(delta), 120 * dt));
     this.steeringAt = now;
     const yawDegrees = this.steeringYaw;
     if (grounded && !this.jumpAt && Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) > 10) {
