@@ -77,6 +77,11 @@ test('terrain keeps planned standing centers clear of adjacent liquid hazards', 
   map.apply({ session: 'shore', reset: true, cursor: 1, clock: 0, cells });
   assert.equal(map.stand(.5, -.5, 1, .3, 1.85)?.y, 1);
   assert.equal(map.stand(.5, 0.5, 1, .3, 1.85), null);
+  const margin = { x: .5, y: 1, z: .5 }, safe = { x: .5, y: 1, z: -.5 };
+  assert.equal(map.clear(margin, .3, 1.85), true);
+  assert.equal(map.dry(margin, .3, 1.85), false);
+  assert.equal(map.traverse(margin, safe, .3, 1.85, true), true, 'dry player can leave a hazard margin');
+  assert.equal(map.traverse(safe, margin, .3, 1.85, true), false, 'safe route cannot enter a hazard margin');
 
   const deep = [];
   for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) for (let y = -2; y <= 3; y++) {

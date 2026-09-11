@@ -119,10 +119,16 @@ export class TerrainMemory {
     if (Math.abs(rise) > 1.06) return false;
     const jump = rise > .05, travelY = Math.max(from.y, to.y) + (jump ? .25 : 0);
     const steps = Math.max(1, Math.ceil(distance(from, to) * 10));
-    let support = 0;
+    // A returning point can itself be inside the braking margin while the
+    // player's actual body is dry. Permit a direct, supported exit toward a
+    // safe endpoint, but never allow a path to re-enter the margin once clear.
+    let support = 0, escapedHazardMargin = this.dry(from, w, h, .55, missing);
     for (let i = 0; i <= steps; i++) {
       const t = i / steps, p = { x: from.x + (to.x - from.x) * t, y: travelY, z: from.z + (to.z - from.z) * t };
-      if (!this.clear(p, w, h, missing) || !this.dry(p, w, h, .55, missing)) return false;
+      if (!this.clear(p, w, h, missing)) return false;
+      const dry = this.dry(p, w, h, .55, missing);
+      if (!dry && escapedHazardMargin) return false;
+      if (dry) escapedHazardMargin = true;
       if (Math.abs(rise) < .05) {
         const n = this.support(p, w, missing);
         if (recenter ? n === 0 || n < support : n !== 9) return false;
@@ -142,7 +148,7 @@ export class TerrainMemory {
     }
     for (const end of [from, to]) for (let y = end.y; y <= travelY + .01; y += .1)
       if (!this.clear({ ...end, y }, w, h, missing)) return false;
-    return this.support(to, w, missing) === 9;
+    return escapedHazardMargin && this.support(to, w, missing) === 9;
   }
   frontier(p, w, h) {
     const result = new Map();
