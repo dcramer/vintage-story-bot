@@ -4,6 +4,7 @@ import { Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
 import { accessibleForage, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat } from '../src/skills/threats.mjs';
+import { travel } from '../src/skills/travel.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
   freshness: { state: 'fresh', freshHoursLeft: 100 } });
@@ -145,4 +146,28 @@ test('route recovery clears soft visit penalties and rotates deterministically',
   field.resetExploration();
   assert.deepEqual([...field.visits], [['2,-2', 1]]);
   assert.equal(field.heading, 35);
+});
+
+test('long travel extends a productive partial detour instead of reversing it', async () => {
+  const initial = { position: { x: .5, y: 1, z: .5 }, condition: {} };
+  const detour = { x: .5, y: 1, z: 48.5, horizontalOnly: true, arrivalRadius: 4 };
+  const legs = [];
+  let latest = initial, walks = 0, explores = 0;
+  const field = {
+    moved: 0,
+    get latest() { return latest; },
+    observe: async () => latest,
+    report: () => {},
+    explore: () => { explores++; return detour; },
+    walk: async target => {
+      legs.push(target);
+      latest = ++walks === 1 ? { ...initial, position: { x: .5, y: 1, z: 10.5 } }
+        : { ...initial, position: { x: 100.5, y: 1, z: .5 } };
+      return { state: walks === 1 ? 'blocked' : 'arrived' };
+    },
+  };
+  const result = await travel(field, null, { x: 100.5, z: .5 });
+  assert.equal(result.ok, true);
+  assert.equal(explores, 1);
+  assert.deepEqual(legs, [detour, detour]);
 });
