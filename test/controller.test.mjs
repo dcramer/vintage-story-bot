@@ -104,6 +104,18 @@ test('navigation sneaks through a nearby sharp waypoint', () => {
   assert.equal(frame.sneak, true);
 });
 
+test('navigation releases sneak for a validated descent', () => {
+  const map = { cells: new Map(), support: () => 9, clear: () => true, traverse: () => true,
+    views: () => new Map() };
+  const state = { position: { x: .5, y: 1, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals: { hunger: { current: 1000, max: 1500 } } };
+  const nav = new Navigation(map, state, { x: 5.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
+  nav.state = 'moving'; nav.route = [{ x: 1.5, y: 0, z: .5 }]; nav.edgeStart = state.position;
+  const frame = nav.tick(state, 500);
+  assert.equal(frame.forward, true);
+  assert.equal(frame.sneak, false);
+});
+
 test('navigation keeps recentering safely from partial edge support', () => {
   const traversals = [];
   const map = { cells: new Map(), support: () => 9, clear: () => true,

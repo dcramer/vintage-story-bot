@@ -134,6 +134,9 @@ export class Navigation {
       Math.abs(angle(desiredYaw, state.orientation.yawDegrees)) < 5 &&
       food?.max > 0 && food.current / food.max >= .6;
     return { yawDegrees, pitchDegrees: 15, forward: horizontal(p, next) > .12,
-      jump: !!this.jumpAt && now - this.jumpAt < 200, sprint, sneak: tight && !this.jumpAt };
+      jump: !!this.jumpAt && now - this.jumpAt < 200, sprint,
+      // Sneak while lining up at a ledge, then release it so a validated
+      // downward route can actually step off the supporting block.
+      sneak: tight && !this.jumpAt && next.y >= p.y - .05 };
   }
 }
