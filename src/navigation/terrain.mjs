@@ -36,6 +36,22 @@ export class TerrainMemory {
         }
     return !unknown || !!missing;
   }
+  dry(p, w, h, margin = .55, missing) {
+    // Keep planned body positions away from liquid/fire cells, not merely out
+    // of their exact voxel. A controller can carry some momentum beyond a
+    // waypoint, so a one-cell shoreline is not reliable braking room.
+    const body = [p.x - w - margin, p.y + .01, p.z - w - margin,
+      p.x + w + margin, p.y + h, p.z + w + margin];
+    let unknown = false;
+    for (let x = Math.floor(body[0]); x <= Math.floor(body[3] - .001); x++)
+      for (let y = Math.floor(body[1]); y <= Math.floor(body[4] - .001); y++)
+        for (let z = Math.floor(body[2]); z <= Math.floor(body[5] - .001); z++) {
+          const cell = this.get(x, y, z);
+          if (!cell) { unknown = true; this.missing(missing, x, y, z); }
+          else if (cell.hazard) return false;
+        }
+    return !unknown || !!missing;
+  }
   support(p, w, missing) {
     let count = 0;
     for (const dx of [-w, 0, w]) for (const dz of [-w, 0, w]) {
@@ -86,7 +102,7 @@ export class TerrainMemory {
     }
     for (const y of [...tops].sort((a, b) => Math.abs(a - nearY) - Math.abs(b - nearY))) {
       const p = { x, y, z };
-      if (this.support(p, w) === 9 && this.clear(p, w, h)) return p;
+      if (this.support(p, w) === 9 && this.clear(p, w, h) && this.dry(p, w, h)) return p;
     }
     return null;
   }
@@ -98,7 +114,7 @@ export class TerrainMemory {
     let support = 0;
     for (let i = 0; i <= steps; i++) {
       const t = i / steps, p = { x: from.x + (to.x - from.x) * t, y: travelY, z: from.z + (to.z - from.z) * t };
-      if (!this.clear(p, w, h, missing)) return false;
+      if (!this.clear(p, w, h, missing) || !this.dry(p, w, h, .55, missing)) return false;
       if (Math.abs(rise) < .05) {
         const n = this.support(p, w, missing);
         if (recenter ? n === 0 || n < support : n !== 9) return false;
