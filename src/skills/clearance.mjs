@@ -8,9 +8,9 @@ export const foliageBlock = object => object?.kind === 'block' &&
 export const threatAllowsClearance = (state, threat, minimum = 12) => !threat ||
   horizontal(state.position, threat.point) >= minimum;
 
-export function foliageClearCandidate(objects, state, toward) {
+export function foliageClearCandidate(objects, state, toward, rejected = new Set()) {
   const direction = lookAt(state.position, toward).yawDegrees;
-  const candidates = objects.filter(object => foliageBlock(object) && object.withinPickingRange &&
+  const candidates = objects.filter(object => !rejected.has(object.key) && foliageBlock(object) && object.withinPickingRange &&
       object.access?.buildOrBreak !== false && object.point.y >= state.position.y - .1 &&
       object.point.y <= state.position.y + state.body.height + .5 &&
       (Math.floor(object.point.x) !== Math.floor(state.position.x) ||
@@ -34,7 +34,7 @@ export async function clearFoliage(field, toward) {
   // a wide no-fieldwork perimeter while allowing one quick leaf beyond it.
   if (!threatAllowsClearance(field.latest, threat) || !field.latest.capabilities.includes('block_actions')) return false;
   const objects = await field.scan(5, ['leaves-', 'leavesbranchy-'], 'blocks');
-  const target = foliageClearCandidate(objects, field.latest, toward);
+  const target = foliageClearCandidate(objects, field.latest, toward, field.rejected);
   if (!target) return false;
   field.report('clearing_foliage', { target: target.key });
   try {
