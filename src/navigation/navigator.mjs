@@ -104,10 +104,21 @@ export class Navigation {
     }
     const next = this.route[this.index];
     this.nextWaypoint = next;
-    if (map.support(next, w) !== 9 || !map.clear(next, w, h)) return grounded ? this.replan(p, now, 'terrain_changed') : this.finish('blocked', 'landing_changed');
+    const nextSupport = map.support(next, w), nextClear = map.clear(next, w, h);
+    if (nextSupport !== 9 || !nextClear) {
+      this.diagnostics = { kind: 'waypoint_invalid', point: next, support: nextSupport, clear: nextClear,
+        dry: typeof map.dry !== 'function' || map.dry(next, w, h) };
+      return grounded ? this.replan(p, now, 'terrain_changed') : this.finish('blocked', 'landing_changed');
+    }
     if (this.jumpAt && grounded && Math.abs(p.y - next.y) < .06) { this.jumpAt = 0; this.landing = true; }
     const recenter = this.landing || this.index === 0 || Math.floor(p.x) === Math.floor(next.x) && Math.floor(p.z) === Math.floor(next.z);
-    if (grounded && !this.jumpAt && !traverse(p, next, recenter)) return this.replan(p, now, 'terrain_changed');
+    if (grounded && !this.jumpAt && !traverse(p, next, recenter)) {
+      this.diagnostics = { kind: 'segment_invalid', from: p, point: next, recenter,
+        fromDry: typeof map.dry !== 'function' || map.dry(p, w, h),
+        dry: typeof map.dry !== 'function' || map.dry(next, w, h),
+        fromHazardDistance: map.hazardDistance?.(p, h), hazardDistance: map.hazardDistance?.(next, h) };
+      return this.replan(p, now, 'terrain_changed');
+    }
     if (distance(p, this.lastProgress) > .12) { this.progressAt = now; this.lastProgress = p; this.lastYawError = undefined; }
     const desiredYaw = lookAt(p, next).yawDegrees;
     this.desiredYaw = desiredYaw;
