@@ -2,8 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 
 // Fleet state service. Bots POST /api/report batches `{bot:{id,...},topics:{[topic]:{at,data}},log:[{topic,at,data}]}`;
 // the single SeraphFleet object keeps the latest value per bot/topic plus a bounded log, evicts bots unseen for RETENTION_HOURS,
-// and pushes updates to browser WebSockets. Reads (API and the static SPA in dist/, see app/) require VIEW_TOKEN when set;
-// writes require REPORT_TOKEN.
+// and pushes updates to browser WebSockets. Reads (API and the static SPA in dist/, see app/) are open; writes require REPORT_TOKEN.
 const topicRe = /^[a-z][a-z0-9_]{0,63}$/, idRe = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const maxBody = 131072, maxMapImage = 92160, maxNativeBatch = 18, maxNativeChunks = 16384;
 const maxLog = 200, maxTrail = 540, maxAtlas = 65536, sharedAtlas = 12000;
@@ -11,7 +10,6 @@ const maxMeta = 128, persistMs = 30000, sweepMs = 900000, mapKinds = new Set(['g
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const bearer = request => { const value = request.headers.get('authorization') ?? ''; return value.startsWith('Bearer ') ? value.slice(7) : ''; };
-const cookie = (request, name) => (request.headers.get('cookie') ?? '').split(';').map(part => part.trim().split('=')).find(([key]) => key === name)?.[1] ?? '';
 function equal(given, expected) {
   const a = new TextEncoder().encode(given), b = new TextEncoder().encode(expected);
   return a.byteLength === b.byteLength && b.byteLength > 0 && crypto.subtle.timingSafeEqual(a, b);
@@ -130,15 +128,6 @@ export default {
       return fleet.fetch(request);
     }
     if (request.method !== 'GET') return json(405, { ok: false, error: 'GET only' });
-    if (env.VIEW_TOKEN) {
-      const token = url.searchParams.get('token') || cookie(request, 'view') || bearer(request);
-      if (!equal(token, env.VIEW_TOKEN)) return json(401, { ok: false, error: 'Bad view token' });
-      if (url.searchParams.has('token')) {
-        url.searchParams.delete('token');
-        return new Response(null, { status: 302, headers: { location: url.pathname + url.search,
-          'set-cookie': `view=${encodeURIComponent(env.VIEW_TOKEN)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000` } });
-      }
-    }
     if (url.pathname === '/api/state' || url.pathname === '/api/ws' || url.pathname === '/api/maps' || url.pathname.startsWith('/api/maps/') ||
       url.pathname.startsWith('/api/map-image/') || url.pathname.startsWith('/api/native-map/')) return fleet.fetch(request);
     if (url.pathname.startsWith('/api/')) return json(404, { ok: false, error: 'Unknown route' });

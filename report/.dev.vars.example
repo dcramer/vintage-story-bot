@@ -1,3 +1,2 @@
 # Copy to report/.dev.vars for `pnpm report:dev`; production uses `pnpm -C report secret <NAME>`.
 REPORT_TOKEN=local-report-token
-VIEW_TOKEN=
