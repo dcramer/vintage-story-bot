@@ -1,6 +1,7 @@
 import { horizontal, normalize } from '../navigation/terrain.mjs';
 import { sightRange, temporalStormUnsafe } from './fieldwork.mjs';
 import { changeBlock } from './blocks.mjs';
+import { clearFoliage } from './clearance.mjs';
 import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, ripeForage, termiteCode } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
@@ -113,13 +114,19 @@ export class Survival {
         if (destination) {
           const before = { ...field.latest.position };
           const result = await field.walk(destination, this.eatWhen);
-          if (stalledFoodRoute(result, before, field.latest.position)) field.reject(target, 120000);
+          if (stalledFoodRoute(result, before, field.latest.position)) {
+            field.reject(target, 120000);
+            await clearFoliage(field, target.point);
+          }
           continue;
         }
         if (horizontal(field.latest.position, target.point) > 6) {
           const before = { ...field.latest.position };
           const result = await field.walk(field.explore(target.point, foodSearchDistance), this.eatWhen);
-          if (stalledFoodRoute(result, before, field.latest.position)) field.reject(target, 120000);
+          if (stalledFoodRoute(result, before, field.latest.position)) {
+            field.reject(target, 120000);
+            await clearFoliage(field, target.point);
+          }
           continue;
         }
         field.reject(target, 30000);

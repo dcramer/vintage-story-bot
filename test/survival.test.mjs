@@ -5,6 +5,7 @@ import { forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from 
 import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, stalledFoodRoute } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat } from '../src/skills/threats.mjs';
 import { routeRegressed, travel } from '../src/skills/travel.mjs';
+import { foliageBlock, foliageClearCandidate } from '../src/skills/clearance.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
   freshness: { state: 'fresh', freshHoursLeft: 100 } });
@@ -255,4 +256,17 @@ test('travel bounds regression from its best observed destination distance', () 
   assert.equal(routeRegressed(100, 112), false);
   assert.equal(routeRegressed(100, 112.01), true);
   assert.equal(routeRegressed(100, 108, 8), false);
+});
+
+test('foliage clearance selects only a reachable body-level leaf toward the goal', () => {
+  const state = { position: { x: .5, y: 1, z: .5 }, body: { height: 1.85 } };
+  const object = (key, code, x, y, z, yaw, extra = {}) => ({ kind: 'block', key, code,
+    point: { x, y, z }, look: { yawDegrees: yaw }, withinPickingRange: true,
+    access: { buildOrBreak: true }, ...extra });
+  const forward = object('forward', 'game:leaves-grown-oak', .5, 2, 2.5, 0);
+  const side = object('side', 'game:leavesbranchy-grown-oak', 2.5, 2, .5, 90);
+  assert.equal(foliageBlock(forward), true);
+  assert.equal(foliageBlock(object('log', 'game:log-grown-oak-ud', .5, 2, 2.5, 0)), false);
+  assert.equal(foliageClearCandidate([side, forward], state, { x: .5, z: 10.5 }), forward);
+  assert.equal(foliageClearCandidate([{ ...forward, withinPickingRange: false }], state, { x: .5, z: 10.5 }), null);
 });

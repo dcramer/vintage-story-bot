@@ -1,6 +1,7 @@
 import { horizontal } from '../navigation/terrain.mjs';
 import { temporalStormUnsafe } from './fieldwork.mjs';
 import { nearestThreat } from './threats.mjs';
+import { clearFoliage } from './clearance.mjs';
 
 export const routeRegressed = (best, current, margin = 12) => current > best + margin;
 
@@ -59,7 +60,16 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     // identical unobserved segment forever.
     localDetour = remaining <= 48 && !['arrived', 'yielded'].includes(result.state) && progress <= 2;
     if (result.state === 'arrived' || result.state === 'yielded' || progress > 2) stalled = 0;
-    else if (++stalled >= 6) {
+    else {
+      stalled++;
+      if (stalled >= 3 && await clearFoliage(field, goal)) {
+        stalled = 0;
+        continuation = null;
+        localDetour = false;
+        field.report('route_cleared', { remaining: +horizontal(field.latest.position, goal).toFixed(1), legs });
+        continue;
+      }
+      if (stalled < 6) continue;
       // A long trip can exhaust every local alternative on a steep ridge even
       // though a fresh per-goal visit history immediately finds a route. Reset
       // only that soft penalty and rotate the deterministic search; observed
