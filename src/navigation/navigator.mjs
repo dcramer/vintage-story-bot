@@ -115,7 +115,7 @@ export class Navigation {
     }
     const next = this.route[this.index];
     this.nextWaypoint = next;
-    if (this.evading && !this.avoid.every(item => horizontal(next, item.point) >= item.minimumDistance)) {
+    if (this.evading && !next.recenter && !this.avoid.every(item => horizontal(next, item.point) >= item.minimumDistance)) {
       this.target = fleeTarget(p, threats); this.survey(now); return null;
     }
     const nextSupport = map.support(next, w), nextClear = map.clear(next, w, h);

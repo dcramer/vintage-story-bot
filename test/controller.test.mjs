@@ -119,6 +119,24 @@ test('planner preserves a precise recenter anchor on a longer route', () => {
   assert.deepEqual(route[0], { ...safe, recenter: true });
 });
 
+test('evasion permits a mandatory short recenter before increasing clearance', () => {
+  const map = new TerrainMemory(), cells = [];
+  for (let x = -1; x <= 5; x++) for (let y = -1; y <= 3; y++) for (let z = -1; z <= 1; z++)
+    cells.push([x, y, z, 0, false, []]);
+  cells.push([0, 1, 0, 0, false, [[0, 0, 0, .5, .0625, 1]]]);
+  for (let x = 1; x <= 5; x++) cells.push([x, 0, 0, 0, false, [[0, 0, 0, 1, 1, 1]]]);
+  map.apply({ session: 'thin-evade', reset: true, cursor: 1, clock: 0, cells });
+  const position = { x: .9, y: 1.0625, z: .5 };
+  const state = { position, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals: { hunger: { current: 1000, max: 1500 } },
+    nearbyEntities: [{ key: 'entity:1', code: 'game:wolf-male', point: { x: 10.5, y: 1, z: .5 } }] };
+  const nav = new Navigation(map, state, { x: -5.5, y: 1, z: .5, timeoutMs: 10000 }, 0);
+  const frame = nav.tick(state, 1);
+  assert.equal(nav.state, 'moving');
+  assert.equal(nav.nextWaypoint.recenter, true);
+  assert.equal(frame.forward, true);
+});
+
 test('terrain keeps planned standing centers clear of adjacent liquid hazards', () => {
   const map = new TerrainMemory();
   const cells = [];
