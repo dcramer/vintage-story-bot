@@ -126,3 +126,13 @@ test('a blocked exploration leg penalizes its destination for the next determini
   await field.walk(target);
   assert.equal(field.visits.get('1,0'), 1);
 });
+
+test('route recovery clears soft visit penalties and rotates deterministically', () => {
+  const field = new Fieldwork({});
+  field.latest = { position: { x: 32.5, z: -16.5 } };
+  field.heading = 350;
+  field.visits.set('old', 4);
+  field.resetExploration();
+  assert.deepEqual([...field.visits], [['2,-2', 1]]);
+  assert.equal(field.heading, 35);
+});

@@ -2,8 +2,8 @@ import { horizontal } from '../navigation/terrain.mjs';
 
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
 export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
-  let stalled = 0, legs = 0;
-  const summary = () => ({ moved: +field.moved.toFixed(1), legs, stalled });
+  let stalled = 0, legs = 0, routeResets = 0;
+  const summary = () => ({ moved: +field.moved.toFixed(1), legs, stalled, routeResets });
   while (true) {
     let state = await field.observe(true);
     let goal = { x, y: y ?? state.position.y, z };
@@ -24,6 +24,15 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
     legs++;
     const progress = horizontal(before, field.latest.position);
     if (result.state === 'arrived' || result.state === 'yielded' || progress > 2) stalled = 0;
-    else if (++stalled >= 6) return { ok: false, reason: 'no_progress', ...summary(), remaining: +remaining.toFixed(1), position: field.latest.position };
+    else if (++stalled >= 6) {
+      // A long trip can exhaust every local alternative on a steep ridge even
+      // though a fresh per-goal visit history immediately finds a route. Reset
+      // only that soft penalty and rotate the deterministic search; observed
+      // terrain, rejected resources and the task deadline remain intact.
+      routeResets++;
+      stalled = 0;
+      field.resetExploration();
+      field.report('recovering_route', { remaining: +horizontal(field.latest.position, goal).toFixed(1), legs, routeResets });
+    }
   }
 }

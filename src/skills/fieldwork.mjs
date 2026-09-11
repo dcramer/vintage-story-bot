@@ -101,6 +101,11 @@ export class Fieldwork {
     while (this.rejected.size > 1024) this.rejected.delete(this.rejected.keys().next().value);
   }
   reject(object, ms = 30000) { this.rejected.set(object.key, this.now() + ms); }
+  resetExploration(turn = 45) {
+    this.visits.clear();
+    this.visits.set(area(this.latest.position), 1);
+    this.heading = normalize(this.heading + turn);
+  }
   targets(predicate) {
     this.prune();
     return [...this.seen.values()].filter(o => predicate(o) && !this.rejected.has(o.key))
