@@ -8,10 +8,18 @@ import { z } from 'zod';
 const exec = promisify(execFile);
 const root = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '');
 const localTool = `${root}/.runtime/x11/usr/bin/xdotool`;
+const localMagick = `${root}/.runtime/x11/usr/lib/x86_64-linux-gnu/ImageMagick-6.9.12`;
+const localImport = existsSync(`${root}/.runtime/x11/usr/bin/import`) &&
+  existsSync(`${localMagick}/modules-Q16/coders/png.so`);
 const env = {
   ...process.env,
   ...(existsSync('/mnt/wslg') ? { DISPLAY: process.env.DISPLAY ?? ':0' } : {}),
   LD_LIBRARY_PATH: `${root}/.runtime/x11/usr/lib/x86_64-linux-gnu${process.env.LD_LIBRARY_PATH ? ':' + process.env.LD_LIBRARY_PATH : ''}`,
+  ...(localImport ? {
+    PATH: `${root}/.runtime/x11/usr/bin${process.env.PATH ? ':' + process.env.PATH : ''}`,
+    MAGICK_CONFIGURE_PATH: `${localMagick}/config-Q16`,
+    MAGICK_CODER_MODULE_PATH: `${localMagick}/modules-Q16/coders`,
+  } : {}),
 };
 
 export const uiTools = [
