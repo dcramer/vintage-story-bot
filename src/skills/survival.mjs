@@ -2,6 +2,7 @@ import { horizontal, normalize } from '../navigation/terrain.mjs';
 import { sightRange, temporalStormUnsafe } from './fieldwork.mjs';
 import { changeBlock } from './blocks.mjs';
 import { clearFoliagePath } from './clearance.mjs';
+import { collectItem } from './collect-item.mjs';
 import { consume, emptyHand, foodReserve, forageFoodCode, hunger, mushroomCode, ripeForage, termiteCode } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';
 
@@ -11,6 +12,8 @@ export const wideFoodSurveyNeeded = ratio => ratio < .2;
 // Twelve-block steps overlap a 16-block sight cone while covering useful new
 // ground before starvation. Navigation still validates every traversed cell.
 export const foodSearchDistance = Math.min(12, foodSightRange * .75);
+export const foodElevationDetourDistance = verticalRemaining => verticalRemaining < 1.5 ? 0 :
+  Math.min(foodSearchDistance, Math.max(6, verticalRemaining * 2));
 const forageMatches = ['bush', 'mushroom', 'crop-', 'termitemound-'];
 const breaksForage = object => mushroomCode(forageFoodCode(object)) || termiteCode(forageFoodCode(object)) ||
   object.forage?.kind === 'crop';
@@ -25,6 +28,10 @@ export const foodViewChanged = (view, state) => !view || horizontal(view.positio
   Math.abs(normalize(state.orientation.yawDegrees - view.yawDegrees + 180) - 180) > 15;
 export const stalledFoodRoute = (result, before, after) => !['arrived', 'yielded'].includes(result.state) &&
   horizontal(before, after) <= 2;
+export const matchingFoodDrops = (objects, foodCode, point) => objects
+  .filter(object => object.kind === 'item' && object.code === foodCode &&
+    Number.isInteger(object.quantity) && object.quantity > 0)
+  .sort((a, b) => horizontal(a.point, point) - horizontal(b.point, point));
 
 // Hysteresis: prepare food below 20%, eat to 80%, retain 320 satiety in safe fresh forage.
 // Navigation checks yieldWhen every sensing tick; food work owns no parallel inputs.
@@ -123,9 +130,10 @@ export class Survival {
           }
           continue;
         }
-        if (horizontal(field.latest.position, target.point) > 6) {
+        const elevationDetour = foodElevationDetourDistance(Math.abs(field.latest.position.y - target.point.y));
+        if (horizontal(field.latest.position, target.point) > 6 || elevationDetour) {
           const before = { ...field.latest.position };
-          const result = await field.walk(field.explore(target.point, foodSearchDistance), this.eatWhen);
+          const result = await field.walk(field.explore(target.point, foodSearchDistance, elevationDetour), this.eatWhen);
           if (stalledFoodRoute(result, before, field.latest.position)) {
             field.reject(target, 120000);
             await clearFoliagePath(field, target.point);
@@ -205,6 +213,27 @@ export class Survival {
           return;
         }
         await field.wait(200);
+      }
+      if (needsBreaking) {
+        // Broken forage can become a loose stack just outside native pickup
+        // range. Reacquire only the exact allowlisted food drop before giving
+        // up on a block that the server already verified as changed.
+        const drops = matchingFoodDrops(await field.scan(8, foodCode.slice(0, 64), 'items'), foodCode, detail.point);
+        for (const drop of drops) {
+          try {
+            await collectItem(field, { target: drop.key, expectedItem: foodCode, radius: 8 });
+          } catch (error) {
+            if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
+          }
+          const after = await field.send({ action: 'inventory' });
+          const gain = count(after) - before;
+          if (gain > 0) {
+            this.harvested += gain;
+            field.seen.delete(target.key);
+            field.reject(target, 120000);
+            return;
+          }
+        }
       }
       // No blind mutation retry: quarantine the sighting, inspect other food sources.
       field.reject(target, 120000);

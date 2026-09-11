@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
 import { eatingLooks, forageFoodCode, mushroomCode, ripeForage, safeFood, termiteCode } from '../src/skills/food.mjs';
-import { accessibleForage, desperateFoodSightRange, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, stalledFoodRoute, wideFoodSurveyNeeded } from '../src/skills/survival.mjs';
+import { accessibleForage, desperateFoodSightRange, foodElevationDetourDistance, foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, matchingFoodDrops, stalledFoodRoute, wideFoodSurveyNeeded } from '../src/skills/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat, threatClearRadius, threatStartRadius, threatVerticalRange } from '../src/skills/threats.mjs';
 import { elevationDetourDistance, routeRegressed, travel } from '../src/skills/travel.mjs';
 import { foliageBlock, foliageClearCandidate, threatAllowsClearance } from '../src/skills/clearance.mjs';
@@ -82,6 +82,19 @@ test('breakable forage is harvested beside its drop, never at maximum reach or u
   assert.equal(harvestReady(mushroom, { x: 9.77, z: 11.26 }, .3), false);
 });
 
+test('survival pickup recovery selects only exact verified food drops', () => {
+  const point = { x: 10.5, z: 10.5 };
+  const item = (code, quantity, x) => ({ kind: 'item', key: `entity:${x}`, code, quantity,
+    point: { x, z: 10.5 } });
+  assert.deepEqual(matchingFoodDrops([
+    item('game:mushroom-witchhat-normal', 1, 14),
+    item('game:mushroom-deathcap-normal', 1, 11),
+    item('game:mushroom-witchhat-normal', null, 12),
+    { ...item('game:mushroom-witchhat-normal', 1, 10), kind: 'block' },
+    item('game:mushroom-witchhat-normal', 2, 13),
+  ], 'game:mushroom-witchhat-normal', point).map(drop => drop.key), ['entity:13', 'entity:14']);
+});
+
 test('food exploration uses observed local steps and does not rescan an unchanged distant cone', () => {
   assert.equal(foodSearchDistance, 12);
   assert.equal(foodSightRange, 32);
@@ -94,6 +107,9 @@ test('food exploration uses observed local steps and does not rescan an unchange
   assert.equal(foodViewChanged(view, state(10, 10, 350)), true);
   assert.equal(wideFoodSurveyNeeded(.2), false);
   assert.equal(wideFoodSurveyNeeded(.199), true);
+  assert.equal(foodElevationDetourDistance(1.49), 0);
+  assert.equal(foodElevationDetourDistance(3), 6);
+  assert.equal(foodElevationDetourDistance(20), foodSearchDistance);
 });
 
 test('food leads survive productive partial routes but quarantine stalled ones', () => {
