@@ -14,13 +14,19 @@ export function foliageClearCandidate(objects, state, toward, rejected = new Set
       object.access?.buildOrBreak !== false && object.point.y >= state.position.y - .1 &&
       object.point.y <= state.position.y + state.body.height + .5 &&
       (Math.floor(object.point.x) !== Math.floor(state.position.x) ||
-        Math.floor(object.point.z) !== Math.floor(state.position.z)));
+        Math.floor(object.point.z) !== Math.floor(state.position.z)) &&
+      // A nearest visible surface can be behind the player in a dense canopy.
+      // Removing it cannot open the intended route and makes long trips carve
+      // backwards. Sideways leaves may widen a corridor, but never cut beyond
+      // the destination-facing hemisphere.
+      Math.abs(angle(lookAt(state.position, object.point).yawDegrees, direction)) <= 90);
   const nearest = Math.min(...candidates.map(object => horizontal(object.point, state.position)));
   // Stay near the visible surface so a deep leaf cannot be occluded, then cut
   // the most useful corridor through that near layer instead of hollowing the
   // entire canopy in arbitrary distance order.
   return candidates.filter(object => horizontal(object.point, state.position) <= nearest + 1.25)
-    .sort((a, b) => Math.abs(angle(a.look.yawDegrees, direction)) - Math.abs(angle(b.look.yawDegrees, direction)) ||
+    .sort((a, b) => Math.abs(angle(lookAt(state.position, a.point).yawDegrees, direction)) -
+      Math.abs(angle(lookAt(state.position, b.point).yawDegrees, direction)) ||
       horizontal(a.point, state.position) - horizontal(b.point, state.position) || a.key.localeCompare(b.key))[0] ?? null;
 }
 
