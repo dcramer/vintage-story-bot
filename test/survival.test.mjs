@@ -287,7 +287,9 @@ test('foliage clearance selects only a reachable body-level leaf toward the goal
   assert.equal(foliageBlock(object('log', 'game:log-grown-oak-ud', .5, 2, 2.5, 0)), false);
   assert.equal(foliageClearCandidate([side, forward], state, { x: .5, z: 10.5 }), forward);
   const nearSide = object('near-side', 'game:leaves-grown-oak', 1.5, 2, .5, 90);
-  assert.equal(foliageClearCandidate([forward, nearSide], state, { x: .5, z: 10.5 }), nearSide);
+  assert.equal(foliageClearCandidate([forward, nearSide], state, { x: .5, z: 10.5 }), forward);
+  const farForward = object('far-forward', 'game:leaves-grown-oak', .5, 2, 4.5, 0);
+  assert.equal(foliageClearCandidate([farForward, nearSide], state, { x: .5, z: 10.5 }), nearSide);
   assert.equal(foliageClearCandidate([{ ...forward, withinPickingRange: false }], state, { x: .5, z: 10.5 }), null);
   assert.equal(threatAllowsClearance(state, { point: { x: 12.5, z: .5 } }), true);
   assert.equal(threatAllowsClearance(state, { point: { x: 12.49, z: .5 } }), false);

@@ -10,16 +10,18 @@ export const threatAllowsClearance = (state, threat, minimum = 12) => !threat ||
 
 export function foliageClearCandidate(objects, state, toward) {
   const direction = lookAt(state.position, toward).yawDegrees;
-  return objects.filter(object => foliageBlock(object) && object.withinPickingRange &&
+  const candidates = objects.filter(object => foliageBlock(object) && object.withinPickingRange &&
       object.access?.buildOrBreak !== false && object.point.y >= state.position.y - .1 &&
       object.point.y <= state.position.y + state.body.height + .5 &&
       (Math.floor(object.point.x) !== Math.floor(state.position.x) ||
-        Math.floor(object.point.z) !== Math.floor(state.position.z)))
-    // Prefer the nearest visible surface so a farther leaf behind it cannot
-    // fail the native target guard. Heading is the deterministic tie-breaker.
-    .sort((a, b) => horizontal(a.point, state.position) - horizontal(b.point, state.position) ||
-      Math.abs(angle(a.look.yawDegrees, direction)) - Math.abs(angle(b.look.yawDegrees, direction)) ||
-      a.key.localeCompare(b.key))[0] ?? null;
+        Math.floor(object.point.z) !== Math.floor(state.position.z)));
+  const nearest = Math.min(...candidates.map(object => horizontal(object.point, state.position)));
+  // Stay near the visible surface so a deep leaf cannot be occluded, then cut
+  // the most useful corridor through that near layer instead of hollowing the
+  // entire canopy in arbitrary distance order.
+  return candidates.filter(object => horizontal(object.point, state.position) <= nearest + 1.25)
+    .sort((a, b) => Math.abs(angle(a.look.yawDegrees, direction)) - Math.abs(angle(b.look.yawDegrees, direction)) ||
+      horizontal(a.point, state.position) - horizontal(b.point, state.position) || a.key.localeCompare(b.key))[0] ?? null;
 }
 
 // Break only one explicitly observed leaf obstruction after deterministic
