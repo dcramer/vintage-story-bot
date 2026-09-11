@@ -154,7 +154,10 @@ export class Survival {
       if (stalledFoodRoute(result, before, field.latest.position)) {
         this.searchStalls++;
         const cleared = await clearFoliagePath(field, destination);
-        const nudged = !cleared && this.searchStalls >= 3 ? await field.nudge(destination) : 0;
+        // A short sneaking step makes newly opened forage corridors useful
+        // immediately while still refusing threats and unsupported ledges.
+        const nudged = cleared ? await field.nudge(destination) :
+          this.searchStalls >= 3 ? await field.nudge(destination) : 0;
         if (cleared || nudged > .1) {
           this.searchStalls = nudged > .1 ? 2 : 0;
           this.surveyed = false;

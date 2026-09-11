@@ -80,7 +80,10 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
       // foliage work at the actual destination; non-mutating routes may still
       // detour around cliffs, water and other hard obstacles.
       const cleared = await clearFoliagePath(field, goal);
-      const nudged = !cleared && stalled >= 3 ? await field.nudge(leg) : 0;
+      // Enter the corridor we just verified and opened. Without this bounded
+      // sneaking probe, a dense canopy can make the planner return to the same
+      // pre-clearance cell and spend the whole day carving without advancing.
+      const nudged = cleared ? await field.nudge(goal) : stalled >= 3 ? await field.nudge(leg) : 0;
       if (cleared || nudged > .1) {
         // Once a cautious probe proves this corridor is physically
         // traversable, retry it after one planner failure instead of
