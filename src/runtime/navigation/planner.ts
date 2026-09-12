@@ -15,7 +15,11 @@ export function findRoute(
 ) {
   const deadline = performance.now() + deadlineMs;
   const remaining = p => (goal.horizontalOnly ? horizontal(p, goal) : Math.hypot(p.x - goal.x, (p.y - goal.y) * 0.5, p.z - goal.z));
-  const safe = p => avoid.every(item => horizontal(p, item.point) >= item.minimumDistance);
+  // A hostile is kept clear of, not by refusing every cell nearer than the body is now (a notch in a hill
+  // would trap the bot), but by charging for closeness: cells inside the kept distance cost extra by how
+  // far inside they are, and only cells within striking range are refused outright.
+  const safe = p => avoid.every(item => horizontal(p, item.point) >= Math.min(3, item.minimumDistance));
+  const dread = p => avoid.reduce((sum, item) => sum + Math.max(0, item.minimumDistance - horizontal(p, item.point)) * 4, 0);
   const reached = p => {
     if (goal.arrivalRadius && horizontal(p, goal) < goal.arrivalRadius && (goal.horizontalOnly || Math.abs(p.y - goal.y) < 0.6)) return true;
     return Math.abs(p.x - goal.x) < 0.51 && Math.abs(p.z - goal.z) < 0.51 && (goal.horizontalOnly || Math.abs(p.y - goal.y) < 0.6);
@@ -85,7 +89,7 @@ export function findRoute(
     }
     for (const { node, cost: step } of moves) {
       if (!safe(node) || blocked.has(`${id}>${key(node)}`)) continue;
-      const cost = costs.get(id) + step,
+      const cost = costs.get(id) + step + dread(node),
         nextId = key(node);
       if ((costs.get(nextId) ?? Infinity) <= cost) continue;
       costs.set(nextId, cost);

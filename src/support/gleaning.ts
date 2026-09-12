@@ -79,7 +79,10 @@ export class Gleaner {
     }
     // Aimed by the block's own selection box from where the body stands now; remembered angles are stale after a walk.
     const selected = await aimAtObject(field, object);
-    if (!selected || selected.key !== object.key) return false;
+    if (!selected || selected.key !== object.key) {
+      field.report('pickup_missed', { target: object.key, selected: selected?.key ?? null });
+      return false;
+    }
     const before = carried(await field.send({ action: 'inventory' }));
     await field.send({ action: 'interact', expectedTarget: object.key, durationMs: 150 });
     await field.wait(500);
