@@ -128,8 +128,18 @@ async function digIn(field, inventory) {
   // player into the shaft and keeps the next layer within native reach.
   if (horizontal(start, center) > 0.1) {
     field.report('centering_over_hole', { at: center });
-    const centered = await field.walk({ ...center, arrivalRadius: 0.1 });
-    if (!['arrived', 'paused'].includes(centered.state) || horizontal(field.latest.position, center) > 0.2)
+    // Fine navigation deliberately treats any point in the current terrain
+    // cell as arrived. Use short first-person walking pulses for this sub-cell
+    // positioning, checking the observed body after each one.
+    for (let pulse = 0; pulse < 4 && horizontal(field.latest.position, center) > 0.12; pulse++) {
+      const distance = horizontal(field.latest.position, center);
+      await field.aim({ yawDegrees: lookAt(field.latest.position, center).yawDegrees, pitchDegrees: 0 });
+      const durationMs = Math.max(40, Math.min(120, Math.round(distance * 240)));
+      await field.send({ action: 'move', direction: 'forward', durationMs, sprint: false, sneak: false });
+      await field.wait(durationMs + 100);
+      await field.observe(true);
+    }
+    if (horizontal(field.latest.position, center) > 0.2)
       return { ok: false, goal: 'burrow', reason: 'cannot_center', cell: { x, y: Math.floor(start.y), z } };
     start = field.latest.position;
   }
