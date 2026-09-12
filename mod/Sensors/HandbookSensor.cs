@@ -41,19 +41,21 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
         if (request.TryGetProperty("offset", out var offsetField) && (!offsetField.TryGetInt32(out offset) || offset < 0 || offset > 100000) ||
             request.TryGetProperty("limit", out var limitField) && (!limitField.TryGetInt32(out limit) || limit < 1 || limit > 100))
             return new { ok = false, error = "offset: 0–100000; limit: 1–100." };
+        // text:false skips the page body: the facts alone, read in a fraction of the time.
+        bool text = !(request.TryGetProperty("text", out var textField) && textField.ValueKind == JsonValueKind.False);
         var all = api.World.Collectibles.Where(collectible => collectible != null && collectible.Code != null && collectible.Id != 0)
             .OrderBy(collectible => collectible.Code.ToString(), StringComparer.Ordinal).ToArray();
         var creatures = api.World.EntityTypes.Where(type => type?.Code != null)
             .OrderBy(type => type.Code.ToString(), StringComparer.Ordinal).ToArray();
         int total = all.Length + creatures.Length;
-        var entries = all.Skip(offset).Take(limit).Select(collectible => Entry(collectible, 3))
+        var entries = all.Skip(offset).Take(limit).Select(collectible => Entry(collectible, text ? 3 : 0))
             .Concat(creatures.Skip(Math.Max(0, offset - all.Length)).Take(Math.Max(0, limit - Math.Max(0, all.Length - offset))).Select(Entry))
             .ToArray();
         return new { ok = true, offset, total, more = offset + entries.Length < total, entries };
     }
 
     // One handbook page as facts. maxTextLines < 0 keeps the full page body as
-    // text; otherwise the first lines become a short desc.
+    // text; 0 reads no body; otherwise the first lines become a short desc.
     private Dictionary<string, object?> Entry(CollectibleObject collectible, int maxTextLines)
     {
         var stack = new ItemStack(collectible);
@@ -95,6 +97,7 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
             ["drops"] = block == null ? null : Drops(block.GetDropsForHandbook(stack, api.World.Player)),
             ["harvest"] = block == null ? null : Harvest(block),
         };
+        if (maxTextLines == 0) return entry;
         var text = PageText(collectible, slot);
         if (maxTextLines < 0) entry["text"] = text;
         else entry["desc"] = text == null ? null : ContextSensor.Clip(string.Join(" ", text.Take(maxTextLines)), 600);

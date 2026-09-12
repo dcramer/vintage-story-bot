@@ -2,14 +2,20 @@
 // Dump the handbook catalog (every loaded block/item: name, description, the game's typing,
 // food/tool/fuel facts, drops, harvest, plus the recipes that make it; every creature: class,
 // drops) into docs/catalog.json.
-//   node scripts/catalog.ts
+//   node scripts/catalog.ts [--no-text]
 // Requires the game with a loaded world (pnpm game start); talks to the mod bridge
 // directly like other operator scripts. Regenerate after a game update, never edit by hand.
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+// --no-text reads the facts without the page body (minutes, not half an hour, and no
+// handbook rendering on the game thread) and keeps each code's desc from the catalog on disk.
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { requestBridge } from '../src/runtime/bridge.ts';
 
 const root = process.cwd();
+const text = !process.argv.includes('--no-text');
+const out = join(root, 'docs/catalog.json');
+const previous = new Map<string, string>();
+if (!text && existsSync(out)) for (const entry of JSON.parse(readFileSync(out, 'utf8')).entries) if (entry.desc) previous.set(entry.code, entry.desc);
 
 // recipes.json output patterns use * wildcards and {variable} single-segment substitutions.
 export const toRegExp = pattern =>
@@ -48,7 +54,7 @@ let offset = 0,
 const readPage = async offset => {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await requestBridge({ action: 'catalog', offset, limit: 50 }, { timeoutMs: 15000 });
+      return await requestBridge({ action: 'catalog', offset, limit: 50, text }, { timeoutMs: 15000 });
     } catch (error) {
       if (attempt >= 60) throw error;
       process.stderr.write(`\r${offset}/${total} bridge away (${error.message.split('.')[0]}); retrying`);
@@ -60,7 +66,8 @@ for (;;) {
   const page = await readPage(offset);
   if (!page.ok) throw new Error(`Catalog dump failed at offset ${offset}: ${page.error ?? 'unknown'}`);
   total = page.total;
-  for (const entry of page.entries) entries.push({ ...entry, recipes: makes(entry.code) });
+  for (const entry of page.entries)
+    entries.push({ ...entry, ...(text ? {} : { desc: previous.get(entry.code) ?? null }), recipes: makes(entry.code) });
   offset += page.entries.length;
   process.stderr.write(`\r${offset}/${total}`);
   if (!page.more || page.entries.length === 0) break;
@@ -72,7 +79,6 @@ const version = versionFile ? versionFile.slice('version-'.length, -'.txt'.lengt
 const kinds: Record<string, number> = {};
 for (const entry of entries) kinds[entry.type] = (kinds[entry.type] ?? 0) + 1;
 const withRecipes = entries.filter(entry => entry.recipes.length > 0).length;
-const out = join(root, 'docs/catalog.json');
 writeFileSync(
   out,
   JSON.stringify(
