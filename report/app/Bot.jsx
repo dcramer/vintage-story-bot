@@ -1,5 +1,5 @@
 import { bots, now } from './store.js';
-import { ago, fmt, time, code, point, phaseDetail, shownProgressKeys, stateClass, goalTitle } from './format.js';
+import { ago, fmt, time, code, point, phaseDetail, shownProgressKeys, stateClass, goalTitle, runDuration, integer, blockCount, itemName } from './format.js';
 import { Dl, LogTable, logRows } from './ui.jsx';
 import { WorldMap } from './Map.jsx';
 
@@ -64,6 +64,38 @@ function Vital({ name, vital, lowAt = .2 }) {
   return <div class={`vital-card ${low ? 'low' : ''}`}><small>{name}</small><strong>{percent(vital)}</strong><i><em style={{ width: `${Math.max(0, Math.min(1, ratio ?? 0)) * 100}%` }} /></i></div>;
 }
 
+const gatheredItems = run => (run?.items?.byCode ?? []).filter(item => item.gathered > 0)
+  .sort((a, b) => b.gathered - a.gathered || a.code.localeCompare(b.code));
+
+function Gathered({ run, limit = 6 }) {
+  const items = gatheredItems(run), shown = items.slice(0, limit);
+  if (!items.length) return <span class="run-empty">No gathered items</span>;
+  return <div class="run-items">{shown.map(item => <span key={item.code}><b>{integer(item.gathered)}</b> {itemName(item.code)}</span>)}
+    {items.length > shown.length && <span>+{items.length - shown.length} more</span>}</div>;
+}
+
+function CurrentRun({ run }) {
+  return <section class="context-run"><div class="context-heading"><span class="eyebrow">Current run</span>
+    <span class="panel-count">{run?.startedAt ? `Started ${ago(run.startedAt, now.value)}` : 'Waiting for data'}</span></div>
+    {run ? <><div class="run-metric-grid"><span><small>{run.alive === false ? 'Survived' : 'Alive for'}</small><strong>{runDuration(run, now.value)}</strong></span>
+      <span><small>Steps</small><strong>{integer(run.estimatedSteps)}</strong></span><span><small>Furthest (blocks)</small><strong>{blockCount(run.maxFromSpawn)}</strong></span>
+      <span><small>Gathered</small><strong>{integer(run.items?.gathered)}</strong></span></div><Gathered run={run} /></>
+      : <div class="panel-empty compact">Run metrics have not arrived</div>}
+  </section>;
+}
+
+function RunHistory({ runs }) {
+  const completed = (runs ?? []).filter(run => run.endedAt != null).slice(-8).reverse();
+  return <section class="run-history panel"><div class="panel-title"><div><span class="eyebrow">Performance</span><h2>Recent runs</h2></div>
+    <span class="panel-count">{completed.length} completed</span></div>
+    {completed.length ? <div class="run-history-scroll"><table><thead><tr><th>Ended</th><th>Survived</th><th>Steps</th><th>Traveled</th><th>Furthest</th><th>Gathered</th></tr></thead>
+      <tbody>{completed.map(run => <tr key={`${run.lifeId}:${run.startedAt}`}><td><time title={new Date(run.endedAt).toLocaleString()}>{ago(run.endedAt, now.value)}</time></td>
+        <td class="run-number">{runDuration(run, now.value)}</td><td class="run-number">{integer(run.estimatedSteps)}</td><td class="run-number">{blockCount(run.distance)}</td>
+        <td class="run-number">{blockCount(run.maxFromSpawn)}</td><td><Gathered run={run} limit={4} /></td></tr>)}</tbody></table></div>
+      : <div class="panel-empty compact">Completed runs will appear here</div>}
+  </section>;
+}
+
 export function Bot({ id }) {
   const bot = bots.value[id];
   if (!bot) return <main><div class="empty">Seraph "{id}" has not reported recently.</div></main>;
@@ -82,10 +114,13 @@ export function Bot({ id }) {
           <div class="context-facts"><span><small>Body</small><b>{s.condition?.bodyTemperatureC == null ? '—' : `${s.condition.bodyTemperatureC.toFixed(1)}°C`}</b></span>
             <span><small>Wetness</small><b>{s.condition?.wetness == null ? '—' : `${Math.round(s.condition.wetness * 100)}%`}</b></span><span><small>Oxygen</small><b>{percent(s.vitals?.oxygen)}</b></span></div>
         </section>
+        <CurrentRun run={bot.runs?.current} />
         <section class="agent-map-panel"><div class="agent-map-heading"><span>Last position</span><b>{point(s.position) ?? 'Unknown'}</b></div><WorldMap bots={[bot]} detailed /></section>
         <section class="agent-events"><div class="context-heading"><span class="eyebrow">Recent missions</span><span class="panel-count">Latest</span></div><MissionHistory bot={bot} /></section>
       </aside>
     </div>
+
+    <RunHistory runs={bot.runs?.recent} />
 
     <details class="panel debug-panel">
       <summary class="panel-title"><div><span class="eyebrow">Operator</span><h2>Technical log &amp; goal script</h2></div><span class="panel-count">Goal {g?.id?.slice(0, 8) ?? '—'} · Expand</span></summary>

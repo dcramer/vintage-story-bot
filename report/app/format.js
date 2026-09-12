@@ -5,7 +5,26 @@ export const ago = (at, now) => { const s = Math.max(0, Math.round((now - at) / 
   return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.floor(s / 60)}m ago` : `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m ago`; };
 export const elapsed = (from, to) => { const sec = Math.max(0, Math.round((to - from) / 1000));
   return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`; };
+export const duration = ms => {
+  if (!Number.isFinite(ms)) return '—';
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ${String(sec % 60).padStart(2, '0')}s`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `${hours}h ${String(min % 60).padStart(2, '0')}m`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+};
+export const runDuration = (run, currentAt) => {
+  if (!run) return '—';
+  const reported = Number.isFinite(run.durationMs) ? run.durationMs : 0;
+  const live = run.alive !== false && run.endedAt == null && Number.isFinite(run.startedAt) ? currentAt - run.startedAt : 0;
+  return duration(Math.max(reported, live));
+};
+export const integer = value => Number.isFinite(value) ? Math.round(value).toLocaleString() : '—';
+export const blockCount = value => Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 1 }) : '—';
 export const code = c => typeof c === 'string' ? c.replace(/^game:/, '') : c;
+export const itemName = value => String(code(value) ?? '').replace(/-/g, ' ');
 export const point = p => p && p.x != null ? [p.x, p.y, p.z].map(v => v == null ? '?' : Math.round(v)).join(', ') : null;
 const count = (n, what) => `${n}× ${what}`;
 // What the goal is trying to accomplish, from its request arguments (see controller/actions).

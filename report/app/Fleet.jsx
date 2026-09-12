@@ -1,5 +1,5 @@
-import { list, isLive } from './store.js';
-import { goalTitle, point } from './format.js';
+import { list, isLive, now } from './store.js';
+import { goalTitle, point, runDuration, integer, blockCount } from './format.js';
 import { WorldMap } from './Map.jsx';
 
 const pct = vital => vital?.max > 0 ? Math.max(0, Math.min(1, vital.current / vital.max)) : null;
@@ -10,6 +10,7 @@ const words = value => String(value ?? '').replace(/_/g, ' ');
 
 function ConnectedBot({ bot, index }) {
   const state = stateOf(bot), goal = goalOf(bot), dead = state.alive === false;
+  const run = bot.runs?.current;
   const food = pct(state.vitals?.hunger);
   const activity = goalTitle(goal) || (goal ? words(goal.kind) : 'Standing by');
   const status = dead ? 'Dead' : goal?.active ? 'Running' : goal?.state === 'blocked' ? 'Blocked' : 'Connected';
@@ -20,6 +21,9 @@ function ConnectedBot({ bot, index }) {
     <div class="connected-facts"><span><small>Health</small><b>{percent(pct(state.vitals?.health))}</b></span>
       <span><small>Food</small><b class={food != null && food < .2 ? 'warn' : ''}>{percent(food)}</b></span>
       <span class="connected-position"><small>Position</small><b>{point(state.position) ?? 'Unknown'}</b></span></div>
+    <div class="connected-run"><span><small>{run?.alive === false ? 'Survived' : 'Alive for'}</small><b>{runDuration(run, now.value)}</b></span>
+      <span><small>Steps</small><b>{integer(run?.estimatedSteps)}</b></span><span><small>Furthest</small><b title={Number.isFinite(run?.maxFromSpawn) ? `${blockCount(run.maxFromSpawn)} blocks from spawn` : ''}>{blockCount(run?.maxFromSpawn)}</b></span>
+      <span><small>Gathered</small><b>{integer(run?.items?.gathered)}</b></span></div>
   </a>;
 }
 

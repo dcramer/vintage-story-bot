@@ -221,6 +221,10 @@ section { display: block; padding: 20px; }
 .connected-facts b.warn { color: var(--warn); }
 .connected-facts .connected-position { border: 0; display: grid; flex: 1; padding: 0; }
 .connected-facts .connected-position b { color: var(--ink2); font-size: 10px; overflow-wrap: anywhere; white-space: nowrap; }
+.connected-run { border-top: 1px solid var(--line); display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-left: 21px; padding-top: 13px; }
+.connected-run span { display: grid; gap: 3px; min-width: 0; }
+.connected-run small { color: var(--muted); font-size: 8px; letter-spacing: .04em; text-transform: uppercase; }
+.connected-run b { color: var(--ink2); font: 10px/14px "IBM Plex Mono", ui-monospace, monospace; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fleet-map { background: #171a19; border: 0; display: flex; min-height: 0; overflow: hidden; padding: 0; position: relative; }
 .fleet-map .global-map-wrap, .fleet-map .world-map { flex: 1; height: 100%; min-height: 0; }
 .map-heading-overlay { background: rgba(11, 12, 13, .92); border: 1px solid var(--line-bright); left: 24px; padding: 14px 16px; pointer-events: none; position: absolute; top: 24px; z-index: 5; }
@@ -392,6 +396,17 @@ section { display: block; padding: 20px; }
 .context-facts { display: flex; justify-content: space-between; margin-top: 20px; }
 .context-facts span { display: grid; gap: 4px; }
 .context-facts b { color: var(--ink); font: 12px/18px "IBM Plex Mono", ui-monospace, monospace; font-weight: 400; }
+.context-run { background: var(--surface); border: 0; border-bottom: 1px solid var(--line); padding: 22px 28px; }
+.run-metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 16px; }
+.run-metric-grid > span { border-left: 1px solid var(--line); display: grid; gap: 4px; min-width: 0; padding: 0 12px; }
+.run-metric-grid > span:first-child { border-left: 0; padding-left: 0; }
+.run-metric-grid > span:last-child { padding-right: 0; }
+.run-metric-grid small { color: var(--muted); font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
+.run-metric-grid strong { color: var(--ink); font: 16px/22px "IBM Plex Mono", ui-monospace, monospace; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-items { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 15px; }
+.run-items span { background: var(--surface-raised); color: var(--ink2); font: 9px/14px "IBM Plex Mono", ui-monospace, monospace; padding: 4px 7px; }
+.run-items b { color: var(--ink); font-weight: 600; }
+.run-empty { color: var(--muted); display: block; font-size: 10px; margin-top: 14px; }
 .agent-map-panel { background: #171a19; border: 0; border-bottom: 1px solid var(--line); height: 250px; overflow: hidden; padding: 0; position: relative; }
 .agent-map-panel .global-map-wrap, .agent-map-panel .world-map { height: 100%; min-height: 0; }
 .agent-map-panel .detailed-map { aspect-ratio: auto; height: 100%; max-height: none; min-height: 0; }
@@ -405,6 +420,15 @@ section { display: block; padding: 20px; }
 .agent-events > .context-heading { padding: 24px 28px 18px; }
 .agent-events .mission-list { border-top: 1px solid var(--line); margin: 0 28px; }
 .agent-events .mission-row { padding-left: 0; padding-right: 0; }
+.run-history { margin: 20px 20px 0; }
+.run-history-scroll { overflow-x: auto; }
+.run-history table { min-width: 800px; }
+.run-history th { background: var(--surface); letter-spacing: .06em; padding: 11px 16px; text-transform: uppercase; }
+.run-history td { color: var(--ink2); padding: 14px 16px; }
+.run-history tbody tr:last-child td { border-bottom: 0; }
+.run-history time, .run-number { font: 11px/16px "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; }
+.run-history .run-items { margin: 0; min-width: 240px; }
+.run-history .run-empty { margin: 0; }
 .debug-panel { margin: 20px; }
 
 /* Shared data */
@@ -490,6 +514,9 @@ td.err { color: var(--bad); }
   .live-bar { left: 14px; right: 14px; top: 12px; }
   .live-foot { bottom: 10px; left: 14px; }
   .context-vitals { padding: 22px 20px; }
+  .context-run { padding: 22px 20px; }
+  .run-metric-grid { gap: 16px 0; grid-template-columns: 1fr 1fr; }
+  .run-metric-grid > span:nth-child(3) { border-left: 0; padding-left: 0; }
   .agent-map-panel { height: 300px; }
   .agent-map-heading { left: 14px; max-width: calc(100% - 28px); top: 14px; }
   .agent-map-heading b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -498,6 +525,7 @@ td.err { color: var(--bad); }
   .agent-events .mission-row { grid-template-columns: minmax(0, 1fr) auto; }
   .agent-events .mission-row time { display: none; }
   .debug-panel { margin: 14px; }
+  .run-history { margin: 14px 14px 0; }
   .mission-kicker { align-items: flex-start; gap: 10px; }
   .bot-rail, .bot-secondary, .debug-grid { grid-template-columns: 1fr; }
   .bot-secondary > section:first-child { grid-column: auto; }
