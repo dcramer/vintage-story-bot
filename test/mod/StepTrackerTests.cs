@@ -45,6 +45,15 @@ static class StepTrackerTests
         var bounce = new StepTracker(toward, new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
         for (long t = 0; t <= 2600; t += 100) bounce.Update(new Point3(1.0 + (t % 300) / 300.0, 100 + (t % 200) / 100.0, 0.5), 90, t % 200 == 0, false, t);
         Check(bounce.State == "blocked", "an old step is stuck");
-        Console.WriteLine("14 step checks passed.");
+        // A queued next point: reaching the first rolls straight on, reporting what was reached.
+        var chain = new StepTracker(toward, new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
+        chain.Queue(new Point3(4.5, 100, 0.5), false);
+        var rolled = chain.Update(new Point3(2.4, 100, 0.5), 90, true, false, 500);
+        Check(chain.State == "walking" && chain.Arrived is Point3 && chain.Toward.X == 4.5 && rolled.Forward, "rolls on to the next point");
+        Check(chain.Continues(new Point3(2.5, 100, 0.5), new Point3(4.5, 100, 0.5)), "a frame naming the reached point and the current one still describes this step");
+        Check(!chain.Continues(new Point3(2.5, 100, 0.5), null), "a frame naming only the reached point does not");
+        chain.Queue(new Point3(4.5, 100, 0.5), false);
+        Check(chain.Next == null, "the current point is never queued behind itself");
+        Console.WriteLine("18 step checks passed.");
     }
 }

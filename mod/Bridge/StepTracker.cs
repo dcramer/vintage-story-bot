@@ -13,17 +13,22 @@ public sealed class StepTracker
     // A single step to an adjacent cell that is still going after this long is stuck, however the distance wobbles.
     public const double MaxMs = 2500;
 
-    public Point3 Toward { get; }
-    public Point3 Start { get; }
+    public Point3 Toward { get; private set; }
+    public Point3 Start { get; private set; }
+    // The point to roll on to once this one is reached, so a walk does not pause for Node between cells.
+    public Point3? Next { get; private set; }
+    public bool NextHop { get; private set; }
+    // The last point reached, reported so Node can retire it while the body already walks on.
+    public Point3? Arrived { get; private set; }
     public double Reach { get; }
     public double ReachY { get; }
     // Jump when close and facing the point: a step up or a gap.
-    public bool Hop { get; }
+    public bool Hop { get; private set; }
     public string State { get; private set; } = "walking";
     public double Distance { get; private set; }
     private double bestDistance = double.PositiveInfinity;
     private long progressAt;
-    private readonly long startedAt;
+    private long startedAt;
 
     public StepTracker(Point3 toward, Point3 start, double reach, double reachY, bool hop, long now)
     {
@@ -33,7 +38,12 @@ public sealed class StepTracker
 
     private static double Horizontal(Point3 a, Point3 b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Z - b.Z) * (a.Z - b.Z));
 
-    public bool Same(Point3 toward) => Math.Abs(toward.X - Toward.X) < 0.01 && Math.Abs(toward.Y - Toward.Y) < 0.01 && Math.Abs(toward.Z - Toward.Z) < 0.01;
+    private static bool Near(Point3? a, Point3 b) => a is Point3 p && Math.Abs(p.X - b.X) < 0.01 && Math.Abs(p.Y - b.Y) < 0.01 && Math.Abs(p.Z - b.Z) < 0.01;
+    public bool Same(Point3 toward) => Near(Toward, toward);
+    // A frame still describes this step when it names the current point, or the point just reached
+    // with the current one queued behind it (Node has not yet seen the roll-on).
+    public bool Continues(Point3 toward, Point3? then) => Same(toward) || (Near(Arrived, toward) && then is Point3 t && Near(Toward, t));
+    public void Queue(Point3? next, bool hop) { Next = next is Point3 n && Near(Toward, n) ? null : next; NextHop = hop; }
 
     // What to hold this tick, and where to look. Forward only while facing the point and
     // supported (in the air only a hop keeps it, so a drop falls straight down); jump held
@@ -50,7 +60,21 @@ public sealed class StepTracker
         double sx = Toward.X - Start.X, sz = Toward.Z - Start.Z, length = Math.Sqrt(sx * sx + sz * sz);
         bool passed = length > 0.05 && (dx * sx + dz * sz) / length < 0 && Math.Abs(dx * sz - dz * sx) / length <= PassedLateral;
         // Arrived means standing on it (or afloat at it): a body still in the air has not landed yet.
-        if (level && (onGround || wet) && (Distance <= Reach || passed)) { State = "arrived"; return (false, wet, wantYaw); }
+        if (level && (onGround || wet) && (Distance <= Reach || passed))
+        {
+            Arrived = Toward;
+            if (Next is Point3 next)
+            {
+                // Roll straight on: the reached point is the new start, no frame from Node needed.
+                Toward = next; Start = position; Hop = NextHop; Next = null;
+                bestDistance = double.PositiveInfinity; progressAt = now; startedAt = now;
+                dx = Toward.X - position.X; dz = Toward.Z - position.Z; Distance = Math.Sqrt(dx * dx + dz * dz);
+                wantYaw = SceneGeometry.Normalize(Math.Atan2(dx, dz) * 180 / Math.PI);
+                double e2 = Math.Abs(SceneGeometry.Normalize(wantYaw - yawDegrees + 180) - 180);
+                return (e2 < AlignDegrees, wet, wantYaw);
+            }
+            State = "arrived"; return (false, wet, wantYaw);
+        }
         double error = Math.Abs(SceneGeometry.Normalize(wantYaw - yawDegrees + 180) - 180);
         bool aligned = error < AlignDegrees;
         if (now - startedAt > MaxMs) { State = "blocked"; return (false, wet, wantYaw); }
@@ -65,5 +89,6 @@ public sealed class StepTracker
 
     public void Expire() { if (State == "walking") State = "expired"; }
 
-    public object View() => new { state = State, distance = Math.Round(Distance, 2), toward = new { x = Toward.X, y = Toward.Y, z = Toward.Z } };
+    public object View() => new { state = State, distance = Math.Round(Distance, 2), toward = new { x = Toward.X, y = Toward.Y, z = Toward.Z },
+        arrived = Arrived is Point3 a ? new { x = a.X, y = a.Y, z = a.Z } : null, next = Next is Point3 n ? new { x = n.X, y = n.Y, z = n.Z } : null };
 }

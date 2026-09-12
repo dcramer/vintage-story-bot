@@ -102,7 +102,7 @@ public sealed partial class AiBridgeMod
             frameSneak = frameSneakField.GetBoolean();
         }
         // A step: walk toward a point until on it, blocked or expired, the hand on the keys every tick.
-        Point3? toward = null; double reach = 0.35, reachY = 0.6; bool hop = false;
+        Point3? toward = null, then = null; double reach = 0.35, reachY = 0.6; bool hop = false, thenHop = false;
         if (request.TryGetProperty("toward", out var towardField) && towardField.ValueKind != JsonValueKind.Null)
         {
             if (!TryNumber(towardField, "x", out double tx) || !TryNumber(towardField, "y", out double ty) || !TryNumber(towardField, "z", out double tz) ||
@@ -117,6 +117,15 @@ public sealed partial class AiBridgeMod
             {
                 if (hopField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return new { ok = false, error = "hop must be boolean." };
                 hop = hopField.GetBoolean();
+            }
+            // The point after this one (next), to roll on to without a pause: within 8 blocks like the first.
+            if (request.TryGetProperty("next", out var thenField) && thenField.ValueKind == JsonValueKind.Object)
+            {
+                if (!TryNumber(thenField, "x", out double nx) || !TryNumber(thenField, "y", out double ny) || !TryNumber(thenField, "z", out double nz) ||
+                    SceneGeometry.Distance(new(entity.Pos.X, entity.Pos.Y, entity.Pos.Z), new(nx, ny, nz)) > 8)
+                    return new { ok = false, error = "next must be a point within 8 blocks." };
+                then = new Point3(nx, ny, nz);
+                thenHop = thenField.TryGetProperty("hop", out var thenHopField) && thenHopField.ValueKind == JsonValueKind.True;
             }
         }
         if (request.TryGetProperty("focus", out var focusField) && focusField.ValueKind != JsonValueKind.Null)
@@ -137,7 +146,8 @@ public sealed partial class AiBridgeMod
         if (toward is Point3 point)
         {
             var at = new Point3(entity.Pos.X, entity.Pos.Y, entity.Pos.Z);
-            if (step == null || !step.Same(point) || step.State != "walking") step = new StepTracker(point, at, reach, reachY, hop, frameNow);
+            if (step == null || !step.Continues(point, then) || step.State != "walking") step = new StepTracker(point, at, reach, reachY, hop, frameNow);
+            step.Queue(then, thenHop);
             // The tracker presses forward and jump itself; the keys are only registered here.
             frameForward = true; jumping = false;
         }

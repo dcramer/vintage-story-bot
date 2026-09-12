@@ -211,7 +211,8 @@ export class Navigation {
       const lateral = Math.abs((p.x - node.x) * dz - (p.z - node.z) * dx) / length;
       return along >= 0 && along < 2.5 && lateral < 0.5 && Math.abs(p.y - node.y) < 0.6;
     };
-    const arrivedAt = step?.state === 'arrived' ? step.toward : null;
+    // The mod reports the point it last reached; it may already be rolling on to the one after.
+    const arrivedAt = step?.arrived ?? (step?.state === 'arrived' ? step.toward : null);
     while (this.index < this.route.length && (reached(this.route[this.index]) || (arrivedAt && sameCell(arrivedAt, this.route[this.index])))) {
       this.edgeStart = this.route[this.index++];
       this.progressAt = now;
@@ -316,7 +317,15 @@ export class Navigation {
     const sprint =
       this.target.sprint !== false && next.move === 'walk' && near > 2 && (emergency || (food?.max > 0 && food.current / food.max >= 0.5));
     const last = this.index >= this.route.length - 1;
+    // The cell after this one is handed over as well, so the mod rolls straight on to it when this
+    // one is reached instead of pausing for a frame from here.
+    const after = this.route[this.index + 1];
+    const next2 =
+      after && ['walk', 'jump', 'step', undefined].includes(after.move) && horizontal(p, after) <= 7.5 && Math.abs(after.y - p.y) <= 3
+        ? { x: after.x, y: after.y, z: after.z, hop: after.move === 'jump' || after.y - next.y > STEP_HEIGHT }
+        : undefined;
     return {
+      ...(next2 ? { next: next2 } : {}),
       toward: { x: next.x, y: next.y, z: next.z },
       reach: last ? Math.max(0.2, Math.min(0.35, this.target.arrivalRadius ?? 0.35)) : 0.35,
       reachY: next.swim || wet ? 1.5 : 0.6,

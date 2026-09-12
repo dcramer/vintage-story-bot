@@ -507,6 +507,7 @@ export class Controller {
                 reach: frame?.reach ?? input.reach,
                 reachY: frame?.reachY ?? input.reachY,
                 hop: frame?.hop ?? input.hop,
+                next: frame?.next ?? input.next,
               }
             : {}),
         };
