@@ -31,7 +31,7 @@ import {
 } from './default/concern.ts';
 import { burrow, recoverBurrow } from './default/reflexes/burrow.ts';
 import { digOut } from './default/reflexes/dig_out.ts';
-import { eat, hungry, peckish } from './default/reflexes/eat.ts';
+import { eat, hungry } from './default/reflexes/eat.ts';
 import { explore } from './default/reflexes/explore.ts';
 import { goHome } from './default/reflexes/go_home.ts';
 import { hide } from './default/reflexes/hide.ts';
@@ -121,7 +121,6 @@ export const LADDER: Rung[] = [
   { job: 'shift', when: (s, tried) => s.night && !s.home && !s.burrowed && tried.has('burrow') },
   { job: 'burrow', when: s => s.night },
   { job: 'unburrow', when: (s, tried) => s.burrowed && !tried.has('unburrow') },
-  { job: 'eat', when: (s, tried) => peckish(s) && s.reserve <= 0 && !tried.has('eat') },
 ];
 const CONCERNS = new Map<Job, Concern>([...REFLEXES, ...TASKS].map(concern => [concern.id, concern]));
 const concern = (job: Job) => CONCERNS.get(job)!;

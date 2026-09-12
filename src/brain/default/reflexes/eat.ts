@@ -1,16 +1,12 @@
-// Food. Hungry (under 20%) is pressing whatever runs; peckish (under 40%) with
-// nothing carried starts a search while there is strength for it. Dug in with
-// food in the pack, one bite where it sits; otherwise forage to half, keeping two bites.
+// Food. Hungry (under 20%) is pressing whatever runs. Dug in with food in the
+// pack, eat one bite where it sits; otherwise forage to half, keeping two bites.
 import { HUNGRY } from '../../../support/food.ts';
 import type { Concern } from '../concern.ts';
 import type { Situation } from '../situation.ts';
 
 // Hungry is the goals' own line (support/food.ts), so the brain interrupts work where forage would stomach poor food.
 export { HUNGRY };
-// With nothing to eat in the pack, start looking while there is still strength to search.
-export const PECKISH = 0.4;
 export const hungry = (s: Situation) => s.hunger !== null && s.hunger < HUNGRY;
-export const peckish = (s: Situation) => s.hunger !== null && s.hunger < PECKISH;
 
 export const eat: Concern = {
   id: 'eat',
@@ -22,9 +18,8 @@ export const eat: Concern = {
     if (s.burrowed && k.reserve > 0) return { start: 'eat', args: {}, why: `satiety ${percent}%, dug in` };
     return {
       start: 'forage',
-      // Fed to half with two bites' worth kept in the pack: the pack is
-      // what stops the next peckish tick from starting the same search again.
-      args: { until: PECKISH + 0.1, keep: 160, timeoutMs: 1800000 },
+      // Fed to half with two bites' worth kept in the pack.
+      args: { until: 0.5, keep: 160, timeoutMs: 1800000 },
       why: `satiety ${percent}%, ${k.reserve > 0 ? `${k.reserve} carried` : 'nothing carried'}`,
     };
   },

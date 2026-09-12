@@ -66,7 +66,9 @@ const reading = (extra = {}) => ({
   markers: [],
   ground: null,
   dialogs: null,
-  terrain: null,
+  // Ordinary decision tests start with a complete, empty terrain reading. Tests
+  // for startup terrain recovery override this with a deliberately partial map.
+  terrain: { get: () => ({ hazard: null, boxes: [] }) },
   now: 1000,
   ...extra,
 });
@@ -151,8 +153,8 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
     { stop: 'burrow' },
     'night falling cuts a kit job short',
   );
-  assert.equal(pickJob(situation({ hunger: 0.35 })), 'eat', 'peckish with an empty pack: go find food');
-  assert.equal(pickJob(situation({ hunger: 0.35, reserve: 200 })), 'explore', 'peckish with food in the pack: carry on');
+  assert.equal(pickJob(situation({ hunger: 0.35 })), 'explore', 'food above 20% does not preempt work with an empty pack');
+  assert.equal(pickJob(situation({ hunger: 0.35, reserve: 200 })), 'explore', 'food above 20% does not preempt work with a reserve');
   assert.equal(pickJob(situation({ dangerHere: true, night: true })), 'relocate', 'a place full of scares is left');
   assert.equal(pickJob(situation({ night: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ night: true, home: false, dirt: 0 })), 'burrow', 'night without a home: dig in where it stands');
@@ -178,11 +180,11 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
     'storage',
     'the reed chest comes right after the knife and axe: it fixes the site',
   );
-  assert.equal(pickJob(situation({ hunger: 0.3 })), 'eat', 'peckish with nothing carried: look for food');
+  assert.equal(pickJob(situation({ hunger: 0.3 })), 'explore', 'food above 20% does not start a search');
   assert.equal(
     pickJob(situation({ hunger: 0.3 }), new Set(['eat'] as any)),
     'explore',
-    'a peckish search that found nothing is set aside like any task',
+    'food above 20% stays below the work list even when eating was tried',
   );
   assert.equal(pickJob(situation({ hunger: 0.1 }), new Set(['eat'] as any)), 'eat', 'a hungry one keeps looking');
   assert.equal(pickJob(situation({ torches: 0 })), 'grass');
@@ -507,6 +509,7 @@ test('brain loop: respawns when dead, waits behind an operator goal, starts and 
     last: null,
     brain: null,
     history: new Map(),
+    map: { get: () => ({ hazard: null, boxes: [] }) },
     send: async request => {
       calls.push(request);
       if (request.action === 'observe') return dead ? { ok: true, alive: false, life: { deathId: 'd:1', canRespawn: true } } : state();

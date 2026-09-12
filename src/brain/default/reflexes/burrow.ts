@@ -47,10 +47,13 @@ export function recoverBurrow(reading: Reading, memory: Memory): Decision | null
       [bx, by + 2, bz + 1],
       [bx, by + 2, bz - 1],
     ].every(([x, y, z]) => reading.terrain.get(x, y, z));
-  if (!ready) {
+  // Wet starts must reach the swim/wade reflex immediately. Inspect for an old
+  // burrow only after the player has dry footing again.
+  if (!ready && !wet) {
     memory.startupAt ??= reading.now;
     if (reading.now - memory.startupAt < STARTUP_TERRAIN_MS) return { wait: 'inspecting surroundings after startup' };
   }
+  if (wet) return null;
   memory.startupChecked = true;
   memory.startupAt = null;
   const observedShaft = !wet && reading.terrain ? dugInState(reading.terrain, bx, by, bz) : null;

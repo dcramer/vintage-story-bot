@@ -54,7 +54,7 @@ fights; it runs or hides.
 | tunnel | `dig_out` away from the threat, else `dig_area` on the mouth | Dug in with a threat outside for three minutes of daylight: stairs out the far side; rock stops them (no pickaxe), so a failed tunnel is set aside and the mouth is opened to run |
 
 Wants (what every walk stops for within six blocks): berries on a ripe bush, an edible mushroom and a wild hive always; loose sticks while short of a few; loose flint and stones while a tool head is wanted and nothing knappable is carried.
-| eat | `forage` to half with two bites kept; `eat` alone when dug in with food | Satiety below 20% (or 40% with nothing carried); eats what is carried when hungry (in the burrow too, off an earth wall), keeps the rest, searches ever farther in one direction for more, and when starving stomachs a bite that costs a point of health |
+| eat | `forage` to half with two bites kept; `eat` alone when dug in with food | Satiety below 20%; eats what is carried when hungry (in the burrow too, off an earth wall), keeps the rest, searches ever farther in one direction for more, and when starving stomachs a bite that costs a point of health |
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
 | shelter | `travel` to six blocks west of the chest when one is noted, then `shelter` | Enough dirt (by day, or at night with nowhere else) |
 | knife | `gather` one stick or flint if short, `knap` a knife blade, `craft_item` the knife | No knife; first of the kit, the moment a stick and a flint are in hand |
