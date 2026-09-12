@@ -43,6 +43,9 @@ const polling = new Set([
   'map_waypoints',
 ]);
 const looping = new Set(['control_frame', 'control_step', 'block_action_status', 'block_action_continue']);
+// Server chat: a goal announces itself once it has run this long, and never repeats the line it just said.
+const ANNOUNCE_GRACE_MS = 2000,
+  ANNOUNCE_REPEAT_MS = 10 * 60 * 1000;
 
 // One bot: the shared game client, its memory, one active goal at a time, and
 // the tool registry every adapter (MCP, CLI, brain) speaks to.
@@ -69,6 +72,7 @@ export class Controller {
   lock = Promise.resolve();
   events = new EventLog();
   chatCursor = { after: 0, session: undefined as string | undefined };
+  announced: { message: string; at: number } | null = null;
   constructor(send, telemetry = null, log: Log = noLog) {
     this.game = new GameClient(send);
     this.game.events = this.events;
@@ -350,12 +354,17 @@ export class Controller {
     });
   }
   // Fire-and-forget status chat so other players on the server can follow what the bot is doing.
+  // A line is said once: a goal restarted with the same story (a retry, a follow-up recovery) stays quiet
+  // until a different line has been said or the last one has gone stale.
   announce(kind, args) {
-    const message = describeGoal(kind, args);
-    if (message)
-      Promise.resolve()
-        .then(() => this.send({ action: 'chat', message }))
-        .catch(() => {});
+    const message = describeGoal(kind, args),
+      now = Date.now();
+    if (!message) return;
+    if (this.announced?.message === message && now - this.announced.at < ANNOUNCE_REPEAT_MS) return;
+    this.announced = { message, at: now };
+    Promise.resolve()
+      .then(() => this.send({ action: 'chat', message }))
+      .catch(() => {});
   }
   // Start one goal: the record is active until its work and cleanup finish,
   // whatever the outcome. START resolves as soon as the work reports it.
@@ -376,7 +385,10 @@ export class Controller {
     this.active = this.last = record;
     this.track(record);
     this.events.emit('goal_started', { goal: record.id, kind, by });
-    this.announce(kind, args);
+    // Announced only once the goal has actually got going: a step that ends within the grace is not worth a chat line.
+    const announce = setTimeout(() => {
+      if (this.active === record && record.state !== 'cancelled') this.announce(kind, args);
+    }, ANNOUNCE_GRACE_MS);
     record.done = (async () => {
       try {
         await work(record, started, abort.signal);
@@ -390,6 +402,7 @@ export class Controller {
         this.track(record);
         started.resolve({ ok: false, error: reason });
       } finally {
+        clearTimeout(announce);
         started.resolve({ ok: false, error: record.reason ?? 'Goal cancelled before start' });
         if (this.active === record) this.active = null;
         record.finishedAt = Date.now();
