@@ -209,7 +209,7 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   // Below the recovery threshold, food is no longer optional daywork. With
   // nothing in the pack, sheltering through the night guarantees starvation;
   // keep searching and let forage's own threat handling decide when to run.
-  if (s.hunger !== null && s.hunger < HUNGRY) return s.burrowed ? 'unburrow' : 'eat';
+  if (s.hunger !== null && s.hunger < HUNGRY) return s.burrowed && s.reserve <= 0 ? 'unburrow' : 'eat';
   if (s.storm) {
     if (s.home) return s.atHome ? 'wait' : 'go_home';
     if (s.burrowed) return 'wait';

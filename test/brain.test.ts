@@ -80,6 +80,7 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ storm: true, home: false })), 'burrow', 'a storm sends a homeless bot underground');
   assert.equal(pickJob(situation({ storm: true, home: false, burrowed: true })), 'wait', 'an existing burrow shelters from a storm');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true, reserve: 100 })), 'eat', 'the pack is eaten from at night');
+  assert.equal(pickJob(situation({ hunger: 0.1, night: true, reserve: 100, burrowed: true })), 'eat', 'carried food is eaten inside a burrow');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true, atHome: false })), 'eat', 'critical hunger cannot wait for day');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true, burrowed: true })), 'unburrow', 'a starving bot opens its burrow first');
   const starvingNight = fresh();
