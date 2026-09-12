@@ -152,7 +152,9 @@ internal sealed class BlockActions(ICoreClientAPI api)
         if (changedAt != 0 && System.Environment.TickCount64 - changedAt > 5000) { Cancel("verification_expired"); return; }
         var entity = api.World.Player.Entity;
         // The body may drop into the hole it digs under itself; walking away is what loses the observation.
-        if (origin == null || entity.Pos.Dimension != position.dimension || !Visible() ||
+        // Once the change has been seen, the cell may well be air the eye's ray finds nothing in; only the body's
+        // place still matters for the verification.
+        if (origin == null || entity.Pos.Dimension != position.dimension || (state != "changed" && !Visible()) ||
             Math.Sqrt((entity.Pos.X - origin.X) * (entity.Pos.X - origin.X) + (entity.Pos.Z - origin.Z) * (entity.Pos.Z - origin.Z)) > .35 ||
             entity.Pos.Y - origin.Y > .35 || origin.Y - entity.Pos.Y > 1.2)
         { Cancel("observation_lost"); return; }
