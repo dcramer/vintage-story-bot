@@ -40,6 +40,7 @@ export const foodViewChanged = (view, state) =>
   !view || horizontal(view.position, state.position) > 2 || Math.abs(normalize(state.orientation.yawDegrees - view.yawDegrees + 180) - 180) > 15;
 export const stuckFoodRoute = (result, before, after) => !['arrived', 'paused'].includes(result.state) && horizontal(before, after) <= 2;
 export const exhaustedFoodLead = (target, result) => result.state === 'arrived' && target.visible === false;
+export const foodSearchBias = (stuckSearches, toward, habitat) => (stuckSearches >= 2 ? null : (toward ?? habitat));
 export const matchingFoodDrops = (objects, foodCode, point) =>
   objects
     .filter(object => object.kind === 'item' && object.code === foodCode && Number.isInteger(object.quantity) && object.quantity > 0)
@@ -218,7 +219,10 @@ export class Survival {
       }
       const before = { ...field.latest.position };
       // With no food in sight, head for where it grows: forest edges, then the water's edge.
-      const destination = this.searchTarget ?? field.explore(toward ?? field.habitat(['edge', 'shore']), foodSearchDistance);
+      // If that bias produced two stationary legs, rotate through reachable
+      // local directions instead of selecting more points on the same cliff.
+      const bias = foodSearchBias(this.stuckSearches, toward, field.habitat(['edge', 'shore']));
+      const destination = this.searchTarget ?? field.explore(bias, foodSearchDistance);
       const result = await field.walk(destination, this.eatWhen);
       const progress = horizontal(before, field.latest.position);
       this.searchTarget = !['arrived', 'paused'].includes(result.state) && progress > 2 ? destination : null;

@@ -11,6 +11,7 @@ import {
   exhaustedFoodLead,
   foodElevationDetourDistance,
   foodRecoverySatisfied,
+  foodSearchBias,
   foodSearchDistance,
   foodSightRange,
   foodViewChanged,
@@ -153,6 +154,14 @@ test('food leads survive productive partial routes but skip stuck ones', () => {
   assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
   assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
   assert.equal(stuckFoodRoute({ state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
+});
+
+test('food search drops an unreachable habitat bias after two stationary legs', () => {
+  const destination = { x: 20, z: 20 };
+  const habitat = { x: 10, z: 10 };
+  assert.equal(foodSearchBias(0, destination, habitat), destination);
+  assert.equal(foodSearchBias(1, null, habitat), habitat);
+  assert.equal(foodSearchBias(2, destination, habitat), null);
 });
 
 test('an unseen remembered food lead expires after reaching its approach cell', () => {
