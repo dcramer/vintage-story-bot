@@ -7,6 +7,9 @@ import { type Habitat, habitatTarget } from './habitat.ts';
 import { area, Places } from './places.ts';
 import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.ts';
 
+// Most substrings the mod's native scan filters on in one request.
+const SCAN_MATCHES = 4;
+
 export { area } from './places.ts';
 export const sightRange = 64;
 // Beyond this the fine navigator's observed disk cannot see the destination;
@@ -297,19 +300,29 @@ export class Fieldwork {
     return this.scan(radius, match, kind);
   }
   async scanView(radius, match?, kind = 'all') {
-    let cursor;
-    const objects = [];
-    // A scan is read-only and stationary. Guard once around the paged sweep
-    // instead of spending an extra game-thread round trip on every page.
-    do {
-      const filter = Array.isArray(match) ? { matches: match } : { match };
-      const page = await this.env.send({ action: 'scan', kind, ...filter, radius, limit: 32, ...(cursor ? { cursor } : {}) });
-      if (page.code === 'scan_expired') break;
-      if (!page.ok) throw Error(page.error ?? 'Scan refused');
-      objects.push(...page.objects);
-      for (const object of page.objects) this.seen.set(object.key, { ...object, seenAt: this.now() });
-      cursor = page.more ? page.cursor : null;
-    } while (cursor);
+    const objects = [],
+      keys = new Set();
+    // The mod's scan filters on at most four substrings at once; a longer watch list is several sweeps of the same view.
+    const filters = Array.isArray(match)
+      ? Array.from({ length: Math.ceil(match.length / SCAN_MATCHES) }, (_, i) => ({ matches: match.slice(i * SCAN_MATCHES, (i + 1) * SCAN_MATCHES) }))
+      : [{ match }];
+    for (const filter of filters) {
+      let cursor;
+      // A scan is read-only and stationary. Guard once around the paged sweep
+      // instead of spending an extra game-thread round trip on every page.
+      do {
+        const page = await this.env.send({ action: 'scan', kind, ...filter, radius, limit: 32, ...(cursor ? { cursor } : {}) });
+        if (page.code === 'scan_expired') break;
+        if (!page.ok) throw Error(page.error ?? 'Scan refused');
+        for (const object of page.objects) {
+          if (keys.has(object.key)) continue;
+          keys.add(object.key);
+          objects.push(object);
+          this.seen.set(object.key, { ...object, seenAt: this.now() });
+        }
+        cursor = page.more ? page.cursor : null;
+      } while (cursor);
+    }
     await this.observe();
     this.searched++;
     this.prune();
