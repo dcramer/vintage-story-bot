@@ -72,6 +72,10 @@ const situation = (extra = {}) => ({
   grass: 0,
   dirt: 0,
   logs: 8,
+  storage: true,
+  full: false,
+  surplus: 0,
+  short: 0,
   ...extra,
 });
 
@@ -927,7 +931,7 @@ test('brain: home is a note that outlives the process and is mirrored once on th
     (first.memory as any).notes.home = { x: 7, y: 100, z: 9 };
     await first.stop();
     const file = first.notes.status().file;
-    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).notes, { home: { x: 7, y: 100, z: 9 } });
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).notes, { home: { x: 7, y: 100, z: 9 }, stash: null });
     const second = new BrainLoop(controller as any, brain, 5);
     second.start();
     await new Promise(resolve => setTimeout(resolve, 30));
@@ -936,4 +940,59 @@ test('brain: home is a note that outlives the process and is mirrored once on th
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('brain: a basket by the door is made in three steps, a full pack is put away, and the basket feeds the kit', () => {
+  const tools = [
+    slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }),
+    slot('game:axe-flint', 1, { tool: 'Axe', durability: 5 }),
+    slot('game:shovel-flint', 1, { tool: 'Shovel', durability: 5 }),
+  ];
+  const home = { x: 3.5, y: 100, z: 0.5 };
+  const settled = () => {
+    const memory = fresh();
+    memory.notes.home = home;
+    return memory;
+  };
+  const cut = decide(reading({ inventory: inventory(slot('game:stick', 10), ...tools) }), settled());
+  assert.deepEqual([cut.start, cut.args.match, cut.args.tool], ['harvest', 'coopersreed', 'Knife'], 'no basket: cut cattail tops first');
+  const weave = decide(reading({ inventory: inventory(slot('game:stick', 10), slot('game:cattailtops', 12), ...tools) }), settled());
+  assert.deepEqual([weave.start, weave.args.output], ['craft_item', 'game:stationarybasket-east']);
+  const carrying = settled();
+  const put = decide(reading({ inventory: inventory(slot('game:stick', 10), slot('game:stationarybasket-east', 1), ...tools) }), carrying);
+  assert.deepEqual([put.start, put.args.cells[0]], ['build', { x: 4, y: 100, z: 2, item: 'game:stationarybasket-east' }], 'beside the door');
+  const built = [{ x: 4, y: 100, z: 2, face: 'up', code: 'game:stationarybasket-north' }];
+  decide(
+    reading({ inventory: inventory(slot('game:stick', 10), ...tools), last: { id: 'b', kind: 'build', ok: true, result: { built } } }),
+    carrying,
+  );
+  const key = 'block:0:4:100:2:game:stationarybasket-north';
+  assert.equal(carrying.notes.stash?.key, key, 'the basket is noted by the key the client observed');
+
+  const heavy = inventory(
+    slot('game:stick', 20),
+    slot('game:log-placed-oak-ud', 12),
+    slot('game:seeds-flax', 3),
+    slot('game:torch-basic-extinct-up', 2),
+    ...tools,
+  );
+  const away = decide(reading({ inventory: heavy }), carrying);
+  assert.equal(away.start, 'store_items', 'a full pack is put away');
+  assert.deepEqual([away.args.target, away.args.items[0]], [key, { item: 'game:stick', count: 10 }], 'ten sticks stay on hand; the rest go first');
+  assert.ok(!away.args.items.some(i => /torch|knife/.test(i.item)), 'tools and torches stay');
+  decide(
+    reading({ inventory: heavy, last: { id: 's', kind: 'store_items', ok: true, result: { contents: [{ code: 'game:stick', quantity: 10 }] } } }),
+    carrying,
+  );
+  assert.deepEqual(carrying.notes.stash?.seen?.items, { 'game:stick': 10 }, 'what the basket held when closed is remembered');
+  const roomy = inventory(slot('game:stick', 20), slot('game:log-placed-oak-ud', 12), ...tools, slot(null, 0), slot(null, 0));
+  assert.notEqual(decide(reading({ inventory: roomy }), carrying).start, 'store_items', 'with room to spare nothing is put away');
+
+  const short = decide(reading({ inventory: inventory(slot('game:stick', 2), ...tools) }), carrying);
+  assert.deepEqual([short.start, short.args.items], ['take_items', [{ item: 'game:stick', count: 8 }]], 'the basket feeds the kit before gathering');
+  const gone = { id: 't', kind: 'take_items', ok: false, reason: 'Target not in native reach, changed or obstructed; no action sent' };
+  decide(reading({ inventory: inventory(slot('game:stick', 2), ...tools), last: gone }), carrying);
+  assert.equal(carrying.notes.stash, null, 'a basket that cannot be opened again is forgotten');
+  assert.deepEqual(fresh({ stash: { key, x: 4, y: 100, z: 2, code: 'game:stationarybasket-north', seen: null } }).notes.stash?.key, key);
+  assert.equal(fresh({ stash: { key } } as any).notes.stash, null, 'a damaged note is not a basket');
 });

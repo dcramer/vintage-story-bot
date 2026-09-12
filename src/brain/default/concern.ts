@@ -26,10 +26,24 @@ export type Job =
   | 'burrow'
   | 'unburrow'
   | 'relocate'
-  | 'recover';
+  | 'recover'
+  | 'storage'
+  | 'stash'
+  | 'resupply';
+// The container the bot keeps things in: its observed key (cell and block code), and what it
+// held when last closed. Unknown until opened; stale once anyone else has been at it.
+export type Stash = {
+  key: string;
+  x: number;
+  y: number;
+  z: number;
+  code: string;
+  seen: { at: number; items: Record<string, number> } | null;
+};
 // What is kept between runs: the decisions made about this world, never what was seen.
 export type Notes = {
   home: Cell | null;
+  stash: Stash | null;
 };
 export type Memory = {
   notes: Notes;
@@ -105,6 +119,8 @@ export type Concern = {
   explains?: (events: any[]) => boolean;
   // Code substrings worth picking up on the way while this concern has a shortfall.
   wants?: (k: Kit) => string[];
+  // What the kit is short of for this task, as an item code substring and a count; storage may hold it.
+  short?: (k: Kit, s: Pick<Situation, 'home' | 'torches'>) => { item: string; count: number } | null;
 };
 // Something done alongside any job through tools that only talk: a marker, a chat line.
 export type Aside = { id: string; act: (ctx: Context) => Decision | null };
@@ -146,6 +162,45 @@ export function pickJob(ladder: Rung[], list: Concern[], idle: Job, s: Situation
 }
 
 export const cell = (c: any): Cell | null => (c && [c.x, c.y, c.z].every(Number.isFinite) ? { x: c.x, y: c.y, z: c.z } : null);
+export const stashNote = (n: any): Stash | null =>
+  n && typeof n.key === 'string' && typeof n.code === 'string' && cell(n)
+    ? {
+        key: n.key,
+        ...cell(n)!,
+        code: n.code,
+        seen:
+          n.seen && Number.isFinite(n.seen.at) && n.seen.items && typeof n.seen.items === 'object'
+            ? { at: n.seen.at, items: { ...n.seen.items } }
+            : null,
+      }
+    : null;
+// A task with a place goes there first: a walk when the place is farther than the goal itself would go, else null.
+export function goTo(ctx: Context, place: Cell, why: string, radius = 12): Decision | null {
+  const far = Math.hypot(place.x - ctx.state.position.x, place.z - ctx.state.position.z);
+  if (far <= radius) return null;
+  return {
+    start: 'travel',
+    args: { x: place.x, z: place.z, arrivalRadius: 3, manageFood: true, timeoutMs: 900000 },
+    why: `${why}, ${Math.round(far)} blocks away`,
+  };
+}
+// The basket's cell, beside the door outside the shelter (docs/brain.md).
+export const stashSpot = (home: Cell): Cell => ({ x: Math.floor(home.x) + 1, y: Math.floor(home.y), z: Math.floor(home.z) + 2 });
+// A container the goal could not open again is gone: its note is dropped, and a new one is made.
+export const containerGone = (last: Ended) => /changed or obstructed|No container dialog|container_unreachable/i.test(last.reason ?? '');
+// What the container held when the goal closed it, remembered until the next look.
+export function noteContents(memory: Memory, last: Ended, now: number) {
+  if (!memory.notes.stash) return;
+  if (containerGone(last)) {
+    memory.notes.stash = null;
+    return;
+  }
+  const contents = last.result?.contents;
+  if (!Array.isArray(contents)) return;
+  const items: Record<string, number> = {};
+  for (const stack of contents) if (typeof stack?.code === 'string') items[stack.code] = (items[stack.code] ?? 0) + (stack.quantity ?? 0);
+  memory.notes.stash.seen = { at: now, items };
+}
 // Home is a note: it outlives the process, and moving house is rewriting it.
 export function setHome(memory: Memory, home: Cell | null) {
   memory.notes.home = cell(home);

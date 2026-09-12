@@ -13,4 +13,5 @@ export const sticks: Concern = {
     why: `${k.sticks}/${STICK_MIN} sticks`,
   }),
   wants: k => (k.sticks < STICK_MIN ? ['stick'] : []),
+  short: k => (k.sticks < STICK_MIN ? { item: 'game:stick', count: STICK_MIN - k.sticks } : null),
 };

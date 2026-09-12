@@ -78,7 +78,7 @@ const priors: [RegExp, string[]][] = [
   [/^game:(rock|ore|cobblestone|stonebricks)-/, ['mineable']],
   [/^game:ore-/, ['ore']],
   [/^game:(tallgrass|tallfern|fern|flower|sapling|mushroom|shortgrass|plant-|reedpapyrus|drygrass)/, ['plant', 'replaceable']],
-  [/^game:(chest|basket|storagevessel|crock)-?/, ['container']],
+  [/^game:(chest|basket|stationarybasket|storagevessel|crock)-?/, ['container']],
 ];
 // The knapping recipes take flint and these stones only; claystone, limestone and the rest do not knap.
 const knappable = code => code === 'game:flint' || /^game:stone-(chert|granite|andesite|basalt|obsidian|flint|peridotite)$/.test(code);

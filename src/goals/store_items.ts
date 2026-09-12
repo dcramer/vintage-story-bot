@@ -135,12 +135,16 @@ export async function exchange(field, survival, { target, items, direction }) {
     const result = await field.walk(destination, survival?.pauseWhen);
     if (!['arrived', 'paused'].includes(result.state) && legs >= 3) return { ok: false, reason: result.reason ?? 'route_blocked', ...summary() };
   }
+  // What the container held when it was closed: the caller's memory of it until the next look.
+  let contents = null;
   try {
     for (const want of items) {
       const result = await moveItems(field, { container, item: want.item, count: want.count ?? Infinity, direction });
       results.push({ item: want.item, wanted: want.count ?? null, ...result });
       if (result.reason === 'transfer_unverified') break;
     }
+    const view = await field.send({ action: 'container_slots' }).catch(() => null);
+    if (view?.ok) contents = (view.slots ?? []).filter(s => s.code && s.quantity > 0).map(s => ({ code: s.code, quantity: s.quantity }));
   } finally {
     await closeContainer(field).catch(() => {});
   }
@@ -150,6 +154,7 @@ export async function exchange(field, survival, { target, items, direction }) {
     goal: direction,
     ...(ok ? {} : { reason: results.find(r => r.reason)?.reason ?? 'incomplete' }),
     ...summary(),
+    contents,
     verification: 'inventory_delta',
   };
 }

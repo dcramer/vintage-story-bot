@@ -13,7 +13,7 @@ resumes on its own.
 - The brain sees every goal, whoever started it. Danger (a hostile seen or heard, a hit) stops any goal; storms and hunger cut short only the brain's own; an adapter's goal is otherwise left to finish and never replaced.
 - Nothing happens without the brain: respawning, swimming for shore, running from a hit and marking a find are its decisions. The loop wakes it when the controller notices something (`events`) as well as every couple of seconds.
 - A brain may return `wants`: code substrings every walk picks up when they lie within six blocks (loose sticks, stones, flints, dropped items, food where it grows), whatever the current job. The default brain always wants berries, edible mushrooms and wild honeycomb, sticks until it has ten, flint and loose stones until it has tools.
-- Memory has two parts. **Notes** are the decisions the brain made about a world (home, chests, claimed spots): plain JSON the loop keeps on disk per world, player and brain (`<knowledge dir>/notes/`, written when they change and on stop) and hands back to `fresh(notes)` when the world is next entered. Everything else is transient and dies with the process. What was seen is never a note: that is `Knowledge`. Moving home is rewriting a note. The map mirrors what others should find: the default brain keeps a `Home` marker where its note says, once per home.
+- Memory has two parts. **Notes** are the decisions the brain made about a world (home, chests, claimed spots): plain JSON the loop keeps on disk per world, player and brain (`<knowledge dir>/notes/`, written when they change and on stop) and hands back to `fresh(notes)` when the world is next entered. Everything else is transient and dies with the process. What was seen is never a note: that is `Knowledge`. Moving home is rewriting a note. The map mirrors what others should find: the default brain keeps a `Home` marker where its note says, once per home. Its notes are `home` and `stash` (the basket's observed key and last-seen contents).
 - Code: `src/brain/<name>.ts` default-exports `{ name, description, fresh(notes?), decide(reading, memory), notes?(memory), summary?(memory) }`; `src/runtime/brain.ts` owns the loop. `decide` is pure: one reading (`observe`, `inventory`, `environment`, the active goal, the brain's own goal that just finished, the events since the last decision, the player's own map markers, the nearest dry ground while swimming) and the brain's memory in, one decision out (`{ start, args, why }`, `{ act, why }`, `{ stop }`, `{ wait }`). `act` runs actions by hand; alongside a running goal only tools that talk (chat, map markers, memory) are accepted. `test/brain.test.ts` covers it without a game.
 
 Later brains (roles) differ only in `decide`. Behavior sources: [getting-started](getting-started.md), [architecture](architecture.md), [bot API](bot-api-reference.md).
@@ -60,6 +60,9 @@ Wants (what every walk stops for within six blocks): berries on a ripe bush, an 
 | grass | `harvest tallgrass` | Wants torches, no dry grass or cattail tops |
 | torches | `craft_item torch` | Fewer than 2 torches |
 | logs | `fell_tree` | Fewer than 8 logs |
+| storage | `harvest coopersreed` with the knife, `craft_item` a stationary basket, `build` it beside the door | A home and no basket noted |
+| stash | `store_items` into the basket: everything the kit does not keep on hand, most first | A basket noted and the pack full (one free slot or none) with something to put away |
+| resupply | `take_items` from the basket | The basket was last seen holding something the kit is short of (sticks, flint, dirt, grass, torches, logs); before gathering it |
 | explore | `explore` | Fed, safe, daylight, kit done |
 
 Order of concern, and the interrupt rule for a running job: danger (a hostile
@@ -73,8 +76,11 @@ stick and a head, dirt needs a shovel, a shelter needs dirt, torches need a home
 to light), and the first task not done is the one worked on. `brain` status
 shows every task as done, next, open or set aside. A failed job is set aside while the bot stays within 24
 blocks of where it failed, for five minutes at most; the next job in the ladder
-runs meanwhile, so a failure never leaves it standing about. Chests,
-`store_items`/`take_items` and body pickup are not used yet: it carries everything.
+runs meanwhile, so a failure never leaves it standing about. The basket is the
+one container it uses: its key and what it held when last closed are notes; a
+basket that cannot be opened again is forgotten and made again. Tools, torches
+and food stay in the pack, and so do the sticks, logs, dirt and grass the list
+keeps on hand; a task with a place (the basket) walks there first.
 
 ### Tiny shelter
 

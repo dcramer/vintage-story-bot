@@ -9,6 +9,7 @@ export const torches: Concern = {
   title: `${TORCH_MIN} torches`,
   done: s => s.torches >= TORCH_MIN,
   after: ['grass'],
+  short: k => (k.torches < TORCH_MIN ? { item: 'torch-basic', count: TORCH_MIN - k.torches } : null),
   run: ({ k }) => ({
     start: 'craft_item',
     args: { output: TORCH, count: Math.max(1, TORCH_MIN - k.torches), timeoutMs: 300000 },

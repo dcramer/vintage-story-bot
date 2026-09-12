@@ -148,7 +148,7 @@ export async function build(field, survival, { cells }) {
           result = { ok: false, reason: error.message };
         }
         if (result.ok) {
-          placed.push({ ...cell, face });
+          placed.push({ ...cell, face, code: result.after ?? null });
           reason = null;
           break;
         }
@@ -162,6 +162,8 @@ export async function build(field, survival, { cells }) {
     goal: 'build',
     ...(failed.length ? { reason: failed[0].reason } : {}),
     ...summary(),
+    // Each cell placed, with the block the client observed there; a container placed this way is found again by its code.
+    built: placed,
     failed,
     verification: 'client_observed',
   };

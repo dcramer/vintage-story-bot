@@ -7,5 +7,6 @@ export const grass: Concern = {
   title: 'dry grass for torches',
   done: s => s.torches >= TORCH_MIN || s.grass > 0,
   after: ['shelter'],
+  short: (k, s) => (s.torches < TORCH_MIN && k.grass <= 0 ? { item: 'drygrass', count: 4 } : null),
   run: () => ({ start: 'harvest', args: { match: 'tallgrass', item: 'drygrass', count: 4, timeoutMs: 600000 }, why: 'grass for torches' }),
 };

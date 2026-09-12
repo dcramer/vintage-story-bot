@@ -24,6 +24,7 @@ import {
   type Notes,
   pickJob as pick,
   type Rung,
+  stashNote,
   TRIED_MS,
   TRIED_RADIUS,
   tasks as taskList,
@@ -43,9 +44,12 @@ import { dirt } from './default/tasks/dirt.ts';
 import { grass } from './default/tasks/grass.ts';
 import { logs } from './default/tasks/logs.ts';
 import { recover } from './default/tasks/recover.ts';
+import { resupply, resupplyOf } from './default/tasks/resupply.ts';
 import { shelter } from './default/tasks/shelter.ts';
+import { FULL_SLOTS, stash, surplusOf } from './default/tasks/stash.ts';
 import { sticks } from './default/tasks/sticks.ts';
 import { stone } from './default/tasks/stone.ts';
+import { storage } from './default/tasks/storage.ts';
 import { tools } from './default/tasks/tools.ts';
 import { torches } from './default/tasks/torches.ts';
 
@@ -54,11 +58,14 @@ export { SHELTER_DIRT } from './default/tasks/shelter.ts';
 export { STICK_MIN } from './default/tasks/sticks.ts';
 export type { Job, Memory, Notes, Situation };
 
-// The day-1 list, in dependency order: each task is done when the kit shows
-// it, and the first task not done is the one to work on. The order carries
-// the dependencies (a tool needs a stick and a head; dirt needs a shovel; a
-// shelter needs dirt; torches need a home to light), and `after` names them.
-export const TASKS: Concern[] = [recover, sticks, stone, tools, dirt, shelter, grass, torches, logs];
+// The day-1 list, in dependency order: each task is done when the kit or the
+// notes show it, and the first task not done is the one to work on. The order
+// carries the dependencies (a tool needs a stick and a head; dirt needs a
+// shovel; a shelter needs dirt; a basket needs a home to stand by; torches
+// need a home to light), and `after` names them. What the basket holds is
+// fetched before anything is gathered; a full pack is emptied before the
+// rest of the list.
+export const TASKS: Concern[] = [recover, resupply, sticks, stone, tools, dirt, shelter, storage, stash, grass, torches, logs];
 const REFLEXES: Concern[] = [hide, eat, goHome, burrow, unburrow, wait, relocate, digOut, explore];
 // What runs beside any job, through tools that only talk.
 const ALONGSIDE: Aside[] = [copper, homeMarker];
@@ -169,6 +176,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
     grass: k.grass,
     dirt: k.dirt,
     logs: k.logs,
+    storage: !!memory.notes.stash,
+    full: k.free <= FULL_SLOTS,
+    surplus: surplusOf(k, { home: !!home, torches: k.torches }).reduce((n, i) => n + i.count, 0),
+    short: resupplyOf(k, { home: !!home, torches: k.torches }, memory.notes.stash).reduce((n, i) => n + i.count, 0),
   };
   memory.situation = s;
   memory.tried_now = [...tried];
@@ -240,7 +251,7 @@ export function notes(memory: Memory): Notes {
 }
 export function fresh(kept?: Partial<Notes> | null): Memory {
   return {
-    notes: { home: cell(kept?.home) },
+    notes: { home: cell(kept?.home), stash: stashNote(kept?.stash) },
     homeMarked: false,
     tried: {},
     situation: null,
@@ -262,13 +273,14 @@ const brain: Brain<Memory, Notes> = {
   name: 'default',
   description:
     'A cautious beginner: respawns, swims for shore, runs from monsters and from whatever hurts it, hides at night and in storms, eats when hungry, marks copper it passes, gathers sticks and stone, ' +
-    'knaps a knife and axe, crafts torches, chops logs, builds a small dirt shelter, and looks around when there is nothing else to do.',
+    'knaps a knife and axe, crafts torches, chops logs, builds a small dirt shelter with a basket by the door, puts the surplus away when its pack is full, and looks around when there is nothing else to do.',
   fresh,
   decide,
   wants,
   notes,
   summary: memory => ({
     home: memory.notes.home,
+    stash: memory.notes.stash,
     burrow: memory.burrow,
     scares: memory.scares.length,
     job: memory.job,
