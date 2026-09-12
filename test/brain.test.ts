@@ -29,6 +29,7 @@ const day = { calendar: { daylight: 1 } },
 const reading = (extra = {}) => ({ state: state(), inventory: inventory(), environment: day, active: null, last: null, now: 1000, ...extra });
 const situation = (extra = {}) => ({
   burrowed: false,
+  dangerHere: false,
   threat: false,
   storm: false,
   hunger: 0.8,
@@ -51,6 +52,7 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ threat: true, hunger: 0.1 })), 'hide');
   assert.equal(pickJob(situation({ storm: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true })), 'eat');
+  assert.equal(pickJob(situation({ dangerHere: true, night: true })), 'relocate', 'a place full of scares is left');
   assert.equal(pickJob(situation({ night: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ night: true, home: false, dirt: 0 })), 'seal');
   assert.equal(pickJob(situation({ night: true, home: false, dirt: 3 })), 'burrow');
@@ -257,4 +259,28 @@ test('brain: digging out of a hole is never interrupted by a threat', () => {
   });
   const during = decide(reading({ state: wolf, active: { id: 'd1', kind: 'dig_out', state: 'running', by: 'brain' } }), digging);
   assert.equal(during.wait, 'letting dig_out finish');
+});
+
+test('brain: three scares around the same spot make it move on; a failed stick search breaks leaves next', () => {
+  const memory = fresh();
+  const wolf = state({ nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }] });
+  for (let scare = 0; scare < 3; scare++) {
+    decide(reading({ state: wolf, now: 1000 + scare }), memory);
+    memory.job = null;
+  }
+  assert.equal(memory.scares.length, 3);
+  const calm = decide(reading({ now: 2000 }), memory);
+  assert.equal(calm.start, 'travel');
+  assert.ok(Math.hypot(calm.args.x, calm.args.z) > 60, 'far from the scares');
+  decide(reading({ last: { id: 'r', kind: 'travel', ok: true }, now: 3000 }), memory);
+  assert.equal(memory.scares.length, 0);
+  const noSticks = fresh();
+  noSticks.job = 'sticks';
+  const next = decide(
+    reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'g', kind: 'gather', ok: false, reason: 'none_found' }, now: 4000 }),
+    noSticks,
+  );
+  assert.equal(next.wait, 'sticks cooling down');
+  noSticks.cool.clear();
+  assert.equal(decide(reading({ inventory: inventory(slot('game:stick', 2)), now: 5000 }), noSticks).args.match, 'leaves');
 });

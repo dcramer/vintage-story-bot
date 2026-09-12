@@ -28,6 +28,11 @@ export const COOLDOWN_MS = 10 * 60 * 1000;
 // Night when the sun is nearly gone; unknown light counts as day, since
 // without a reading the brain cannot call itself home.
 export const NIGHT_LIGHT = 0.25;
+// Three scares within this many blocks in this long make a place worth leaving, by this far.
+export const DANGER_SCARES = 3;
+export const DANGER_RADIUS = 48;
+export const DANGER_MS = 15 * 60 * 1000;
+export const RELOCATE_DISTANCE = 96;
 
 export type Job =
   | 'hide'
@@ -46,7 +51,8 @@ export type Job =
   | 'dig_out'
   | 'burrow'
   | 'unburrow'
-  | 'seal';
+  | 'seal'
+  | 'relocate';
 type Cell = { x: number; y: number; z: number };
 export type Memory = {
   home: Cell | null;
@@ -57,7 +63,10 @@ export type Memory = {
   // The pocket the bot dug in for the night: its mouth cell, to dig open again at dawn.
   burrow: { x: number; y: number; z: number } | null;
   done: Record<string, number>;
-  scares: number;
+  // Where and when the bot had to run; a cluster of these around it means this is a bad place to be.
+  scares: { x: number; z: number; at: number }[];
+  // Loose sticks ran out here: break leaves for them next time.
+  sticksFromLeaves: boolean;
   resting: boolean;
 };
 
@@ -96,6 +105,7 @@ export type Situation = {
   home: boolean;
   atHome: boolean;
   burrowed: boolean;
+  dangerHere: boolean;
   sticks: number;
   knife: boolean;
   axe: boolean;
@@ -115,6 +125,8 @@ export function pickJob(s: Situation): Job {
   if (s.threat) return 'hide';
   if (s.storm) return s.home && !s.atHome ? 'go_home' : 'wait';
   if (s.hunger !== null && s.hunger < HUNGRY) return 'eat';
+  // A place that keeps producing scares is left behind, day or night, before anything else here.
+  if (s.dangerHere && !s.burrowed) return 'relocate';
   if (s.night) return s.home ? (s.atHome ? 'wait' : 'go_home') : s.burrowed ? 'wait' : s.dirt > 0 ? 'burrow' : 'seal';
   if (s.burrowed) return 'unburrow';
   if (s.sticks < STICK_MIN) return 'sticks';
@@ -141,9 +153,13 @@ export function decide(reading: Reading, memory: Memory): Decision {
     if (memory.job === 'shelter' && last.ok && last.result?.home) memory.home = last.result.home;
     if (memory.job === 'burrow' && last.ok && last.result?.mouth) memory.burrow = last.result.mouth;
     if (memory.job === 'unburrow' && last.ok) memory.burrow = null;
+    // Whatever the trip's outcome, this place has been judged; judge the new one afresh.
+    if (memory.job === 'relocate') memory.scares = [];
+    if (memory.job === 'sticks') memory.sticksFromLeaves = !last.ok && last.reason !== 'pit';
     memory.job = null;
   }
   if (memory.resting) return { wait: 'resting after too many scares' };
+  memory.scares = memory.scares.filter(scare => now - scare.at < DANGER_MS);
   const threat = nearestThreat(state);
   let satiety: number | null = null;
   try {
@@ -175,6 +191,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     home: !!home,
     atHome: !!home && horizontal(state.position, home) < 8,
     burrowed: !!memory.burrow,
+    dangerHere: memory.scares.filter(scare => horizontal(state.position, scare) <= DANGER_RADIUS).length >= DANGER_SCARES,
     sticks: k.sticks,
     knife: k.knife,
     axe: k.axe,
@@ -198,11 +215,24 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'unburrow':
       return start('dig_area', { cells: [memory.burrow], timeoutMs: 120000 }, 'morning, opening the burrow');
     case 'hide': {
+      memory.scares.push({ x: state.position.x, z: state.position.z, at: now });
       const away = fleeTarget(state.position, threat);
       return start(
         'travel',
         { x: away.x, z: away.z, arrivalRadius: 3, timeoutMs: 600000 },
         `${threat.code} at ${Math.round(horizontal(state.position, threat.point))} blocks`,
+      );
+    }
+    case 'relocate': {
+      const away = fleeTarget(
+        state.position,
+        memory.scares.map(scare => ({ point: { x: scare.x, y: state.position.y, z: scare.z } })),
+        RELOCATE_DISTANCE,
+      );
+      return start(
+        'travel',
+        { x: away.x, z: away.z, arrivalRadius: 4, manageFood: true, timeoutMs: 900000 },
+        `${memory.scares.length} scares around here; moving on`,
       );
     }
     case 'go_home':
@@ -222,6 +252,12 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'shelter':
       return start('shelter', { item: k.dirtCode ?? 'soil-', timeoutMs: 1800000 }, `${k.dirt} dirt, putting up a shelter`);
     case 'sticks':
+      if (memory.sticksFromLeaves)
+        return start(
+          'harvest',
+          { match: 'leaves', item: 'game:stick', count: STICK_MIN - k.sticks, timeoutMs: 600000 },
+          'no loose sticks about; breaking leaves for them',
+        );
       return start(
         'gather',
         { match: 'stick', item: 'game:stick', count: STICK_MIN - k.sticks, timeoutMs: 600000 },
@@ -268,7 +304,7 @@ export function wants(reading: Reading): string[] {
 }
 
 export function fresh(): Memory {
-  return { home: null, cool: new Map(), job: null, pit: null, burrow: null, done: {}, scares: 0, resting: false };
+  return { home: null, cool: new Map(), job: null, pit: null, burrow: null, done: {}, scares: [], sticksFromLeaves: false, resting: false };
 }
 
 const brain: Brain<Memory> = {
@@ -282,6 +318,7 @@ const brain: Brain<Memory> = {
   summary: memory => ({
     home: memory.home,
     burrow: memory.burrow,
+    scares: memory.scares.length,
     job: memory.job,
     done: memory.done,
     cooling: [...memory.cool].filter(([, until]) => until > Date.now()).map(([job]) => job),
