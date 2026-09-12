@@ -17,6 +17,11 @@ export class SightingsMemory {
   now = 0;
   wall = 0;
   capacity = 32768;
+  // What a sighting affords, read from its code and facts; injected so memory stays pure.
+  traits: (object: { kind: string; code: string; facts?: any }) => string[];
+  constructor(traits: (object: { kind: string; code: string; facts?: any }) => string[] = () => []) {
+    this.traits = traits;
+  }
   apply(snapshot, wall = Date.now()) {
     if (!snapshot) return [];
     this.now = snapshot.clock ?? this.now;
@@ -94,6 +99,7 @@ export class SightingsMemory {
         key: record.key,
         code: record.code,
         point: record.point,
+        traits: this.traits({ kind: 'entity', code: record.code }),
         how: record.how,
         seenAt: record.at,
         visible: record.visible,
@@ -127,6 +133,7 @@ export class SightingsMemory {
       quantity: record.extra?.quantity ?? null,
       access: record.extra?.access ?? null,
       facts: record.extra?.facts ?? null,
+      traits: this.traits({ kind: record.kind, code: record.code, facts: record.extra?.facts }),
       how: record.how,
       source: far <= 8 ? 'nearby' : 'sight',
       visible: record.visible,

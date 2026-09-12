@@ -20,7 +20,7 @@ export const carried = (state, item) =>
 export async function gather(env, { match = 'stick', item = match, count = 10, manageFood = false, ...options }: any = {}) {
   if (!Number.isInteger(count) || count < 1 || count > 64) throw Error('count must be 1–64');
   const wanted = code => code?.toLowerCase().includes(match.toLowerCase());
-  const loose = o => o.kind === 'block' && pickupBlock(o.code) && wanted(o.code);
+  const loose = o => pickupBlock(o) && wanted(o.code);
   const dropped = o => o.kind === 'item' && wanted(o.code);
   const sticks = wanted('stick');
   const twiggy = o => sticks && o.kind === 'block' && o.code.includes(TWIGS);

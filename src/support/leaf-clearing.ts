@@ -2,8 +2,9 @@ import { angle, horizontal, lookAt } from '../runtime/navigation/terrain.ts';
 import { changeBlock } from './blocks.ts';
 import { emptyHand } from './food.ts';
 import { nearestThreat } from './threats.ts';
+import { has } from './traits.ts';
 
-export const leafBlock = object => object?.kind === 'block' && /^game:leaves(?:branchy)?-/.test(object.code ?? '');
+export const leafBlock = object => object?.kind === 'block' && has(object, 'leaves');
 export const threatAllowsLeafClearing = (state, threat, minimum = 12) => !threat || horizontal(state.position, threat.point) >= minimum;
 
 export function leafClearCandidate(objects, state, toward, skipped = new Set()) {

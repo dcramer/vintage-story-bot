@@ -31,7 +31,8 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [~] `terrain` — merged observed/seen surface view around a point; absent columns unknown. Not live-verified.
 - [ ] **P2 · `ground_at {x,z}`** — one-column projection of the remembered `terrain` view; absent columns unknown, never air (`ctl`). Site picking, `travel` with omitted y.
 - [ ] **P2 · entity detail** — `inspect_target` on entities: health if visible, hostile/passive class, tameable/harvestable hints (`mod`).
-- [ ] **P2 · entity catalog** — creature/entity index for hunting (drops, hostility); the catalog covers blocks+items only today (`mod`, static or `ctl`).
+- [~] entity catalog — `catalog`/`item_info` list creatures (class, drops); hostility stays prior knowledge in [threats](src/support/threats.ts) and shows as the `hostile` trait. Not live-verified.
+- [~] traits — every reported object (`sightings`, `scan`, `target`, `block_at`, `inventory`, `sighted` events) carries `traits`, Node's reading of the handbook facts and the eye's growth facts ([traits](src/support/traits.ts)); `sightings`/`search_items` filter by `trait`. Not live-verified.
 
 ## 3. Controls (`setControlState`, `clearControlStates`, `look`, `lookAt`)
 

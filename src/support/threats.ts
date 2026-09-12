@@ -30,10 +30,9 @@ export const threatClearDistance = code => {
 
 // The young of a species are not hunters.
 const young = /-(baby|pup|cub|calf|kid|lamb|chick|piglet)/;
+export const youngEntity = entity => typeof entity?.code === 'string' && young.test(entity.code.toLowerCase());
 export const hostileEntity = entity =>
-  typeof entity?.code === 'string' &&
-  hostileMarkers.some(marker => entity.code.toLowerCase().includes(marker)) &&
-  !young.test(entity.code.toLowerCase());
+  typeof entity?.code === 'string' && hostileMarkers.some(marker => entity.code.toLowerCase().includes(marker)) && !youngEntity(entity);
 
 export const threatVerticalRange = code => {
   const lower = code.toLowerCase();

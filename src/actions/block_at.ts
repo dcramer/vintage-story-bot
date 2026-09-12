@@ -10,7 +10,7 @@ export default defineAction({
   readOnly: true,
   description:
     'What is remembered about one cell: kind unknown|air|solid|hazard from the surroundings seen within 8 blocks (traits such as ' +
-    'leaves, plant, water; ageMs since seen), block {key, code, facts, access} when a watched block was sighted there, and column ' +
+    'leaves, plant, water; ageMs since seen), block {key, code, facts, traits, access} when a watched block was sighted there, and column ' +
     '{y, kind, code} when the far view saw that ground. unknown is never air: look at the cell to learn it. Memory only.',
   local: async (runtime, { x, y, z }) => {
     await runtime.snapshot();
@@ -32,6 +32,7 @@ export default defineAction({
             key: sighting.key,
             code: sighting.code,
             facts: sighting.extra?.facts ?? null,
+            traits: runtime.sightings.traits({ kind: 'block', code: sighting.code, facts: sighting.extra?.facts }),
             access: sighting.extra?.access ?? null,
             visible: sighting.visible,
             ageMs: sighting.visible ? 0 : Math.max(0, wall - sighting.seenAt),

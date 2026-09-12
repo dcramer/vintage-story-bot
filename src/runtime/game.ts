@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { decorate, traitsOf } from '../support/traits.ts';
 import { requestBridge } from './bridge.ts';
 import { SightingsMemory } from './navigation/sightings.ts';
 import { SurfaceMemory } from './navigation/surface.ts';
@@ -19,12 +20,13 @@ export class GameClient {
   send: (request: any, options?: any) => Promise<any>;
   map = new TerrainMemory();
   surface = new SurfaceMemory();
-  sightings = new SightingsMemory();
+  sightings = new SightingsMemory(traitsOf);
   // Attention: block code substrings the eye is currently looking for.
   watch = [...salient];
   constructor(send = requestBridge) {
     this.send = async (request, options) => {
-      const result: any = await send(request, options);
+      // Whatever names a thing carries its traits, for agents and goals alike.
+      const result: any = decorate(request, await send(request, options));
       // observe carries only this instant's entities; memory adds what left the view.
       if (request.action === 'observe' && result?.ok && Array.isArray(result.nearbyEntities)) {
         this.knowledge?.enter(result.world?.identifier);
@@ -61,7 +63,15 @@ export class GameClient {
   }
   // Something confirmed by a line of sight for the first time.
   sighted(fresh = []) {
-    for (const s of fresh) this.events?.emit('sighted', { kind: s.kind ?? 'entity', key: s.key, code: s.code, point: s.point, how: s.how ?? 'seen' });
+    for (const s of fresh)
+      this.events?.emit('sighted', {
+        kind: s.kind ?? 'entity',
+        key: s.key,
+        code: s.code,
+        point: s.point,
+        how: s.how ?? 'seen',
+        traits: traitsOf({ kind: s.kind ?? 'entity', code: s.code, facts: s.extra?.facts }),
+      });
   }
   // Life, as it changed since the last state: hurt, died, alive, alerts, storm.
   // Attrition (starvation, instability) does not move lastDamageAt, so hurt means an attack or a fall.

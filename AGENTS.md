@@ -60,6 +60,7 @@ Seraph system:
 - **threat**: a hostile seen, heard or recently seen within range; the bot moves away until it is clear.
 - **forage**: picking food from the world (berries, mushrooms, wild crops) that the handbook says yields something edible.
 - **facts**: what a player can see or read about a thing: a block's name, variant and growth state (`facts` on `sightings`, `block_at`, `scan` and `target`), an item's handbook page (`item_info`); never what it is for.
+- **trait**: what a thing affords, as Node reads it from facts (`traits` on every reported object: `pickup`, `harvestable`/`ready`/`growing`, `food`, `choppable`, `diggable`, `mineable`, `hostile`…; vocabulary in `src/support/traits.ts`). The mod never assigns one.
 - **pause**: stopping travel for something more urgent (food, storm), then carrying on.
 - **skip**: ignoring a target for a while after a failed attempt.
 - **waypoint**: a named place, like a marker on the game map (`set_waypoint`, `waypoints`).

@@ -1,15 +1,15 @@
 import { horizontal, lookAt } from '../runtime/navigation/terrain.ts';
 import { ownedSlots } from './inventory.ts';
 import { nearestThreat } from './threats.ts';
+import { has } from './traits.ts';
 
 // Picking up what the bot wants as it passes: loose sticks, stones and flints
 // on the ground (a right-click), and dropped items (walked over). Wants are
 // code substrings the brain or an adapter sets; a walk pauses for one within
 // a few blocks, the pickup happens, the walk goes on. Never a search of its own.
-// Loose sticks, stones and flints: each is one right-click; so is a fruiting bush whose berries are on (growth mature).
-export const pickupBlock = code => /^game:(loosestick|loosestones|looseflints)-/.test(code ?? '');
-export const handHarvest = object =>
-  pickupBlock(object?.code) || (/^game:fruitingbush-/.test(object?.code ?? '') && object?.facts?.growth === 'mature');
+// Loose sticks, stones and flints: each is one right-click; so is a bush whose berries are on.
+export const pickupBlock = object => object?.kind === 'block' && has(object, 'pickup');
+export const handHarvest = object => object?.kind === 'block' && (has(object, 'pickup') || has(object, 'ready'));
 export const gleanRadius = 6;
 const carried = inventory => ownedSlots(inventory).reduce((n, s) => n + s.quantity, 0);
 

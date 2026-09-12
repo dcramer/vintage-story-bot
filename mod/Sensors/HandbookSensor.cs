@@ -3,14 +3,18 @@ using System.Text;
 using System.Text.Json;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
+using Vintagestory.API.Config;
 using Vintagestory.API.Util;
 using Vintagestory.GameContent;
 
 namespace VintageStoryAI;
 
-// The handbook as data: one item/block page per code, or the whole collectible
+// The handbook as data: one item/block/creature page per code, or the whole
 // index in pages. Same facts either way; the catalog batches what item_info
-// reads one code at a time. Public game data, never world state.
+// reads one code at a time. Public game data, never world state. The game's
+// own typing (class, material, behaviors, tier) is reported as read; what a
+// thing is for (its traits) is Node's reading of these facts.
 internal sealed class HandbookSensor(ICoreClientAPI api)
 {
     private static readonly FieldInfo? StackSlot = typeof(ItemstackTextComponent).GetField("slot", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -19,15 +23,18 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
     {
         var location = new AssetLocation(code);
         CollectibleObject? collectible = api.World.GetItem(location) ?? (CollectibleObject?)api.World.GetBlock(location);
-        if (collectible?.Code == null || collectible.Id == 0) return new { ok = false, error = "No handbook page for that code." };
         var page = new Dictionary<string, object?> { ["ok"] = true, ["observedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
-        foreach (var (key, value) in Entry(collectible, -1)) page[key] = value;
+        if (collectible?.Code != null && collectible.Id != 0)
+            foreach (var (key, value) in Entry(collectible, -1)) page[key] = value;
+        else if (api.World.GetEntityType(location) is { Code: not null } creature)
+            foreach (var (key, value) in Entry(creature)) page[key] = value;
+        else return new { ok = false, error = "No handbook page for that code." };
         return page;
     }
 
-    // Every loaded block and item, stable-sorted by code. One read of the
-    // public collectible registry per page; entries carry the item_info facts
-    // with the page body trimmed to a short description.
+    // Every loaded block and item, stable-sorted by code, then every creature
+    // type. One read of the public registries per page; entries carry the
+    // item_info facts with the page body trimmed to a short description.
     public object CatalogPage(JsonElement request)
     {
         int offset = 0, limit = 50;
@@ -36,8 +43,13 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
             return new { ok = false, error = "offset: 0–100000; limit: 1–100." };
         var all = api.World.Collectibles.Where(collectible => collectible != null && collectible.Code != null && collectible.Id != 0)
             .OrderBy(collectible => collectible.Code.ToString(), StringComparer.Ordinal).ToArray();
-        var entries = all.Skip(offset).Take(limit).Select(collectible => Entry(collectible, 3)).ToArray();
-        return new { ok = true, offset, total = all.Length, more = offset + entries.Length < all.Length, entries };
+        var creatures = api.World.EntityTypes.Where(type => type?.Code != null)
+            .OrderBy(type => type.Code.ToString(), StringComparer.Ordinal).ToArray();
+        int total = all.Length + creatures.Length;
+        var entries = all.Skip(offset).Take(limit).Select(collectible => Entry(collectible, 3))
+            .Concat(creatures.Skip(Math.Max(0, offset - all.Length)).Take(Math.Max(0, limit - Math.Max(0, all.Length - offset))).Select(Entry))
+            .ToArray();
+        return new { ok = true, offset, total, more = offset + entries.Length < total, entries };
     }
 
     // One handbook page as facts. maxTextLines < 0 keeps the full page body as
@@ -55,6 +67,16 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
             ["code"] = collectible.Code.ToString(),
             ["type"] = block == null ? "item" : "block",
             ["name"] = ContextSensor.Clip(collectible.GetHeldItemName(stack), 96),
+            // The game's own typing: the C# class the asset names, the block material,
+            // and the behaviors attached (RightClickPickup, Harvestable, Unstable...).
+            ["class"] = collectible.GetType().Name,
+            ["material"] = block?.BlockMaterial.ToString(),
+            ["behaviors"] = Behaviors(collectible),
+            ["miningTier"] = block == null ? null : block.RequiredMiningTier,
+            ["resistance"] = block == null ? null : Math.Round(block.Resistance, 2),
+            ["climbable"] = block == null ? null : block.Climbable,
+            ["replaceable"] = block == null ? null : block.Replaceable,
+            ["liquid"] = block?.LiquidCode,
             ["maxStackSize"] = collectible.MaxStackSize,
             ["tool"] = collectible.Tool?.ToString(),
             ["toolTier"] = collectible.ToolTier,
@@ -78,6 +100,26 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
         else entry["desc"] = text == null ? null : ContextSensor.Clip(string.Join(" ", text.Take(maxTextLines)), 600);
         return entry;
     }
+
+    private static string[] Behaviors(CollectibleObject collectible)
+    {
+        var names = (collectible.CollectibleBehaviors ?? []).Select(b => b.GetType().Name)
+            .Concat(((collectible as Block)?.BlockBehaviors ?? []).Select(b => b.GetType().Name))
+            .Select(name => name.StartsWith("CollectibleBehavior") ? name["CollectibleBehavior".Length..] : name.StartsWith("BlockBehavior") ? name["BlockBehavior".Length..] : name)
+            .Where(name => name.Length > 0).Distinct().OrderBy(name => name, StringComparer.Ordinal).ToArray();
+        return names;
+    }
+
+    // One creature as the game types it: its class, what it drops when killed.
+    // Nothing about temperament; hostility is prior knowledge Node keeps.
+    private static Dictionary<string, object?> Entry(EntityProperties type) => new()
+    {
+        ["code"] = type.Code.ToString(),
+        ["type"] = "entity",
+        ["name"] = ContextSensor.Clip(Lang.GetIfExists("item-creature-" + type.Code.Path) ?? type.Code.Path, 96),
+        ["class"] = type.Class,
+        ["drops"] = Drops(type.Drops),
+    };
 
     private static object[]? Drops(BlockDropItemStack[]? drops) => drops?
         .Where(drop => drop?.ResolvedItemstack?.Collectible?.Code != null).Take(16)

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { distance, lookAt } from '../runtime/navigation/terrain.ts';
 import { ownedSlots } from './inventory.ts';
+import { has } from './traits.ts';
 
 const faces = { north: [0, 0, -1], east: [1, 0, 0], south: [0, 0, 1], west: [-1, 0, 0], up: [0, 1, 0], down: [0, -1, 0] };
 const count = (inventory, code) =>
@@ -91,8 +92,7 @@ export async function changeBlock(field, kind, { target, point, face, slot, expe
 }
 
 // Non-colliding vegetation the game replaces on placement but which still captures the selection ray.
-export const replaceablePlant = code =>
-  /game:(tallgrass|tallfern|fern|flower|sapling|mushroom|shortgrass|plant-|reedpapyrus|drygrass)/.test(code ?? '');
+export const replaceablePlant = code => has({ kind: 'block', code }, 'replaceable');
 
 export const parseBlockKey = key => {
   const [, dimension, x, y, z] = key.split(':');

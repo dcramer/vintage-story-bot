@@ -28,7 +28,7 @@ export const TRAITS = {
   leaves: 'tree canopy',
   plant: 'plant matter',
   // Items and blocks alike.
-  fuel: 'burns in a firepit or kiln',
+  fuel: 'worth burning: firewood, peat, charcoal, logs (burns 20 s or more; grass and leaves only catch fire)',
   smeltable: 'melts into something',
   // Items: what it is good for in the hand.
   edible: 'feeds, does not hurt, does not alter the mind',
@@ -66,13 +66,15 @@ const materials = {
 const toolWorks = { Axe: 'choppable', Shovel: 'diggable', Pickaxe: 'mineable', Knife: 'cuttable', Scythe: 'cuttable', Sickle: 'cuttable' };
 // Placing a block over one with this much give replaces it (Block.IsReplacableBy).
 const REPLACEABLE = 6000;
+// Vegetation burns for ten seconds and warms nothing; fuel burns longer.
+const FUEL_SECONDS = 20;
 // Prior knowledge by code, used only where the page lacks the fact (an older
 // catalog, a page never read): what a player knows before reading anything.
 const priors: [RegExp, string[]][] = [
   [/^game:(loosestick|loosestones|looseflints)-/, ['pickup']],
   [/^game:log-/, ['choppable']],
   [/^game:leaves/, ['leaves']],
-  [/^game:(soil|sand|gravel|snowlayer|snowblock|peat|rawclay)-?/, ['diggable']],
+  [/^game:(soil|forestfloor|sand|gravel|snowlayer|snowblock|peat|rawclay)-?/, ['diggable']],
   [/^game:(rock|ore|cobblestone|stonebricks)-/, ['mineable']],
   [/^game:ore-/, ['ore']],
   [/^game:(tallgrass|tallfern|fern|flower|sapling|mushroom|shortgrass|plant-|reedpapyrus|drygrass)/, ['plant', 'replaceable']],
@@ -114,7 +116,7 @@ export function traitsOf(object: { kind?: string; code?: string; facts?: any } |
     }
     for (const drop of [...(page.drops ?? []), ...(page.harvest?.drops ?? [])]) if (toolWorks[drop.tool]) set.add(toolWorks[drop.tool]);
     if (foodYield(object, page)) set.add('food');
-    if (page.combustible?.burnTemperature > 0 && page.combustible.burnDuration > 0) set.add('fuel');
+    if (page.combustible?.burnTemperature > 0 && page.combustible.burnDuration >= FUEL_SECONDS) set.add('fuel');
     if (page.combustible?.smeltsInto) set.add('smeltable');
     if (page.climbable) set.add('climbable');
     if (page.liquid || page.material === 'Liquid') set.add('liquid');
@@ -127,8 +129,9 @@ export function traitsOf(object: { kind?: string; code?: string; facts?: any } |
   }
   if (knappable(code)) set.add('knappable');
   if (clayformable(code)) set.add('clayformable');
+  // Priors describe blocks; an item's page says whether it is one.
   for (const [pattern, traits] of priors) {
-    if (!pattern.test(code)) continue;
+    if (!pattern.test(code) || (kind === 'item' && page && !block)) continue;
     for (const trait of traits) {
       const known =
         trait === 'pickup'

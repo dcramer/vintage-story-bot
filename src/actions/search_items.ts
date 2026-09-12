@@ -1,24 +1,17 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
+import { catalog } from '../support/catalog.ts';
+import { traitsOfPage } from '../support/traits.ts';
 
 export const schema = z
   .object({
-    match: z.string().min(1).max(64),
-    type: z.enum(['block', 'item']).optional(),
+    match: z.string().min(1).max(64).optional().describe('Name or code substring; omit to search by trait alone.'),
+    trait: z.string().min(1).max(32).optional().describe('Keep only entries with this trait, e.g. edible, fuel, harvestable, tool:Axe.'),
+    type: z.enum(['block', 'item', 'entity']).optional(),
     limit: z.number().int().min(1).max(20).optional(),
   })
-  .strict();
-
-let cached = null;
-function catalog() {
-  if (!cached) {
-    cached = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../docs/catalog.json'), 'utf8'));
-  }
-  return cached;
-}
+  .strict()
+  .refine(value => value.match || value.trait, { message: 'Give match or trait' });
 
 function rank(entry, needle) {
   const code = entry.code.toLowerCase(),
@@ -35,21 +28,22 @@ export default defineAction({
   readOnly: true,
   idempotent: true,
   description:
-    'Search the handbook catalog by name or code substring: every block/item with its description, ' +
-    'food/tool/fuel facts, drops, harvest and the recipes that make it. Static per game version ' +
-    '(regenerate after a game update). Full page text via item_info; grid crafting with owned-stack ' +
-    'matches via recipes.',
-  local: async (_runtime, { match, type, limit = 8 }) => {
-    let data;
-    try {
-      data = catalog();
-    } catch {
-      return { ok: false, error: 'Catalog missing; regenerate with node scripts/catalog.ts against a loaded world.' };
-    }
-    const needle = match.toLowerCase();
-    const hits = data.entries.filter(
-      entry => (!type || entry.type === type) && (entry.code.toLowerCase().includes(needle) || (entry.name ?? '').toLowerCase().includes(needle)),
-    );
+    'Search the handbook catalog by name or code substring and/or trait: every block, item and creature with its ' +
+    "description, the game's typing (class, material, behaviors), food/tool/fuel facts, drops, harvest, the recipes that " +
+    'make it, and its traits (what it affords). Static per game version (regenerate after a game update). Full page text ' +
+    'via item_info; grid crafting with owned-stack matches via recipes.',
+  local: async (_runtime, { match, trait, type, limit = 8 }) => {
+    const data = catalog();
+    if (!data) return { ok: false, error: 'Catalog missing; regenerate with node scripts/catalog.ts against a loaded world.' };
+    const needle = match?.toLowerCase() ?? '';
+    const hits = data.entries
+      .filter(
+        entry =>
+          (!type || entry.type === type) &&
+          (!needle || entry.code.toLowerCase().includes(needle) || (entry.name ?? '').toLowerCase().includes(needle)),
+      )
+      .map(entry => ({ ...entry, traits: traitsOfPage(entry) }))
+      .filter(entry => !trait || entry.traits.includes(trait));
     hits.sort((a, b) => rank(a, needle) - rank(b, needle) || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
     return { ok: true, generatedFrom: data.generatedFrom, total: hits.length, more: hits.length > limit, items: hits.slice(0, limit) };
   },

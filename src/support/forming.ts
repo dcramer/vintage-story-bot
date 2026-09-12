@@ -2,10 +2,11 @@ import { useOnBlock } from '../goals/use_block.ts';
 import { lookAt, normalize } from '../runtime/navigation/terrain.ts';
 import { parseBlockKey, replaceablePlant } from './blocks.ts';
 import { equip, itemCount, ownedSlots } from './inventory.ts';
+import { has } from './traits.ts';
 
 export const kinds = {
-  knapping: { surface: 'knappingsurface', materials: s => s.code === 'game:flint' || /^game:stone-/.test(s.code) },
-  clayforming: { surface: 'clayform', materials: s => /^game:clay-/.test(s.code) },
+  knapping: { surface: 'knappingsurface', materials: s => has({ kind: 'item', code: s.code }, 'knappable') },
+  clayforming: { surface: 'clayform', materials: s => has({ kind: 'item', code: s.code }, 'clayformable') },
 };
 
 const voxelPoint = (cell, [vx, vy, vz], top = true) => ({
