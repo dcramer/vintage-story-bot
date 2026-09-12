@@ -80,7 +80,8 @@ public sealed class StepTracker
             State = "arrived"; return (false, wet, wantYaw);
         }
         double error = Math.Abs(SceneGeometry.Normalize(wantYaw - yawDegrees + 180) - 180);
-        bool aligned = error < (Distance > WideAlignDistance && !Hop ? WideAlignDegrees : AlignDegrees);
+        // A point with another queued behind it is passed through, not stopped on: the wide gate all the way.
+        bool aligned = error < ((Distance > WideAlignDistance || Next is Point3) && !Hop ? WideAlignDegrees : AlignDegrees);
         if (now - startedAt > MaxMs) { State = "blocked"; return (false, wet, wantYaw); }
         if (Distance < bestDistance - 0.03) { bestDistance = Distance; progressAt = now; }
         // Turning and falling are not being stuck; walking without getting closer is.

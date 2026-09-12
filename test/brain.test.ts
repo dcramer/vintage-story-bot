@@ -1076,6 +1076,21 @@ test('brain: knapping needs two flints, one for the surface and one in hand for 
   assert.deepEqual([two.start, two.args.output], ['knap', 'game:knifeblade-flint'], 'two flints: knap');
 });
 
+test("brain: a flight refused for footing is not the flight's fault: it is tried again at once", () => {
+  const memory = fresh();
+  memory.job = 'hide';
+  const wolf = state({ nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }] });
+  const refused = {
+    id: 'f',
+    kind: 'travel',
+    ok: false,
+    reason: 'Navigation needs grounded/dry/ready player and destination within 128 horizontal/32 vertical blocks.',
+  };
+  const again = decide(reading({ state: wolf, last: refused, now: 2000 }), memory);
+  assert.equal(memory.tried.hide, undefined);
+  assert.equal(again.start, 'travel', 'the wolf is still there: run');
+});
+
 test('brain: a goal that ended in a pit without saying where has the body dug out from where it stands', () => {
   const memory = fresh();
   memory.job = 'recover';

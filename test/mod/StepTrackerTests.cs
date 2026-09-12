@@ -15,6 +15,10 @@ static class StepTrackerTests
         Check(step.Update(new Point3(0.5, 100, 0.5), 130, true, false, 2050).Forward, "walk while turning when the point is off");
         // Facing it: walk.
         Check(step.Update(new Point3(0.5, 100, 0.5), 85, true, false, 2100).Forward, "walk once facing");
+        // A pass-through point (another queued behind it) keeps the wide gate to the end.
+        var through = new StepTracker(toward, new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
+        through.Queue(new Point3(4.5, 100, 0.5), false);
+        Check(through.Update(new Point3(1.8, 100, 0.5), 130, true, false, 0).Forward, "a pass-through point is rounded, not stopped on");
         // The last block wants the head on the point.
         var close = new StepTracker(toward, new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
         Check(!close.Update(new Point3(1.8, 100, 0.5), 130, true, false, 0).Forward, "the last block waits for the head");
