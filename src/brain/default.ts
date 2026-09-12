@@ -331,6 +331,9 @@ export function decide(reading: Reading, memory: Memory): Decision {
     return state.life?.deathId && state.life?.canRespawn
       ? { act: [{ action: 'respawn', deathId: state.life.deathId }], why: 'dead' }
       : { wait: 'dead, waiting for respawn' };
+  // A world still loading, a menu or a dialog: no goal can begin, and one refused
+  // before it began would only be started again at once. Wait for the controls.
+  if (state.controlReady === false) return { wait: 'controls not ready (loading, menu or dialog)' };
   // Brain memory is deliberately fresh on each controller process, but a
   // completed burrow is durable world state. Recover its mouth from the
   // observed shaft before choosing work, and treat an already-open shaft as
