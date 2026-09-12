@@ -158,6 +158,12 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ night: true, home: false, dirt: 0 })), 'burrow', 'night without a home: dig in where it stands');
   assert.equal(pickJob(situation({ night: true, home: false, dirt: 3 })), 'burrow');
   assert.equal(pickJob(situation({ night: true, home: false, burrowed: true })), 'wait');
+  assert.equal(
+    pickJob(situation({ night: true, home: false }), new Set(['burrow'] as any)),
+    'shift',
+    'a burrow that failed here: walk on and dig elsewhere, never stand in the dark',
+  );
+  assert.equal(pickJob(situation({ storm: true, home: false }), new Set(['burrow'] as any)), 'shift');
   assert.equal(pickJob(situation({ home: false, burrowed: true })), 'unburrow');
   assert.equal(pickJob(situation({ home: false, dirt: SHELTER_DIRT })), 'shelter');
   assert.equal(pickJob(situation({ home: false })), 'dirt');

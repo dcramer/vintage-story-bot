@@ -29,6 +29,7 @@ export type Job =
   | 'burrow'
   | 'unburrow'
   | 'tunnel'
+  | 'shift'
   | 'relocate'
   | 'recover'
   | 'storage'

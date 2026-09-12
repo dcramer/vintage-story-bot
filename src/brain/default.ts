@@ -36,6 +36,7 @@ import { explore } from './default/reflexes/explore.ts';
 import { goHome } from './default/reflexes/go_home.ts';
 import { hide } from './default/reflexes/hide.ts';
 import { dangerHere, forgetOldScares, relocate } from './default/reflexes/relocate.ts';
+import { shift } from './default/reflexes/shift.ts';
 import { surfacing } from './default/reflexes/swim.ts';
 import { SIEGE_MS, tunnel } from './default/reflexes/tunnel.ts';
 import { unburrow } from './default/reflexes/unburrow.ts';
@@ -89,7 +90,7 @@ export const TASKS: Concern[] = [
   spareKnife,
   logs,
 ];
-const REFLEXES: Concern[] = [hide, eat, goHome, burrow, unburrow, tunnel, wait, relocate, digOut, explore];
+const REFLEXES: Concern[] = [hide, eat, goHome, burrow, unburrow, tunnel, shift, wait, relocate, digOut, explore];
 // What runs beside any job, through tools that only talk.
 const ALONGSIDE: Alongside[] = [copper, homeMarker];
 // The ladder: danger, then hunger, then a storm, a bad place, night, then the
@@ -110,11 +111,14 @@ export const LADDER: Rung[] = [
   { job: 'unburrow', when: s => hungry(s) && s.burrowed && s.reserve <= 0 },
   { job: 'eat', when: s => hungry(s) },
   { job: 'go_home', when: s => s.storm && s.home && !s.atHome },
-  { job: 'wait', when: (s, tried) => s.storm && ((s.home && s.atHome) || s.burrowed || tried.has('burrow')) },
+  { job: 'wait', when: (s, tried) => s.storm && ((s.home && s.atHome) || s.burrowed) },
+  { job: 'shift', when: (s, tried) => s.storm && !s.home && !s.burrowed && tried.has('burrow') },
   { job: 'burrow', when: s => s.storm },
   { job: 'relocate', when: s => s.dangerHere && !s.burrowed },
   { job: 'go_home', when: s => s.night && s.home && !s.atHome },
-  { job: 'wait', when: (s, tried) => s.night && ((s.home && s.atHome) || s.burrowed || tried.has('burrow')) },
+  { job: 'wait', when: s => s.night && ((s.home && s.atHome) || s.burrowed) },
+  // A burrow that failed here (rock, nothing to seal it): walk on and dig in elsewhere, never stand in the dark.
+  { job: 'shift', when: (s, tried) => s.night && !s.home && !s.burrowed && tried.has('burrow') },
   { job: 'burrow', when: s => s.night },
   { job: 'unburrow', when: (s, tried) => s.burrowed && !tried.has('unburrow') },
   { job: 'eat', when: (s, tried) => peckish(s) && s.reserve <= 0 && !tried.has('eat') },
