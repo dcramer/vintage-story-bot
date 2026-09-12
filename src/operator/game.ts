@@ -1,5 +1,5 @@
 // Bot client lifecycle on the headless display: start, status, stop, saves. Operator-only; never imports gameplay code.
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { botWindow, isBotProcess } from './bot-window.ts';
@@ -15,6 +15,8 @@ export const paths = {
   stdout: `${root}/.runtime/game/client.out.log`,
 };
 const modDirectory = `${paths.botData}/Mods/VintageStoryAI`;
+const modBuild = `${root}/mod/bin/Release/net10.0`;
+const modFiles = ['VintageStoryAI.dll', 'modinfo.json'];
 const phaseMarkers = [
   ['Received level finalize', 'world_ready'],
   ['Exiting current game to main menu', 'main_menu'],
@@ -176,6 +178,59 @@ export async function stopGame({ timeoutMs = 90_000, force = false } = {}) {
   // Keep the state of a client that is still running so a later stop can still find its display.
   if (exited) rmSync(paths.state, { force: true });
   return { stopped: Boolean(exited), method, saved, forced: force && Boolean(exited), pids: processes.map(({ pid }) => pid) };
+}
+
+// Release build of the mod against the installed client.
+export function buildMod() {
+  const since = Date.now();
+  const result = spawnSync(paths.dotnet, ['build', `${root}/mod/VintageStoryAI.csproj`, '-c', 'Release', `-p:VintageStoryPath=${paths.game}`], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, DOTNET_CLI_HOME: `${root}/.runtime/dotnet-home`, DOTNET_CLI_TELEMETRY_OPTOUT: '1' },
+  });
+  const lines = `${result.stdout}${result.stderr}`.split('\n');
+  if (result.status !== 0)
+    throw new Error(
+      `Mod build failed:\n${lines
+        .filter(line => /error/i.test(line))
+        .slice(0, 12)
+        .join('\n')}`,
+    );
+  const warnings = lines.filter(line => /warning [A-Z]+\d+/.test(line)).length;
+  return { built: true, warnings, ms: Date.now() - since, dll: `${modBuild}/VintageStoryAI.dll` };
+}
+
+// Copy the built mod into the bot profile. The game loads the DLL once at
+// launch, so nothing is copied while a client runs: stop it or reinstall.
+export function installMod({ build = true } = {}) {
+  const running = botProcesses();
+  if (running.length) throw new Error(`Bot client running (pid ${running.map(p => p.pid).join(', ')}); game stop first, or game mod reinstall.`);
+  const built = build ? buildMod() : null;
+  for (const file of modFiles) if (!existsSync(`${modBuild}/${file}`)) throw new Error(`Missing ${modBuild}/${file}; build the mod first.`);
+  mkdirSync(modDirectory, { recursive: true });
+  for (const file of modFiles) copyFileSync(`${modBuild}/${file}`, `${modDirectory}/${file}`);
+  return { installed: modFiles, modDirectory, bytes: statSync(`${modDirectory}/VintageStoryAI.dll`).size, built };
+}
+
+// Build, stop the running client the way it saves, install, and start it
+// again on the same world or server. A failed build stops nothing.
+export async function reinstallMod({ build = true, wait = true } = {}) {
+  const before = await gameStatus();
+  const built = build ? buildMod() : null;
+  let stopped = null;
+  if (before.pids.length) {
+    stopped = await stopGame();
+    if (!stopped.stopped) throw new Error(`Client did not stop (${stopped.method}); nothing installed.`);
+  }
+  const installed = installMod({ build: false });
+  let started = null;
+  if (stopped && before.target)
+    started = await startGame({
+      ...(before.target.server ? { server: before.target.server } : { world: before.target.world }),
+      display: before.display,
+      wait,
+    });
+  return { built, stopped, installed, started: started ? { phase: started.phase, target: started.target, pids: started.pids } : null };
 }
 
 export function listWorlds() {

@@ -44,8 +44,20 @@ const makes = code => {
 const entries = [];
 let offset = 0,
   total = Infinity;
+// A page is asked for again while the bridge is away (a client restart mid-dump), for up to ten minutes.
+const readPage = async offset => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await requestBridge({ action: 'catalog', offset, limit: 50 }, { timeoutMs: 15000 });
+    } catch (error) {
+      if (attempt >= 60) throw error;
+      process.stderr.write(`\r${offset}/${total} bridge away (${error.message.split('.')[0]}); retrying`);
+      await new Promise(resolve => setTimeout(resolve, 10000));
+    }
+  }
+};
 for (;;) {
-  const page = await requestBridge({ action: 'catalog', offset, limit: 50 }, { timeoutMs: 15000 });
+  const page = await readPage(offset);
   if (!page.ok) throw new Error(`Catalog dump failed at offset ${offset}: ${page.error ?? 'unknown'}`);
   total = page.total;
   for (const entry of page.entries) entries.push({ ...entry, recipes: makes(entry.code) });

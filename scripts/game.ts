@@ -2,7 +2,7 @@
 import { writeFileSync } from 'node:fs';
 import { callUi, typeText } from '../src/operator/bot-window.ts';
 import { displayStatus, ensureDisplay, stopDisplay } from '../src/operator/display.ts';
-import { botProcesses, gameStatus, importWorld, listWorlds, startGame, stopGame } from '../src/operator/game.ts';
+import { botProcesses, buildMod, gameStatus, importWorld, installMod, listWorlds, reinstallMod, startGame, stopGame } from '../src/operator/game.ts';
 import { syncNativeMap } from '../src/operator/native-map.ts';
 import { captureWorldMap } from '../src/operator/world-map.ts';
 
@@ -10,6 +10,7 @@ const usage = `Usage: game.ts <command>
   start [--world NAME | --new NAME [--play-style STYLE] | --server HOST[:PORT]] [--display :N] [--size WxH] [--no-wait] [--timeout SEC]
   stop [--force]            window-close request = game's own saving exit path; --force SIGKILLs after the timeout
   status | worlds | import <file.vcdbs> [NAME]
+  mod build | mod install [--no-build] | mod reinstall [--no-build] [--no-wait]   (install needs a stopped client; reinstall stops and restarts it)
   display start|stop|status [--display :N] [--size WxH]
   screenshot [FILE.png] | map | click X Y | key KEY | type   (type reads one line from stdin; operator sign-in only)`;
 
@@ -23,7 +24,7 @@ for (let i = 0; i < rest.length; i++) {
     continue;
   }
   const name = arg.slice(2);
-  if (['no-wait', 'force'].includes(name)) flags[name] = true;
+  if (['no-wait', 'force', 'no-build'].includes(name)) flags[name] = true;
   else flags[name] = rest[++i];
 }
 const size = flags.size ? flags.size.match(/^(\d+)x(\d+)$/) : null;
@@ -58,6 +59,11 @@ async function run() {
       return print(await gameStatus());
     case 'worlds':
       return print(listWorlds());
+    case 'mod':
+      if (positional[0] === 'build') return print(buildMod());
+      if (positional[0] === 'install') return print(installMod({ build: !flags['no-build'] }));
+      if (positional[0] === 'reinstall') return print(await reinstallMod({ build: !flags['no-build'], wait: !flags['no-wait'] }));
+      return fail(usage);
     case 'import':
       return print(importWorld(positional[0] ?? fail(usage), positional[1]));
     case 'display':
