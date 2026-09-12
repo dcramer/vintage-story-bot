@@ -216,7 +216,7 @@ test('navigation hands the mod one point per step, hops for a block up, and take
   assert.equal(first.sneak, false);
   assert.ok(first.toward, 'a step is a point the mod walks to with its hand on the keys every tick');
   assert.equal(first.hop, false);
-  assert.equal(first.durationMs, 1500);
+  assert.equal(first.durationMs, 500);
   const facing = { ...state, position: at(2, 0), orientation: { yawDegrees: 90 } };
   const jump = nav.tick(facing, 500);
   assert.equal(nav.route[nav.index].move, 'jump');

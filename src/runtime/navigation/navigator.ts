@@ -247,7 +247,8 @@ export class Navigation {
       return null;
     }
     // The next cell must still be a place to stand.
-    const still = map.nodeAt(Math.floor(next.x), Math.floor(next.z), next.y, 0.1, 0.1);
+    // A swim node sits half a block under the surface; a dry one is exact.
+    const still = map.nodeAt(Math.floor(next.x), Math.floor(next.z), next.y, next.swim ? 1 : 0.1, next.swim ? 1 : 0.1);
     if (!still) {
       this.diagnostics = { kind: 'checkpoint_gone', point: next };
       return grounded ? this.replanNow(state, p, now, 'terrain_changed') : this.finish('blocked', 'landing_changed');
@@ -306,7 +307,8 @@ export class Navigation {
       jump: false,
       sprint,
       sneak: false,
-      durationMs: 1500,
+      // The hold's heartbeat caps a frame at 500 ms; the loop renews well inside that and the step carries on.
+      durationMs: 500,
     };
   }
 }
