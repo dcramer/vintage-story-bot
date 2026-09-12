@@ -95,7 +95,8 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
             // oversized or overflowing shapes are avoided because their geometry is not a cell's.
             string? hazard = block.Code?.Path.Contains("fire") == true || block.Code?.Path.Contains("lava") == true ||
                     fluid.Code?.Path.Contains("lava") == true ? "fire"
-                : fluid.IsLiquid() ? "water"
+                // A solid with collision boxes inside a water-logged cell (leaves, a slab) is stood on, not swum.
+                : fluid.IsLiquid() && boxes.Length == 0 ? "water"
                 : boxes.Length > 16 || boxes.Any(b => b.X1 < 0 || b.Y1 < 0 || b.Z1 < 0 || b.X2 > 1 || b.Y2 > 1 || b.Z2 > 1) ? "shape"
                 : null;
             map.Put(cell, boxes.Take(16).Select(b => new Bounds(cell.X + b.X1, cell.Y + b.Y1, cell.Z + b.Z1,

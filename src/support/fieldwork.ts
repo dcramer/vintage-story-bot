@@ -49,6 +49,7 @@ export class Fieldwork {
   skipped = new Map();
   events: any[] = [];
   alertsAt = '';
+  lookedAround: any = null;
   recoveringFood = false;
   constructor(
     env,
@@ -250,6 +251,11 @@ export class Fieldwork {
   // player looks around from a rise. Then read what is now remembered.
   async lookAround(match?, kind = 'blocks', radius = sightRange) {
     if (!this.seeing || !this.attentive) return this.scan(radius, match, kind);
+    // One full circle per spot: the view does not change by looking again from the same place.
+    const p0 = this.latest.position;
+    if (this.lookedAround && this.now() - this.lookedAround.at < 20000 && horizontal(p0, this.lookedAround.position) < 2)
+      return this.scan(radius, match, kind);
+    this.lookedAround = { position: { ...p0 }, at: this.now() };
     this.env.watch?.(Array.isArray(match) ? match : match ? [match] : []);
     const p = this.latest.position,
       start = this.latest.orientation.yawDegrees;
