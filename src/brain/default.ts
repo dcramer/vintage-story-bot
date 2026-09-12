@@ -265,7 +265,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
       !last.ok &&
       memory.job &&
       !['hide', 'dig_out'].includes(memory.job) &&
-      (!/interruption|^brain:/.test(last.reason ?? '') || (memory.job === 'recover' && /^brain: (threat|hurt|relocate)$/.test(last.reason ?? '')))
+      (!/interruption|^brain:|^Start grounded$/.test(last.reason ?? '') ||
+        (memory.job === 'recover' && /^brain: (threat|hurt|relocate)$/.test(last.reason ?? '')))
     )
       memory.tried[memory.job] = { x: state.position.x, z: state.position.z, at: now };
     if (memory.job === 'dig_out') memory.pit = null;
@@ -422,6 +423,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (classifyingHurt) return { wait: 'identifying damage source' };
   // Deep water with nothing running: swim for shore before anything else.
   if (state.motion?.swimming) return surfacing(state, ground);
+  // Stopping a flight can catch the body between a jump and its landing. Every
+  // fieldwork goal requires grounded footing, so let physics settle instead of
+  // immediately failing the resumed kit job and setting it aside for minutes.
+  if (state.motion?.onGround === false) return { wait: 'settling after movement' };
   if (memory.pit) {
     memory.job = 'dig_out';
     return { start: 'dig_out', args: { x: memory.pit.x, z: memory.pit.z }, why: 'in a hole' };

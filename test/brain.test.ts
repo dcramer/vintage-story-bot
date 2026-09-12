@@ -202,6 +202,38 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
   assert.deepEqual(shelterMemory.home, home);
 });
 
+test('brain: a flight hands daywork back only after landing', () => {
+  const memory = fresh();
+  memory.job = 'hide';
+  const airborne = state({ motion: { onGround: false, swimming: false } });
+  assert.deepEqual(
+    decide(
+      reading({
+        state: airborne,
+        last: { id: 'flight', kind: 'travel', ok: false, reason: 'brain: safe' },
+      }),
+      memory,
+    ),
+    { wait: 'settling after movement' },
+  );
+  assert.equal(decide(reading({ state: state({ motion: { onGround: true, swimming: false } }) }), memory).start, 'gather');
+});
+
+test('brain: a transient ungrounded start does not set a kit job aside', () => {
+  const memory = fresh();
+  memory.job = 'stone';
+  const next = decide(
+    reading({
+      inventory: inventory(slot('game:stick', STICK_MIN)),
+      last: { id: 'flint', kind: 'gather', ok: false, reason: 'Start grounded' },
+    }),
+    memory,
+  );
+  assert.equal(memory.tried.stone, undefined);
+  assert.equal(next.start, 'gather');
+  assert.equal(next.args.match, 'looseflints');
+});
+
 test('brain: danger interrupts body recovery and backs it off across a flight', () => {
   const grave = [{ guid: 'g', title: 'You died here', icon: 'gravestone', position: { x: 0, y: 100, z: 0 } }];
   const memory = fresh();
