@@ -7,7 +7,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 ## Live status 2026-09-12 (multiplayer, spawn area)
 
 - Verified live: the step follower (one `control_step` per checkpoint, arrivals reported by the mod; 27 walks arrived, none stalled in a four-minute sample, frame gaps under 1.1 s on a software renderer); flights end when the coast is clear; `retrieve_body` recovered the pack after a death; `gather` reached ten sticks by breaking branchy leaves and picking up drops; mushrooms harvested by breaking and eaten; the night dig-in digs the first block (the second still to be seen through on a full night).
-- Not yet seen live: a ripe fruiting bush harvest (none ripe around spawn this month), knapping and hafting from gathered flint, the shelter build, `store_items`/`take_items`.
+- Verified live 06:31 UTC: forage harvested five ripe blueberries by right-click and ate two (bushes are harvestable at growth `ripe`; the catalog must be regenerated after handbook changes). Not yet seen live: the full night dig-in (two blocks down and sealed), knapping and hafting from gathered flint, the shelter build, `store_items`/`take_items`.
 - Known limits: the software-rendered client turns and walks slowly (about 1.5 blocks a second); a wolf pack lives at spawn and kills the bot at night when it is caught in the open before digging in.
 
 ## 1. State (`bot.entity`, `health`, `food`, `time`, `players`)
