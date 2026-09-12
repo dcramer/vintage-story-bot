@@ -46,6 +46,8 @@ export const DANGER_SCARES = 3;
 export const DANGER_RADIUS = 48;
 export const DANGER_MS = 15 * 60 * 1000;
 export const RELOCATE_DISTANCE = 96;
+// Jobs that cut a lesser running job short when the ladder turns to them.
+const URGENT: Job[] = ['hide', 'go_home', 'wait', 'eat', 'relocate', 'burrow', 'seal'];
 // A flight ends when no threat has shown for this long and the scare is this far behind.
 export const SAFE_MS = 20000;
 export const SAFE_DISTANCE = 16;
@@ -183,7 +185,14 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   if (s.hunger !== null && s.hunger < HUNGRY && s.reserve > 0) return 'eat';
   // A place that keeps producing scares is left behind, day or night, before anything else here.
   if (s.dangerHere && !s.burrowed) return 'relocate';
-  if (s.night) return s.home ? (s.atHome ? 'wait' : 'go_home') : s.burrowed ? 'wait' : s.dirt > 0 ? 'burrow' : 'seal';
+  if (s.night) {
+    if (s.home) return s.atHome ? 'wait' : 'go_home';
+    if (s.burrowed) return 'wait';
+    // Dig in with a block to seal; with none, two dirt come first; a dig-in that failed here is not tried again at once.
+    if (s.dirt > 0 && !tried.has('burrow')) return 'burrow';
+    if (s.dirt <= 0 && !tried.has('seal')) return 'seal';
+    return 'wait';
+  }
   if (s.burrowed) return 'unburrow';
   if (s.hunger !== null && (s.hunger < HUNGRY || (s.hunger < PECKISH && s.reserve <= 0))) return 'eat';
   // The first task on the list not done and not set aside around here; with none left, look around.
@@ -264,27 +273,6 @@ export function decide(reading: Reading, memory: Memory): Decision {
     satiety = null;
   }
   const storm = temporalStormUnsafe(state);
-  // A goal of its own is running: only danger, storms and hunger cut it short.
-  if (active) {
-    // A flight is never interrupted, and neither is digging out: there is no running from a hole.
-    if ((threat || hurt) && !['hide', 'dig_out'].includes(memory.job ?? '')) return { stop: threat ? 'threat' : 'hurt' };
-    // A flight is over once nothing has been seen or heard for a while and the scare is well behind.
-    const scare = memory.scares.at(-1);
-    if (memory.job === 'hide' && !threat && !hurt && scare && now - scare.at > SAFE_MS && horizontal(state.position, scare) >= SAFE_DISTANCE)
-      return { stop: 'safe' };
-    // Someone else's goal is otherwise left alone; storms and hunger cut short only the brain's own.
-    if (active.by !== 'brain') return { wait: `letting ${active.kind} finish (${active.by})` };
-    if (storm && !['hide', 'go_home', 'wait'].includes(memory.job ?? '')) return { stop: 'storm' };
-    // Hunger never interrupts a flight: danger outranks it, as in pickJob.
-    if (satiety !== null && satiety < HUNGRY && !['eat', 'hide'].includes(memory.job ?? '')) return { stop: 'hungry' };
-    return { wait: `letting ${active.kind} finish` };
-  }
-  // Deep water with nothing running: swim for shore before anything else.
-  if (state.motion?.swimming) return surfacing(state, ground);
-  if (memory.pit) {
-    memory.job = 'dig_out';
-    return { start: 'dig_out', args: { x: memory.pit.x, z: memory.pit.z }, why: 'in a hole' };
-  }
   const k = kit(inventory);
   const home = memory.home;
   const tried = new Set<Job>(
@@ -317,6 +305,28 @@ export function decide(reading: Reading, memory: Memory): Decision {
   memory.situation = situation;
   memory.tried_now = [...tried];
   const job = pickJob(situation, tried);
+  // A goal of its own is running. What cuts it short is what the ladder would rather do now:
+  // danger first, then a storm, night, a bad place, or food in hand when hungry.
+  if (active) {
+    // A flight is never interrupted, and neither is digging out: there is no running from a hole.
+    if ((threat || hurt) && !['hide', 'dig_out'].includes(memory.job ?? '')) return { stop: threat ? 'threat' : 'hurt' };
+    // A flight is over once nothing has been seen or heard for a while and the scare is well behind.
+    const scare = memory.scares.at(-1);
+    if (memory.job === 'hide' && !threat && !hurt && scare && now - scare.at > SAFE_MS && horizontal(state.position, scare) >= SAFE_DISTANCE)
+      return { stop: 'safe' };
+    // Someone else's goal is otherwise left alone.
+    if (active.by !== 'brain') return { wait: `letting ${active.kind} finish (${active.by})` };
+    const pressing = URGENT.includes(job) && job !== memory.job && !['hide', 'dig_out'].includes(memory.job ?? '');
+    // Peckish is not an interruption; hungry is, and only when the ladder would actually eat.
+    if (pressing && (job !== 'eat' || (satiety !== null && satiety < HUNGRY))) return { stop: job };
+    return { wait: `letting ${active.kind} finish` };
+  }
+  // Deep water with nothing running: swim for shore before anything else.
+  if (state.motion?.swimming) return surfacing(state, ground);
+  if (memory.pit) {
+    memory.job = 'dig_out';
+    return { start: 'dig_out', args: { x: memory.pit.x, z: memory.pit.z }, why: 'in a hole' };
+  }
   const start = (goal: string, args: Record<string, unknown>, why: string): Decision => {
     memory.job = job;
     return { start: goal, args, why };

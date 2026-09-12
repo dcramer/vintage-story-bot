@@ -67,6 +67,23 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ storm: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true, reserve: 100 })), 'eat', 'the pack is eaten from at night');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true, atHome: false })), 'go_home', 'but foraging waits for day');
+  const starvingNight = fresh();
+  starvingNight.job = 'burrow';
+  const digging = decide(
+    reading({
+      environment: night,
+      state: state({ vitals: { hunger: { current: 0, max: 1500 } } }),
+      active: { id: 'b', kind: 'burrow', state: 'running', by: 'brain' },
+    }),
+    starvingNight,
+  );
+  assert.equal(digging.wait, 'letting burrow finish', 'hunger with nothing to eat does not cut the night dig-in short');
+  starvingNight.job = 'sticks';
+  assert.deepEqual(
+    decide(reading({ environment: night, active: { id: 's', kind: 'gather', state: 'running', by: 'brain' } }), starvingNight),
+    { stop: 'burrow' },
+    'night falling cuts a kit job short',
+  );
   assert.equal(pickJob(situation({ hunger: 0.35 })), 'eat', 'peckish with an empty pack: go find food');
   assert.equal(pickJob(situation({ hunger: 0.35, reserve: 200 })), 'explore', 'peckish with food in the pack: carry on');
   assert.equal(pickJob(situation({ dangerHere: true, night: true })), 'relocate', 'a place full of scares is left');
