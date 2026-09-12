@@ -30,6 +30,26 @@ const defer = () => {
   };
 };
 const message = error => (error instanceof Error ? error.message : String(error));
+// What a goal's end means to whoever asked for it, in one word, so a brain has one rule for
+// setting a job aside instead of a pattern per job: done; interrupted (stopped from outside);
+// refused (the world would not let it begin: controls, water, a lost bridge); no_progress (it
+// tried and could not get on); failed (anything else the goal itself reported).
+export type Outcome = 'done' | 'interrupted' | 'refused' | 'no_progress' | 'failed';
+export function outcomeOf(record: { state?: string; reason?: string; result?: any; progress?: any }): Outcome {
+  if (record.state === 'arrived') return 'done';
+  if (record.state === 'cancelled') return 'interrupted';
+  const reason = String(record.reason ?? record.result?.reason ?? '');
+  if (/interruption|Start grounded|Cannot reach|Bridge (timed out|closed|request cancelled)|Controls unavailable|controls not ready/i.test(reason))
+    return 'refused';
+  if (!record.progress && /refused|unavailable|Update mod/i.test(reason)) return 'refused';
+  if (
+    /no_progress|deadline|exploration_exhausted|no_observed_route|no_visible_route|route_blocked|no_route|no_rough_route|lost_support|replan/i.test(
+      reason,
+    )
+  )
+    return 'no_progress';
+  return 'failed';
+}
 // Reads that run in loops: logged only when refused.
 const polling = new Set(['sense', 'observe', 'inventory', 'environment', 'messages', 'events', 'target', 'dialogs', 'recipes', 'map_waypoints']);
 const looping = new Set(['control_frame', 'control_step', 'block_action_status', 'block_action_continue']);
@@ -207,6 +227,7 @@ export class Controller {
       progress: record.progress,
       result: record.result,
       cleanupError: record.cleanupError,
+      outcome: record.outcome,
       by: record.by,
     };
   }
@@ -447,6 +468,7 @@ export class Controller {
         started.resolve({ ok: false, error: record.reason ?? 'Goal cancelled before start' });
         if (this.active === record) this.active = null;
         record.finishedAt = Date.now();
+        record.outcome = outcomeOf(record);
         this.history.set(record.id, this.goalView(record));
         this.events.emit('goal_finished', {
           goal: record.id,
@@ -455,6 +477,7 @@ export class Controller {
           state: record.state,
           ok: record.state === 'arrived',
           reason: record.reason ?? record.result?.reason ?? null,
+          outcome: record.outcome,
         });
         this.track(record);
         while (this.history.size > 64) this.history.delete(this.history.keys().next().value);
@@ -699,7 +722,16 @@ export class Controller {
         this.track(record, true);
       },
     };
-    record.result = await policy(env, { ...args, signal });
+    const result = await policy(env, { ...args, signal });
+    // The contract every goal keeps: ok, and a reason when not. A goal that breaks it is
+    // noted by name so it gets fixed, and its result is made whole for whoever reads it.
+    if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') {
+      record.log?.info('goal', 'contract', { returned: result === undefined ? 'undefined' : typeof result });
+      record.result = { ok: false, reason: 'no_result' };
+    } else if (!result.ok && typeof result.reason !== 'string') {
+      record.log?.info('goal', 'contract', { missing: 'reason', result });
+      record.result = { ...result, reason: 'unspecified' };
+    } else record.result = result;
     record.state = record.result.ok ? 'arrived' : 'blocked';
   }
   runGoalScript(args, record, started, signal) {

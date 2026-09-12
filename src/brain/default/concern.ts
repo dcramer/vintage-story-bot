@@ -132,8 +132,10 @@ export type Rung = { job: Job; when: (s: Situation, tried: Set<Job>) => boolean 
 export const TRIED_RADIUS = 24;
 export const TRIED_MS = 5 * 60 * 1000;
 // A job the surroundings refused before it began (water, lost controls) or that the brain
-// itself cut short is not the job's fault; any other failure sets it aside.
-export const failedOnItsOwn = (last: Ended) => !/interruption|^brain:|^Start grounded$/.test(last.reason ?? '');
+// itself cut short is not the job's fault; any other failure sets it aside. The controller
+// names the outcome; the pattern is only for a reading that has none.
+export const failedOnItsOwn = (last: Ended) =>
+  last.outcome ? last.outcome !== 'refused' && last.outcome !== 'interrupted' : !/interruption|^brain:|^Start grounded$/.test(last.reason ?? '');
 
 export type TaskState = 'done' | 'next' | 'open' | 'set aside' | 'waiting';
 // The list as the brain sees it now: what is done, what is next, what waits.

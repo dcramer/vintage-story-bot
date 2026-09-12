@@ -31,7 +31,7 @@ export type Reading = {
   // The goal running now, whoever started it, or null when idle.
   active: { id: string; kind: string; state: string; by: string } | null;
   // The brain's own goal that finished since the previous tick, once.
-  last: { id: string; kind: string; ok: boolean; reason?: string; result?: any } | null;
+  last: { id: string; kind: string; ok: boolean; reason?: string; outcome?: string; result?: any } | null;
   // What the controller noticed since the previous decision, oldest first (events).
   events: any[];
   // The player's own markers on the game map, when the mod reports them.
@@ -178,6 +178,7 @@ export class BrainLoop<Memory> {
         kind: this.goal.kind,
         ok: view?.state === 'arrived',
         reason: view?.reason ?? view?.result?.reason,
+        outcome: view?.outcome,
         result: view?.result,
       };
       this.goal = null;
