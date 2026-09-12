@@ -73,7 +73,7 @@ test('water cells over solid ground are waded, deeper water only swum when allow
 });
 
 test('a burrow site is a standable cell beside two blocks of plain earth two deep, closed all round', async () => {
-  const { burrowSite } = await import('../src/goals/burrow.ts');
+  const { burrowSite, dugInState } = await import('../src/goals/burrow.ts');
   const hill = world(6, (x, y) => x >= 1 && y >= 0 && y <= 3);
   const site = burrowSite(hill, { x: 0.5, y: 0, z: 0.5 }, 3);
   assert.deepEqual(
@@ -86,4 +86,9 @@ test('a burrow site is a standable cell beside two blocks of plain earth two dee
   assert.equal(site.cut.length, 4);
   const thin = world(6, (x, y) => x === 1 && y >= 0 && y <= 3);
   assert.equal(burrowSite(thin, { x: 0.5, y: 0, z: 0.5 }, 3), null, 'a one-block wall makes no pocket');
+
+  const shaft = world(3, (x, y, z) => (Math.abs(x) >= 1 || Math.abs(z) >= 1) && y >= 0 && y <= 3);
+  assert.equal(dugInState(shaft, 0, 0, 0), 'open');
+  shaft.apply({ session: 'w', reset: false, cursor: 2, more: false, clock: 0, cells: [[0, 2, 0, 0, null, [[0, 0, 0, 1, 1, 1]]]] });
+  assert.equal(dugInState(shaft, 0, 0, 0), 'sealed', 'a restarted controller recognizes the block sealing its shelter');
 });

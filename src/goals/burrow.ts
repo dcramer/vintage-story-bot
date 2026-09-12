@@ -18,6 +18,15 @@ const earth = (map, x, y, z) => {
   const cell = map.get(x, y, z);
   return !!cell && solid(map, x, y, z) && !cell.traits.some(t => t === 'leaves' || t === 'plant' || t === 'shape' || t.startsWith('tier'));
 };
+
+// Recognize the one-cell shaft from observed blocks so a controller restart
+// does not forget that the player is already sheltered underground.
+export function dugInState(map, x, y, z): 'open' | 'sealed' | null {
+  if (solid(map, x, y + 1, z)) return null;
+  const rim = cardinals.filter(([ax, az]) => solid(map, x + ax, y + 2, z + az)).length;
+  if (rim < 3) return null;
+  return solid(map, x, y + 2, z) ? 'sealed' : 'open';
+}
 // A blocking item the pack holds: dirt, sand, gravel, stone, logs, anything the game places as a block.
 export const sealStone = inventory =>
   ownedSlots(inventory).find(s => s.itemClass === 'Block' && s.quantity > 0 && /soil-|sand-|gravel-|rock-|log-|cobble|clay-|peat/.test(s.code ?? ''));
@@ -145,11 +154,24 @@ async function digIn(field, inventory) {
   }
   let y = Math.floor(start.y);
   field.report('digging_in', { at: { x, y, z } });
+  const priorShaft = dugInState(map, x, y, z);
+  if (priorShaft === 'sealed') {
+    const mouth = { x, y: y + 2, z };
+    field.report('already_sheltered', { at: { x, y, z }, mouth });
+    return {
+      ok: true,
+      goal: 'burrow',
+      mouth,
+      inside: { x, y, z },
+      sealed: map.get(x, y + 2, z)?.code ?? 'observed block',
+      dugIn: true,
+      verification: 'client_observed',
+    };
+  }
   // A previous attempt may already have cut this shaft. Three solid rim cells
   // two blocks above mean the body is already down in a protective hole; keep
   // that useful work and proceed to sealing instead of mining into hard rock.
-  const alreadyDugIn =
-    !solid(map, x, y + 1, z) && !solid(map, x, y + 2, z) && cardinals.filter(([ax, az]) => solid(map, x + ax, y + 2, z + az)).length >= 3;
+  const alreadyDugIn = priorShaft === 'open';
   if (alreadyDugIn) field.report('resuming_dug_in', { at: { x, y, z } });
   else {
     // Dig whatever the crosshair finds straight down, layer or plant or ground, until the feet are two
