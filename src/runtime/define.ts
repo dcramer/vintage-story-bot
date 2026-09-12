@@ -1,5 +1,5 @@
 /**
- * @typedef {object} ActionDefinition One public query/command; file `src/actions/<name>.mjs`, default export.
+ * @typedef {object} ActionDefinition One public query/command; file `src/actions/<name>.ts`, default export.
  * @property {string} name Public RPC/MCP name; must equal the file basename.
  * @property {import('zod').ZodType} schema Input validation.
  * @property {string} description
@@ -12,7 +12,7 @@
 export const defineAction = definition => definition;
 
 /**
- * @typedef {object} GoalDefinition One long-running goal; file `src/goals/<name>.mjs`, default export.
+ * @typedef {object} GoalDefinition One long-running goal; file `src/goals/<name>.ts`, default export.
  * @property {string} name Public RPC/MCP name; must equal the file basename.
  * @property {import('zod').ZodType} schema Input validation.
  * @property {string} description

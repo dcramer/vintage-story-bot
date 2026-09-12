@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Dump the handbook catalog (every loaded block/item: name, description, food/tool/fuel
 // facts, drops, harvest, plus the recipes that make it) into docs/catalog.json.
-//   node scripts/catalog.mjs
+//   node scripts/catalog.ts
 // Requires the game with a loaded world (pnpm game start); talks to the mod bridge
 // directly like other operator scripts. Regenerate after a game update, never edit by hand.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';

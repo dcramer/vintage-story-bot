@@ -30,7 +30,7 @@
 - Mod owns immediate safety release even if Node hangs. Node decides subsequent reactions; cancellation completes cleanup before another goal runs. Do not auto-resume after damage/death/restart.
 - Transport acknowledgement is not gameplay completion. Verify arrival, inventory deltas and life state. Lost replies imply uncertain effects; inspect, never blindly resend.
 - Memory must be session-scoped, bounded and invalidatable. Share observations across skills; geometry, resource sightings and failed approaches have different expiry rules. No persistence until world identity/invalidation are defined.
-- Prefer this small client/skills/goals split over a second game engine, screenshot loops, or a generic workflow framework.
+- Prefer this small actions/support/goals split over a second game engine, screenshot loops, or a generic workflow framework.
 - With no brain installed, survival runs only inside an assigned task, never as an idle process; a [brain](brain.md) is the one loop that assigns tasks on its own. Food priority pauses navigation on supported ground; control release precedes eating/foraging. Planned pauses preserve parent progress; damage/death/session changes abort the entire task. Thresholds live in `src/support/`.
 
 ## Controller RPC

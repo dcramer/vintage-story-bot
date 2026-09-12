@@ -14,7 +14,7 @@ const target: Record<string, string> = {};
 if (positional.length === 3 && positional[1] === '--world' && positional[2]) target.world = positional[2];
 else if (positional.length === 2 && !positional[1].startsWith('-') && positional[1]) target.server = positional[1];
 else if (positional.length !== 1 || positional[0].startsWith('--')) {
-  console.error('Usage: node scripts/launch-bot.mjs <game-install-directory> [--dry-run] [server:port | --world save-basename]');
+  console.error('Usage: node scripts/launch-bot.ts <game-install-directory> [--dry-run] [server:port | --world save-basename]');
   process.exit(1);
 }
 

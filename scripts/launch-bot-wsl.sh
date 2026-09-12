@@ -26,5 +26,5 @@ bot_node="$(command -v node || true)"
 if [[ -z "$bot_node" && -x "$HOME/.volta/bin/node" ]]; then
     bot_node="$HOME/.volta/bin/node"
 fi
-[[ -n "$bot_node" ]] || { echo 'Node 22+ is required.' >&2; exit 1; }
-exec "$bot_node" "$bot_repository/scripts/launch-bot.mjs" "$bot_game" --wsl "$@"
+[[ -n "$bot_node" ]] || { echo 'Node 24+ is required.' >&2; exit 1; }
+exec "$bot_node" "$bot_repository/scripts/launch-bot.ts" "$bot_game" --wsl "$@"

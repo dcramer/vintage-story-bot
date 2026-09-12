@@ -6,7 +6,7 @@ import { botProcesses, gameStatus, importWorld, listWorlds, startGame, stopGame 
 import { syncNativeMap } from '../src/operator/native-map.ts';
 import { captureWorldMap } from '../src/operator/world-map.ts';
 
-const usage = `Usage: game.mjs <command>
+const usage = `Usage: game.ts <command>
   start [--world NAME | --new NAME [--play-style STYLE] | --server HOST[:PORT]] [--display :N] [--size WxH] [--no-wait] [--timeout SEC]
   stop [--force]            window-close request = game's own saving exit path; --force SIGKILLs after the timeout
   status | worlds | import <file.vcdbs> [NAME]

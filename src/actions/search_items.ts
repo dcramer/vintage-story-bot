@@ -44,7 +44,7 @@ export default defineAction({
     try {
       data = catalog();
     } catch {
-      return { ok: false, error: 'Catalog missing; regenerate with node scripts/catalog.mjs against a loaded world.' };
+      return { ok: false, error: 'Catalog missing; regenerate with node scripts/catalog.ts against a loaded world.' };
     }
     const needle = match.toLowerCase();
     const hits = data.entries.filter(

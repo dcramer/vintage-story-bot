@@ -44,7 +44,7 @@ fights; it runs or hides.
 
 Order of concern: danger, storm, hunger, night, shelter, then the kit in that
 order, then exploring. A failed job is left alone for ten minutes. Chests,
-`store`/`take` and body pickup are not used yet: it carries everything.
+`store_items`/`take_items` and body pickup are not used yet: it carries everything.
 
 ### Tiny shelter
 

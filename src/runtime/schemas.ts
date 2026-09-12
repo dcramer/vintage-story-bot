@@ -17,7 +17,7 @@ export const blockTarget = z
   .string()
   .max(160)
   .regex(/^block:0:-?\d+:-?\d+:-?\d+:[a-z0-9_-]+:[a-z0-9_./-]+$/)
-  .describe('Exact observed block key from scan/inspect_target; main dimension only.');
+  .describe('Exact observed block key from scan/target; main dimension only.');
 export const blockFace = z.enum(['north', 'east', 'south', 'west', 'up', 'down']);
 export const blockPoint = z
   .object({ x: z.number().finite(), y: z.number().finite(), z: z.number().finite() })

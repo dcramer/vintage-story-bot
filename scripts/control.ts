@@ -21,7 +21,7 @@ if (params[0] === '--json' && params.length === 2) {
 const parsed = tool?.schema.safeParse(args);
 if (!parsed?.success || params.length !== expectedParams) {
   console.error(
-    'Usage: control.mjs <action> --json <object>, or observe|scan|stop|move <ms>|look <yaw> <pitch>|select <slot>|interact <ms>|attack <ms>',
+    'Usage: control.ts <action> --json <object>, or observe|scan|stop|move <ms>|look <yaw> <pitch>|select <slot>|interact <ms>|attack <ms>',
   );
   process.exitCode = 1;
 } else {

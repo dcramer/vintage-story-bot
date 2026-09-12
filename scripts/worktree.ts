@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from 'node:fs';
 import path from 'node:path';
 
-const usage = `Usage: worktree.mjs <command>
+const usage = `Usage: worktree.ts <command>
   add <name> [--branch NAME] [--from REF]   git worktree add .worktrees/<name> (new or existing branch), then setup
   setup [DIR]                               link .dotnet and .runtime/* to the main checkout, copy .worktreeinclude files, pnpm install
   ensure [DIR]                              setup when DIR (or a hook's stdin cwd) is a linked worktree; silent otherwise

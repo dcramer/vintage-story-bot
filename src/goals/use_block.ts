@@ -58,7 +58,7 @@ export async function useOnBlock(field, { target, item, sneak = false, holdMs = 
       const consumed = heldCode ? before - itemCount(contents, heldCode) : 0;
       if (dialog) {
         last = { target, after: null, changed: null, consumed, item: heldCode, dialog: true };
-        if (!consume || consumed > 0) return { ok: true, goal: 'use_on_block', ...last, verification: 'client_observed' };
+        if (!consume || consumed > 0) return { ok: true, goal: 'use_block', ...last, verification: 'client_observed' };
         await field.wait(200);
         continue;
       }
@@ -68,7 +68,7 @@ export async function useOnBlock(field, { target, item, sneak = false, holdMs = 
       last = { target, after, changed, consumed, item: heldCode, dialog: false };
       const expected = (expectAfter === undefined || (typeof after === 'string' && after.includes(expectAfter))) && (!consume || consumed > 0);
       if (expected && (changed || consumed > 0 || expectAfter !== undefined))
-        return { ok: true, goal: 'use_on_block', ...last, verification: 'client_observed' };
+        return { ok: true, goal: 'use_block', ...last, verification: 'client_observed' };
       await field.wait(200);
     }
     return { ok: false, reason: 'no_observed_effect', ...last };

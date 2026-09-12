@@ -142,7 +142,7 @@ public sealed class FormingAdapter(ICoreClientAPI api)
             return new { ok = false, error = "Hold the surface's base material." };
         var candidates = allowed.ToArray();
         if (recipeId < 0) recipeId = candidates.FirstOrDefault(c => c.output == output, (-1, null)).id;
-        if (!candidates.Any(c => c.id == recipeId)) return new { ok = false, error = "Recipe not available for this material; inspect_target lists recipes." };
+        if (!candidates.Any(c => c.id == recipeId)) return new { ok = false, error = "Recipe not available for this material; target lists recipes." };
         foreach (var dialog in api.Gui.OpenedGuis.OfType<GuiDialogBlockEntityRecipeSelector>().ToArray())
         {
             // The native dialog cancels (and destroys the surface) unless it believes a selection happened.

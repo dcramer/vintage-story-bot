@@ -153,9 +153,9 @@ public sealed class InventoryAdapter(ICoreClientAPI api)
         if (!request.TryGetProperty("quantity", out var count) || count.ValueKind != JsonValueKind.Number ||
             !count.TryGetInt32(out int quantity) || quantity < 1 || quantity > 64 || quantity > source.StackSize)
             return Error("quantity must be 1–64 and available in source.");
-        // One act drops a single item or the whole stack; other partial counts split first via inventory_move.
+        // One act drops a single item or the whole stack; other partial counts split first via move_item.
         bool full = quantity >= source.StackSize;
-        if (!full && quantity != 1) return Error("One drop moves 1 item or the whole stack; split the stack with inventory_move first.");
+        if (!full && quantity != 1) return Error("One drop moves 1 item or the whole stack; split the stack with move_item first.");
         string code = source.Itemstack.Collectible.Code.ToString();
         int dropped = full ? source.StackSize : 1;
         // The manager's own drop path; server validation and sync remain authoritative.

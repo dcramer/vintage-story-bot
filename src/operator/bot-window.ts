@@ -89,7 +89,7 @@ export async function botWindow(env) {
   try {
     ids = (await xdo(['search', '--onlyvisible', '--name', '^Vintage Story$'], env)).split(/\s+/);
   } catch {
-    throw new Error('No bot window or xdotool unavailable. Launch with scripts/game.mjs start; see docs/runtime.md.');
+    throw new Error('No bot window or xdotool unavailable. Launch with pnpm game start; see docs/runtime.md.');
   }
   const matches = [];
   for (const id of ids) {
