@@ -1,6 +1,6 @@
 import { signal, computed } from '@preact/signals';
 
-// Fleet state mirrored from the Worker: snapshots seed, /api/ws streams `snapshot|bot|gone`. Vital history is
+// Fleet state mirrored from the Worker: snapshots seed, /api/ws streams `snapshot|bot|nativemap|gone`. Vital history is
 // client-side only, accumulated while the page is open.
 export const bots = signal({});
 export const status = signal('connecting');
@@ -36,6 +36,9 @@ export function apply(message) {
   } else if (message.type === 'bot') {
     record(message.bot);
     bots.value = { ...bots.value, [message.bot.id]: message.bot };
+  } else if (message.type === 'nativemap') {
+    const bot = bots.value[message.id];
+    if (bot) bots.value = { ...bots.value, [message.id]: { ...bot, nativeMap: message.nativeMap } };
   } else if (message.type === 'gone') {
     const { [message.id]: _, ...rest } = bots.value;
     bots.value = rest;

@@ -3,7 +3,8 @@ import { type Log, noLog } from './log.ts';
 
 // Fire-and-forget batches to the fleet report service (report/worker.mjs). Same `publish(topic, data, {coalesce})` contract as
 // Telemetry: latest value per topic plus a bounded log, trimmed to fleet-relevant fields, one POST per interval. Never awaited
-// by gameplay; a failed POST keeps the latest topics for the next interval and drops that batch's log lines.
+// by gameplay; a failed POST keeps the latest topics for the next interval and drops that batch's log lines. `frame` and the
+// far-view `map` columns stay local: the fleet page draws the game's own World Map chunks (operator native map sync) instead.
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 // Public base of this host's live view; the fleet page frames `<stream>/bot/`. Only web origins, no path, credentials or query.
 function streamOrigin(value) {
@@ -32,6 +33,7 @@ const polling = new Set([
 const pick = (source, keys) => (source ? Object.fromEntries(keys.filter(k => source[k] !== undefined).map(k => [k, source[k]])) : source);
 const reduce = {
   frame: () => undefined,
+  map: () => undefined,
   scan: s => ({
     match: s?.match,
     kind: s?.kind,
@@ -82,19 +84,6 @@ function bounded(data, limit) {
   const text = JSON.stringify(data);
   return text === undefined || text.length <= limit ? data : { truncated: true, bytes: text.length };
 }
-function mergeMapColumns(before = [], after = [], limit = 1024, bytes = 65536) {
-  const merged = new Map();
-  for (const row of [...before, ...after]) {
-    if (!Array.isArray(row) || !Number.isFinite(row[0]) || !Number.isFinite(row[1])) continue;
-    const key = `${row[0]},${row[1]}`;
-    merged.delete(key);
-    merged.set(key, row);
-  }
-  let columns = [...merged.values()].slice(-limit);
-  while (columns.length && JSON.stringify({ columns }).length > bytes) columns = columns.slice(Math.min(64, columns.length));
-  return columns;
-}
-
 export class Reporter {
   timer: any;
   latest = new Map();
@@ -122,8 +111,6 @@ export class Reporter {
   maxLog: number;
   maxBytes: number;
   topicBytes: number;
-  mapColumns: number;
-  mapBytes: number;
   timeoutMs: number;
   fetch: typeof globalThis.fetch;
   constructor({
@@ -135,8 +122,6 @@ export class Reporter {
     maxLog = 100,
     maxBytes = 98304,
     topicBytes = 16384,
-    mapColumns = 1024,
-    mapBytes = 65536,
     timeoutMs = 8000,
     fetch = globalThis.fetch,
     log = noLog as Log,
@@ -152,8 +137,6 @@ export class Reporter {
       maxLog,
       maxBytes,
       topicBytes,
-      mapColumns,
-      mapBytes,
       timeoutMs,
       fetch,
     });
@@ -161,12 +144,6 @@ export class Reporter {
   }
   publish(topic, data, { coalesce = false } = {}) {
     if (this.closed || !/^[a-z][a-z0-9_]{0,63}$/.test(topic)) return;
-    if (topic === 'map') {
-      const at = Date.now(),
-        columns = mergeMapColumns(this.latest.get(topic)?.data?.columns, data?.columns, this.mapColumns, this.mapBytes);
-      if (columns.length) this.latest.set(topic, { at, data: { columns } });
-      return;
-    }
     const reduced = topic in reduce ? reduce[topic](data) : data;
     if (reduced === undefined) return;
     const entry = { at: Date.now(), data: bounded(reduced ?? null, this.topicBytes) };
@@ -212,15 +189,7 @@ export class Reporter {
         },
         error => {
           if (!this.failures++) this.session.info('report', 'failed', { error: error.message });
-          for (const [topic, entry] of Object.entries(topics) as [string, any][]) {
-            const current = this.latest.get(topic);
-            if (topic === 'map' && current)
-              this.latest.set(topic, {
-                at: current.at,
-                data: { columns: mergeMapColumns(entry.data?.columns, current.data?.columns, this.mapColumns, this.mapBytes) },
-              });
-            else if (!current) this.latest.set(topic, entry);
-          }
+          for (const [topic, entry] of Object.entries(topics) as [string, any][]) if (!this.latest.has(topic)) this.latest.set(topic, entry);
         },
       )
       .finally(() => {

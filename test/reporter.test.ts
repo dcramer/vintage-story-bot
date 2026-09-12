@@ -2,39 +2,25 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Reporter } from '../src/runtime/reporter.ts';
 
-test('fleet reporter merges surface sweeps into one bounded map delta', async () => {
+test('fleet reporter keeps frames and far-view columns local', async () => {
   let report;
   const reporter = new Reporter({
     url: 'https://fleet.test',
     token: 'token',
     id: 'Atlas',
     intervalMs: 60000,
-    mapColumns: 3,
     fetch: async (_url, request) => {
       report = JSON.parse(request.body as string);
       return new Response(null, { status: 204 });
     },
   });
-  reporter.publish('map', {
-    columns: [
-      [0, 0, 4, 'ground', 1, 'soil', 1, 0x112233],
-      [1, 0, 4, 'ground', 1, 'grass', 1, 0x223344],
-    ],
-  });
-  reporter.publish('map', {
-    columns: [
-      [0, 0, 5, 'ground', 1, 'stone', 2, 0x334455],
-      [2, 0, 4, 'water', 1, 'water', 2, 0x445566],
-      [3, 0, 4, 'ground', 1, 'sand', 2, 0x556677],
-    ],
-  });
+  reporter.publish('map', { columns: [[0, 0, 4, 'ground', 1, 'soil', 1, 0x112233]] }, { coalesce: true });
+  reporter.publish('frame', { tick: 1 }, { coalesce: true });
+  reporter.publish('navigation', { id: 'nav-1', state: 'walking' }, { coalesce: true });
   await reporter.flush();
   reporter.close();
-  assert.deepEqual(report.topics.map.data.columns, [
-    [0, 0, 5, 'ground', 1, 'stone', 2, 0x334455],
-    [2, 0, 4, 'water', 1, 'water', 2, 0x445566],
-    [3, 0, 4, 'ground', 1, 'sand', 2, 0x556677],
-  ]);
+  assert.deepEqual(Object.keys(report.topics), ['navigation']);
+  assert.deepEqual(report.log, []);
 });
 
 test('fleet reporter keeps goal intent, script and subgoal', async () => {

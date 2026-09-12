@@ -119,6 +119,12 @@ export async function syncNativeMap({ known = new Map(), sample = null } = {}) {
   const players = (sample.players ?? [])
     .slice(0, 64)
     .map(player => ({ name: player.name, x: player.x, z: player.z, yawDegrees: player.yawDegrees, self: player.self === true }));
+  // Upload only what changed since the last sync through this `known` map: new chunk pixels, or a player that moved a block or
+  // turned by more than 15 degrees. A stationary Seraph with an unchanged map sends nothing.
+  const playersKey = `${world}:players`,
+    playersNow = JSON.stringify(players.map(p => [p.name, Math.round(p.x), Math.round(p.z), Math.round((p.yawDegrees ?? 0) / 15), p.self]));
+  if (!changed.length && known.get(playersKey) === playersNow)
+    return { ok: true, world, changed: 0, total: chunks.length, players: players.length, uploaded: false };
   const batches = changed.length
     ? Array.from({ length: Math.ceil(changed.length / maxChunksPerUpload) }, (_, index) =>
         changed.slice(index * maxChunksPerUpload, (index + 1) * maxChunksPerUpload),
@@ -136,7 +142,8 @@ export async function syncNativeMap({ known = new Map(), sample = null } = {}) {
     });
     for (const chunk of batch) known.set(`${world}:${chunk.x}:${chunk.z}`, chunk.hash);
   }
-  return { ok: true, world, changed: changed.length, total: chunks.length, players: players.length, map: result?.map };
+  known.set(playersKey, playersNow);
+  return { ok: true, world, changed: changed.length, total: chunks.length, players: players.length, uploaded: true, map: result?.map };
 }
 
 export function superviseNativeMap({

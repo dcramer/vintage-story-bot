@@ -3,11 +3,12 @@ import { markRespawnBreaks } from './trail.mjs';
 
 // Fleet state service. Bots POST /api/report batches `{bot:{id,...},topics:{[topic]:{at,data}},log:[{topic,at,data}]}`;
 // the single SeraphFleet object keeps the latest value per bot/topic plus a bounded log, evicts bots unseen for RETENTION_HOURS,
-// and pushes updates to browser WebSockets. Reads (API and the static SPA in dist/, see app/) are open; writes require REPORT_TOKEN.
+// and pushes updates to browser WebSockets (`snapshot|bot|nativemap|gone`; a report sends the whole bot record, a native map sync
+// only its `nativeMap` summary). Reads (API and the static SPA in dist/, see app/) are open; writes require REPORT_TOKEN.
 const topicRe = /^[a-z][a-z0-9_]{0,63}$/, idRe = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const maxBody = 131072, maxMapImage = 92160, maxNativeBatch = 18, maxNativeChunks = 16384;
-const maxLog = 200, maxTrail = 540, maxAtlas = 65536, sharedAtlas = 12000;
-const maxMeta = 128, persistMs = 30000, sweepMs = 900000, mapKinds = new Set(['ground', 'canopy', 'water', 'hazard']);
+const maxLog = 200, maxTrail = 540;
+const maxMeta = 128, persistMs = 30000, sweepMs = 900000;
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const bearer = request => { const value = request.headers.get('authorization') ?? ''; return value.startsWith('Bearer ') ? value.slice(7) : ''; };
@@ -40,18 +41,6 @@ function appendTrail(bot, stateEntry, now) {
   trail.push(sample);
   while (trail.length > maxTrail) trail.shift();
   return true;
-}
-
-function mapDelta(entry, now) {
-  if (!Array.isArray(entry?.data?.columns)) return [];
-  const seenAt = number(entry.at, now), rows = [];
-  for (const row of entry.data.columns.slice(-1024)) {
-    if (!Array.isArray(row) || !Number.isInteger(row[0]) || !Number.isInteger(row[1]) || !Number.isFinite(row[2]) ||
-      !mapKinds.has(row[3]) || ![1, 2, 4].includes(row[4])) continue;
-    rows.push([row[0], row[1], row[2], row[3], row[4], typeof row[5] === 'string' ? row[5].slice(0, 96) : null,
-      seenAt, Number.isInteger(row[7]) && row[7] >= 0 && row[7] <= 0xffffff ? row[7] : null]);
-  }
-  return rows;
 }
 
 const mapPoint = value => Array.isArray(value) && value.length === 2 && value.every(item => Number.isFinite(item) && item >= -8 && item <= 8)
@@ -143,11 +132,8 @@ export class SeraphFleet extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
-    this.sql.exec(`CREATE TABLE IF NOT EXISTS atlas (
-      bot_id TEXT NOT NULL, x INTEGER NOT NULL, z INTEGER NOT NULL, y REAL NOT NULL, kind TEXT NOT NULL,
-      step INTEGER NOT NULL, code TEXT, seen_at INTEGER NOT NULL, color INTEGER,
-      PRIMARY KEY (bot_id, x, z)
-    )`);
+    // The surface-column atlas older reporters filled is gone: nothing read it and it was the largest write per report.
+    this.sql.exec('DROP TABLE IF EXISTS atlas');
     this.sql.exec(`CREATE TABLE IF NOT EXISTS native_map_chunk (
       bot_id TEXT NOT NULL, world_id TEXT NOT NULL, x INTEGER NOT NULL, z INTEGER NOT NULL,
       pixels BLOB NOT NULL, seen_at INTEGER NOT NULL,
@@ -162,27 +148,6 @@ export class SeraphFleet extends DurableObject {
   }
   retentionMs() { return Math.max(1, Number(this.env.RETENTION_HOURS) || 6) * 3600000; }
   snapshot() { return { now: Date.now(), retentionMs: this.retentionMs(), bots: [...this.bots.values()] }; }
-  mapRows(id, limit) {
-    return this.sql.exec(`SELECT x,z,y,kind,step,code,seen_at,color FROM atlas WHERE bot_id = ? ORDER BY seen_at DESC LIMIT ?`, id, limit)
-      .raw().toArray().reverse();
-  }
-  maps(ids, limit) { return { maps: ids.map(id => ({ id, columns: this.mapRows(id, limit) })) }; }
-  writeMap(id, entry, now) {
-    const rows = mapDelta(entry, now);
-    if (!rows.length) return rows;
-    this.ctx.storage.transactionSync(() => {
-      for (let offset = 0; offset < rows.length; offset += 10) {
-        const batch = rows.slice(offset, offset + 10), values = batch.map(() => '(?,?,?,?,?,?,?,?,?)').join(',');
-        this.sql.exec(`INSERT INTO atlas (bot_id,x,z,y,kind,step,code,seen_at,color) VALUES ${values}
-          ON CONFLICT(bot_id,x,z) DO UPDATE SET y=excluded.y,kind=excluded.kind,step=excluded.step,
-          code=excluded.code,seen_at=excluded.seen_at,color=excluded.color`, ...batch.flatMap(row => [id, ...row]));
-      }
-      this.sql.exec(`DELETE FROM atlas WHERE rowid IN (
-        SELECT rowid FROM atlas WHERE bot_id = ? ORDER BY seen_at DESC, rowid DESC LIMIT -1 OFFSET ?
-      )`, id, maxAtlas);
-    });
-    return rows;
-  }
   async schedule() { if (this.bots.size && !(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(Date.now() + sweepMs); }
   async fetch(request) {
     const url = new URL(request.url);
@@ -190,11 +155,6 @@ export class SeraphFleet extends DurableObject {
     if (url.pathname === '/api/map-image') return this.captureMap(request);
     if (url.pathname === '/api/native-map') return this.syncNativeMap(request);
     if (url.pathname === '/api/state') return json(200, this.snapshot());
-    if (url.pathname === '/api/maps') return json(200, this.maps([...this.bots.keys()], sharedAtlas));
-    if (url.pathname.startsWith('/api/maps/')) {
-      const id = decodeURIComponent(url.pathname.slice('/api/maps/'.length));
-      return idRe.test(id) ? json(200, this.maps([id], maxAtlas)) : json(400, { ok: false, error: 'Bad Seraph id' });
-    }
     if (url.pathname.startsWith('/api/map-image/')) {
       const id = decodeURIComponent(url.pathname.slice('/api/map-image/'.length));
       if (!idRe.test(id)) return json(400, { ok: false, error: 'Bad Seraph id' });
@@ -279,9 +239,12 @@ export class SeraphFleet extends DurableObject {
       )`, batch.id, maxNativeChunks);
     });
     if (!batch.complete) return json(200, { ok: true, chunks: batch.chunks.length });
-    const map = this.nativeManifest(batch.world, batch.id);
+    // A players-only sync reuses the stored manifest and the normal write throttle; only new chunks rescan and persist at once.
+    const previous = bot.nativeMap, rescan = batch.chunks.length > 0 || previous?.world !== batch.world;
+    const map = rescan ? this.nativeManifest(batch.world, batch.id) : previous;
     bot.nativeMap = { world: batch.world, at: batch.at, players: batch.players, count: map.count, bounds: map.bounds, revision: map.revision };
-    this.dirty.add(batch.id); await this.persist(batch.at, true); this.broadcast({ type: 'bot', bot });
+    this.dirty.add(batch.id); await this.persist(batch.at, rescan);
+    this.broadcast({ type: 'nativemap', id: batch.id, nativeMap: bot.nativeMap });
     return json(200, { ok: true, chunks: batch.chunks.length, map: bot.nativeMap });
   }
   async report(request) {
@@ -300,7 +263,6 @@ export class SeraphFleet extends DurableObject {
     }
     delete bot.topics.map;
     const trailed = appendTrail(bot, body.topics?.state, now);
-    const mapped = this.writeMap(id, body.topics?.map, now);
     for (const entry of (Array.isArray(body.log) ? body.log : []).slice(-maxLog)) {
       if (!entry || typeof entry !== 'object' || !topicRe.test(entry.topic)) continue;
       bot.log.push({ topic: entry.topic, at: number(entry.at, now), data: entry.data ?? null });
@@ -309,7 +271,6 @@ export class SeraphFleet extends DurableObject {
     const segmented = markRespawnBreaks(bot.trail ?? [], bot.log);
     this.bots.set(id, bot); this.dirty.add(id);
     this.broadcast({ type: 'bot', bot });
-    if (mapped.length) this.broadcast({ type: 'map', id, columns: mapped });
     // Unlike latest topics, a historical sample cannot be refilled by the next report.
     // Persist movement immediately; stationary updates keep the existing write throttle.
     await this.persist(now, trailed || segmented);
@@ -331,7 +292,6 @@ export class SeraphFleet extends DurableObject {
       this.bots.delete(id); this.dirty.delete(id); this.persisted.delete(id);
       await this.ctx.storage.delete('bot:' + id);
       await this.ctx.storage.delete('map-image:' + id);
-      this.sql.exec('DELETE FROM atlas WHERE bot_id = ?', id);
       this.broadcast({ type: 'gone', id });
     }
     await this.persist(now, true);
