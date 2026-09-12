@@ -116,51 +116,116 @@ public sealed partial class AiBridgeMod : ModSystem
         lifetime?.Dispose();
         lifetime = null;
         listener = null;
+        Interlocked.Exchange(ref lastTickAt, 0);
         while (requests.TryDequeue(out var pending)) pending.Completion.TrySetCanceled();
     }
 
     // Networking only queues requests. All game access happens in OnTick.
+    // A connection lives as long as the client keeps it: JSON lines in, JSON lines out, many in
+    // flight at once; a request carrying an id gets it echoed on its reply so the client can pair
+    // them out of order. A request the tick cannot answer within its deadline is refused, never
+    // dropped, and one that arrives while the game thread has not ticked for a second is refused
+    // at once from here, so a stalled client is told apart from a slow one.
+    private const int RequestMaxBytes = 1024;
+    private const long RequestDeadlineMs = 3000, StallMs = 1000;
+    private long lastTickAt;
+
     private async Task ServeAsync(TcpListener server, CancellationToken stopped)
     {
         try
         {
             while (!stopped.IsCancellationRequested)
             {
-                using var client = await server.AcceptTcpClientAsync(stopped).ConfigureAwait(false);
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stopped);
-                timeout.CancelAfter(TimeSpan.FromSeconds(3));
-                try
-                {
-                    var stream = client.GetStream();
-                    // One small JSON line per connection; cap memory and connection lifetime.
-                    var buffer = new byte[1024];
-                    int length = 0;
-                    while (length < buffer.Length)
-                    {
-                        int count = await stream.ReadAsync(buffer.AsMemory(length, 1), timeout.Token).ConfigureAwait(false);
-                        if (count == 0 || buffer[length] == (byte)'\n') break;
-                        length++;
-                    }
-                    object response;
-                    if (length == buffer.Length)
-                        response = new { ok = false, error = "Request exceeds 1023 bytes." };
-                    else
-                    {
-                        var completion = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
-                        requests.Enqueue(new(Encoding.UTF8.GetString(buffer, 0, length), Environment.TickCount64, timeout.Token, completion));
-                        response = await completion.Task.WaitAsync(timeout.Token).ConfigureAwait(false);
-                    }
-                    byte[] output = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response) + "\n");
-                    await stream.WriteAsync(output, timeout.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) { }
-                catch (IOException) { }
-                catch (SocketException) { }
+                var client = await server.AcceptTcpClientAsync(stopped).ConfigureAwait(false);
+                _ = ServeConnectionAsync(client, stopped);
             }
         }
         catch (OperationCanceledException) when (stopped.IsCancellationRequested) { }
         catch (SocketException) when (stopped.IsCancellationRequested) { }
         catch (ObjectDisposedException) when (stopped.IsCancellationRequested) { }
+    }
+
+    private async Task ServeConnectionAsync(TcpClient client, CancellationToken stopped)
+    {
+        using var connection = client;
+        using var closed = CancellationTokenSource.CreateLinkedTokenSource(stopped);
+        var writes = new SemaphoreSlim(1, 1);
+        NetworkStream stream;
+        try { stream = client.GetStream(); } catch (Exception) { return; }
+        async Task Reply(string json, string? id)
+        {
+            // The id is spliced in front of the serialized reply so no response type has to carry it.
+            string line = id == null || json.Length < 2 || json[0] != '{' ? json
+                : "{\"id\":" + id + (json.Length > 2 ? "," : "") + json[1..];
+            byte[] output = Encoding.UTF8.GetBytes(line + "\n");
+            await writes.WaitAsync(closed.Token).ConfigureAwait(false);
+            try { await stream.WriteAsync(output, closed.Token).ConfigureAwait(false); }
+            finally { writes.Release(); }
+        }
+        try
+        {
+            var buffer = new byte[4096];
+            var line = new List<byte>(RequestMaxBytes);
+            bool overflow = false;
+            while (!closed.IsCancellationRequested)
+            {
+                int count = await stream.ReadAsync(buffer, closed.Token).ConfigureAwait(false);
+                if (count == 0) break;
+                for (int i = 0; i < count; i++)
+                {
+                    if (buffer[i] != (byte)'\n')
+                    {
+                        if (line.Count < RequestMaxBytes) line.Add(buffer[i]); else overflow = true;
+                        continue;
+                    }
+                    string json = Encoding.UTF8.GetString(line.ToArray());
+                    bool tooLong = overflow;
+                    line.Clear(); overflow = false;
+                    string? id = RequestId(json);
+                    if (tooLong) { await Reply(JsonSerializer.Serialize(new { ok = false, error = $"Request exceeds {RequestMaxBytes - 1} bytes." }), id).ConfigureAwait(false); continue; }
+                    long now = Environment.TickCount64, ticked = Interlocked.Read(ref lastTickAt);
+                    if (ticked != 0 && now - ticked > StallMs)
+                    {
+                        await Reply(JsonSerializer.Serialize(new { ok = false, code = "stalled",
+                            error = $"Game thread has not ticked for {now - ticked} ms; the client is stalled." }), id).ConfigureAwait(false);
+                        continue;
+                    }
+                    var completion = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    requests.Enqueue(new(json, now, closed.Token, completion));
+                    _ = AnswerAsync(completion.Task, id, Reply, closed.Token);
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (IOException) { }
+        catch (SocketException) { }
+        catch (ObjectDisposedException) { }
+        finally { closed.Cancel(); }
+    }
+
+    private static async Task AnswerAsync(Task<object> answer, string? id, System.Func<string, string?, Task> reply, CancellationToken closed)
+    {
+        try
+        {
+            object response = await answer.WaitAsync(closed).ConfigureAwait(false);
+            await reply(JsonSerializer.Serialize(response), id).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { }
+        catch (IOException) { }
+        catch (SocketException) { }
+        catch (ObjectDisposedException) { }
+    }
+
+    // The raw JSON text of a request's id, if it carries one; anything else is answered without.
+    private static string? RequestId(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("id", out var id)) return null;
+            return id.ValueKind is JsonValueKind.String or JsonValueKind.Number ? id.GetRawText() : null;
+        }
+        catch (JsonException) { return null; }
     }
 
     private void OnTick(float dt)
@@ -242,9 +307,17 @@ public sealed partial class AiBridgeMod : ModSystem
     // are still discarded and cannot revive control.
     private void DrainRequests()
     {
+        Interlocked.Exchange(ref lastTickAt, Environment.TickCount64);
         while (requests.TryDequeue(out var pending))
         {
             if (pending.Cancellation.IsCancellationRequested) continue;
+            long waited = Environment.TickCount64 - pending.ReceivedAt;
+            if (waited > RequestDeadlineMs)
+            {
+                // The hand never reached the keys: the request is refused rather than acted on late.
+                pending.Completion.TrySetResult(new { ok = false, code = "expired", error = $"Request waited {waited} ms for a game tick; nothing was done." });
+                continue;
+            }
             try { pending.Completion.TrySetResult(Execute(pending.Json, pending.ReceivedAt)); }
             catch (JsonException) { pending.Completion.TrySetResult(new { ok = false, error = "Invalid JSON request." }); }
             catch (Exception exception)

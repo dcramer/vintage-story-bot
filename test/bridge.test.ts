@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { isBotCommand, uiTools, validateClick } from '../src/operator/bot-window.ts';
 import { decodeChunkIndex, decodeMapPiece } from '../src/operator/native-map.ts';
 import { mapMode, normalizeMapView } from '../src/operator/world-map.ts';
-import { bridgePort, requestBridge } from '../src/runtime/bridge.ts';
+import { BridgeClient, bridgePort, requestBridge } from '../src/runtime/bridge.ts';
 import { tools as actions } from '../src/runtime/registry.ts';
 
 async function fakeBridge(t, handle) {
@@ -18,7 +18,13 @@ async function fakeBridge(t, handle) {
     socket.setEncoding('utf8');
     socket.on('data', chunk => {
       line += chunk;
-      if (line.includes('\n')) handle(socket, JSON.parse(line.trim()));
+      let end = line.indexOf('\n');
+      while (end >= 0) {
+        const text = line.slice(0, end);
+        line = line.slice(end + 1);
+        handle(socket, JSON.parse(text));
+        end = line.indexOf('\n');
+      }
     });
   });
   server.listen(0, '127.0.0.1');
@@ -97,6 +103,42 @@ test('times out without retrying and caps request size', async t => {
   assert.equal(calls, 1);
   await assert.rejects(requestBridge({ action: 'x'.repeat(1024) }, { port }), /exceeds/);
   assert.equal(calls, 1);
+});
+
+test('pipelines requests on one connection, pairs replies by id, and keeps deadlines apart', async t => {
+  const port = await fakeBridge(t, (socket, request) => {
+    // Answer in reverse order of arrival and leave one request unanswered; ids must pair them.
+    if (request.action === 'never') return;
+    setTimeout(() => socket.write(JSON.stringify({ id: request.id, ok: true, echo: request.action }) + '\n'), request.action === 'slow' ? 30 : 5);
+  });
+  const server = new BridgeClient({ port });
+  t.after(() => server.close());
+  const lost = server.request({ action: 'never' }, { timeoutMs: 40 });
+  const [slow, fast] = await Promise.all([server.request({ action: 'slow' }), server.request({ action: 'fast' })]);
+  assert.equal(slow.echo, 'slow');
+  assert.equal(fast.echo, 'fast');
+  assert.equal(server.pending.size, 1);
+  await assert.rejects(lost, /timed out/);
+  assert.equal(server.pending.size, 0);
+  assert.equal(server.socket?.destroyed, false);
+});
+
+test('a dropped bridge connection rejects everything in flight and the next request reconnects', async t => {
+  let sockets = 0;
+  const port = await fakeBridge(t, (socket, request) => {
+    sockets++;
+    if (request.action === 'cut') return socket.destroy();
+    socket.write(JSON.stringify({ id: request.id, ok: true }) + '\n');
+  });
+  const server = new BridgeClient({ port });
+  t.after(() => server.close());
+  // The cut lands first; the request queued behind it on the same connection is lost with it.
+  const cut = server.request({ action: 'cut' });
+  const waiting = server.request({ action: 'observe' });
+  await assert.rejects(cut, /Bridge closed/);
+  await assert.rejects(waiting, /Bridge closed/);
+  assert.deepEqual(await server.request({ action: 'observe' }), { ok: true });
+  assert.equal(sockets, 3);
 });
 
 test('UI restricts bot identity, keys and click bounds without touching a display', () => {

@@ -17,8 +17,11 @@ public sealed class SurfaceMap(long ttlMs = 30000, int radius = 96)
 {
     private sealed record Observation(double Y, string Kind, int Step, string? Code, int Color, long SeenAt, long CheckedAt);
     private readonly Dictionary<Column, Observation> columns = new();
+    // Columns in the order they were last seen, so a snapshot walks only the
+    // recent tail instead of every column the buffer holds.
+    private readonly Queue<(Column Column, long SeenAt)> recent = new();
     public int Count => columns.Count;
-    public void Clear() => columns.Clear();
+    public void Clear() { columns.Clear(); recent.Clear(); }
     public bool Fresh(Column column, long now, long age) =>
         columns.TryGetValue(column, out var value) && now - value.CheckedAt <= age;
     // Attention changed: every column must be looked at again for watched blocks.
@@ -26,25 +29,35 @@ public sealed class SurfaceMap(long ttlMs = 30000, int radius = 96)
     {
         foreach (var (column, value) in columns.ToArray()) columns[column] = value with { CheckedAt = 0 };
     }
-    public void Put(Column column, double y, string kind, int step, string? code, int color, long now) =>
+    public void Put(Column column, double y, string kind, int step, string? code, int color, long now)
+    {
         columns[column] = new(y, kind, step, code, color, now, now);
+        recent.Enqueue((column, now));
+    }
     public void Prune(double x, double z, long now)
     {
         foreach (var (column, value) in columns.ToArray())
             if (now - value.SeenAt > ttlMs || Math.Abs(column.X - x) > radius || Math.Abs(column.Z - z) > radius) columns.Remove(column);
     }
     // What the eye sees now: columns inside the current view confirmed recently.
-    public object[] Snapshot(long now, Point3 eye, double yaw, double halfYaw, long maxAgeMs = 5000) => columns
-        .Where(p =>
+    public object[] Snapshot(long now, Point3 eye, double yaw, double halfYaw, long maxAgeMs = 5000)
+    {
+        while (recent.Count > 0 && now - recent.Peek().SeenAt > maxAgeMs) recent.Dequeue();
+        var rows = new List<object?[]>(recent.Count);
+        foreach (var (column, seenAt) in recent)
         {
-            if (now - p.Value.SeenAt > maxAgeMs) return false;
-            double planar = Math.Sqrt(Math.Pow(p.Key.X + .5 - eye.X, 2) + Math.Pow(p.Key.Z + .5 - eye.Z, 2));
-            if (planar <= 8) return true;
-            double bearing = SceneGeometry.Normalize(Math.Atan2(p.Key.X + .5 - eye.X, p.Key.Z + .5 - eye.Z) * 180 / Math.PI);
-            return Math.Abs(SceneGeometry.Normalize(bearing - yaw + 180) - 180) <= halfYaw;
-        })
-        .Select(p => new object?[] { p.Key.X, p.Key.Z, Math.Round(p.Value.Y, 3), p.Value.Kind, p.Value.Step, p.Value.Code, p.Value.SeenAt, p.Value.Color })
-        .ToArray();
+            // A column seen again later is in the queue twice; only its latest sighting counts.
+            if (!columns.TryGetValue(column, out var value) || value.SeenAt != seenAt) continue;
+            double planar = Math.Sqrt(Math.Pow(column.X + .5 - eye.X, 2) + Math.Pow(column.Z + .5 - eye.Z, 2));
+            if (planar > 8)
+            {
+                double bearing = SceneGeometry.Normalize(Math.Atan2(column.X + .5 - eye.X, column.Z + .5 - eye.Z) * 180 / Math.PI);
+                if (Math.Abs(SceneGeometry.Normalize(bearing - yaw + 180) - 180) > halfYaw) continue;
+            }
+            rows.Add([column.X, column.Z, Math.Round(value.Y, 3), value.Kind, value.Step, value.Code, value.SeenAt, value.Color]);
+        }
+        return rows.ToArray();
+    }
 }
 
 // Passive vision: every tick, while a controller is listening, sample surface

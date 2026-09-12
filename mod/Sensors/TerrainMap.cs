@@ -11,17 +11,26 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
     // forgotten geometry and drops only changed cells.
     private sealed record Observation(Bounds[]? Boxes, string? Traits, long At, long Sequence, long PublishedAt, string? Reason = null);
     private readonly Dictionary<Cell, Observation> cells = new();
+    // Every published observation by its sequence, so a page is a slice and the
+    // oldest is the first entry, never a sort or a scan of the whole map.
+    private readonly SortedList<long, Cell> published = new();
     private long sequence, lostThrough;
     public string Session { get; private set; } = Guid.NewGuid().ToString("N");
-    public void Clear() { cells.Clear(); sequence = lostThrough = 0; Session = Guid.NewGuid().ToString("N"); }
+    public void Clear() { cells.Clear(); published.Clear(); sequence = lostThrough = 0; Session = Guid.NewGuid().ToString("N"); }
     public bool Fresh(Cell cell, long now, long age = 500) =>
         cells.TryGetValue(cell, out var value) && value.Boxes != null && now - value.At <= Math.Min(age, ttlMs);
+    private void Set(Cell cell, Observation? prior, Observation next)
+    {
+        if (prior != null && prior.Sequence != next.Sequence) published.Remove(prior.Sequence);
+        if (prior == null || prior.Sequence != next.Sequence) published[next.Sequence] = cell;
+        cells[cell] = next;
+    }
     public void Invalidate(Cell cell, string reason = "changed")
     {
         // Forget only knowledge we held; unrelated world updates must not flood the delta stream.
         if (!cells.TryGetValue(cell, out var prior) || prior.Boxes == null) return;
         long now = Environment.TickCount64;
-        cells[cell] = new(null, null, now, ++sequence, now, reason);
+        Set(cell, prior, new(null, null, now, ++sequence, now, reason));
         Bound();
     }
     public void Stale(Cell cell)
@@ -34,22 +43,22 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
     }
     public void Put(Cell cell, Bounds[] boxes, string? traits, long now)
     {
-        if (cells.TryGetValue(cell, out var prior) && prior.Boxes != null && prior.Traits == traits &&
-            prior.Boxes.AsSpan().SequenceEqual(boxes))
+        cells.TryGetValue(cell, out var prior);
+        if (prior != null && prior.Boxes != null && prior.Traits == traits && prior.Boxes.AsSpan().SequenceEqual(boxes))
         {
             bool publish = now - prior.PublishedAt >= RefreshDeltaMs;
-            cells[cell] = new(prior.Boxes, traits, now, publish ? ++sequence : prior.Sequence,
-                publish ? now : prior.PublishedAt);
+            Set(cell, prior, new(prior.Boxes, traits, now, publish ? ++sequence : prior.Sequence, publish ? now : prior.PublishedAt));
         }
-        else cells[cell] = new(boxes, traits, now, ++sequence, now);
+        else Set(cell, prior, new(boxes, traits, now, ++sequence, now));
         Bound();
     }
     private void Bound()
     {
-        if (cells.Count <= capacity) return;
-        var oldest = cells.MinBy(pair => pair.Value.Sequence);
-        lostThrough = Math.Max(lostThrough, oldest.Value.Sequence);
-        cells.Remove(oldest.Key);
+        if (cells.Count <= capacity || published.Count == 0) return;
+        long oldest = published.Keys[0];
+        lostThrough = Math.Max(lostThrough, oldest);
+        cells.Remove(published.Values[0]);
+        published.RemoveAt(0);
     }
     public void Prune(Point3 center, long now, Func<Cell, bool>? loaded = null)
     {
@@ -64,13 +73,19 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
     {
         bool reset = session != Session || after < lostThrough || after > sequence;
         if (reset) after = 0;
-        var batch = cells.Where(p => p.Value.Sequence > after).OrderBy(p => p.Value.Sequence).Take(PageSize).ToArray();
-        long cursor = batch.Length == 0 ? sequence : batch[^1].Value.Sequence;
+        // First published sequence above the cursor, by binary search over the ordered keys.
+        var keys = published.Keys;
+        int low = 0, high = keys.Count;
+        while (low < high) { int mid = (low + high) / 2; if (keys[mid] > after) high = mid; else low = mid + 1; }
+        int count = Math.Min(PageSize, keys.Count - low);
+        var batch = new (Cell Cell, Observation Value)[count];
+        for (int i = 0; i < count; i++) { var cell = published.Values[low + i]; batch[i] = (cell, cells[cell]); }
+        long cursor = count == 0 ? sequence : batch[^1].Value.Sequence;
         return new { session = Session, reset, cursor, more = cursor < sequence, clock = now,
             cells = batch.Select(p => p.Value.Boxes == null
-                ? new object?[] { p.Key.X, p.Key.Y, p.Key.Z, p.Value.At, p.Value.Traits, null, p.Value.Reason ?? "changed" }
-                : new object?[] { p.Key.X, p.Key.Y, p.Key.Z, p.Value.At, p.Value.Traits,
-                    p.Value.Boxes.Select(b => new[] { b.X1 - p.Key.X, b.Y1 - p.Key.Y, b.Z1 - p.Key.Z,
-                        b.X2 - p.Key.X, b.Y2 - p.Key.Y, b.Z2 - p.Key.Z }).ToArray() }).ToArray() };
+                ? new object?[] { p.Cell.X, p.Cell.Y, p.Cell.Z, p.Value.At, p.Value.Traits, null, p.Value.Reason ?? "changed" }
+                : new object?[] { p.Cell.X, p.Cell.Y, p.Cell.Z, p.Value.At, p.Value.Traits,
+                    p.Value.Boxes.Select(b => new[] { b.X1 - p.Cell.X, b.Y1 - p.Cell.Y, b.Z1 - p.Cell.Z,
+                        b.X2 - p.Cell.X, b.Y2 - p.Cell.Y, b.Z2 - p.Cell.Z }).ToArray() }).ToArray() };
     }
 }

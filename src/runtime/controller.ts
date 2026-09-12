@@ -211,6 +211,8 @@ export class Controller {
   // goal is walking, so memory and threats are never older than a glance.
   // Read-only; a lost bridge just backs off until it returns.
   eyeTicks = 0;
+  eyeLostAt: number | null = null;
+  eyeStallNoted: number | null = null;
   eye(intervalMs = 250) {
     if (this.eyeTimer) return;
     const tick = async () => {
@@ -222,9 +224,21 @@ export class Controller {
         try {
           const batch = await this.game.sense();
           if (this.eyeTicks % 4 === 0) this.sample(batch.state);
+          if (this.eyeLostAt) {
+            this.log.info('eye', 'recovered', { lostMs: Date.now() - this.eyeLostAt });
+            this.eyeLostAt = this.eyeStallNoted = null;
+          }
         } catch (error) {
           delay = 2000;
           this.log.debug('eye', 'lost', { error: message(error) });
+          // One failed glance is routine; a client that has answered nothing for
+          // seconds is a stalled client, noted once and then every half minute.
+          const now = Date.now();
+          this.eyeLostAt ??= now;
+          if (now - this.eyeLostAt >= 5000 && (!this.eyeStallNoted || now - this.eyeStallNoted >= 30000)) {
+            this.eyeStallNoted = now;
+            this.log.info('eye', 'stalled', { lostMs: now - this.eyeLostAt, error: message(error) });
+          }
         }
       }
       // Chat lines the player has read since the last look, once a second.
@@ -587,30 +601,27 @@ export class Controller {
           nav.finish('paused', nextPause);
           break;
         }
-        // Renew immediately after the sensed step, before deterministic route
-        // planning on the next iteration. Repeating the already-vetted frame for
-        // one game tick keeps planning time outside the heartbeat critical path.
-        try {
-          const renewed = await control.frame(
-            batch.terrain.reset
-              ? {
-                  yawDegrees: input.yawDegrees,
-                  pitchDegrees: 15,
-                  forward: false,
-                  jump: false,
-                  sprint: false,
-                  sneak: false,
-                  focus: null,
-                }
-              : input,
-          );
-          if (renewed?.step) stepView = renewed.step;
-          // A step in flight is watched about ten times a second, not as fast as the loopback allows.
-          if (input.toward && stepView?.state === 'walking') await sleep(60);
-        } catch (error) {
-          nav.finish('cancelled', 'control_lost: ' + message(error));
-          break;
-        }
+        // The mod keeps the hand on the keys until the next step arrives, so one
+        // request per iteration is enough. A reset feed means the map is being
+        // rebuilt: stand still for a tick rather than walk on it. A step in
+        // flight is watched about ten times a second, not as fast as the
+        // loopback allows.
+        if (batch.terrain.reset) {
+          try {
+            await control.frame({
+              yawDegrees: input.yawDegrees,
+              pitchDegrees: 15,
+              forward: false,
+              jump: false,
+              sprint: false,
+              sneak: false,
+              focus: null,
+            });
+          } catch (error) {
+            nav.finish('cancelled', 'control_lost: ' + message(error));
+            break;
+          }
+        } else if (input.toward && stepView?.state === 'walking') await sleep(60);
       }
     } finally {
       await control.release();

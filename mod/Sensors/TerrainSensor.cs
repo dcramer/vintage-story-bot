@@ -9,7 +9,7 @@ namespace VintageStoryAI;
 internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
 {
     private readonly Queue<Cell> pending = new();
-    private long nextBatch;
+    private long nextBatch, nextPrune;
     private Cell? lastPosition;
     private Cell? lastPriority;
     public void Reset() { pending.Clear(); map.Clear(); nextBatch = 0; lastPosition = lastPriority = null; }
@@ -42,7 +42,8 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
         }
         var foot = new Point3(pos.X, pos.Y, pos.Z);
         var blocks = api.World.BlockAccessor;
-        map.Prune(foot, now, cell => blocks.GetChunkAtBlockPos(new BlockPos(cell.X, cell.Y, cell.Z, 0)) != null);
+        // Forgetting is a once-a-second sweep over the whole map, not a per-tick one.
+        if (now >= nextPrune) { map.Prune(foot, now, cell => blocks.GetChunkAtBlockPos(new BlockPos(cell.X, cell.Y, cell.Z, 0)) != null); nextPrune = now + 1000; }
         if (pending.Count == 0 && now >= nextBatch)
         {
             var cells = new List<Cell>();

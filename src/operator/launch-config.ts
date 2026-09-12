@@ -81,12 +81,15 @@ export function updateCharacterName(botData, characterName) {
 }
 
 // Windowed at the virtual screen size so the borderless headless window fills the display exactly.
+// The mod answers on the game tick, which runs once per rendered frame, so the frame cap is also
+// the cap on how fast the bot can sense and act: never below 60.
 export function updateWindowSettings(botData, { width, height }) {
   const file = readSettings(botData);
   if (!file) return false;
   const ints = (file.settings.intSettings ??= {});
-  if (ints.screenWidth === width && ints.screenHeight === height && ints.gameWindowMode === 0) return false;
-  Object.assign(ints, { screenWidth: width, screenHeight: height, gameWindowMode: 0 });
+  const maxFps = Math.max(Number(ints.maxFps) || 0, 60);
+  if (ints.screenWidth === width && ints.screenHeight === height && ints.gameWindowMode === 0 && ints.maxFps === maxFps) return false;
+  Object.assign(ints, { screenWidth: width, screenHeight: height, gameWindowMode: 0, maxFps });
   writeSettings(file);
   return true;
 }

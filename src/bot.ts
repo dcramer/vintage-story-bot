@@ -6,6 +6,7 @@
 import { once } from 'node:events';
 import net from 'node:net';
 import { installBrain } from './runtime/brain.ts';
+import { BridgeClient } from './runtime/bridge.ts';
 import { Controller } from './runtime/controller.ts';
 import { SessionLog } from './runtime/log.ts';
 import { Reporter } from './runtime/reporter.ts';
@@ -28,7 +29,9 @@ const telemetry = {
     for (const sink of sinks) sink.close();
   },
 };
-const controller = new Controller(undefined, telemetry as any, log);
+// One connection to the mod for the whole process; requests overlap on it.
+const bridge = new BridgeClient();
+const controller = new Controller(bridge.request, telemetry as any, log);
 const sockets = new Set<net.Socket>();
 const maxRequestBytes = 16384;
 
@@ -86,6 +89,7 @@ try {
 } finally {
   log.info('controller', 'stop', { session: controller.session, uptimeMs: Math.round(process.uptime() * 1000) });
   await controller.close();
+  bridge.close();
   telemetry.close();
   log.close();
   for (const socket of sockets) socket.destroy();
