@@ -146,6 +146,33 @@ test('fleet metrics join controller segments idempotently and archive completed 
   assert.equal(bot.runs.current.lifeId, 'life-2');
 });
 
+test('fleet metrics keep an alive run across controller and client session restarts', () => {
+  const bot: any = {};
+  const metric = (segmentId, lifeId, startedAt, observedAt, distance) => ({
+    segmentId,
+    lifeId,
+    segmentStartedAt: startedAt,
+    observedAt,
+    endedAt: null,
+    alive: true,
+    origin: { x: distance, y: 100, z: 0, dimension: 0 },
+    position: { x: distance + 1, y: 100, z: 0, dimension: 0 },
+    distance,
+    movementSamples: distance,
+    maxFromOrigin: 1,
+    discontinuities: 0,
+    items: { byCode: [] },
+  });
+
+  mergeRunMetric(bot, metric('controller-1', 'mod-session-1', 1000, 2000, 5));
+  mergeRunMetric(bot, metric('controller-2', 'mod-session-2', 3000, 4000, 4));
+  assert.equal(bot.runs.recent.length, 0);
+  assert.equal(bot.runs.current.lifeId, 'mod-session-2');
+  assert.equal(bot.runs.current.startedAt, 1000);
+  assert.equal(bot.runs.current.controllerSegments, 2);
+  assert.equal(bot.runs.current.distance, 9);
+});
+
 test('fleet metrics archive a death when the same game session respawns', () => {
   const bot: any = {};
   const metric = (observedAt, alive) => ({
@@ -228,6 +255,78 @@ test('fleet metrics heal a revived run polluted by a pre-death segment', () => {
   assert.equal(bot.runs.current.startedAt, 3000);
   assert.equal(bot.runs.current.distance, 2);
   assert.equal(bot.runs.current.controllerSegments, 1);
+});
+
+test('fleet metrics fold false client-restart archives back into the living run', () => {
+  const bot: any = {
+    runs: {
+      current: {
+        lifeId: 'mod-session-2',
+        startedAt: 3000,
+        observedAt: 3500,
+        endedAt: null,
+        alive: true,
+        spawn: { x: 10, y: 100, z: 0, dimension: 0 },
+        position: { x: 12, y: 100, z: 0, dimension: 0 },
+        durationMs: 500,
+        distance: 2,
+        movementSamples: 2,
+        estimatedSteps: 3,
+        maxFromSpawn: 2,
+        discontinuities: 0,
+        controllerSegments: 1,
+        items: { gained: 0, gathered: 0, crafted: 0, recovered: 0, other: 0, byCode: [] },
+      },
+      recent: [
+        {
+          lifeId: 'mod-session-1',
+          startedAt: 1000,
+          observedAt: 2500,
+          endedAt: null,
+          alive: true,
+          spawn: { x: 0, y: 100, z: 0, dimension: 0 },
+          position: { x: 10, y: 100, z: 0, dimension: 0 },
+          durationMs: 1500,
+          distance: 10,
+          movementSamples: 10,
+          estimatedSteps: 13,
+          maxFromSpawn: 10,
+          discontinuities: 0,
+          controllerSegments: 1,
+          items: {
+            byCode: [{ code: 'game:stick', gained: 2, gathered: 2, crafted: 0, recovered: 0, other: 0 }],
+          },
+        },
+      ],
+    },
+    runSegments: {
+      current: { observedAt: 3500, startedAt: 3000, distance: 2, movementSamples: 2, discontinuities: 0, items: {} },
+    },
+  };
+  const current = {
+    segmentId: 'current',
+    lifeId: 'mod-session-2',
+    segmentStartedAt: 3000,
+    observedAt: 4000,
+    endedAt: null,
+    alive: true,
+    origin: { x: 10, y: 100, z: 0, dimension: 0 },
+    position: { x: 13, y: 100, z: 0, dimension: 0 },
+    distance: 3,
+    movementSamples: 3,
+    maxFromOrigin: 3,
+    discontinuities: 0,
+    items: { byCode: [] },
+  };
+
+  mergeRunMetric(bot, current);
+  assert.equal(bot.runs.recent.length, 0);
+  assert.equal(bot.runs.current.startedAt, 1000);
+  assert.equal(bot.runs.current.distance, 13);
+  assert.equal(bot.runs.current.controllerSegments, 2);
+  assert.equal(bot.runs.current.items.gathered, 2);
+  assert.deepEqual(bot.runs.current.spawn, { x: 0, y: 100, z: 0, dimension: 0 });
+  assert.equal(bot.runs.current.maxFromSpawn, 13);
 });
 
 test('fleet metrics consume transition logs and latest snapshots only once', () => {

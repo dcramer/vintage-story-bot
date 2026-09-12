@@ -46,7 +46,32 @@ function archive(runs) {
   while (runs.recent.length > maxRecentRuns) runs.recent.shift();
 }
 
-// Join cumulative controller-segment measurements into one durable game life.
+// Early metrics builds treated a changed mod session as a death and archived
+// a still-living run. Fold those durable records back into the current run as
+// cumulative segments. A real completed run always has endedAt.
+function foldFalseArchives(bot, runs) {
+  while (runs.current?.alive !== false) {
+    const prior = runs.recent.at(-1);
+    if (!prior || prior.alive === false || prior.endedAt != null) return;
+    runs.recent.pop();
+    const id = `legacy:${prior.lifeId}:${prior.startedAt}`;
+    (bot.runSegments ??= {})[id] = {
+      observedAt: prior.observedAt,
+      startedAt: prior.startedAt,
+      distance: Math.max(0, number(prior.distance)),
+      movementSamples: count(prior.movementSamples),
+      discontinuities: count(prior.discontinuities),
+      items: items(prior.items),
+    };
+    runs.current.startedAt = Math.min(runs.current.startedAt, prior.startedAt);
+    runs.current.spawn = point(prior.spawn) ?? runs.current.spawn;
+    runs.current.maxFromSpawn = Math.max(runs.current.maxFromSpawn, number(prior.maxFromSpawn));
+  }
+}
+
+// Join cumulative controller-segment measurements into one durable survival
+// run. Game/mod session ids can change on a client restart and remain stable
+// across a respawn, so only dead -> alive is a run boundary.
 // Replaying the same report replaces a segment snapshot rather than adding it
 // twice. The internal segment map is stored server-side but omitted from API
 // and WebSocket bot records by publicBot().
@@ -61,11 +86,12 @@ export function mergeRunMetric(bot, value) {
     return { changed: false, transition: false };
   const runs = (bot.runs ??= { current: null, recent: [] });
   let transition = false;
+  foldFalseArchives(bot, runs);
   const priorDeath = runs.recent
     .slice()
     .reverse()
-    .find(run => run.lifeId === lifeId && run.endedAt != null);
-  if (priorDeath && runs.current?.lifeId === lifeId) {
+    .find(run => run.endedAt != null);
+  if (priorDeath && runs.current) {
     priorDeath.alive = false;
     // Heal records written by the first metrics revision, which let a
     // pre-death controller segment leak back into the revived run.
@@ -77,12 +103,11 @@ export function mergeRunMetric(bot, value) {
       return { changed: false, transition: false };
     }
   }
-  // Vintage Story keeps the same game session id after respawn. A newer alive
-  // segment following a recorded death therefore starts a new survival run
-  // even though lifeId is unchanged.
+  // A newer alive segment following a recorded death starts a survival run,
+  // regardless of whether the mod session id changed in the meantime.
   const revived =
     runs.current?.endedAt != null && value.alive !== false && observedAt > runs.current.observedAt;
-  if (runs.current?.lifeId !== lifeId || revived) {
+  if (!runs.current || revived) {
     // Reporter requests are serialized, but a retried stale batch must never
     // roll the durable record back to a life that has already ended.
     if (runs.current && observedAt < runs.current.observedAt) return { changed: false, transition: false };
@@ -133,6 +158,7 @@ export function mergeRunMetric(bot, value) {
   current.controllerSegments = segments.length;
   current.items = publicItems(bot.runSegments);
   if (observedAt >= current.observedAt) {
+    current.lifeId = lifeId;
     current.observedAt = observedAt;
     current.position = position;
     current.alive = value.alive !== false;
