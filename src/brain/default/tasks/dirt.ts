@@ -6,7 +6,7 @@ export const dirt: Concern = {
   id: 'dirt',
   title: `${SHELTER_DIRT} dirt for a shelter`,
   done: s => s.home || s.dirt >= SHELTER_DIRT,
-  after: ['tools'],
+  after: ['shovel'],
   short: (k, s) => (!s.home && k.dirt < SHELTER_DIRT ? { item: 'soil-', count: SHELTER_DIRT - k.dirt } : null),
   run: ({ k }) => ({
     start: 'harvest',

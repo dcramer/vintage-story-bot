@@ -76,6 +76,7 @@ const situation = (extra = {}) => ({
   full: false,
   surplus: 0,
   short: 0,
+  stashKnife: true,
   ...extra,
 });
 
@@ -138,10 +139,12 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ home: false, burrowed: true })), 'unburrow');
   assert.equal(pickJob(situation({ home: false, dirt: SHELTER_DIRT })), 'shelter');
   assert.equal(pickJob(situation({ home: false })), 'dirt');
-  assert.equal(pickJob(situation({ home: false, sticks: 3 })), 'sticks', 'sticks before dirt: the shovel needs one');
-  assert.equal(pickJob(situation({ home: false, shovel: false, stone: true })), 'tools', 'a shovel before digging dirt');
-  assert.equal(pickJob(situation({ knife: false })), 'stone');
-  assert.equal(pickJob(situation({ knife: false, stone: true })), 'tools');
+  assert.equal(pickJob(situation({ home: false, sticks: 3 })), 'dirt', 'ten sticks wait for a home: the shovel needed only one');
+  assert.equal(pickJob(situation({ home: false, shovel: false, stone: true })), 'shovel', 'a shovel before digging dirt');
+  assert.equal(pickJob(situation({ knife: false, sticks: 0 })), 'knife', 'the knife first, whatever else is short');
+  assert.equal(pickJob(situation({ knife: false, axe: false, stone: true })), 'knife');
+  assert.equal(pickJob(situation({ axe: false, stone: true })), 'axe');
+  assert.equal(pickJob(situation({ stashKnife: false })), 'spare_knife', 'a spare knife for the basket once the kit is in hand');
   assert.equal(pickJob(situation({ torches: 0 })), 'grass');
   assert.equal(pickJob(situation({ torches: 0, grass: 2 })), 'torches');
   assert.equal(pickJob(situation({ logs: 1 })), 'logs');
@@ -150,7 +153,7 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ body: true, night: true })), 'wait', 'but not at night');
   assert.equal(pickJob(situation({ body: true, sticks: 0 }), new Set(['recover'] as any)), 'sticks', 'a failed recovery is set aside');
   assert.equal(
-    pickJob(situation({ sticks: 3, knife: false, stone: true }), new Set(['sticks'] as any)),
+    pickJob(situation({ home: false, shovel: false }), new Set(['shovel'] as any)),
     'explore',
     'a set-aside job holds back what depends on it; the ladder goes exploring',
   );
@@ -160,7 +163,7 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
   const memory = fresh();
   memory.notes.home = { x: 0, y: 100, z: 0 };
   const first = decide(reading({ inventory: inventory(slot('game:stick', 2)) }), memory);
-  assert.deepEqual([first.start, first.args.count, memory.job], ['gather', STICK_MIN - 2, 'sticks']);
+  assert.deepEqual([first.start, first.args.match, memory.job], ['gather', 'looseflints', 'knife'], 'a stick in hand: flint for the knife next');
   const wolf = state({ nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }] });
   assert.deepEqual(decide(reading({ state: wolf, active: { id: 'g1', kind: 'gather', state: 'running', by: 'brain' } }), memory), {
     stop: 'threat',
@@ -233,7 +236,7 @@ test('brain: a flight hands daywork back only after landing', () => {
 
 test('brain: a transient ungrounded start does not set a kit job aside', () => {
   const memory = fresh();
-  memory.job = 'stone';
+  memory.job = 'knife';
   const next = decide(
     reading({
       inventory: inventory(slot('game:stick', STICK_MIN)),
@@ -241,7 +244,7 @@ test('brain: a transient ungrounded start does not set a kit job aside', () => {
     }),
     memory,
   );
-  assert.equal(memory.tried.stone, undefined);
+  assert.equal(memory.tried.knife, undefined);
   assert.equal(next.start, 'gather');
   assert.equal(next.args.match, 'looseflints');
 });
@@ -488,7 +491,7 @@ test('brain loop: respawns when dead, waits behind an operator goal, starts and 
   assert.ok(calls.some(c => c.action === 'respawn' && c.deathId === 'd:1'));
   assert.ok(
     calls.some(c => c.action === 'gather' && c.by === 'brain'),
-    'starts the first kit job (sticks, which every tool needs)',
+    'starts the first kit job (a stick for the knife)',
   );
   assert.deepEqual(goal, { id: 'b1', kind: 'gather' });
   assert.match(decision, /letting travel finish \(operator\)/);

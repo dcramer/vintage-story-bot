@@ -46,11 +46,11 @@ import { logs } from './default/tasks/logs.ts';
 import { recover } from './default/tasks/recover.ts';
 import { resupply, resupplyOf } from './default/tasks/resupply.ts';
 import { shelter } from './default/tasks/shelter.ts';
+import { spareKnife } from './default/tasks/spare_knife.ts';
 import { FULL_SLOTS, stash, surplusOf } from './default/tasks/stash.ts';
 import { sticks } from './default/tasks/sticks.ts';
-import { stone } from './default/tasks/stone.ts';
 import { storage } from './default/tasks/storage.ts';
-import { tools } from './default/tasks/tools.ts';
+import { axe, knife, shovel } from './default/tasks/tools.ts';
 import { torches } from './default/tasks/torches.ts';
 
 export { environmentalHurt, HURT_CLASSIFY_MS, kit } from './default/situation.ts';
@@ -59,13 +59,14 @@ export { STICK_MIN } from './default/tasks/sticks.ts';
 export type { Job, Memory, Notes, Situation };
 
 // The day-1 list, in dependency order: each task is done when the kit or the
-// notes show it, and the first task not done is the one to work on. The order
-// carries the dependencies (a tool needs a stick and a head; dirt needs a
-// shovel; a shelter needs dirt; a basket needs a home to stand by; torches
-// need a home to light), and `after` names them. What the basket holds is
-// fetched before anything is gathered; a full pack is emptied before the
-// rest of the list.
-export const TASKS: Concern[] = [recover, resupply, sticks, stone, tools, dirt, shelter, storage, stash, grass, torches, logs];
+// notes show it, and the first task not done is the one to work on. The knife
+// comes first and needs only a stick and a flint, so it is made the moment
+// both are in hand; the axe and shovel follow the same way. The order carries
+// the rest of the dependencies (dirt needs a shovel; a shelter needs dirt; a
+// basket needs a home to stand by; torches need a home to light), and `after`
+// names them. What the basket holds is fetched before anything is gathered;
+// a full pack is emptied before the rest of the list.
+export const TASKS: Concern[] = [recover, resupply, knife, axe, shovel, dirt, shelter, storage, stash, sticks, spareKnife, grass, torches, logs];
 const REFLEXES: Concern[] = [hide, eat, goHome, burrow, unburrow, wait, relocate, digOut, explore];
 // What runs beside any job, through tools that only talk.
 const ALONGSIDE: Aside[] = [copper, homeMarker];
@@ -180,6 +181,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     full: k.free <= FULL_SLOTS,
     surplus: surplusOf(k, { home: !!home, torches: k.torches }).reduce((n, i) => n + i.count, 0),
     short: resupplyOf(k, { home: !!home, torches: k.torches }, memory.notes.stash).reduce((n, i) => n + i.count, 0),
+    stashKnife: Object.keys(memory.notes.stash?.seen?.items ?? {}).some(code => code.includes('knife-')),
   };
   memory.situation = s;
   memory.tried_now = [...tried];

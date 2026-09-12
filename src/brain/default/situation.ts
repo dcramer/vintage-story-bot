@@ -47,6 +47,8 @@ export function kit(inventory: any) {
     heads: slots.map(s => s.code).filter(code => /^game:(knifeblade|axehead|shovelhead)-/.test(code ?? '')) as string[],
     torches: part('torch-basic'),
     torch: slots.find(s => s.code?.includes('torch-basic'))?.code ?? null,
+    // Knives carried with an edge left; a second is the spare for the basket.
+    knives: slots.filter(s => s.tool === 'Knife' && (s.durability ?? 1) > 0).length,
     dirt: part('soil-'),
     dirtCode: slots.find(s => s.code?.includes('soil-'))?.code ?? null,
     stone: slots.some(s => s.code && kinds.knapping.materials(s)),
@@ -95,6 +97,8 @@ export type Situation = {
   full: boolean;
   surplus: number;
   short: number;
+  // The basket was last seen holding a knife.
+  stashKnife: boolean;
 };
 
 export const environmentalHurt = (events: any[]) =>

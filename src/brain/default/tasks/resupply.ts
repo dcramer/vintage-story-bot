@@ -7,10 +7,10 @@ import { dirt } from './dirt.ts';
 import { grass } from './grass.ts';
 import { logs } from './logs.ts';
 import { sticks } from './sticks.ts';
-import { stone } from './stone.ts';
+import { axe, knife, shovel } from './tools.ts';
 import { torches } from './torches.ts';
 
-const FEEDS: Concern[] = [sticks, stone, dirt, grass, torches, logs];
+const FEEDS: Concern[] = [knife, axe, shovel, sticks, dirt, grass, torches, logs];
 
 // The shortfalls the basket can fill, by what it was last seen holding.
 export function resupplyOf(k: Kit, s: { home: boolean; torches: number }, stash: Stash | null): { item: string; count: number }[] {

@@ -54,9 +54,10 @@ Wants (what every walk stops for within six blocks): berries on a ripe bush, an 
 | eat | `forage` to half with two bites kept; `eat` alone when dug in with food | Satiety below 20% (or 40% with nothing carried); eats what is carried when hungry (in the burrow too, off an earth wall), keeps the rest, searches ever farther in one direction for more, and when starving stomachs a bite that costs a point of health |
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
 | shelter | `shelter` | Enough dirt (by day, or at night with nowhere else) |
-| sticks | `gather stick` (loose sticks, then branchy leaves in reach) | Fewer than 10 sticks |
-| stone | `gather looseflints` (loose flint, or a knappable loose stone picked up on the way) | A tool is missing and nothing knappable is carried |
-| tools | `knap` a head from the flint or knappable stone carried, `craft_item` the tool of that material | Missing the knife, the axe or the shovel |
+| knife | `gather` one stick or flint if short, `knap` a knife blade, `craft_item` the knife | No knife; first of the kit, the moment a stick and a flint are in hand |
+| axe, shovel | the same, one tool per task | No axe; no shovel |
+| sticks | `gather stick` (loose sticks, then branchy leaves in reach) | Fewer than 10 sticks, once there is a home |
+| spare_knife | a second knife made like the first, `store_items` into the basket | The basket was never seen holding a knife |
 | grass | `harvest tallgrass` | Wants torches, no dry grass or cattail tops |
 | torches | `craft_item torch` | Fewer than 2 torches |
 | logs | `fell_tree` | Fewer than 8 logs |
@@ -73,7 +74,8 @@ things above the list; a flight, a dig-out and a night dig-in are never cut
 short by a threat. The list (`TASKS` in the brain) is a task tracker: each task says
 when the kit shows it done, the order carries the dependencies (a tool needs a
 stick and a head, dirt needs a shovel, a shelter needs dirt, torches need a home
-to light), and the first task not done is the one worked on. `brain` status
+to light; a tool needs one stick and one flint, so the knife comes first and
+ten sticks wait for a home), and the first task not done is the one worked on. `brain` status
 shows every task as done, next, open or set aside. A failed job is set aside while the bot stays within 24
 blocks of where it failed, for five minutes at most; the next job in the ladder
 runs meanwhile, so a failure never leaves it standing about. The basket is the

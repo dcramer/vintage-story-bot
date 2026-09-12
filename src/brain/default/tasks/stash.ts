@@ -24,8 +24,12 @@ export function surplusOf(k: Kit, { home, torches }: { home: boolean; torches: n
     return 0;
   };
   const totals = new Map<string, number>();
+  // One tool of each class stays, the one with the most edge left; a second is a spare for the basket.
+  const kept = new Set<any>();
+  for (const cls of new Set(k.slots.filter(s => s.tool).map(s => s.tool)))
+    kept.add(k.slots.filter(s => s.tool === cls).sort((a, b) => (b.durability ?? 0) - (a.durability ?? 0))[0]);
   for (const slot of k.slots) {
-    if (!slot.code || !(slot.quantity > 0) || slot.bag || slot.tool || slot.nutrition || slot.code.includes('torch-basic')) continue;
+    if (!slot.code || !(slot.quantity > 0) || slot.bag || kept.has(slot) || slot.nutrition || slot.code.includes('torch-basic')) continue;
     totals.set(slot.code, (totals.get(slot.code) ?? 0) + slot.quantity);
   }
   return [...totals]
