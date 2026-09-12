@@ -81,9 +81,9 @@ Nothing exists. Blocks day 2 hunting and all threat response.
 
 Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 
-- [ ] **P0 · `open_container {target}`** — right-click chest/vessel/basket, return slots via `OpenedInventories` guard; session token like `inventory.state` (`mod`, `ctl`).
-- [ ] **P0 · `container_move {from,to,quantity,expectedState}`** — extend `inventory_move` addresses with `container` while open (`mod`, `ctl`).
-- [ ] **P0 · `close_container`** — explicit close; opening any goal auto-closes (`mod`, `ctl`).
+- [x] `open_container {target}` — right-click chest/vessel/basket, return slots via `OpenedInventories` guard; session token like `inventory.state`.
+- [x] `container_move {from,to,quantity,expectedState}` — own slots plus `container` while open, guarded by the container session token.
+- [x] `close_container` — explicit close via the manager's own sync packet; opening another container closes the first (goal auto-close is future work).
 - [ ] **P0 · `store {target,items[]}` / `take {target,items[]}`** — goal: walk, open, move, verify deltas, close (`skill`, `goal`).
 - [ ] **P1 · firepit** — not a furnace: fuel slot + input slot, or a cooking pot holding up to 4 ingredients making a meal per `recipes/cooking`; needs firestarter to light; verify burning/cooked state (`mod`, `skill`).
 - [ ] **P1 · ground storage piles** — sneak-place stackable items (logs, firewood, stones, cattails) as piles and pick them back up; 182 ground-storable items in assets (`skill`).
