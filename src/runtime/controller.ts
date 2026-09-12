@@ -61,6 +61,8 @@ export class Controller {
   wants = [];
   // Walked and failed 16x16 areas, shared by every goal of the session.
   places = new Places();
+  // The last full look around, so a goal that replaces another does not sweep the same spot again.
+  looks: { last: any } = { last: null };
   session = randomUUID();
   history = new Map();
   waypoints = new Map();
@@ -628,6 +630,7 @@ export class Controller {
       watch: list => this.game.attend(list),
       wants: this.wants,
       places: this.places,
+      looks: this.looks,
       sync: () => this.snapshot(signal),
       aim: (angles, safety) => this.aim(angles, record, safety, signal),
       navigate: (goal, pauseWhen, safety) => this.navigate(goal, record, undefined, pauseWhen, safety, signal),

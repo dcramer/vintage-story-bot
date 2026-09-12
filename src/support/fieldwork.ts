@@ -55,7 +55,15 @@ export class Fieldwork {
   skipped = new Map();
   events: any[] = [];
   alertsAt = '';
-  lookedAround: any = null;
+  // The last full look around, shared by every goal of the session when the controller keeps it.
+  get lookedAround() {
+    return this.env.looks?.last ?? this.ownLook;
+  }
+  set lookedAround(value) {
+    if (this.env.looks) this.env.looks.last = value;
+    else this.ownLook = value;
+  }
+  ownLook: any = null;
   stormAt = 'clear';
   recoveringFood = false;
   constructor(
@@ -63,7 +71,7 @@ export class Fieldwork {
     {
       signal,
       timeoutMs,
-      sprint = false,
+      sprint = undefined,
       swim = true,
       stopWhenHurt = false,
       wants = env.wants,
@@ -248,7 +256,7 @@ export class Fieldwork {
     if (!this.seeing || !this.attentive) return this.scan(radius, match, kind);
     // One full circle per spot: the view does not change by looking again from the same place.
     const p0 = this.latest.position;
-    if (this.lookedAround && this.now() - this.lookedAround.at < 20000 && horizontal(p0, this.lookedAround.position) < 2)
+    if (this.lookedAround && this.now() - this.lookedAround.at < 45000 && horizontal(p0, this.lookedAround.position) < 3)
       return this.scan(radius, match, kind);
     this.lookedAround = { position: { ...p0 }, at: this.now() };
     this.env.watch?.(Array.isArray(match) ? match : match ? [match] : []);
@@ -400,7 +408,7 @@ export class Fieldwork {
         ...target,
         dimension: 0,
         timeoutMs,
-        sprint: target.sprint ?? (this.sprint || emergencyFoodSearch),
+        sprint: target.sprint ?? (emergencyFoodSearch ? true : this.sprint),
         ...(emergencyFoodSearch ? { emergency: true } : {}),
       },
       state => {

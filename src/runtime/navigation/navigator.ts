@@ -294,7 +294,9 @@ export class Navigation {
     const food = state.vitals?.hunger;
     const emergency = this.evading || this.target.emergency;
     // Running from something is done at a sprint whatever the stomach says; otherwise only well fed.
-    const sprint = !!this.target.sprint && next.move === 'walk' && near > 2 && (emergency || (food?.max > 0 && food.current / food.max >= 0.6));
+    // A player runs when there is room and the stomach allows; a goal may forbid it (sprint: false).
+    const sprint =
+      this.target.sprint !== false && next.move === 'walk' && near > 2 && (emergency || (food?.max > 0 && food.current / food.max >= 0.5));
     const last = this.index >= this.route.length - 1;
     return {
       toward: { x: next.x, y: next.y, z: next.z },

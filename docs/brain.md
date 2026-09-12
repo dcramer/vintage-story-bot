@@ -37,7 +37,7 @@ fights; it runs or hides.
 | go_home | `travel` home | Storm or night, away from home |
 | wait | none | Storm at home, or night with nowhere to go |
 
-Wants (what every walk stops for within six blocks): ripe berries on a bush always; loose sticks while short of ten; loose flint and stones while a tool head is wanted and nothing knappable is carried.
+Wants (what every walk stops for within six blocks): berries on a bush always; loose sticks while short of ten; loose flint and stones while a tool head is wanted and nothing knappable is carried.
 | eat | `eat`, else `forage` | Satiety below 20% (or 40% with nothing carried); the pack any time, foraging by day |
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
 | shelter | `shelter` | Enough dirt (by day, or at night with nowhere else) |

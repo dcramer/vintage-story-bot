@@ -127,7 +127,7 @@ export const schema = z
     tool: z.string().min(1).max(64).optional().describe('Required tool class, e.g. Knife, Axe, Shovel; equips the lowest adequate tier.'),
     minTier: z.number().int().min(0).max(20).optional(),
     manageFood: z.boolean().default(false),
-    sprint: z.boolean().default(false),
+    sprint: z.boolean().optional().describe('false forbids running; by default the walk runs where there is room and food allows'),
     timeoutMs: z.number().int().min(1000).max(3600000).optional(),
   })
   .strict();

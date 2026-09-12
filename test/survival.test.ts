@@ -160,13 +160,14 @@ test('threat avoidance is explicit, proximity-bounded and points away', () => {
   assert.equal(hostileEntity(wolf), true);
   assert.equal(hostileEntity({ ...wolf, code: 'game:chicken-hen' }), false);
   assert.equal(nearestThreat({ position: player, nearbyEntities: [wolf] }), wolf);
-  assert.equal(threatStartRadius, 20);
-  assert.equal(threatClearRadius, 32);
-  assert.equal(threatStartDistance('game:bowtorn-surface'), 36);
-  assert.equal(threatClearDistance('game:bowtorn-surface'), 48);
-  assert.equal(threatStartDistance('game:bear-brown-adult-male'), 28);
-  assert.equal(threatClearDistance('game:bear-brown-adult-male'), 36);
-  const boundaryWolf = { ...wolf, point: { x: -18, y: 2, z: 10.5 } };
+  assert.equal(threatStartRadius, 16);
+  assert.equal(threatClearRadius, 28);
+  assert.equal(threatStartDistance('game:bowtorn-surface'), 28);
+  assert.equal(threatClearDistance('game:bowtorn-surface'), 36);
+  assert.equal(threatStartDistance('game:bear-brown-adult-male'), 22);
+  assert.equal(threatClearDistance('game:bear-brown-adult-male'), 30);
+  assert.equal(hostileEntity({ code: 'game:wolf-eurasian-baby-female' }), false, 'the young are not hunters');
+  const boundaryWolf = { ...wolf, point: { x: -16, y: 2, z: 10.5 } };
   assert.equal(nearestThreat({ position: player, nearbyEntities: [boundaryWolf] }), null);
   assert.equal(nearestThreat({ position: player, nearbyEntities: [boundaryWolf] }, threatClearRadius), boundaryWolf);
   assert.equal(nearestUnclearedThreat({ position: player, nearbyEntities: [boundaryWolf] }), boundaryWolf);
@@ -177,8 +178,8 @@ test('threat avoidance is explicit, proximity-bounded and points away', () => {
   );
   const bowtorn = { code: 'game:bowtorn-surface', point: { x: 8.5, y: 22, z: 10.5 } };
   assert.equal(nearestThreat({ position: player, nearbyEntities: [bowtorn] }), bowtorn);
-  assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...bowtorn, point: { x: 46.5, y: 2, z: 10.5 } }] }).code, 'game:bowtorn-surface');
-  assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...bowtorn, point: { x: 47.5, y: 2, z: 10.5 } }] }), null);
+  assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...bowtorn, point: { x: 38.5, y: 2, z: 10.5 } }] }).code, 'game:bowtorn-surface');
+  assert.equal(nearestThreat({ position: player, nearbyEntities: [{ ...bowtorn, point: { x: 39.5, y: 2, z: 10.5 } }] }), null);
   assert.equal(threatVerticalRange('game:bear-brown-adult-male'), 12);
   assert.equal(
     nearestThreat({ position: player, nearbyEntities: [{ ...wolf, code: 'game:bear-brown-adult-male', point: { x: 8.5, y: 11.5, z: 10.5 } }] })?.code,

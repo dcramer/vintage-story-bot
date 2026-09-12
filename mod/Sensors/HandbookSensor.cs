@@ -93,7 +93,8 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
         if (block.GetBehavior(typeof(BlockBehaviorHarvestable), true) is BlockBehaviorHarvestable harvestable && harvestable.harvestedStacks != null)
             return new { drops = Drops(harvestable.harvestedStacks), tool = harvestable.Tool?.ToString() };
         if (block.GetBehavior(typeof(BlockBehaviorFruitingBush), true) is BlockBehaviorFruitingBush bush && bush.harvestedStacks != null)
-            return new { drops = Drops(bush.harvestedStacks), requiresGrowth = "ripe" };
+            // The game's growth states run empty, flowering, ripening, mature; berries come off a mature bush.
+            return new { drops = Drops(bush.harvestedStacks), requiresGrowth = "mature" };
         return null;
     }
 

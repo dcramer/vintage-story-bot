@@ -9,7 +9,7 @@ export default defineGoal({
       legs: z.number().int().min(1).max(16).default(4).describe('Exploration legs of up to 48 blocks, preferring unvisited regions.'),
       heading: z.number().min(0).max(360).optional().describe('Initial yaw in degrees; defaults to current facing.'),
       manageFood: z.boolean().default(false),
-      sprint: z.boolean().default(false),
+      sprint: z.boolean().optional().describe('false forbids running; by default the walk runs where there is room and food allows'),
       timeoutMs: z.number().int().min(1000).max(3600000).optional(),
     })
     .strict(),

@@ -145,7 +145,7 @@ export default defineGoal({
       waypoint: z.string().min(1).max(32).optional().describe('Named point from set_waypoint instead of coordinates.'),
       arrivalRadius: z.number().min(0.5).max(8).default(1),
       manageFood: z.boolean().default(false),
-      sprint: z.boolean().default(false),
+      sprint: z.boolean().optional().describe('false forbids running; by default the walk runs where there is room and food allows'),
       timeoutMs: z.number().int().min(1000).max(3600000).optional(),
     })
     .strict()

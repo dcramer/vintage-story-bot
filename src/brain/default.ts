@@ -408,8 +408,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
 export function wants(reading: Reading): string[] {
   const k = kit(reading.inventory);
   const list: string[] = [];
-  // Ripe berries on a bush are always worth a stop.
-  list.push('berrybush');
+  // Berries on a bush are always worth a stop.
+  list.push('fruitingbush');
   if (k.sticks < STICK_MIN) list.push('stick');
   if ((!k.knife || !k.axe) && !k.stone) list.push('flint', 'loosestones');
   return list;

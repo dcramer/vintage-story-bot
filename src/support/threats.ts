@@ -8,27 +8,32 @@ const hostileMarkers = ['drifter', 'wolf-', 'bear-', 'locust-', 'bell-', 'bowtor
 // keep the wider observed perimeter until escape is complete. Using the full
 // scan radius for both thresholds makes entities hovering at its edge start
 // repeated long evasions despite never approaching the player.
-export const threatStartRadius = 20;
-export const threatClearRadius = 32;
+export const threatStartRadius = 16;
+export const threatClearRadius = 28;
 
 // Ranged mobs and fast large predators need more reaction time than a walking
 // drifter. Keep these explicit by known game code: unknown/modded entities do
 // not become dangerous through behavioral inference.
 export const threatStartDistance = code => {
   const lower = code.toLowerCase();
-  if (lower.includes('bowtorn-')) return 36;
-  if (['bear-', 'wolf-', 'hyena-'].some(marker => lower.includes(marker))) return 28;
+  if (lower.includes('bowtorn-')) return 28;
+  if (['bear-', 'wolf-', 'hyena-'].some(marker => lower.includes(marker))) return 22;
   return threatStartRadius;
 };
 
 export const threatClearDistance = code => {
   const lower = code.toLowerCase();
-  if (lower.includes('bowtorn-')) return 48;
-  if (['bear-', 'wolf-', 'hyena-'].some(marker => lower.includes(marker))) return 36;
+  if (lower.includes('bowtorn-')) return 36;
+  if (['bear-', 'wolf-', 'hyena-'].some(marker => lower.includes(marker))) return 30;
   return threatClearRadius;
 };
 
-export const hostileEntity = entity => typeof entity?.code === 'string' && hostileMarkers.some(marker => entity.code.toLowerCase().includes(marker));
+// The young of a species are not hunters.
+const young = /-(baby|pup|cub|calf|kid|lamb|chick|piglet)/;
+export const hostileEntity = entity =>
+  typeof entity?.code === 'string' &&
+  hostileMarkers.some(marker => entity.code.toLowerCase().includes(marker)) &&
+  !young.test(entity.code.toLowerCase());
 
 export const threatVerticalRange = code => {
   const lower = code.toLowerCase();
