@@ -278,7 +278,8 @@ export class Navigation {
     if (jumpMove && grounded && !this.jumpAt && yawMagnitude < 15 && near < (next.move === 'gap' ? 2.2 : 1.3)) this.jumpAt = now;
     if (this.jumpAt && !grounded) this.airborne = true;
     if (this.jumpAt && now - this.jumpAt > 2500) return this.replan(p, now, 'jump_failed');
-    let walking = jumpMove && near < 1.3 && !this.jumpAt ? yawMagnitude < 15 : yawMagnitude < 60 || (durationMs === 180 && yawMagnitude <= 90);
+    // Turn first, then walk: walking while far off the line is how a body clips trees and walls.
+    let walking = jumpMove && near < 1.3 && !this.jumpAt ? yawMagnitude < 15 : yawMagnitude < 30;
     // A drop is walked to the edge, then left with one short step so the
     // body lands on the cell below instead of flying past it. Walking pace
     // off an edge carries about two blocks before a three-block fall lands.

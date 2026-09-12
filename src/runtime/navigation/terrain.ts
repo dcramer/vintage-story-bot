@@ -115,8 +115,10 @@ export class TerrainMemory {
     if (!missing || this.buried(x, y, z)) return;
     missing.set(cellKey(Math.floor(x), Math.floor(y), Math.floor(z)), { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) });
   }
+  // Sealed under known solid ground: the first known cell above it, up to six up (the eye never
+  // records the earth under a hillside, so a known surface anywhere above settles it).
   buried(x, y, z) {
-    for (let above = Math.floor(y) + 1; above <= Math.floor(y) + 3; above++) {
+    for (let above = Math.floor(y) + 1; above <= Math.floor(y) + 6; above++) {
       const cell = this.get(x, above, z);
       if (!cell) continue;
       return !cell.hazard && cell.boxes.some(b => b[3] - b[0] > 0.99 && b[5] - b[2] > 0.99 && b[4] - b[1] > 0.99);

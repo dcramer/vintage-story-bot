@@ -214,7 +214,7 @@ test('navigation walks through bends without crouching, jumps a block up from cl
   const first = nav.tick(state, 0);
   assert.equal(nav.state, 'moving');
   assert.equal(first.sneak, false);
-  assert.equal(first.forward, true, 'walks while turning 90 degrees in a short frame');
+  assert.equal(first.forward, false, 'turns first when 90 degrees off the line; walking while that far off clips walls');
   assert.equal(first.durationMs, 180);
   const facing = { ...state, position: at(2, 0), orientation: { yawDegrees: 90 } };
   const jump = nav.tick(facing, 500);

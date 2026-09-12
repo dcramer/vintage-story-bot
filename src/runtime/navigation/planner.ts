@@ -11,7 +11,7 @@ export function findRoute(
   goal,
   _w,
   _h,
-  { blocked = new Set(), visits = new Map(), partial = true, budget = 1024, avoid = [], deadlineMs = 250 } = {},
+  { blocked = new Set(), visits = new Map(), partial = true, budget = 1024, avoid = [], deadlineMs = 600 } = {},
 ) {
   const deadline = performance.now() + deadlineMs;
   const remaining = p => (goal.horizontalOnly ? horizontal(p, goal) : Math.hypot(p.x - goal.x, (p.y - goal.y) * 0.5, p.z - goal.z));
@@ -39,7 +39,8 @@ export function findRoute(
   const costs = new Map([[key(origin), 0]]),
     previous = new Map(),
     closed = new Set();
-  const open = [{ p: origin, score: remaining(origin) }];
+  const open = new Heap();
+  open.push({ p: origin, score: remaining(origin) });
   let frontier = null,
     best = Infinity;
   const path = end => {
@@ -54,8 +55,7 @@ export function findRoute(
     if (list.length > 1 && horizontal(start, list[0]) < 0.35 && Math.abs(start.y - list[0].y) < 0.6) list.shift();
     return list;
   };
-  while (open.length && closed.size < budget && performance.now() < deadline) {
-    open.sort((a, b) => b.score - a.score);
+  while (open.size && closed.size < budget && performance.now() < deadline) {
     const at = open.pop().p,
       id = key(at);
     if (closed.has(id)) continue;
@@ -91,4 +91,42 @@ export function findRoute(
     }
   }
   return frontier ? path(frontier) : null;
+}
+
+// The open list: lowest score first, in log time, so planning stays well inside its deadline
+// even on a machine the game's software renderer is starving.
+class Heap {
+  items: { p: any; score: number }[] = [];
+  get size() {
+    return this.items.length;
+  }
+  push(item) {
+    const a = this.items;
+    a.push(item);
+    for (let i = a.length - 1; i > 0; ) {
+      const parent = (i - 1) >> 1;
+      if (a[parent].score <= a[i].score) break;
+      [a[parent], a[i]] = [a[i], a[parent]];
+      i = parent;
+    }
+  }
+  pop() {
+    const a = this.items,
+      top = a[0],
+      last = a.pop();
+    if (a.length && last) {
+      a[0] = last;
+      for (let i = 0; ; ) {
+        const l = 2 * i + 1,
+          r = l + 1;
+        let m = i;
+        if (l < a.length && a[l].score < a[m].score) m = l;
+        if (r < a.length && a[r].score < a[m].score) m = r;
+        if (m === i) break;
+        [a[m], a[i]] = [a[i], a[m]];
+        i = m;
+      }
+    }
+    return top;
+  }
 }
