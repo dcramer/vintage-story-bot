@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { Places } from '../support/places.ts';
+import { Budget } from './budget.ts';
 import { EventLog } from './events.ts';
 import { GameClient } from './game.ts';
 import { compileGoalScript, runGoalPlan } from './goal-script.ts';
@@ -74,9 +75,11 @@ export class Controller {
   waypoints = new Map();
   lock = Promise.resolve();
   events = new EventLog();
+  budget: Budget;
   chatCursor = { after: 0, session: undefined as string | undefined };
   announced: { message: string; at: number } | null = null;
   constructor(send, telemetry = null, log: Log = noLog) {
+    this.budget = new Budget(log, telemetry);
     this.game = new GameClient(send);
     this.game.events = this.events;
     this.log = log;
@@ -111,6 +114,10 @@ export class Controller {
   trace(request, result, since = performance.now()) {
     const { action, ...args } = request;
     const ms = Math.round(performance.now() - since);
+    if (result.ok) {
+      this.budget.request(action, ms);
+      this.budget.mod(result.state?.performance ?? result.performance);
+    }
     if (!result.ok)
       this.log.info('mod', 'refused', { action, args: looping.has(action) ? undefined : args, error: result.error, code: result.code, ms });
     else if (!polling.has(action) && !looping.has(action)) this.log.debug('mod', action, { args, ms });
@@ -229,6 +236,7 @@ export class Controller {
   // Read-only; a lost bridge just backs off until it returns.
   eyeTicks = 0;
   eyeLostAt: number | null = null;
+  eyeSeenAt: number | null = null;
   eyeStallNoted: number | null = null;
   eye(intervalMs = 250) {
     if (this.eyeTimer) return;
@@ -239,7 +247,10 @@ export class Controller {
       // would only compete with them on the game thread.
       if (!this.active?.nav?.active) {
         try {
+          const glanceAt = Date.now();
+          if (this.eyeSeenAt) this.budget.eyeGap(glanceAt - this.eyeSeenAt);
           const batch = await this.game.sense();
+          this.eyeSeenAt = Date.now();
           if (this.eyeTicks % 4 === 0) this.sample(batch.state);
           if (this.eyeLostAt) {
             this.log.info('eye', 'recovered', { lostMs: Date.now() - this.eyeLostAt });
@@ -308,6 +319,7 @@ export class Controller {
   async close() {
     this.closing = true;
     clearTimeout(this.eyeTimer);
+    this.budget.close();
     await this.brain?.stop().catch(() => {});
     await this.stop('controller_shutdown');
     try {
@@ -417,6 +429,7 @@ export class Controller {
     this.active = this.last = record;
     this.track(record);
     this.events.emit('goal_started', { goal: record.id, kind, by });
+    this.budget.churn(kind);
     // Announced only once the goal has actually got going: a step that ends within the grace is not worth a chat line.
     const announce = setTimeout(() => {
       if (this.active === record && record.state !== 'cancelled') this.announce(kind, args);
@@ -525,7 +538,8 @@ export class Controller {
         route = nav.route;
       let input: any = null,
         stepView: any = null,
-        pagingSince = Date.now();
+        pagingSince = Date.now(),
+        lastIterationAt = 0;
       while (nav.active) {
         const pausing = pauseWhen?.(state);
         // Pause only on supported ground; a food task must not take over mid-jump.
@@ -537,7 +551,11 @@ export class Controller {
         // re-checked; the last vetted frame carries on for up to a second, then the body waits.
         // The commanded yaw is always the follower's own: echoing the observed yaw back, which
         // lags the camera by a frame, rocks the head from side to side.
-        const frame = terrainMore ? null : nav.tick(state, Date.now(), stepView);
+        const iterationAt = Date.now();
+        if (lastIterationAt) this.budget.walkIteration(iterationAt - lastIterationAt);
+        lastIterationAt = iterationAt;
+        const frame = terrainMore ? null : nav.tick(state, iterationAt, stepView);
+        this.budget.planning(Date.now() - iterationAt);
         const carryOn = terrainMore && !!input?.forward && !input.jump && Date.now() - pagingSince < 1000;
         if (!terrainMore) pagingSince = Date.now();
         input = {

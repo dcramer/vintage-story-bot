@@ -241,7 +241,35 @@ public sealed partial class AiBridgeMod : ModSystem
         catch (JsonException) { return null; }
     }
 
+    // What the mod costs the game, as a player-facing client would feel it: the work of one tick and
+    // the longest silence between ticks, worst of the last second; observe reports it.
+    private readonly System.Diagnostics.Stopwatch tickWatch = new();
+    private long lastTickStartedAt, perfWindowAt;
+    private double tickMs, tickMaxMs, frameGapMaxMs;
+    private double reportedTickMaxMs, reportedFrameGapMs;
+    private object Performance() => new { tickMs = Math.Round(tickMs, 2), tickMaxMs = Math.Round(reportedTickMaxMs, 2),
+        frameGapMs = Math.Round(reportedFrameGapMs), frameMs = Math.Round(lastTickDt * 1000, 1) };
+
     private void OnTick(float dt)
+    {
+        long started = Environment.TickCount64;
+        if (lastTickStartedAt != 0) frameGapMaxMs = Math.Max(frameGapMaxMs, started - lastTickStartedAt);
+        lastTickStartedAt = started;
+        tickWatch.Restart();
+        try { Tick(dt); }
+        finally
+        {
+            tickMs = tickWatch.Elapsed.TotalMilliseconds;
+            tickMaxMs = Math.Max(tickMaxMs, tickMs);
+            if (started - perfWindowAt >= 1000)
+            {
+                reportedTickMaxMs = tickMaxMs; reportedFrameGapMs = frameGapMaxMs;
+                tickMaxMs = frameGapMaxMs = 0; perfWindowAt = started;
+            }
+        }
+    }
+
+    private void Tick(float dt)
     {
         lastTickDt = dt;
         priorWorldInteraction ??= api.Input.MouseWorldInteractAnyway;

@@ -26,7 +26,7 @@ Three tiers, each a list in order of concern, all re-derived from the reading ev
 - **Tasks**: wants, not steps. Each says when the kit or the notes show it done, what it waits on, and which goal reaches it; the first not done, not waiting and not set aside is the one worked on. A one-shot task stays done (a knife exists); a recurring one flips back (the pack is heavy again). A task with a place (home, a chest) travels there first.
 - **Alongside**: what runs beside any job through tools that only talk: marking a find, a chat line, `wants` picked up on the way.
 
-Each concern owns its predicate, the goal it starts, the bookkeeping when that goal ends, and its own notes; adding one is a file and a line in the list.
+Each concern owns its predicate, the goal it starts, its say while that goal runs, and the bookkeeping when it ends; adding one is a file and a line in a list. The contract is `Concern` in `src/brain/default/concern.ts`; the default brain's parts live in `src/brain/default/{reflexes,tasks,alongside}/`, its ladder and lists in `src/brain/default.ts`.
 
 ## Default brain: cautious beginner
 

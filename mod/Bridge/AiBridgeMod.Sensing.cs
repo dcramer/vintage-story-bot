@@ -23,7 +23,7 @@ public sealed partial class AiBridgeMod
         return new
         {
             ok = true,
-            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "map_waypoints", "map_waypoint_add", "map_view", "map_hud_state", "drop", "containers", "look_at", "players", "catalog", "chat_messages", "can_see", "ui_close", "catalog_facts" },
+            capabilities = new[] { "target_guard", "performance", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "map_waypoints", "map_waypoint_add", "map_view", "map_hud_state", "drop", "containers", "look_at", "players", "catalog", "chat_messages", "can_see", "ui_close", "catalog_facts" },
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
             world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString(),
@@ -47,6 +47,7 @@ public sealed partial class AiBridgeMod
             mouseGrabbed = api.Input.MouseGrabbed,
             controlReady = CanControl(),
             control = control.Observe(Environment.TickCount64),
+            performance = Performance(),
             body = new { halfWidth = Math.Max(Math.Max(Math.Abs(entity.CollisionBox.X1), Math.Abs(entity.CollisionBox.X2)),
                 Math.Max(Math.Abs(entity.CollisionBox.Z1), Math.Abs(entity.CollisionBox.Z2))), height = entity.CollisionBox.Y2,
                 eyeHeight = entity.LocalEyePos.Y },
