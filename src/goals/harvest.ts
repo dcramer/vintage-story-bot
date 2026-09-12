@@ -103,7 +103,8 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     await field.observe(true);
     if ((await refresh()) >= count) return { ok: true, goal: 'harvest', ...summary(), verification: 'inventory_delta' };
     await survival?.tend();
-    if (search.exhausted()) return { ok: false, goal: 'harvest', reason: 'none_found', ...summary() };
+    if (search.pit || search.exhausted())
+      return { ok: false, goal: 'harvest', reason: search.pit ? 'pit' : 'none_found', position: field.latest.position, ...summary() };
     field.report('searching');
     await search.step();
   }

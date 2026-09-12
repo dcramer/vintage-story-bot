@@ -252,10 +252,10 @@ export class Survival {
         continue;
       }
       // Nothing taken, seen or covered for a while: say so, rather than run to the deadline.
-      if (search.exhausted()) {
+      if (search.pit || search.exhausted()) {
         this.tending = false;
         field.recoveringFood = false;
-        return { reason: 'none_found', unproductive: search.unproductive };
+        return { reason: search.pit ? 'pit' : 'none_found', unproductive: search.unproductive, position: field.latest.position };
       }
       await search.step({ toward });
     }

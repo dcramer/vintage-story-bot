@@ -93,11 +93,12 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
           searched: field.searched,
         };
       await survival?.tend();
-      if (search.exhausted())
+      if (search.pit || search.exhausted())
         return {
           ok: false,
           goal: 'gather',
-          reason: 'none_found',
+          reason: search.pit ? 'pit' : 'none_found',
+          position: field.latest.position,
           match,
           item,
           count,

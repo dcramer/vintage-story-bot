@@ -44,7 +44,7 @@ export default defineGoal({
       return {
         ok: !ended?.reason,
         goal: 'forage',
-        ...(ended?.reason ? { reason: ended.reason } : {}),
+        ...(ended?.reason ? { reason: ended.reason, position: ended.position } : {}),
         eaten: survival.eaten,
         harvested: survival.harvested,
         retained: survival.retained,

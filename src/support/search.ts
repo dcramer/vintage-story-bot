@@ -1,4 +1,5 @@
 import { horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
+import { pitLimit, reachable } from './digging.ts';
 import { sightRange } from './fieldwork.ts';
 import { type Habitat, habitatTarget } from './habitat.ts';
 import { clearLeafPath } from './leaf-clearing.ts';
@@ -124,6 +125,8 @@ export class Search {
   stuck = 0;
   // Steps in a row that took, saw or covered nothing.
   unproductive = 0;
+  // The ground the body can reach from where it stands ran out: a hole, for the caller to name.
+  pit = false;
   lastSeenCheck = 0;
   constructor(field, options: SearchOptions) {
     this.field = field;
@@ -250,6 +253,7 @@ export class Search {
       if (leg) result = await field.walk(leg, this.pause);
       else await field.wait(1000);
     }
+    if (this.inPit(result)) return 'ranged';
     if (result.state === 'paused' && result.reason === 'route_threatened') this.avoidThreat();
     if (stuckLeg(result, p, field.latest.position)) {
       // Stopped short: turn first; stuck again on the same spot, cut through the leaves.
@@ -259,6 +263,18 @@ export class Search {
     } else this.stuck = 0;
     if (['arrived', 'paused'].includes(result.state) || horizontal(p, field.latest.position) > 2) this.lastView = null;
     return 'ranged';
+  }
+  // A walk that found no route at all from a spot with hardly any ground to reach: the body is in a
+  // hole, and no search gets it out. The goal ends with reason pit for the brain to dig out, as travel does.
+  inPit(result) {
+    if (result?.state !== 'blocked' || result.reason !== 'no_observed_route') return false;
+    const map = this.field.env?.map,
+      p = this.field.latest.position;
+    const here = map?.nodeAt?.(Math.floor(p.x), Math.floor(p.z), p.y, 0.6, 0.6);
+    if (!here || reachable(map, here) >= pitLimit) return false;
+    this.pit = true;
+    this.field.report('pit', { position: p });
+    return true;
   }
   // Nothing taken, seen or covered for a while: the goal gives up here. Where it stood is marked
   // failed and the frontier dropped, so the next search of this kind heads somewhere else.
@@ -275,6 +291,7 @@ export class Search {
     const destination = field.approach(target, exclude);
     if (destination) {
       const result = await field.walk(destination, this.pause);
+      if (this.inPit(result)) return;
       // A leg that paused (a new lead in view, a bite, a threat) is not a leg that got nowhere.
       if (!['arrived', 'paused'].includes(result.state)) field.places.fail(target.point);
       // The far eye is directional: reaching an old lead, read the surroundings
@@ -302,6 +319,7 @@ export class Search {
     const detour = elevationDetour(Math.abs(field.latest.position.y - target.point.y));
     if (horizontal(field.latest.position, target.point) > 6 || detour) {
       const result = await field.walk(field.explore(target.point, APPROACH_LEG, detour), this.pause);
+      if (this.inPit(result)) return;
       const nearer = horizontal(field.latest.position, target.point) + 2 < horizontal(before, target.point);
       if (!['arrived', 'paused'].includes(result.state) && !nearer) field.places.fail(target.point);
       if (result.state === 'paused' && result.reason === 'route_threatened') this.avoidThreat(target);
