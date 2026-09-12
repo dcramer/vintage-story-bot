@@ -203,8 +203,9 @@ public sealed partial class AiBridgeMod : ModSystem
             if (control.Active) ReleaseControl("control_unavailable");
             ClearTargetLock();
         }
-        blockActions.Tick(CanControl() && !ManualInput() &&
-            api.World.Player.Entity.OnGround && !api.World.Player.Entity.FeetInLiquid);
+        // A player keeps digging through a short drop (the block under the feet gives way) or with wet
+        // feet; only losing the world, a menu, or the hand on the keyboard ends a block action.
+        blockActions.Tick(CanControl() && !ManualInput());
         if (handAction != null)
         {
             if (Environment.TickCount64 >= handStopAt || api.IsGamePaused ||
