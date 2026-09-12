@@ -76,6 +76,7 @@ const situation = (extra = {}) => ({
   dangerHere: false,
   body: false,
   threat: false,
+  threatNear: false,
   hurt: false,
   storm: false,
   hunger: 0.8,
@@ -1024,12 +1025,32 @@ test('brain: a threat outside the burrow is waited out, then by day tunnelled aw
   assert.ok(memory.burrow, 'the burrow is kept until the stairs reach daylight');
   memory.job = 'tunnel';
   const rock = decide(
-    reading({ state: prowler, now: 1000 + SIEGE_MS + 2000, last: { id: 't', kind: 'dig_out', ok: false, reason: 'cannot_climb' } }),
+    reading({ state: prowler, now: 1000 + SIEGE_MS + 2000, last: { id: 't', kind: 'dig_out', ok: false, reason: 'cannot_cut' } }),
     memory,
   );
-  assert.ok(memory.tried.tunnel, 'rock: the tunnel is set aside');
-  assert.deepEqual([rock.start, rock.why], ['dig_area', 'tunnel stopped by rock; opening the mouth to run'], 'dig, and run');
-  memory.job = 'tunnel';
+  assert.ok(!memory.tried.tunnel && rock.start === 'dig_out' && rock.args.z !== out.args.z, 'rock on one bearing: try another');
+  for (const at of [4000, 6000]) {
+    memory.job = 'tunnel';
+    decide(reading({ state: prowler, now: 1000 + SIEGE_MS + at, last: { id: 't', kind: 'dig_out', ok: false, reason: 'cannot_cut' } }), memory);
+  }
+  assert.ok(memory.tried.tunnel, 'rock on every bearing: the tunnel is set aside');
+  assert.ok(
+    'wait' in decide(reading({ state: prowler, now: 1000 + SIEGE_MS + 8000 }), memory),
+    'a drifter three blocks from the mouth: it stays shut',
+  );
+  const farther = state({ nearbyEntities: [{ code: 'game:drifter-normal', point: { x: 10, y: 102, z: 0 }, distance: 10, how: 'heard', at: 1 }] });
+  const run = decide(reading({ state: farther, now: 1000 + SIEGE_MS + 9000 }), memory);
+  assert.deepEqual(
+    [run.start, run.why],
+    ['dig_area', 'tunnel stopped by rock; opening the mouth to run'],
+    'the prowler ten blocks off: dig, and run',
+  );
+  const starvingPack = state({ vitals: { hunger: { current: 100, max: 1500 } }, nearbyEntities: prowler.nearbyEntities });
+  assert.equal(
+    decide(reading({ state: starvingPack, now: 1000 + SIEGE_MS + 9500 }), memory).start,
+    'dig_area',
+    'starving: the mouth is opened whatever stands there',
+  );
   const done = fresh();
   done.burrow = { x: 0, y: 102, z: 0 };
   done.job = 'tunnel';

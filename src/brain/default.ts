@@ -101,8 +101,9 @@ const ALONGSIDE: Alongside[] = [copper, homeMarker];
 export const LADDER: Rung[] = [
   { job: 'unburrow', when: s => s.burrowed && s.hurt },
   { job: 'tunnel', when: (s, tried) => s.burrowed && s.threat && !s.hurt && s.besieged && !tried.has('tunnel') },
-  // Rock stopped the tunnel: open the mouth and run (the hide rung takes over once outside).
-  { job: 'unburrow', when: (s, tried) => s.burrowed && s.threat && !s.hurt && s.besieged && tried.has('tunnel') },
+  // Rock stopped every tunnel: open the mouth and run (the hide rung takes over once outside), but not
+  // onto a hostile at the mouth unless starvation leaves no choice.
+  { job: 'unburrow', when: (s, tried) => s.burrowed && s.threat && !s.hurt && s.besieged && tried.has('tunnel') && (!s.threatNear || starving(s)) },
   { job: 'wait', when: s => s.burrowed && s.threat && !s.hurt },
   { job: 'hide', when: (s, tried) => s.hurt || (s.threat && !tried.has('hide')) },
   { job: 'unburrow', when: s => hungry(s) && s.burrowed && s.reserve <= 0 },
@@ -125,6 +126,11 @@ export const tasks = (s: Situation, tried: Set<Job> = new Set()) => taskList(TAS
 // a player presses Escape. Character creation, death and disconnection are not closed this way.
 // Escape is pressed at most a few times in a short while, then the wait says what is open.
 export const DIALOG_CLOSES = 3;
+// A hostile this close to the mouth makes opening it death.
+export const THREAT_NEAR = 6;
+// Below this satiety a burrow is opened whatever stands outside.
+export const STARVING = 0.1;
+const starving = (s: Situation) => s.hunger !== null && s.hunger < STARVING;
 // How long damage the job explained keeps explaining after the job ended.
 export const EXPLAINED_MS = 15000;
 export const DIALOG_CLOSE_MS = 10000;
@@ -203,6 +209,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
   const tried = triedNow(memory, state.position, now);
   const s: Situation = {
     threat: !!danger,
+    threatNear: !!danger && horizontal(state.position, danger.point) <= THREAT_NEAR,
     hurt,
     storm,
     hunger: satiety,
@@ -320,6 +327,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
     dialogCloses: [],
     explainedUntil: 0,
     besiegedAt: null,
+    tunnelTries: 0,
     stashMisses: 0,
   };
 }

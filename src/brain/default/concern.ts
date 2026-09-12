@@ -79,8 +79,9 @@ export type Memory = {
   dialogCloses: number[];
   // Until when a hit is explained by the job just done (poison after a bite).
   explainedUntil: number;
-  // Since when something has prowled outside the sealed burrow.
+  // Since when something has prowled outside the sealed burrow, and tunnel bearings tried since.
   besiegedAt: number | null;
+  tunnelTries: number;
   // Times in a row the chest could not be aimed at where its note says.
   stashMisses: number;
   // Sighting keys already marked on the map, so one nugget is announced once.

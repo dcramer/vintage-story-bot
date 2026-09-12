@@ -85,6 +85,8 @@ export function headMaterial(k: Kit, head: string): string {
 
 export type Situation = {
   threat: boolean;
+  // A hostile within a few blocks: opening a burrow onto it is death.
+  threatNear: boolean;
   hurt: boolean;
   storm: boolean;
   hunger: number | null;
