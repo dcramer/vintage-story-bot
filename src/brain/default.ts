@@ -280,6 +280,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
   memory.scares = memory.scares.filter(scare => now - scare.at < DANGER_MS);
   // Dead: respawn when the server offers it; nothing else matters until then.
   if (!state.alive && active) return { stop: 'dead' };
+  if (!state.alive && temporalStormUnsafe(state)) return { wait: 'dead, waiting out temporal storm' };
   if (!state.alive)
     return state.life?.deathId
       ? { act: [{ action: 'respawn', deathId: state.life.deathId }], why: 'dead' }

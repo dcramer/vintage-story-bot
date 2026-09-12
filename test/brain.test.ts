@@ -277,6 +277,19 @@ test('brain: a hit from nowhere is danger, and copper seen in passing is marked 
   assert.ok(!('act' in near), 'a marker already nearby means no new one');
 });
 
+test('brain: death waits out a temporal storm before respawning', () => {
+  const dead = state({
+    alive: false,
+    life: { deathId: 'death-1' },
+    condition: { temporalStorm: { phase: 'active' } },
+  });
+  assert.deepEqual(decide(reading({ state: dead }), fresh()), { wait: 'dead, waiting out temporal storm' });
+  assert.deepEqual(decide(reading({ state: { ...dead, condition: {} } }), fresh()), {
+    act: [{ action: 'respawn', deathId: 'death-1' }],
+    why: 'dead',
+  });
+});
+
 test('brain: a fall is not mistaken for an unseen attacker', () => {
   const fall = [
     { id: 1, at: 1, type: 'hurt', health: 10 },
