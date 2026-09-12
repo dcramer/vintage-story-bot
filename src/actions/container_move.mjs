@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { defineAction } from '../controller/define.mjs';
-import { expectedState } from '../controller/schemas.mjs';
+import { defineAction } from '../runtime/define.mjs';
+import { expectedState } from '../runtime/schemas.mjs';
 
 const endpoint = z.object({
   inventory: z.enum(['hotbar', 'backpack', 'craftinggrid', 'mouse', 'container']),

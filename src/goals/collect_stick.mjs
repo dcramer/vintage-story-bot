@@ -1,5 +1,5 @@
-import { defineGoal } from '../controller/define.mjs';
-import { empty as schema } from '../controller/schemas.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { empty as schema } from '../runtime/schemas.mjs';
 
 export async function collectStick(send, wait = ms => new Promise(resolve => setTimeout(resolve, ms))) {
   const before = await send({ action: 'observe' });

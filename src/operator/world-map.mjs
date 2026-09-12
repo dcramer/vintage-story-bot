@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { requestBridge } from '../bridge/client.mjs';
+import { requestBridge } from '../runtime/bridge.mjs';
 import { callUi, uiEnv } from './bot-window.mjs';
 import { tool } from './display.mjs';
 

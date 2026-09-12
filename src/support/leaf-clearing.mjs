@@ -1,4 +1,4 @@
-import { angle, horizontal, lookAt } from '../navigation/terrain.mjs';
+import { angle, horizontal, lookAt } from '../runtime/navigation/terrain.mjs';
 import { changeBlock } from './blocks.mjs';
 import { emptyHand } from './food.mjs';
 import { nearestThreat } from './threats.mjs';

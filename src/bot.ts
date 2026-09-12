@@ -1,10 +1,10 @@
 import net from 'node:net';
 import { once } from 'node:events';
 import { Effect } from 'effect';
-import { Controller } from './runtime.mjs';
-import { controllerPort } from './client.mjs';
-import { Telemetry } from './telemetry.mjs';
-import { Reporter } from './reporter.mjs';
+import { Controller } from './runtime/controller.mjs';
+import { controllerPort } from './runtime/rpc.mjs';
+import { Telemetry } from './runtime/telemetry.mjs';
+import { Reporter } from './runtime/reporter.mjs';
 
 const sinks = [new Telemetry(), Reporter.fromEnv()].filter(Boolean);
 const telemetry = { publish: (...args) => sinks.forEach(sink => sink.publish(...args)), close: () => sinks.forEach(sink => sink.close()) };

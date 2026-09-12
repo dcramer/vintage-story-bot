@@ -33,7 +33,8 @@ Seraph system:
 - **controller**: the one shared Node process; talks to the mod, keeps memory, runs goals.
 - **action**: a public tool that does one thing and returns (`src/actions`).
 - **goal**: a public tool for longer work (`src/goals`); start it, check it by id, stop it; one at a time.
-- **skill**: reusable Node behavior that goals share (`src/skills`).
+- **brain**: the policy installed in a running bot that picks goals for it (`src/brain`); with no brain the bot only does what it is told.
+- **support**: helpers goals share (`src/support`); goals compose other goals by calling their exported functions.
 - **feature flag**: what the mod says it supports (`observe.capabilities`); check it, never the mod version.
 - **control hold**: the controller's exclusive, short-lived hold on the inputs; each input renews it.
 - **release**: the mod dropping every held input on stop, damage, death, menus, manual input or F8; nothing resumes.
@@ -101,11 +102,11 @@ The split is by what a player does in one act, never by convenience.
 | Path | Owns | Touch when |
 | --- | --- | --- |
 | `src/actions/<name>.mjs` | One public query/command: schema, description, mod wire alias or controller-local handler. | Adding/changing that tool. |
-| `src/goals/<name>.mjs` | One public goal: schema, description, chat announcement, runner composing skills. | Adding/changing that goal. |
-| `src/skills/` | Reusable behaviors (fieldwork, food, blocks, travel, forming…) and the `task.mjs` harness. | A behavior two goals share. `fieldwork.mjs`/`survival.mjs` are hubs: keep edits minimal. |
-| `src/navigation/` | Terrain memory, planning, steering; pure, no I/O. | Route/terrain logic only. |
-| `src/controller/` | Service, tool registry, shared zod fragments, goal lifecycle. | Lifecycle or cross-tool contract changes only. |
-| `src/game/`, `src/bridge/` | Mod RPC client, control holds, transport. | Wire protocol changes (pair with `mod/`). |
+| `src/goals/<name>.mjs` | One public goal: schema, description, chat announcement, and its behavior as exported functions other goals compose. | Adding/changing that goal. |
+| `src/brain/<name>.mjs` | One installable brain: what the bot does on its own, as pure decisions over readings. | Changing how the bot runs itself. |
+| `src/support/` | Helpers goals share: the `fieldwork.mjs` session harness, `task.mjs`, inventory, food, survival, threats, blocks, forming, structures. | A helper two goals share. `fieldwork.mjs`/`survival.mjs` are hubs: keep edits minimal. |
+| `src/runtime/` | The bot core: `controller.mjs` (tool registry, goal lifecycle), `game.mjs`/`bridge.mjs` (mod RPC, control holds, transport), `navigation/` (terrain memory, planning, steering; pure, no I/O), shared zod fragments, telemetry. | Lifecycle, wire protocol (pair with `mod/`) or route/terrain logic only. |
+| `src/bot.ts` | The Seraph process: serves the controller, runs the eye, installs the brain. | Startup/shutdown only. |
 | `src/mcp/`, `src/operator/`, `scripts/` | Adapters, operator UI, launch/CLI. | Never import gameplay code into `operator/`. |
 | `mod/Bridge/` | `AiBridgeMod` partials: lifecycle/dispatch, `Sensing`, `Movement`, `Hands`; control hold and life tracker. | New mod action (dispatch line + method in the owning partial) or safety rule. |
 | `mod/Sensors/` | Read-only perception classes. | New observation. Must respect the perception limits above. |
@@ -149,7 +150,7 @@ Linux, headless, one bot client per profile; flags, phases and constraints in [R
 - [Conventions](docs/conventions.md) — read first; repo-wide writing, versioning, and documentation rules.
 - [Development](docs/development.md) — read when changing code or running checks.
 - [Architecture](docs/architecture.md) — read when changing module boundaries, RPC, control, or goal lifecycle.
-- [Bot API reference](docs/bot-api-reference.md) — read when designing bot APIs, skills, or goals; Mineflayer analogues and design criteria.
+- [Bot API reference](docs/bot-api-reference.md) — read when designing bot APIs, support helpers, or goals; Mineflayer analogues and design criteria.
 - [Runtime](docs/runtime.md) — read before launching, deploying, configuring MCP, or controlling the bot.
 - [Navigation](docs/navigation.md) — read when changing sensing, terrain memory, route planning or steering; perception layers, planners, walk loop, statuses.
 - [Getting started](docs/getting-started.md) — read when defining or prioritizing goals; survival rules, house/kiln specs, day 1–5 checklists.

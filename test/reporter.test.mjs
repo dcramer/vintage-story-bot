@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Reporter } from '../src/controller/reporter.mjs';
+import { Reporter } from '../src/runtime/reporter.mjs';
 
 test('fleet reporter merges surface sweeps into one bounded map delta', async () => {
   let report;

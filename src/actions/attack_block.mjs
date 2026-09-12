@@ -1,5 +1,5 @@
-import { defineAction } from '../controller/define.mjs';
-import { hand as schema } from '../controller/schemas.mjs';
+import { defineAction } from '../runtime/define.mjs';
+import { hand as schema } from '../runtime/schemas.mjs';
 
 export default defineAction({
   name: 'attack_block',

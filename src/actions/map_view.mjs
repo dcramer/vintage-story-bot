@@ -1,5 +1,5 @@
-import { defineAction } from '../controller/define.mjs';
-import { empty as schema } from '../controller/schemas.mjs';
+import { defineAction } from '../runtime/define.mjs';
+import { empty as schema } from '../runtime/schemas.mjs';
 
 export default defineAction({
   name: 'map_view',

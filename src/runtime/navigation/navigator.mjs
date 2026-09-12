@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { angle, horizontal, key, lookAt, normalize, JUMP_HEIGHT, MAX_DROP, STEP_HEIGHT } from './terrain.mjs';
 import { findRoute } from './planner.mjs';
-import { fleeTarget, nearbyThreats, nearbyUnclearedThreats } from '../skills/threats.mjs';
+import { fleeTarget, nearbyThreats, nearbyUnclearedThreats } from '../../support/threats.mjs';
 
 // Follows a route of standing cells the way a player walks: aim at the next
 // cell, keep walking through bends while the head turns, jump when the next

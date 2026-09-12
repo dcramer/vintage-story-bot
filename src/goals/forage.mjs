@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
-import { runField } from '../skills/task.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { runField } from '../support/task.mjs';
 
 export const schema = z.object({
   timeoutMs: z.number().int().min(1000).max(3600000).optional(),

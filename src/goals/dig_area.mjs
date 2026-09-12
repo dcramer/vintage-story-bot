@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
-import { digArea } from '../skills/build.mjs';
-import { box } from '../skills/structures.mjs';
-import { runField } from '../skills/task.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { digArea } from './build.mjs';
+import { box } from '../support/structures.mjs';
+import { runField } from '../support/task.mjs';
 
 const cell = z.object({ x: z.number().int(), y: z.number().int(), z: z.number().int() }).strict();
 

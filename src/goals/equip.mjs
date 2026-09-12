@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
-import { equip } from '../skills/inventory.mjs';
-import { runField } from '../skills/task.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { equip } from '../support/inventory.mjs';
+import { runField } from '../support/task.mjs';
 
 export default defineGoal({
   name: 'equip',

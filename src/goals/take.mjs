@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
-import { blockTarget } from '../controller/schemas.mjs';
-import { exchange } from '../skills/containers.mjs';
-import { cleanName, runField } from '../skills/task.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { blockTarget } from '../runtime/schemas.mjs';
+import { exchange } from './store.mjs';
+import { cleanName, runField } from '../support/task.mjs';
 import { wanted } from './store.mjs';
 
 export default defineGoal({

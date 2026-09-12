@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
-import { form } from '../skills/forming.mjs';
-import { cleanName, runField } from '../skills/task.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { form } from '../support/forming.mjs';
+import { cleanName, runField } from '../support/task.mjs';
 
 export const schema = z.object({
   output: z.string().min(1).max(160).describe('Exact knapping output code, e.g. game:knifeblade-flint.'),

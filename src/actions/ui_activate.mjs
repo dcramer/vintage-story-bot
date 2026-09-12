@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { defineAction } from '../controller/define.mjs';
+import { defineAction } from '../runtime/define.mjs';
 
 export const schema = z.object({
   dialog: z.string().min(1).max(80).describe('Dialog name from ui_dialogs.'),

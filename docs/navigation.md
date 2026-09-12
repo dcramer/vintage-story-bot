@@ -14,7 +14,7 @@ How a Seraph sees the ground and moves across it. The mod only senses and applie
 
 Rules that hold for every layer: perception is a snapshot of what the camera sees now, never a query, and memory is Node's alone; a sample exists only if a line of sight from the eye reached it; absent means unknown, never air; nothing below the visible surface, behind a ridge or in an unloaded chunk is reported; stale samples expire (surroundings 120 s in the mod, surface 5 min). The mod never plans or chooses where to look; Node turns the head and remembers what came into view.
 
-## Memory (Node, `src/navigation/`)
+## Memory (Node, `src/runtime/navigation/`)
 
 - `TerrainMemory` (`terrain.mjs`): cells with absolute collision boxes from the near-field deltas, read as a block grid. A cell is a place to stand when it has a floor and a body's worth of known free cells above it; water, fire and unknown are walls. `moves(node)` lists the ways out: walk or step (up to 0.6) to any of eight neighbours, jump one block up or drop up to three along a cardinal, never a diagonal past something solid, never a drop beside water, extra cost beside water. `gapMoves` hops a one-cell hole as a last resort. `frontier(node)` is the unknown cells a move would need.
 - `SurfaceMemory` (`surface.mjs`): far-field columns from the vision feed keyed by world coordinates so views from different spots merge. Answers coarse neighbours, shoreline adjacency and nearest known column.

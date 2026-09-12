@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/skills/fieldwork.mjs';
-import { remember } from '../src/skills/facts.mjs';
-import { eatingLooks, edible, foodYield, safeFood } from '../src/skills/food.mjs';
+import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/support/fieldwork.mjs';
+import { remember } from '../src/support/facts.mjs';
+import { eatingLooks, edible, foodYield, safeFood } from '../src/support/food.mjs';
 import { accessibleForage, desperateFoodSightRange, foodElevationDetourDistance, foodRecoverySatisfied,
   foodSearchDistance, foodSightRange, foodViewChanged, harvestReady, matchingFoodDrops, stuckFoodRoute,
-  wideFoodSurveyNeeded } from '../src/skills/survival.mjs';
+  wideFoodSurveyNeeded } from '../src/support/survival.mjs';
 import { fleeTarget, hostileEntity, nearestThreat, nearestUnclearedThreat, threatClearDistance,
-  threatClearRadius, threatStartDistance, threatStartRadius, threatVerticalRange } from '../src/skills/threats.mjs';
-import { elevationDetourDistance, routeRegressed, travel } from '../src/skills/travel.mjs';
-import { leafBlock, leafClearCandidate, threatAllowsLeafClearing } from '../src/skills/leaf-clearing.mjs';
+  threatClearRadius, threatStartDistance, threatStartRadius, threatVerticalRange } from '../src/support/threats.mjs';
+import { elevationDetourDistance, routeRegressed, travel } from '../src/goals/travel.mjs';
+import { leafBlock, leafClearCandidate, threatAllowsLeafClearing } from '../src/support/leaf-clearing.mjs';
 
 const slot = code => ({ code, quantity: 1, nutrition: { saturation: 80, health: 0 },
   freshness: { state: 'fresh', freshHoursLeft: 100 } });

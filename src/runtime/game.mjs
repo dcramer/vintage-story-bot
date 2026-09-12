@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Effect } from 'effect';
-import { requestBridge } from '../bridge/client.mjs';
-import { TerrainMemory } from '../navigation/terrain.mjs';
-import { SurfaceMemory } from '../navigation/surface.mjs';
-import { SightingsMemory } from '../navigation/sightings.mjs';
+import { requestBridge } from './bridge.mjs';
+import { TerrainMemory } from './navigation/terrain.mjs';
+import { SurfaceMemory } from './navigation/surface.mjs';
+import { SightingsMemory } from './navigation/sightings.mjs';
 
 // Blocks a player notices without looking for them; goals add to this, never replace it.
 export const salient = ['ore', 'berry', 'stick', 'flint', 'loose', 'mushroom', 'cattail', 'chest', 'basket', 'vessel', 'fire', 'torch'];

@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
-import { form } from '../skills/forming.mjs';
-import { cleanName, runField } from '../skills/task.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { form } from '../support/forming.mjs';
+import { cleanName, runField } from '../support/task.mjs';
 
 export default defineGoal({
   name: 'clayform',

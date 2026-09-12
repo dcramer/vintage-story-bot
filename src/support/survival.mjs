@@ -1,8 +1,8 @@
-import { horizontal, normalize } from '../navigation/terrain.mjs';
+import { horizontal, normalize } from '../runtime/navigation/terrain.mjs';
 import { sightRange, temporalStormUnsafe } from './fieldwork.mjs';
 import { changeBlock } from './blocks.mjs';
 import { clearLeafPath } from './leaf-clearing.mjs';
-import { collectItem } from './collect-item.mjs';
+import { collectItem } from '../goals/collect_item.mjs';
 import { learnYields } from './facts.mjs';
 import { consume, emptyHand, foodCount, foodReserve, foodYield, forageWatch, hunger } from './food.mjs';
 import { ownedSlots } from './inventory.mjs';

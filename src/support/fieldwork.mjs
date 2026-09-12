@@ -1,6 +1,6 @@
-import { distance, horizontal, lookAt, normalize } from '../navigation/terrain.mjs';
-import { findRoute } from '../navigation/planner.mjs';
-import { nextLeg, planRoughRoute } from '../navigation/surface.mjs';
+import { distance, horizontal, lookAt, normalize } from '../runtime/navigation/terrain.mjs';
+import { findRoute } from '../runtime/navigation/planner.mjs';
+import { nextLeg, planRoughRoute } from '../runtime/navigation/surface.mjs';
 import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.mjs';
 
 export const area = p => `${Math.floor(p.x / 16)},${Math.floor(p.z / 16)}`;

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Controller } from '../src/controller/runtime.mjs';
-import { Navigation } from '../src/navigation/navigator.mjs';
-import { horizontal, TerrainMemory } from '../src/navigation/terrain.mjs';
-import { findRoute } from '../src/navigation/planner.mjs';
+import { Controller } from '../src/runtime/controller.mjs';
+import { Navigation } from '../src/runtime/navigation/navigator.mjs';
+import { horizontal, TerrainMemory } from '../src/runtime/navigation/terrain.mjs';
+import { findRoute } from '../src/runtime/navigation/planner.mjs';
 
 function terrain() {
   const cells = [];
@@ -259,9 +259,9 @@ test('knowledge survives a round trip through disk and is keyed by world', async
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
-  const { Knowledge } = await import('../src/navigation/knowledge.mjs');
-  const { SurfaceMemory } = await import('../src/navigation/surface.mjs');
-  const { SightingsMemory } = await import('../src/navigation/sightings.mjs');
+  const { Knowledge } = await import('../src/runtime/navigation/knowledge.mjs');
+  const { SurfaceMemory } = await import('../src/runtime/navigation/surface.mjs');
+  const { SightingsMemory } = await import('../src/runtime/navigation/sightings.mjs');
   const dir = mkdtempSync(join(tmpdir(), 'seraph-knowledge-'));
   const memories = { map: new TerrainMemory(), surface: new SurfaceMemory(), sightings: new SightingsMemory() };
   const knowledge = new Knowledge(dir, memories);

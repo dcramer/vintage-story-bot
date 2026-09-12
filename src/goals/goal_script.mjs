@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
-import { parseGoalScript } from '../controller/goal-script.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { parseGoalScript } from '../runtime/goal-script.mjs';
 
 const intent = z.string().trim().min(1).max(240)
   .refine(value => !/[\u0000-\u001f\u007f]/.test(value), 'intent cannot contain control characters');

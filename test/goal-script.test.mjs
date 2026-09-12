@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { z } from 'zod';
-import { Controller } from '../src/controller/runtime.mjs';
-import { compileGoalScript, parseGoalScript, runGoalPlan } from '../src/controller/goal-script.mjs';
+import { Controller } from '../src/runtime/controller.mjs';
+import { compileGoalScript, parseGoalScript, runGoalPlan } from '../src/runtime/goal-script.mjs';
 
 const definitions = [
   { name: 'forage', schema: z.object({ count: z.number().int().min(1).default(1) }).strict(), run() {} },

@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { once } from 'node:events';
-import { bridgePort } from '../bridge/client.mjs';
+import { bridgePort } from '../runtime/bridge.mjs';
 import { superviseStream } from './stream.mjs';
 import { superviseNativeMap } from './native-map.mjs';
 

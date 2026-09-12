@@ -1,4 +1,4 @@
-import { runGoal } from '../src/controller/client.mjs';
+import { runGoal } from '../src/runtime/rpc.mjs';
 
 const cancellation = new AbortController();
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => cancellation.abort());

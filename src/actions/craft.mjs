@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { defineAction } from '../controller/define.mjs';
-import { address, expectedState } from '../controller/schemas.mjs';
+import { defineAction } from '../runtime/define.mjs';
+import { address, expectedState } from '../runtime/schemas.mjs';
 
 export const schema = z.object({
   to: address,

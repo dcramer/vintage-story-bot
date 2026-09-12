@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { defineAction } from '../controller/define.mjs';
-import { blockTarget } from '../controller/schemas.mjs';
+import { defineAction } from '../runtime/define.mjs';
+import { blockTarget } from '../runtime/schemas.mjs';
 
 export default defineAction({
   name: 'select_recipe',

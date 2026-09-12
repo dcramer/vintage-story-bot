@@ -1,4 +1,4 @@
-import { horizontal } from '../navigation/terrain.mjs';
+import { horizontal } from '../runtime/navigation/terrain.mjs';
 
 // Explicit game-code markers only. Neutral wildlife and unknown modded entities
 // never become hostile by inference.

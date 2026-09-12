@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { bridgePort } from '../bridge/client.mjs';
+import { bridgePort } from './bridge.mjs';
 
 export const dashboardPort = () => bridgePort(process.env.VINTAGE_STORY_DASHBOARD_PORT ?? '42159');
 

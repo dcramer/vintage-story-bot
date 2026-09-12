@@ -1,7 +1,7 @@
-import { defineGoal } from '../controller/define.mjs';
+import { defineGoal } from '../runtime/define.mjs';
 import { z } from 'zod';
-import { consume } from '../skills/food.mjs';
-import { runField } from '../skills/task.mjs';
+import { consume } from '../support/food.mjs';
+import { runField } from '../support/task.mjs';
 
 export const schema = z.object({
   item: z.string().min(1).max(64).optional().describe('Only eat food whose code contains this, e.g. bread, fruit-.'),

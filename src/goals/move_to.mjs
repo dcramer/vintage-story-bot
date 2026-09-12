@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
+import { defineGoal } from '../runtime/define.mjs';
 
 export const schema = z.object({
   x: z.number().finite(),

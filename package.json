@@ -8,8 +8,9 @@
   },
   "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "controller": "node --env-file-if-exists=.env src/controller/server.mjs",
-    "controller:dev": "node --watch --env-file-if-exists=.env src/controller/server.mjs",
+    "bot": "node --env-file-if-exists=.env src/bot.ts",
+    "controller": "node --env-file-if-exists=.env src/bot.ts",
+    "controller:dev": "node --watch --env-file-if-exists=.env src/bot.ts",
     "dashboard": "node src/operator/dashboard.mjs",
     "mcp": "node src/mcp-server.mjs",
     "test": "node --test test/*.test.mjs",

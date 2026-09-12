@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
-import { horizontal } from '../navigation/terrain.mjs';
-import { area, Fieldwork, sightRange } from '../skills/fieldwork.mjs';
-import { Survival } from '../skills/survival.mjs';
-import { foodFeatures } from '../skills/task.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { horizontal } from '../runtime/navigation/terrain.mjs';
+import { area, Fieldwork, sightRange } from '../support/fieldwork.mjs';
+import { Survival } from '../support/survival.mjs';
+import { foodFeatures } from '../support/task.mjs';
 
 const loose = o => o.kind === 'block' && /^game:loosestick-(free|snow)$/.test(o.code);
 const dropped = o => o.kind === 'item' && o.code === 'game:stick';

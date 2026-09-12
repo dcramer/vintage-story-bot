@@ -1,6 +1,7 @@
-import { horizontal, lookAt, normalize } from '../navigation/terrain.mjs';
+import { horizontal, lookAt, normalize } from '../runtime/navigation/terrain.mjs';
 import { equip, itemCount, ownedSlots } from './inventory.mjs';
-import { parseBlockKey, replaceablePlant, useOnBlock } from './use.mjs';
+import { parseBlockKey, replaceablePlant } from './blocks.mjs';
+import { useOnBlock } from '../goals/use_on_block.mjs';
 
 export const kinds = {
   knapping: { surface: 'knappingsurface', materials: s => s.code === 'game:flint' || /^game:stone-/.test(s.code) },

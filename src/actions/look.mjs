@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { defineAction } from '../controller/define.mjs';
+import { defineAction } from '../runtime/define.mjs';
 
 export const schema = z.object({
   yawDegrees: z.number().min(-36000).max(36000),

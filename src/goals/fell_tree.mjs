@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
-import { harvest } from '../skills/harvest.mjs';
-import { runField } from '../skills/task.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { harvest } from './harvest.mjs';
+import { runField } from '../support/task.mjs';
 
 export default defineGoal({
   name: 'fell_tree',

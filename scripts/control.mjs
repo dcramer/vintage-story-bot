@@ -1,5 +1,5 @@
-import { tools } from '../src/controller/registry.mjs';
-import { requestController } from '../src/controller/client.mjs';
+import { tools } from '../src/runtime/registry.mjs';
+import { requestController } from '../src/runtime/rpc.mjs';
 
 const [name = 'observe', ...params] = process.argv.slice(2);
 const tool = tools.find(tool => tool.name === name || tool.action === name);

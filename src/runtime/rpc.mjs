@@ -1,4 +1,4 @@
-import { bridgePort, requestBridge } from '../bridge/client.mjs';
+import { bridgePort, requestBridge } from './bridge.mjs';
 
 export const controllerPort = () => bridgePort(process.env.VINTAGE_STORY_CONTROLLER_PORT ?? '42158');
 export async function requestController(request) {

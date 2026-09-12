@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { distance, lookAt } from '../navigation/terrain.mjs';
+import { distance, lookAt } from '../runtime/navigation/terrain.mjs';
 import { ownedSlots } from './inventory.mjs';
+
 
 const faces = { north: [0, 0, -1], east: [1, 0, 0], south: [0, 0, 1], west: [-1, 0, 0], up: [0, 1, 0], down: [0, -1, 0] };
 const count = (inventory, code) => ownedSlots(inventory).filter(s => s.code === code).reduce((sum, s) => sum + s.quantity, 0);
@@ -57,4 +58,34 @@ export async function changeBlock(field, kind, { target, point, face, slot, expe
     operation = await field.send({ action: kind === 'dig' && operation.state === 'working' ? 'block_action_continue' : 'block_action_status',
       id, sequence: ++sequence });
   }
+}
+
+// Non-colliding vegetation the game replaces on placement but which still captures the selection ray.
+export const replaceablePlant = code => /game:(tallgrass|tallfern|fern|flower|sapling|mushroom|shortgrass|plant-|reedpapyrus|drygrass)/.test(code ?? '');
+
+export const parseBlockKey = key => {
+  const [, dimension, x, y, z] = key.split(':');
+  const cell = { x: Number(x), y: Number(y), z: Number(z), dimension: Number(dimension) };
+  if (Object.values(cell).some(n => !Number.isSafeInteger(n))) throw Error('Invalid block key');
+  return cell;
+};
+
+// Aim at a cell and return the native selection when it lands in that cell, else null.
+// clearPlants digs replaceable vegetation that intercepts the ray (one block per call) and re-aims.
+export async function selectCell(field, cell, { point, face, clearPlants = false } = {}) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const state = await field.observe();
+    const eye = { ...state.position, y: state.position.y + state.body.eyeHeight };
+    const aimPoint = point ?? { x: cell.x + .5, y: cell.y + .5, z: cell.z + .5 };
+    await field.aim(lookAt(eye, aimPoint));
+    const selected = await field.send({ action: 'inspect_target' });
+    if (!selected.key || !selected.key.startsWith('block:')) return null;
+    const hit = parseBlockKey(selected.key);
+    if (hit.x === cell.x && hit.y === cell.y && hit.z === cell.z) return !face || selected.face === face ? selected : null;
+    if (!clearPlants || attempt > 0 || !replaceablePlant(selected.code)) return null;
+    field.report('clearing_plant', { target: selected.key });
+    const result = await changeBlock(field, 'dig', { target: selected.key, acceptTransform: true });
+    if (!result.ok) return null;
+  }
+  return null;
 }

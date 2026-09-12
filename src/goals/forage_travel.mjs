@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
-import { runField } from '../skills/task.mjs';
-import { travel } from '../skills/travel.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { runField } from '../support/task.mjs';
+import { travel } from './travel.mjs';
 
 export default defineGoal({
   name: 'forage_travel',

@@ -3,9 +3,9 @@ import { Cause, Deferred, Effect, Fiber } from 'effect';
 import { z } from 'zod';
 import { findTool, goals, tools } from './registry.mjs';
 import { compileGoalScript, runGoalPlan } from './goal-script.mjs';
-import { GameClient } from '../game/client.mjs';
-import { Navigation } from '../navigation/navigator.mjs';
-import { Knowledge } from '../navigation/knowledge.mjs';
+import { GameClient } from './game.mjs';
+import { Navigation } from './navigation/navigator.mjs';
+import { Knowledge } from './navigation/knowledge.mjs';
 
 const attempt = fn => Effect.tryPromise({ try: fn, catch: error => error instanceof Error ? error : new Error(String(error)) });
 

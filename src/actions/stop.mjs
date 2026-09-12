@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { defineAction } from '../controller/define.mjs';
+import { defineAction } from '../runtime/define.mjs';
 
 export const schema = z.object({
   expectedGoal: z.string().uuid().optional(),

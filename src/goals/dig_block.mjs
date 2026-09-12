@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { defineGoal } from '../controller/define.mjs';
-import { blockPoint, blockTarget } from '../controller/schemas.mjs';
-import { changeBlock } from '../skills/blocks.mjs';
-import { runField } from '../skills/task.mjs';
+import { defineGoal } from '../runtime/define.mjs';
+import { blockPoint, blockTarget } from '../runtime/schemas.mjs';
+import { changeBlock } from '../support/blocks.mjs';
+import { runField } from '../support/task.mjs';
 
 export default defineGoal({
   name: 'dig_block',

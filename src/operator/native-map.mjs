@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { requestBridge } from '../bridge/client.mjs';
+import { requestBridge } from '../runtime/bridge.mjs';
 import { root } from './display.mjs';
 
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
