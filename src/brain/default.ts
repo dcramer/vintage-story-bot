@@ -182,6 +182,15 @@ export function decide(reading: Reading, memory: Memory): Decision {
   }
 }
 
+// What to pick up in passing, whatever the current job: the kit's shortfalls that lie on the ground.
+export function wants(reading: Reading): string[] {
+  const k = kit(reading.inventory);
+  const list: string[] = [];
+  if (k.sticks < STICK_MIN) list.push('stick');
+  if ((!k.knife || !k.axe) && !k.stone) list.push('flint', 'loosestones');
+  return list;
+}
+
 export function fresh(): Memory {
   return { home: null, cool: new Map(), shelter: null, job: null, done: {}, scares: 0, resting: false };
 }
@@ -193,6 +202,7 @@ const brain: Brain<Memory> = {
     'knaps a knife and axe, crafts torches, chops logs, builds a small dirt shelter, and looks around when there is nothing else to do.',
   fresh,
   decide,
+  wants,
   summary: memory => ({ home: memory.home, job: memory.job, shelter: memory.shelter?.phase ?? null, done: memory.done,
     cooling: [...memory.cool].filter(([, until]) => until > Date.now()).map(([job]) => job) }),
 };

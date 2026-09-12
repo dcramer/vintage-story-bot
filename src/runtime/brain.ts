@@ -5,7 +5,7 @@
 // Goals started by someone else are never touched: the brain waits for them.
 // The slice of the controller a brain loop uses; the class itself is plain JS.
 export interface ControllerLike {
-  active: any; last: any; brain: any; history: Map<string, any>;
+  active: any; last: any; brain: any; history: Map<string, any>; wants: string[];
   send(request: object): Promise<any>;
   request(request: object, options?: { by?: string }): Promise<any>;
   stop(reason?: string): Promise<void>;
@@ -32,6 +32,8 @@ export interface Brain<Memory = unknown> {
   fresh(): Memory;
   decide(reading: Reading, memory: Memory): Decision;
   summary?(memory: Memory): Record<string, unknown>;
+  // Code substrings worth picking up on the way, whatever goal runs.
+  wants?(reading: Reading, memory: Memory): string[];
 }
 
 const sleep = (ms: number, signal: AbortSignal) => new Promise<void>(resolve => {
@@ -108,7 +110,9 @@ export class BrainLoop<Memory> {
     const [inventory, environment] = await Promise.all([controller.send({ action: 'inventory' }), controller.send({ action: 'environment' })]);
     if (!inventory.ok) throw new Error(inventory.error ?? 'inventory refused');
     if (!environment.ok) throw new Error(environment.error ?? 'environment refused');
-    const decision = this.brain.decide({ state, inventory, environment, active, last, now: Date.now() }, this.memory);
+    const reading: Reading = { state, inventory, environment, active, last, now: Date.now() };
+    if (this.brain.wants) controller.wants = this.brain.wants(reading, this.memory);
+    const decision = this.brain.decide(reading, this.memory);
     if ('wait' in decision) { this.note(`wait: ${decision.wait}`); return; }
     if ('stop' in decision) {
       this.note(`stop: ${decision.stop}`);

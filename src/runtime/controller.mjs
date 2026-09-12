@@ -19,7 +19,7 @@ const message = error => error instanceof Error ? error.message : String(error);
 // One bot: the shared game client, its memory, one active goal at a time, and
 // the tool registry every adapter (MCP, CLI, brain) speaks to.
 export class Controller {
-  active = null; last = null; closing = false; brain = null;
+  active = null; last = null; closing = false; brain = null; wants = [];
   session = randomUUID(); history = new Map(); waypoints = new Map();
   lock = Promise.resolve();
   constructor(send, telemetry = null) {
@@ -277,7 +277,7 @@ export class Controller {
       return this.send(request);
     };
     const env = {
-      send, map: this.map, surface: this.surface, sightings: this.sightings, watch: list => this.game.attend(list),
+      send, map: this.map, surface: this.surface, sightings: this.sightings, watch: list => this.game.attend(list), wants: this.wants,
       sync: () => this.snapshot(signal),
       aim: (angles, safety) => this.aim(angles, record, safety, signal),
       navigate: (goal, pauseWhen, safety) => this.navigate(goal, record, undefined, pauseWhen, safety, signal),

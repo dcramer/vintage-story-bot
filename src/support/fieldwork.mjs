@@ -2,6 +2,7 @@ import { distance, horizontal, lookAt, normalize } from '../runtime/navigation/t
 import { findRoute } from '../runtime/navigation/planner.mjs';
 import { nextLeg, planRoughRoute } from '../runtime/navigation/surface.mjs';
 import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.mjs';
+import { Gleaner } from './gleaning.mjs';
 
 export const area = p => `${Math.floor(p.x / 16)},${Math.floor(p.z / 16)}`;
 export const sightRange = 64;
@@ -35,9 +36,11 @@ export class Fieldwork {
   seen = new Map();
   skipped = new Map();
   events = [];
-  constructor(env, { signal, timeoutMs, sprint = false, swim = false, stopWhenHurt = false,
+  constructor(env, { signal, timeoutMs, sprint = false, swim = false, stopWhenHurt = false, wants = env.wants,
     wait = ms => new Promise(r => setTimeout(r, ms)), now = Date.now } = {}) {
     this.env = env;
+    // Things to pick up on the way, whatever the goal: set by the brain or the wants action.
+    this.gleaner = Array.isArray(wants) && wants.length ? new Gleaner(this, wants) : null;
     this.signal = signal;
     this.timeoutMs = timeoutMs;
     this.sprint = sprint;
@@ -242,7 +245,17 @@ export class Fieldwork {
   // looking again from each new viewpoint. Near targets are one fine leg. A far
   // target with nothing visible leading there ends as no_visible_route so
   // the caller's stuck recovery (leaf clearing, nudges, exploration) takes over.
+  // A walk that also picks up what the bot wants when it passes within reach.
   async walk(target, pauseWhen) {
+    const gleaner = this.gleaner;
+    const pause = gleaner ? state => pauseWhen?.(state) ?? gleaner.pauseWhen(state) : pauseWhen;
+    for (let stops = 0; ; stops++) {
+      const result = await this.walkOn(target, pause);
+      if (result.state !== 'paused' || result.reason !== 'want_in_reach' || stops >= 4) return result;
+      await gleaner.tend();
+    }
+  }
+  async walkOn(target, pauseWhen) {
     await this.observe();
     // Fleeing never pauses to look around; the flee target is already mapped.
     if (!this.seeing || target.leg || nearestThreat(this.latest)) return this.leg(target, pauseWhen);
