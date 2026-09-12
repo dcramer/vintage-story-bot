@@ -400,7 +400,8 @@ export class Navigation {
     // one is reached instead of pausing for a frame from here.
     const after = this.route[this.index + 1];
     // A step down of a block is walked off in stride too; only a real drop waits for the landing.
-    const rollOn = after && (['walk', 'jump', 'step', undefined].includes(after.move) || (after.move === 'drop' && next.y - after.y <= 1.05));
+    const rollOn =
+      after && (['walk', 'jump', 'step', 'swim', 'wade', undefined].includes(after.move) || (after.move === 'drop' && next.y - after.y <= 1.05));
     const next2 =
       rollOn && horizontal(p, after) <= 7.4 && Math.abs(after.y - p.y) <= 3
         ? { x: after.x, y: after.y, z: after.z, hop: after.move === 'jump' || after.y - next.y > STEP_HEIGHT }

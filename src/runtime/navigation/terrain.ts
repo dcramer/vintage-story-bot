@@ -262,7 +262,7 @@ export class TerrainMemory {
         let kind, cost;
         // Into or through water: a wade or a swim, never a jump or a drop.
         if (to.wet || to.swim || node.wet || node.swim) {
-          if (diagonal && !this.cornerOpen(x, z, dx, dz, Math.max(t, to.y), missing)) continue;
+          if (diagonal && !this.cornerOpen(x, z, dx, dz, Math.max(t, to.y), missing, true)) continue;
           // Out of water a bank one block up is climbed with jump held; into deep water a fall of up to
           // three blocks is fine (the water takes it); into shallow water only a one-block step.
           if (rise > (node.swim ? 1.6 : JUMP_HEIGHT) || -rise > (to.swim ? MAX_DROP : 1.05)) continue;
@@ -307,9 +307,10 @@ export class TerrainMemory {
   // at the landing height and has footing within a step below it, so the body can round the
   // corner on that side: not through a solid block, and not over a hole (the shaft it dug, a pit),
   // which the walk's cliff guard would refuse forever while the planner kept proposing it.
-  cornerOpen(x, z, dx, dz, top, missing?) {
+  cornerOpen(x, z, dx, dz, top, missing?, wet = false) {
     const side = (sx, sz) =>
-      this.clearBetween(sx, sz, top + 0.01, top + BODY_HEIGHT, missing) && this.levels(sx, sz, top, JUMP_HEIGHT, 1.05, missing).length > 0;
+      (wet && this.levels(sx, sz, top, JUMP_HEIGHT, 1.05, missing).some(node => node.wet || node.swim)) ||
+      (this.clearBetween(sx, sz, top + 0.01, top + BODY_HEIGHT, missing) && this.levels(sx, sz, top, JUMP_HEIGHT, 1.05, missing).length > 0);
     return side(x + dx, z) || side(x, z + dz);
   }
   // Escape edges over a one-cell hole: the far cell stands, the middle one

@@ -109,3 +109,53 @@ test('replanning and revisiting checkpoints cannot renew movement progress indef
   }
   assert.equal(moving.active, true, 'new ground remains progress even across replans');
 });
+
+test('swimming and wading queue the next checkpoint instead of stopping at every water cell', () => {
+  for (const deep of [true, false]) {
+    const map = new TerrainMemory();
+    for (let x = 0; x <= 4; x++)
+      for (let y = -2; y <= 3; y++)
+        map.put({
+          x,
+          y,
+          z: 0,
+          seenAt: Date.now(),
+          traits: y === 0 || (deep && y === -1) ? ['water'] : [],
+          boxes: y === -2 || (!deep && y === -1) ? [[x, y, 0, x + 1, y + 1, 1]] : [],
+        });
+    const origin = map.nodeAt(0, 0, 0);
+    const state = { ...stateAt(origin), motion: { onGround: !deep, feetInLiquid: true, swimming: deep } };
+    const first = { ...map.nodeAt(1, 0, 0), move: deep ? 'swim' : 'wade' };
+    const after = { ...map.nodeAt(2, 0, 0), move: first.move };
+    const nav = new Navigation(map, state, after, 0);
+    nav.adopt([first, after], origin, 0);
+    const frame = nav.tick(state, 0);
+    assert.deepEqual(frame.next, { x: after.x, y: after.y, z: after.z, hop: false });
+    assert.equal(frame.forward, true);
+    assert.equal(frame.sprint, false);
+  }
+});
+
+test('open water permits diagonal swimming while solid bank corners remain blocked', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x <= 2; x++)
+    for (let z = 0; z <= 2; z++)
+      for (let y = -2; y <= 3; y++)
+        map.put({
+          x,
+          y,
+          z,
+          seenAt: Date.now(),
+          traits: y === 0 || y === -1 ? ['water'] : [],
+          boxes: y === -2 ? [[x, y, z, x + 1, y + 1, z + 1]] : [],
+        });
+  const origin = map.nodeAt(0, 0, 0);
+  const diagonal = () => map.moves(origin).some(({ node }) => node.x === 1.5 && node.z === 1.5 && node.swim);
+  assert.equal(diagonal(), true);
+  for (const [x, z] of [
+    [1, 0],
+    [0, 1],
+  ])
+    for (let y = 0; y <= 2; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [[x, y, z, x + 1, y + 1, z + 1]] });
+  assert.equal(diagonal(), false);
+});
