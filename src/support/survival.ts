@@ -39,6 +39,7 @@ export const harvestReady = (object, position, halfWidth = 0.3) =>
 export const foodViewChanged = (view, state) =>
   !view || horizontal(view.position, state.position) > 2 || Math.abs(normalize(state.orientation.yawDegrees - view.yawDegrees + 180) - 180) > 15;
 export const stuckFoodRoute = (result, before, after) => !['arrived', 'paused'].includes(result.state) && horizontal(before, after) <= 2;
+export const exhaustedFoodLead = (target, result) => result.state === 'arrived' && target.visible === false;
 export const matchingFoodDrops = (objects, foodCode, point) =>
   objects
     .filter(object => object.kind === 'item' && object.code === foodCode && Number.isInteger(object.quantity) && object.quantity > 0)
@@ -191,7 +192,13 @@ export class Survival {
         if (destination) {
           const before = { ...field.latest.position };
           const result = await field.walk(destination, this.eatWhen);
-          if (stuckFoodRoute(result, before, field.latest.position)) {
+          if (exhaustedFoodLead(target, result)) {
+            // Reaching a remembered block's harvest position without seeing it
+            // again is the successful-route version of a stale lead. Do not
+            // orbit alternate approach cells around an occluded or gone block.
+            field.skip(target, 120000);
+            field.report('food_lead_unseen', { target: target.key });
+          } else if (stuckFoodRoute(result, before, field.latest.position)) {
             field.skip(target, 120000);
             await clearLeafPath(field, target.point);
           }

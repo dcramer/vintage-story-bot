@@ -8,6 +8,7 @@ import { leafBlock, leafClearCandidate, threatAllowsLeafClearing } from '../src/
 import {
   accessibleForage,
   desperateFoodSightRange,
+  exhaustedFoodLead,
   foodElevationDetourDistance,
   foodRecoverySatisfied,
   foodSearchDistance,
@@ -152,6 +153,12 @@ test('food leads survive productive partial routes but skip stuck ones', () => {
   assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
   assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
   assert.equal(stuckFoodRoute({ state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
+});
+
+test('an unseen remembered food lead expires after reaching its approach cell', () => {
+  assert.equal(exhaustedFoodLead({ visible: false }, { state: 'arrived' }), true);
+  assert.equal(exhaustedFoodLead({ visible: true }, { state: 'arrived' }), false);
+  assert.equal(exhaustedFoodLead({ visible: false }, { state: 'paused' }), false);
 });
 
 test('recalled blocks enter the goal working set even when the sighting is old', () => {
