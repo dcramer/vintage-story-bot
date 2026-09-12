@@ -14,6 +14,31 @@ function column(map, x, z, floor = true) {
   for (let y = -1; y < 4; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: y === -1 && floor ? [[x, y, z, x + 1, y + 1, z + 1]] : [] });
 }
 
+test('swimmers and waders can climb a clear bank without treating their water as a ceiling', () => {
+  for (const deep of [false, true]) {
+    const map = new TerrainMemory();
+    column(map, 0, 0);
+    column(map, 1, 0);
+    for (let y = 0; y <= (deep ? 1 : 0); y++) map.put({ x: 0, y, z: 0, seenAt: Date.now(), traits: ['water'], boxes: [] });
+    const top = deep ? 2 : 1;
+    for (let y = 0; y < top; y++) map.put({ x: 1, y, z: 0, seenAt: Date.now(), traits: [], boxes: [[1, y, 0, 2, y + 1, 1]] });
+    const start = map.nodeAt(0, 0, deep ? 0.5 : 0);
+    assert.ok(
+      map.moves(start).some(({ node }) => node.x === 1.5 && node.y === top),
+      'surface-level bank must be reachable',
+    );
+    const state = { ...stateAt(start), motion: { onGround: !deep, feetInLiquid: true, swimming: deep } };
+    const bank = { x: 1.5, y: top, z: 0.5, move: 'jump' };
+    const nav = new Navigation(map, state, bank, 0);
+    nav.adopt([bank], start, 0);
+    const frame = nav.tick(state, 0);
+    assert.equal(frame.hop, true);
+    assert.ok(frame.reachY < top - start.y, 'water tolerance must not suppress the bank jump');
+    map.put({ x: 0, y: top, z: 0, seenAt: Date.now(), traits: [], boxes: [[0, top, 0, 1, top + 1, 1]] });
+    assert.ok(!map.moves(start).some(({ node }) => node.x === 1.5), 'a solid ceiling must still prevent the climb');
+  }
+});
+
 test('a shortcut refused by the cliff guard follows its original checkpoint and still times out when stationary', () => {
   const map = new TerrainMemory();
   for (let x = 0; x < 4; x++) for (let z = 0; z < 3; z++) column(map, x, z, x !== 1 || z !== 1);

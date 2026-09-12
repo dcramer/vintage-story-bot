@@ -257,7 +257,7 @@ export class TerrainMemory {
     for (const [dx, dz] of around) {
       const diagonal = dx !== 0 && dz !== 0,
         d = diagonal ? Math.SQRT2 : 1;
-      for (const to of this.levels(x + dx, z + dz, t, JUMP_HEIGHT, MAX_DROP, missing)) {
+      for (const to of this.levels(x + dx, z + dz, t, node.swim ? 1.6 : JUMP_HEIGHT, MAX_DROP, missing)) {
         const rise = to.y - t;
         let kind, cost;
         // Into or through water: a wade or a swim, never a jump or a drop.
@@ -266,7 +266,9 @@ export class TerrainMemory {
           // Out of water a bank one block up is climbed with jump held; into deep water a fall of up to
           // three blocks is fine (the water takes it); into shallow water only a one-block step.
           if (rise > (node.swim ? 1.6 : JUMP_HEIGHT) || -rise > (to.swim ? MAX_DROP : 1.05)) continue;
-          if (rise > STEP_HEIGHT && !this.clearBetween(x, z, t, t + JUMP_HEADROOM, missing)) continue;
+          // The submerged part of the body is in known water, not blocked headroom.
+          const surface = node.swim ? t + 1 + SWIM_DEPTH : node.wet ? t + 1 : t;
+          if (rise > STEP_HEIGHT && !this.clearBetween(x, z, surface, Math.max(surface, to.y) + BODY_HEIGHT, missing)) continue;
           kind = to.swim ? 'swim' : to.wet ? 'wade' : rise > STEP_HEIGHT ? 'jump' : 'walk';
           cost = d + (to.swim ? SWIM_COST : to.wet ? WADE_COST : 1);
           result.push({ node: { ...to, move: kind }, cost });

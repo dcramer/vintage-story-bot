@@ -418,7 +418,7 @@ export class Navigation {
       ...(next2 ? { next: next2 } : {}),
       toward: { x: next.x, y: next.y, z: next.z },
       reach: last ? Math.max(0.2, Math.min(0.35, this.target.arrivalRadius ?? 0.35)) : 0.35,
-      reachY: next.swim || wet ? 1.5 : 0.6,
+      reachY: next.swim ? 1.5 : 0.6,
       hop: jumpMove,
       yawDegrees: desiredYaw,
       pitchDegrees: 15,
