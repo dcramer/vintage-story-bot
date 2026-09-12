@@ -14,6 +14,8 @@ export const MERGE_RUN = 7;
 export const SPRINT_FOOD = 0.35;
 // How often a partial route is re-planned from the body's position while walking, once the far view has filled in.
 export const REPLAN_AHEAD_MS = 700;
+export const NO_PROGRESS_MS = 15000;
+const progressCell = p => `${Math.floor(p.x / 2)},${Math.floor(p.y / 2)},${Math.floor(p.z / 2)}`;
 const sameCell = (a, b) => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01 && Math.abs(a.z - b.z) < 0.01;
 
 export class Navigation {
@@ -29,6 +31,8 @@ export class Navigation {
   nextCheckpoint: any;
   primaryTarget: any;
   progressAt: any;
+  movedAt: number;
+  progressCells = new Set<string>();
   replannedAt: any;
   steppedOff: any;
   surveyAt: any;
@@ -71,6 +75,8 @@ export class Navigation {
     this.deadline = now + (goal.timeoutMs ?? 60000);
     this.surveyAt = this.progressAt = now;
     this.edgeStart = state.position;
+    this.movedAt = now;
+    this.progressCells.add(progressCell(state.position));
   }
   get active() {
     return ['surveying', 'moving'].includes(this.state);
@@ -165,6 +171,13 @@ export class Navigation {
       h = this.height;
     // In water the jump key keeps the head up; a body that stops holding it sinks and drowns.
     const wet = !!(state.motion.feetInLiquid || state.motion.swimming);
+    // Checkpoint arrivals and replans can both describe circling the same patch.
+    // Only reaching another two-block cell renews this clock, across every route.
+    const cell = progressCell(p);
+    if (!this.progressCells.has(cell)) {
+      this.progressCells.add(cell);
+      this.movedAt = now;
+    } else if (now - this.movedAt >= NO_PROGRESS_MS) return this.finish('blocked', 'no_progress');
     const from = wet ? { ...p, afloat: true } : p;
     const threats = this.evading ? nearbyUnclearedThreats(state) : nearbyThreats(state);
     const nearby = threats[0] ?? null;

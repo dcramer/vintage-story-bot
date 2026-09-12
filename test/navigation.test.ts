@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Navigation } from '../src/runtime/navigation/navigator.ts';
+import { Navigation, NO_PROGRESS_MS } from '../src/runtime/navigation/navigator.ts';
 import { distance, TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 
 const stateAt = position => ({
@@ -86,4 +86,26 @@ test('an uphill takeoff starts before the riser only with a clear earlier jump a
     assert.equal(frame.toward.x, ceiling ? 1.5 : 2.5);
     assert.equal(frame.hop, !ceiling);
   }
+});
+
+test('replanning and revisiting checkpoints cannot renew movement progress indefinitely', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x <= 30; x++) column(map, x, 0);
+  const state = stateAt({ x: 0.5, y: 0, z: 0.5 });
+  const end = { x: 30.5, y: 0, z: 0.5, move: 'walk' };
+  const nav = new Navigation(map, state, end, 0);
+  for (let at = 0; at <= NO_PROGRESS_MS + 2000 && nav.active; at += 1000) {
+    state.position = { x: at % 2000 ? 2.5 : 0.5, y: 0, z: 0.5 };
+    nav.adopt([{ ...state.position, move: 'walk' }, end], state.position, at);
+    nav.tick(state, at);
+  }
+  assert.equal(nav.state, 'blocked');
+  assert.equal(nav.reason, 'no_progress');
+  const moving = new Navigation(map, state, end, 0);
+  for (let at = 0; at <= NO_PROGRESS_MS + 2000; at += 1000) {
+    state.position = { x: 0.5 + at / 1000, y: 0, z: 0.5 };
+    moving.adopt([end], state.position, at);
+    moving.tick(state, at);
+  }
+  assert.equal(moving.active, true, 'new ground remains progress even across replans');
 });
