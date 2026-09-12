@@ -122,7 +122,7 @@ public sealed partial class AiBridgeMod : ModSystem
 
     // Networking only queues requests. All game access happens in OnTick.
     // A connection lives as long as the client keeps it: JSON lines in, JSON lines out, many in
-    // flight at once; a request carrying an id gets it echoed on its reply so the client can pair
+    // flight at once; a request carrying a requestId gets it echoed on its reply so the client can pair
     // them out of order. A request the tick cannot answer within its deadline is refused, never
     // dropped, and one that arrives while the game thread has not ticked for a second is refused
     // at once from here, so a stalled client is told apart from a slow one.
@@ -154,9 +154,9 @@ public sealed partial class AiBridgeMod : ModSystem
         try { stream = client.GetStream(); } catch (Exception) { return; }
         async Task Reply(string json, string? id)
         {
-            // The id is spliced in front of the serialized reply so no response type has to carry it.
+            // The requestId is spliced in front of the serialized reply so no response type has to carry it.
             string line = id == null || json.Length < 2 || json[0] != '{' ? json
-                : "{\"id\":" + id + (json.Length > 2 ? "," : "") + json[1..];
+                : "{\"requestId\":" + id + (json.Length > 2 ? "," : "") + json[1..];
             byte[] output = Encoding.UTF8.GetBytes(line + "\n");
             await writes.WaitAsync(closed.Token).ConfigureAwait(false);
             try { await stream.WriteAsync(output, closed.Token).ConfigureAwait(false); }
@@ -216,13 +216,13 @@ public sealed partial class AiBridgeMod : ModSystem
         catch (ObjectDisposedException) { }
     }
 
-    // The raw JSON text of a request's id, if it carries one; anything else is answered without.
+    // The raw JSON text of a request's requestId, if it carries one; anything else is answered without.
     private static string? RequestId(string json)
     {
         try
         {
             using var document = JsonDocument.Parse(json);
-            if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("id", out var id)) return null;
+            if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("requestId", out var id)) return null;
             return id.ValueKind is JsonValueKind.String or JsonValueKind.Number ? id.GetRawText() : null;
         }
         catch (JsonException) { return null; }

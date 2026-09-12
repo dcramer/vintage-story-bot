@@ -105,18 +105,26 @@ test('times out without retrying and caps request size', async t => {
   assert.equal(calls, 1);
 });
 
-test('pipelines requests on one connection, pairs replies by id, and keeps deadlines apart', async t => {
+test('pipelines requests on one connection without replacing action ids, and keeps deadlines apart', async t => {
   const port = await fakeBridge(t, (socket, request) => {
-    // Answer in reverse order of arrival and leave one request unanswered; ids must pair them.
+    // Answer in reverse order of arrival and leave one request unanswered; requestIds must pair them.
     if (request.action === 'never') return;
-    setTimeout(() => socket.write(JSON.stringify({ id: request.id, ok: true, echo: request.action }) + '\n'), request.action === 'slow' ? 30 : 5);
+    setTimeout(
+      () => socket.write(JSON.stringify({ requestId: request.requestId, ok: true, echo: request.action, operation: request.id }) + '\n'),
+      request.action === 'slow' ? 30 : 5,
+    );
   });
   const server = new BridgeClient({ port });
   t.after(() => server.close());
   const lost = server.request({ action: 'never' }, { timeoutMs: 40 });
-  const [slow, fast] = await Promise.all([server.request({ action: 'slow' }), server.request({ action: 'fast' })]);
+  const [slow, fast, block] = await Promise.all([
+    server.request({ action: 'slow' }),
+    server.request({ action: 'fast' }),
+    server.request({ action: 'block_action_begin', id: 'operation-id' }),
+  ]);
   assert.equal(slow.echo, 'slow');
   assert.equal(fast.echo, 'fast');
+  assert.equal(block.operation, 'operation-id', 'transport correlation must not replace an action operation id');
   assert.equal(server.pending.size, 1);
   await assert.rejects(lost, /timed out/);
   assert.equal(server.pending.size, 0);
@@ -128,7 +136,7 @@ test('a dropped bridge connection rejects everything in flight and the next requ
   const port = await fakeBridge(t, (socket, request) => {
     sockets++;
     if (request.action === 'cut') return socket.destroy();
-    socket.write(JSON.stringify({ id: request.id, ok: true }) + '\n');
+    socket.write(JSON.stringify({ requestId: request.requestId, ok: true }) + '\n');
   });
   const server = new BridgeClient({ port });
   t.after(() => server.close());

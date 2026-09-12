@@ -62,8 +62,8 @@ export function requestBridge(
   });
 }
 
-// One connection the controller keeps open to the mod: requests carry an id,
-// many are in flight at once, and replies are paired by id as they come back
+// One connection the controller keeps open to the mod: requests carry a requestId,
+// many are in flight at once, and replies are paired by requestId as they come back
 // in any order. Each request keeps its own deadline; a reply after it is
 // ignored. A lost connection rejects everything in flight and the next request
 // reconnects. A lost acknowledgement can still mean the game acted: no retries.
@@ -90,7 +90,7 @@ export class BridgeClient {
     return new Promise<any>((resolve, reject) => {
       if (signal?.aborted) return reject(new Error('Bridge request cancelled; inspect before retrying.'));
       const id = ++this.next;
-      const line = JSON.stringify({ ...request, id }) + '\n';
+      const line = JSON.stringify({ ...request, requestId: id }) + '\n';
       if (Buffer.byteLength(line) > this.requestMaxBytes) return reject(new Error(`Request exceeds ${this.requestMaxBytes - 1} bytes.`));
       const entry = {
         resolve,
@@ -156,10 +156,10 @@ export class BridgeClient {
       } catch (error) {
         return this.drop(socket, new Error(`Invalid bridge response: ${error.message}`));
       }
-      // A reply without an id answers the oldest request still waiting.
-      const id = typeof result.id === 'number' ? result.id : this.pending.keys().next().value;
+      // A reply without a requestId answers the oldest request still waiting.
+      const id = typeof result.requestId === 'number' ? result.requestId : this.pending.keys().next().value;
       if (id !== undefined && this.pending.has(id)) {
-        delete result.id;
+        delete result.requestId;
         this.settle(id, null, result);
       }
       end = this.buffer.indexOf('\n');
