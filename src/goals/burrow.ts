@@ -145,26 +145,34 @@ async function digIn(field, inventory) {
   }
   let y = Math.floor(start.y);
   field.report('digging_in', { at: { x, y, z } });
-  // Dig whatever the crosshair finds straight down, layer or plant or ground, until the feet are two
-  // blocks lower than they started; the body drops into each cut.
-  for (let cuts = 0; cuts < 6 && y > Math.floor(start.y) - 2; cuts++) {
-    const eye = { ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight };
-    await field.aim(lookAt(eye, { x: x + 0.5, y: field.latest.position.y - 0.5, z: z + 0.5 }));
-    const selected = await field.send({ action: 'inspect_target' });
-    if (!selected?.key?.startsWith('block:')) return { ok: false, goal: 'burrow', reason: 'cannot_aim', cell: { x, y: y - 1, z } };
-    const slot = await diggingSlot(field, selected, inventory);
-    if (slot === null) return { ok: false, goal: 'burrow', reason: 'cannot_dig', cell: { x, y: y - 1, z }, code: selected.code };
-    field.report('cutting', { cell: selected.key, code: selected.code });
-    const dug = await changeBlock(field, 'dig', { target: selected.key, slot, acceptTransform: true, timeoutMs: 45000 });
-    if (!dug.ok) return { ok: false, goal: 'burrow', reason: dug.reason ?? 'dig_failed', cell: selected.key };
-    for (let waits = 0; waits < 8; waits++) {
-      await field.wait(250);
-      const now = await field.observe(true);
-      if (now.motion.onGround && now.position.y < y) break;
+  // A previous attempt may already have cut this shaft. Three solid rim cells
+  // two blocks above mean the body is already down in a protective hole; keep
+  // that useful work and proceed to sealing instead of mining into hard rock.
+  const alreadyDugIn =
+    !solid(map, x, y + 1, z) && !solid(map, x, y + 2, z) && cardinals.filter(([ax, az]) => solid(map, x + ax, y + 2, z + az)).length >= 3;
+  if (alreadyDugIn) field.report('resuming_dug_in', { at: { x, y, z } });
+  else {
+    // Dig whatever the crosshair finds straight down, layer or plant or ground, until the feet are two
+    // blocks lower than they started; the body drops into each cut.
+    for (let cuts = 0; cuts < 6 && y > Math.floor(start.y) - 2; cuts++) {
+      const eye = { ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight };
+      await field.aim(lookAt(eye, { x: x + 0.5, y: field.latest.position.y - 0.5, z: z + 0.5 }));
+      const selected = await field.send({ action: 'inspect_target' });
+      if (!selected?.key?.startsWith('block:')) return { ok: false, goal: 'burrow', reason: 'cannot_aim', cell: { x, y: y - 1, z } };
+      const slot = await diggingSlot(field, selected, inventory);
+      if (slot === null) return { ok: false, goal: 'burrow', reason: 'cannot_dig', cell: { x, y: y - 1, z }, code: selected.code };
+      field.report('cutting', { cell: selected.key, code: selected.code });
+      const dug = await changeBlock(field, 'dig', { target: selected.key, slot, acceptTransform: true, timeoutMs: 45000 });
+      if (!dug.ok) return { ok: false, goal: 'burrow', reason: dug.reason ?? 'dig_failed', cell: selected.key };
+      for (let waits = 0; waits < 8; waits++) {
+        await field.wait(250);
+        const now = await field.observe(true);
+        if (now.motion.onGround && now.position.y < y) break;
+      }
+      y = Math.floor(field.latest.position.y + 0.01);
     }
-    y = Math.floor(field.latest.position.y + 0.01);
+    if (y > Math.floor(start.y) - 2) return { ok: false, goal: 'burrow', reason: 'hole_too_shallow', depth: Math.floor(start.y) - y };
   }
-  if (y > Math.floor(start.y) - 2) return { ok: false, goal: 'burrow', reason: 'hole_too_shallow', depth: Math.floor(start.y) - y };
   const mouth = { x, y: y + 2, z };
   // Two blocks down is out of a drifter's reach even open; the cell above is closed when a block is in hand.
   const seal = sealStone(await field.send({ action: 'inventory' }));
