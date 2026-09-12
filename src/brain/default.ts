@@ -36,6 +36,9 @@ export const NIGHT_LIGHT = 0.4;
 export const COPPER = /nativecopper/;
 export const COPPER_TITLE = 'Copper';
 export const MARKER_RADIUS = 32;
+// Home is mirrored on the map for the operator and the others; a marker this far from the note is stale.
+export const HOME_TITLE = 'Home';
+export const HOME_MARKER_RADIUS = 4;
 // Three scares within this many blocks in this long make a place worth leaving, by this far.
 export const DANGER_SCARES = 3;
 export const DANGER_RADIUS = 48;
@@ -73,8 +76,14 @@ export type Job =
   | 'relocate'
   | 'recover';
 type Cell = { x: number; y: number; z: number };
-export type Memory = {
+// What is kept between runs: the decisions made about this world, never what was seen.
+export type Notes = {
   home: Cell | null;
+};
+export type Memory = {
+  notes: Notes;
+  // The Home marker was put on the map, or found there, for the home in the notes.
+  homeMarked: boolean;
   // Where and when each job last failed.
   tried: Partial<Record<Job, { x: number; z: number; at: number }>>;
   // The last reading's situation and set-aside jobs, for the task list in status.
@@ -281,7 +290,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     if (memory.job === 'dig_out' && (last.ok || (!(last.result?.climbed > 0) && (!memory.pit || state.position.y <= memory.pit.y + 0.5))))
       memory.pit = null;
     // A finished shelter is home.
-    if (memory.job === 'shelter' && last.ok && last.result?.home) memory.home = last.result.home;
+    if (memory.job === 'shelter' && last.ok && last.result?.home) setHome(memory, last.result.home);
     if (memory.job === 'burrow' && last.ok && last.result?.mouth) memory.burrow = last.result.mouth;
     if (memory.job === 'unburrow' && last.ok) {
       // Removing the seal opens the shaft but does not put the body back on
@@ -392,6 +401,30 @@ export function decide(reading: Reading, memory: Memory): Decision {
         why: `${copper.code} sighted`,
       };
   }
+  const home = memory.notes.home;
+  // Home on the map, once per home: the operator and the others find it there, and a home that moved takes its marker along.
+  if (home && !memory.homeMarked && !danger && !hurt && !classifyingHurt && state.capabilities?.includes?.('map_waypoint_add')) {
+    const marker = markers.find(m => m.title === HOME_TITLE);
+    if (marker && horizontal(marker.position, home) <= HOME_MARKER_RADIUS) memory.homeMarked = true;
+    else {
+      memory.homeMarked = true;
+      return {
+        act: [
+          ...(marker ? [{ action: 'remove_map_waypoint', guid: marker.guid }] : []),
+          {
+            action: 'add_map_waypoint',
+            title: HOME_TITLE,
+            x: Math.floor(home.x),
+            y: Math.floor(home.y),
+            z: Math.floor(home.z),
+            icon: 'home',
+            color: '#22aa22',
+          },
+        ],
+        why: marker ? 'home moved' : 'home built',
+      };
+    }
+  }
   let satiety: number | null = null;
   try {
     satiety = hunger(state);
@@ -400,7 +433,6 @@ export function decide(reading: Reading, memory: Memory): Decision {
   }
   const storm = temporalStormUnsafe(state);
   const k = kit(inventory);
-  const home = memory.home;
   const tried = new Set<Job>(
     (Object.entries(memory.tried) as [Job, { x: number; z: number; at: number }][])
       // Recovery danger belongs to the grave, not the point from which the bot happened to notice it.
@@ -595,9 +627,19 @@ export function wants(reading: Reading): string[] {
 export function headMaterial(k: ReturnType<typeof kit>, head: string): string {
   return k.heads.find(code => code.startsWith(`game:${head}-`))?.slice(`game:${head}-`.length) ?? k.material ?? 'flint';
 }
-export function fresh(): Memory {
+const cell = (c: any): Cell | null => (c && [c.x, c.y, c.z].every(Number.isFinite) ? { x: c.x, y: c.y, z: c.z } : null);
+// Home is a note: it outlives the process, and moving house is rewriting it.
+export function setHome(memory: Memory, home: Cell | null) {
+  memory.notes.home = cell(home);
+  memory.homeMarked = false;
+}
+export function notes(memory: Memory): Notes {
+  return memory.notes;
+}
+export function fresh(kept?: Partial<Notes> | null): Memory {
   return {
-    home: null,
+    notes: { home: cell(kept?.home) },
+    homeMarked: false,
     tried: {},
     situation: null,
     tried_now: [],
@@ -614,7 +656,7 @@ export function fresh(): Memory {
   };
 }
 
-const brain: Brain<Memory> = {
+const brain: Brain<Memory, Notes> = {
   name: 'default',
   description:
     'A cautious beginner: respawns, swims for shore, runs from monsters and from whatever hurts it, hides at night and in storms, eats when hungry, marks copper it passes, gathers sticks and stone, ' +
@@ -622,8 +664,9 @@ const brain: Brain<Memory> = {
   fresh,
   decide,
   wants,
+  notes,
   summary: memory => ({
-    home: memory.home,
+    home: memory.notes.home,
     burrow: memory.burrow,
     scares: memory.scares.length,
     job: memory.job,

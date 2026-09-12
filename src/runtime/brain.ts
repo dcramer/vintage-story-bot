@@ -5,6 +5,7 @@
 // as an adapter would. The loop decides nothing itself: respawning, swimming
 // for shore, running from a hit are all the brain's to choose.
 import { type Log, noLog } from './log.ts';
+import { Notes } from './notes.ts';
 
 // The slice of the controller a brain loop uses; the class itself is plain JS.
 export interface ControllerLike {
@@ -16,6 +17,7 @@ export interface ControllerLike {
   wants: string[];
   map?: any;
   events?: any;
+  knowledge?: { dir?: string };
   send(request: object): Promise<any>;
   request(request: object, options?: { by?: string }): Promise<any>;
   stop(reason?: string): Promise<void>;
@@ -49,12 +51,16 @@ export type Decision =
   | { act: Record<string, unknown>[]; why: string }
   | { stop: string }
   | { wait: string };
-export interface Brain<Memory = unknown> {
+export interface Brain<Memory = unknown, Durable = unknown> {
   name: string;
   description: string;
-  fresh(): Memory;
+  // A memory to start from: fresh, or carrying the notes kept from an earlier run in this world.
+  fresh(notes?: Durable | null): Memory;
   decide(reading: Reading, memory: Memory): Decision;
   summary?(memory: Memory): Record<string, unknown>;
+  // The part of memory worth keeping between runs, as JSON: decisions about the
+  // world (home, chests), never what was seen or what only matters this session.
+  notes?(memory: Memory): Durable;
   // Code substrings worth picking up on the way, whatever goal runs.
   wants?(reading: Reading, memory: Memory): string[];
 }
@@ -76,12 +82,14 @@ export class BrainLoop<Memory> {
   private nudge: (() => void) | null = null;
   private unsubscribe: (() => void) | null = null;
   private log: Log;
+  notes: Notes;
   constructor(controller: ControllerLike, brain: Brain<Memory>, tickMs = 2000) {
     this.controller = controller;
     this.brain = brain;
     this.log = (controller.log ?? noLog).bind({ brain: brain.name });
     this.tickMs = tickMs;
-    this.memory = brain.fresh();
+    this.notes = new Notes(controller.knowledge?.dir ?? null, brain.name);
+    this.memory = brain.fresh(null);
     this.cursor = controller.events?.sequence ?? 0;
     this.unsubscribe = controller.events?.subscribe?.(() => this.nudge?.()) ?? null;
   }
@@ -94,6 +102,7 @@ export class BrainLoop<Memory> {
       faults: this.faults,
       lastDecision: this.lastDecision,
       goal: this.goal,
+      notes: this.brain.notes ? this.notes.status() : undefined,
       ...(this.brain.summary?.(this.memory) ?? {}),
     };
   }
@@ -135,14 +144,30 @@ export class BrainLoop<Memory> {
     this.stopping.abort();
     this.unsubscribe?.();
     await this.running;
+    this.keep(true);
     const active = this.controller.active as any;
     if (active && active.by === 'brain') await this.controller.stop('brain_removed');
+  }
+  // The brain's notes to disk when they changed; a full disk never stops the loop.
+  private keep(force = false) {
+    if (!this.brain.notes) return;
+    try {
+      this.notes.set(this.brain.notes(this.memory));
+      if (this.notes.save(force)) this.log.info('brain', 'notes_saved', { file: this.notes.status().file });
+    } catch (error) {
+      this.log.info('brain', 'notes_save_failed', { error: error instanceof Error ? error.message : String(error) });
+    }
   }
   private async tick() {
     this.ticks++;
     const controller = this.controller;
     const state = await controller.send({ action: 'observe' });
     if (!state.ok) throw new Error(state.error ?? 'observe refused');
+    // A world seen for the first time this run: memory starts from the notes kept about it.
+    if (this.notes.enter(state.world?.identifier, state.player?.uid)) {
+      this.memory = this.brain.fresh(this.notes.data as any);
+      if (this.notes.loaded) this.log.info('brain', 'notes_loaded', { file: this.notes.status().file, ...this.notes.loaded });
+    }
     const record = controller.active as any;
     const active = record ? { id: record.id, kind: record.kind, state: record.state, by: record.by } : null;
     let last: Reading['last'] = null;
@@ -180,6 +205,7 @@ export class BrainLoop<Memory> {
     };
     if (this.brain.wants) controller.wants = this.brain.wants(reading, this.memory);
     const decision = this.brain.decide(reading, this.memory);
+    this.keep();
     // What the brain saw when it decided: enough to read the decision back later.
     const saw = {
       tick: this.ticks,

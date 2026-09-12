@@ -14,6 +14,9 @@ import { shelter as shelterCells } from '../src/support/structures.ts';
 
 const decide = (reading, memory): any => decision(reading, memory);
 
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { BrainLoop } from '../src/runtime/brain.ts';
 
 const slot = (code, quantity = 1, extra = {}) => ({ slot: 0, code, quantity, ...extra });
@@ -151,7 +154,7 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
 
 test('brain: a threat interrupts its own goal, a failed job is set aside, a finished shelter becomes home', () => {
   const memory = fresh();
-  memory.home = { x: 0, y: 100, z: 0 };
+  memory.notes.home = { x: 0, y: 100, z: 0 };
   const first = decide(reading({ inventory: inventory(slot('game:stick', 2)) }), memory);
   assert.deepEqual([first.start, first.args.count, memory.job], ['gather', STICK_MIN - 2, 'sticks']);
   const wolf = state({ nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }] });
@@ -204,7 +207,7 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
   assert.equal(shelterCells({ x: 0, y: 0, z: 0 }, 'd').length, 23);
   const home = { x: 3.5, y: 100, z: 0.5 };
   decide(reading({ inventory: dirt, last: { id: 's1', kind: 'shelter', ok: true, result: { home } } }), shelterMemory);
-  assert.deepEqual(shelterMemory.home, home);
+  assert.deepEqual(shelterMemory.notes.home, home);
 });
 
 test('brain: a flight hands daywork back only after landing', () => {
@@ -857,4 +860,66 @@ test('brain: three scares around the same spot make it move on; a failed stick s
     'gather',
     'sticks are looked for again away from where they failed',
   );
+});
+
+test('brain: home is a note that outlives the process and is mirrored once on the map', async () => {
+  const withMap = state({ capabilities: ['map_waypoint_add'], world: { identifier: 'w1' }, player: { uid: 'p1' } });
+  const memory = fresh();
+  memory.notes.home = { x: 3, y: 100, z: 5 };
+  const marked = decide(reading({ state: withMap }), memory);
+  assert.deepEqual(
+    marked.act.map(a => a.action),
+    ['add_map_waypoint'],
+    'a home with no marker gets one',
+  );
+  assert.equal(marked.act[0].title, 'Home');
+  assert.ok(decide(reading({ state: withMap }), memory).start, 'and only once');
+  const moved = fresh();
+  moved.notes.home = { x: 40, y: 100, z: 5 };
+  const marker = { guid: 'g1', title: 'Home', icon: 'home', position: { x: 3, y: 100, z: 5 } };
+  assert.deepEqual(
+    decide(reading({ state: withMap, markers: [marker] }), moved).act.map(a => a.action),
+    ['remove_map_waypoint', 'add_map_waypoint'],
+    'a home that moved takes its marker along',
+  );
+  const found = fresh();
+  found.notes.home = { x: 3, y: 100, z: 5 };
+  assert.ok(decide(reading({ state: withMap, markers: [marker] }), found).start, 'a marker already there is left alone');
+  assert.deepEqual(fresh({ home: { x: 1, y: 2, z: 3 } }).notes.home, { x: 1, y: 2, z: 3 });
+  assert.equal(fresh({ home: { x: 'no' } } as any).notes.home, null, 'a damaged note is not a home');
+
+  // Through the loop: a second loop on the same world reads the first one's notes.
+  const dir = mkdtempSync(join(tmpdir(), 'seraph-notes-'));
+  const controller = {
+    active: null,
+    last: null,
+    brain: null,
+    history: new Map(),
+    knowledge: { dir },
+    send: async request => (request.action === 'observe' ? withMap : request.action === 'inventory' ? inventory() : { ok: true, ...day }),
+    request: async request => {
+      controller.active = { id: 'b1', kind: request.action, state: 'running', by: 'brain' };
+      return { ok: true, goal: { id: 'b1' } };
+    },
+    stop: async () => {
+      controller.active = null;
+    },
+    goalView: () => null,
+  };
+  try {
+    const first = new BrainLoop(controller as any, brain, 5);
+    first.start();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    (first.memory as any).notes.home = { x: 7, y: 100, z: 9 };
+    await first.stop();
+    const file = first.notes.status().file;
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).notes, { home: { x: 7, y: 100, z: 9 } });
+    const second = new BrainLoop(controller as any, brain, 5);
+    second.start();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    await second.stop();
+    assert.deepEqual((second.memory as any).notes.home, { x: 7, y: 100, z: 9 }, 'the next run starts from the note');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
