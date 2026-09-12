@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { fleeTarget, nearbyThreats, nearbyUnclearedThreats } from '../../support/threats.ts';
 import { findRoute } from './planner.ts';
-import { angle, horizontal, JUMP_HEIGHT, key, lookAt, MAX_DROP, STEP_HEIGHT } from './terrain.ts';
+import { angle, distance, horizontal, JUMP_HEIGHT, key, lookAt, MAX_DROP, STEP_HEIGHT } from './terrain.ts';
 
 // Follows a route of standing cells the way a player walks: aim at the next
 // cell, keep walking through bends while the head turns, jump when the next
 // cell is a block up, walk off a drop, and re-plan only when the next cell
 // stops being a place to stand or no progress is made for a while.
 // A run of checkpoints is merged into one up to this far ahead.
-export const MERGE_RUN = 8;
+// Leave a block inside the mod's eight-block input range for motion before a frame is processed.
+export const MERGE_RUN = 7;
 // Satiety from which a walk sprints where there is room; running costs more per minute, so not on a low bar.
 export const SPRINT_FOOD = 0.35;
 // How often a partial route is re-planned from the body's position while walking, once the far view has filled in.
@@ -273,10 +274,19 @@ export class Navigation {
     // Merge a run of checkpoints the body can walk without a turn into one, gentle slopes
     // included, so bends are only where the route really turns: a route on a grid zigzags a
     // cell at a time, and a turn at every cell is a stop at every cell.
+    // Momentum can carry the body away from a merged point while turning. Keep the current
+    // point inside input range too, not just the point when it was first selected.
+    if (this.mergedFrom !== null && distance(p, this.route[this.index]) > MERGE_RUN) {
+      this.index = this.mergedFrom;
+      this.mergedFrom = null;
+      this.mergeRefused = true;
+      this.edgeStart = p;
+      this.bestNear = undefined;
+    }
     if (grounded && !this.mergeRefused)
       for (let ahead = this.index + 1; ahead < this.route.length; ahead++) {
         const node = this.route[ahead];
-        if (!['walk', 'step'].includes(node.move) || horizontal(p, node) > MERGE_RUN || !map.runWalkable(p, node)) break;
+        if (!['walk', 'step'].includes(node.move) || distance(p, node) > MERGE_RUN || !map.runWalkable(p, node)) break;
         // The merge is undone if the body drifts off the line it was made from (below).
         if (this.mergedFrom === null) this.mergedFrom = this.index;
         this.index = ahead;

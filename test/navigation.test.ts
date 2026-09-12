@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Navigation } from '../src/runtime/navigation/navigator.ts';
-import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
+import { distance, TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 
 const stateAt = position => ({
   position,
@@ -52,4 +52,22 @@ test('a partial route extends in stride when new terrain replaces old cells at c
   assert.equal(nav.routeReaches, true);
   assert.equal(nav.route.at(-1).x, 8.5);
   assert.equal(frame.forward, true);
+});
+
+test('a merged run keeps input reach margin and falls back when the body drifts away during a turn', () => {
+  const map = new TerrainMemory();
+  for (let x = -2; x <= 12; x++) for (let z = -1; z <= 1; z++) column(map, x, z);
+  const state = stateAt({ x: 0.5, y: 0, z: 0.5 });
+  const nav = new Navigation(map, state, { x: 10.5, y: 0, z: 0.5 }, 0);
+  nav.adopt(
+    Array.from({ length: 10 }, (_, i) => ({ x: i + 1.5, y: 0, z: 0.5, move: 'walk' })),
+    state.position,
+    0,
+  );
+  const first = nav.tick(state, 0);
+  assert.ok(distance(state.position, first.toward) <= 7, 'leave room for movement before the mod processes the frame');
+  state.position = { x: -0.5, y: 0, z: 0.5 };
+  const turning = nav.tick(state, 100);
+  assert.ok(distance(state.position, turning.toward) <= 7, 'a previously merged point cannot drift out of reach');
+  assert.equal(turning.toward.x, 1.5, 'return to the original nearby checkpoint');
 });
