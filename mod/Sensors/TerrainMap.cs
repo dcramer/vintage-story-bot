@@ -9,7 +9,7 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
     // A null Boxes row is either a real change (the block was replaced) or
     // the eye merely forgetting a cell it no longer keeps; Node's map keeps
     // forgotten geometry and drops only changed cells.
-    private sealed record Observation(Bounds[]? Boxes, bool Hazard, long At, long Sequence, long PublishedAt, string? Reason = null);
+    private sealed record Observation(Bounds[]? Boxes, string? Hazard, long At, long Sequence, long PublishedAt, string? Reason = null);
     private readonly Dictionary<Cell, Observation> cells = new();
     private long sequence, lostThrough;
     public string Session { get; private set; } = Guid.NewGuid().ToString("N");
@@ -21,7 +21,7 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
         // Forget only knowledge we held; unrelated world updates must not flood the delta stream.
         if (!cells.TryGetValue(cell, out var prior) || prior.Boxes == null) return;
         long now = Environment.TickCount64;
-        cells[cell] = new(null, false, now, ++sequence, now, reason);
+        cells[cell] = new(null, null, now, ++sequence, now, reason);
         Bound();
     }
     public void Stale(Cell cell)
@@ -32,7 +32,7 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
         if (cells.TryGetValue(cell, out var prior) && prior.Boxes != null)
             cells[cell] = prior with { At = 0 };
     }
-    public void Put(Cell cell, Bounds[] boxes, bool hazard, long now)
+    public void Put(Cell cell, Bounds[] boxes, string? hazard, long now)
     {
         if (cells.TryGetValue(cell, out var prior) && prior.Boxes != null && prior.Hazard == hazard &&
             prior.Boxes.AsSpan().SequenceEqual(boxes))

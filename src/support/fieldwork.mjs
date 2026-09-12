@@ -34,11 +34,15 @@ export class Fieldwork {
   visits = new Map();
   seen = new Map();
   skipped = new Map();
-  constructor(env, { signal, timeoutMs, sprint = false, wait = ms => new Promise(r => setTimeout(r, ms)), now = Date.now } = {}) {
+  events = [];
+  constructor(env, { signal, timeoutMs, sprint = false, swim = false, stopWhenHurt = false,
+    wait = ms => new Promise(r => setTimeout(r, ms)), now = Date.now } = {}) {
     this.env = env;
     this.signal = signal;
     this.timeoutMs = timeoutMs;
     this.sprint = sprint;
+    this.swim = swim;
+    this.stopWhenHurt = stopWhenHurt;
     this.wait = wait;
     this.now = now;
     this.started = now();
@@ -59,24 +63,42 @@ export class Fieldwork {
     if (!result.ok) throw Error(result.error ?? 'Game action refused');
     return result;
   }
-  guard(state) {
+  // What ends a goal outright: death, lost controls, a life alert, deep water
+  // without leave to swim, a changed player or world. Being hurt does not:
+  // it is noted as an event the goal and the brain can read, and the work
+  // goes on, unless the goal asked to stop when hurt.
+  assess(state, { controls = true } = {}) {
     this.check();
-    if (!state.ok || !state.alive || !state.controlReady || !this.alertsSafe(state) ||
-        state.motion.swimming || state.motion.feetInLiquid || state.mounted)
+    if (!state.ok || !state.alive || controls && !state.controlReady || !this.alertsSafe(state) ||
+        state.motion.swimming && !this.swim || state.mounted)
       throw Error('Gameplay interruption: life, controls or liquid');
     const initial = this.initial;
     if (initial && (state.player.uid !== initial.player.uid || state.life.session !== initial.life.session ||
-        state.life.lastDamageAt !== initial.life.lastDamageAt || state.position.dimension !== initial.position.dimension))
-      throw Error('Gameplay interruption: damage or session changed');
+        state.position.dimension !== initial.position.dimension))
+      throw Error('Gameplay interruption: session changed');
+    if (initial && state.life.lastDamageAt !== this.hurtAt) {
+      this.hurtAt = state.life.lastDamageAt;
+      this.event('hurt', { health: state.vitals?.health?.current ?? null });
+      if (this.stopWhenHurt) throw Error('Gameplay interruption: hurt');
+    }
     this.latest = state;
     return state;
+  }
+  guard(state) { return this.assess(state); }
+  // Things that happened during the goal, newest last, bounded; reported with progress.
+  event(type, extra = {}) {
+    this.events.push({ type, at: this.now(), ...extra });
+    while (this.events.length > 16) this.events.shift();
+    this.report(type, extra);
   }
   async observe(sync = false) {
     this.check();
     return this.guard(sync ? await this.env.sync() : await this.send({ action: 'observe' }));
   }
   async start(features = []) {
-    this.initial = await this.observe(true);
+    this.initial = await this.env.sync();
+    this.hurtAt = this.initial.life?.lastDamageAt ?? null;
+    this.guard(this.initial);
     if (!this.initial.motion.onGround) throw Error('Start grounded');
     for (const feature of ['nearby_awareness', ...features])
       if (!this.initial.capabilities.includes(feature)) throw Error(`Update mod: ${feature} required`);
@@ -84,7 +106,8 @@ export class Fieldwork {
     this.visits.set(area(this.initial.position), 1);
   }
   report(phase, extra = {}) {
-    this.env.report?.({ phase, moved: +this.moved.toFixed(1), searched: this.searched, ...extra });
+    this.env.report?.({ phase, moved: +this.moved.toFixed(1), searched: this.searched,
+      ...(this.events.length ? { events: this.events.slice(-4) } : {}), ...extra });
   }
   async aim(angles) {
     await this.observe();
@@ -300,7 +323,12 @@ export class Fieldwork {
       // the same blocked leg six times.
       this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + 1);
     while (this.visits.size > 4096) this.visits.delete(this.visits.keys().next().value);
-    if (result.state === 'cancelled') throw Error(`Navigation interrupted: ${result.reason}`);
+    // A walk the mod released or the eye cancelled without a hard reason is a
+    // pause: the goal observes again and carries on from where it stands.
+    if (result.state === 'cancelled') {
+      if (/control_lost|identity_life_or_control_changed/.test(result.reason ?? '') && this.env.map) { await this.observe(); return { ...result, state: 'paused', reason: 'released' }; }
+      throw Error(`Navigation interrupted: ${result.reason}`);
+    }
     if (result.state !== 'arrived' && result.state !== 'paused') this.report('rerouting', { reason: result.reason });
     if (horizontal(before.position, after.position) > 1) this.heading = lookAt(before.position, after.position).yawDegrees;
     else if (result.state !== 'paused') this.heading = normalize(this.heading + 90);

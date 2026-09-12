@@ -22,23 +22,23 @@ static class ControlHoldTests
         Check(!hold.StarvingRecovery, "release clears recovery scope");
         Check(!hold.Frame("b", 2, 1002, 1002, 400), "released frame cannot resume");
         var map = new TerrainMap();
-        map.Put(new(1, 2, 3), [], false, 0);
+        map.Put(new(1, 2, 3), [], null, 0);
         Check(map.Fresh(new(1, 2, 3), 1), "observed air");
         var first = JsonSerializer.SerializeToElement(map.Read(0, map.Session, 1));
         long cursor = first.GetProperty("cursor").GetInt64();
-        map.Put(new(1, 2, 3), [], false, 100);
+        map.Put(new(1, 2, 3), [], null, 100);
         var unchanged = JsonSerializer.SerializeToElement(map.Read(cursor, map.Session, 100));
         Check(unchanged.GetProperty("cells").GetArrayLength() == 0 && map.Fresh(new(1, 2, 3), 550),
             "unchanged terrain refreshes without flooding deltas");
-        map.Put(new(1, 2, 3), [], false, 10_001);
+        map.Put(new(1, 2, 3), [], null, 10_001);
         var refreshed = JsonSerializer.SerializeToElement(map.Read(cursor, map.Session, 10_001));
         Check(refreshed.GetProperty("cells").GetArrayLength() == 1, "stable terrain periodically republishes freshness");
         var before = map.Session;
-        map.Put(new(4, 5, 6), [new(4, 5, 6, 5, 6, 7)], false, 10_001);
+        map.Put(new(4, 5, 6), [new(4, 5, 6, 5, 6, 7)], null, 10_001);
         map.Stale(new(4, 5, 6));
         Check(!map.Fresh(new(4, 5, 6), 10_001), "stale neighbor queued for resampling");
         var staleCursor = JsonSerializer.SerializeToElement(map.Read(0, map.Session, 10_001)).GetProperty("cursor").GetInt64();
-        map.Put(new(4, 5, 6), [new(4, 5, 6, 5, 6, 7)], false, 10_002);
+        map.Put(new(4, 5, 6), [new(4, 5, 6, 5, 6, 7)], null, 10_002);
         Check(JsonSerializer.SerializeToElement(map.Read(staleCursor, map.Session, 10_002)).GetProperty("cells").GetArrayLength() == 0,
             "unchanged stale neighbor does not publish an unknown/geometry pair");
         map.Invalidate(new(1, 2, 3));

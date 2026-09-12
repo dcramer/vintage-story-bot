@@ -204,12 +204,13 @@ export class Controller {
     const initial = await this.snapshot(signal);
     if (goal.sprint && !initial.capabilities.includes('background_sprint')) throw new Error('Update mod: background_sprint required');
     const alertsSafe = state => state.life.alerts.every(alert => alert === 'low_food' || alert === 'low_health' && allowStarvingRecovery);
-    if (!initial.controlReady || !initial.alive || !initial.motion.onGround || initial.motion.swimming || initial.motion.feetInLiquid || initial.mounted ||
+    if (!initial.controlReady || !initial.alive || !initial.motion.onGround && !initial.motion.feetInLiquid || initial.motion.swimming && !goal.swim || initial.mounted ||
       !alertsSafe(initial) || initial.position.dimension !== 0 ||
       Math.abs(goal.x - initial.position.x) > 128 || Math.abs(goal.z - initial.position.z) > 128 || Math.abs(goal.y - initial.position.y) > 32)
       throw new Error('Navigation needs grounded/dry/ready player and destination within 128 horizontal/32 vertical blocks.');
     if (signal?.aborted) throw new Error('Goal cancelled');
     const control = await this.game.control(initial, error => { record.cleanupError = error.message; }, { allowStarvingRecovery }, signal);
+    this.map.swim = !!goal.swim;
     const nav = record.nav = new Navigation(this.map, initial, goal);
     try {
       if (started) {
@@ -234,9 +235,13 @@ export class Controller {
         try { batch = await control.step(input); }
         catch (error) { nav.finish('cancelled', 'control_lost: ' + message(error)); break; }
         state = batch.state;
+        if (state.life.lastDamageAt !== initial.life.lastDamageAt) {
+          // Hurt: noted for the goal and its brain; the walk itself goes on.
+          initial.life.lastDamageAt = state.life.lastDamageAt;
+          nav.events = [...(nav.events ?? []).slice(-7), { type: 'hurt', at: Date.now(), health: state.vitals?.health?.current ?? null }];
+        }
         if (state.player.uid !== initial.player.uid || state.life.session !== initial.life.session || state.control.owner !== control.owner ||
-          !state.controlReady || !state.alive || state.life.lastDamageAt !== initial.life.lastDamageAt ||
-          !alertsSafe(state) || state.motion.swimming || state.motion.feetInLiquid || state.mounted || state.position.dimension !== 0) {
+          !state.controlReady || !state.alive || !alertsSafe(state) || state.motion.swimming && !goal.swim || state.mounted || state.position.dimension !== 0) {
           nav.finish('cancelled', state.control.reason ?? 'identity_life_or_control_changed'); break;
         }
         if (batch.terrain.reset) nav.survey(Date.now());

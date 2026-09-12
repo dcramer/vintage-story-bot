@@ -91,9 +91,13 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
             if (!visible) continue;
             var boxes = block.GetCollisionBoxes(blocks, blockPos) ?? [];
             var fluid = blocks.GetBlock(blockPos, BlockLayersAccess.Fluid);
-            bool hazard = fluid.IsLiquid() || block.Code?.Path.Contains("fire") == true ||
-                block.Code?.Path.Contains("lava") == true || boxes.Length > 16 ||
-                boxes.Any(b => b.X1 < 0 || b.Y1 < 0 || b.Z1 < 0 || b.X2 > 1 || b.Y2 > 1 || b.Z2 > 1);
+            // What kind of hazard a cell is: fire and lava are never entered, water can be waded or swum,
+            // oversized or overflowing shapes are avoided because their geometry is not a cell's.
+            string? hazard = block.Code?.Path.Contains("fire") == true || block.Code?.Path.Contains("lava") == true ||
+                    fluid.Code?.Path.Contains("lava") == true ? "fire"
+                : fluid.IsLiquid() ? "water"
+                : boxes.Length > 16 || boxes.Any(b => b.X1 < 0 || b.Y1 < 0 || b.Z1 < 0 || b.X2 > 1 || b.Y2 > 1 || b.Z2 > 1) ? "shape"
+                : null;
             map.Put(cell, boxes.Take(16).Select(b => new Bounds(cell.X + b.X1, cell.Y + b.Y1, cell.Z + b.Z1,
                 cell.X + b.X2, cell.Y + b.Y2, cell.Z + b.Z2)).ToArray(), hazard, now);
         }

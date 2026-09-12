@@ -19,14 +19,7 @@ const containerSide = container => container.slots.map(s => ({ ...s, address: { 
 // interruption; life, damage and session changes still end the goal.
 async function peek(field) {
   const state = await field.send({ action: 'observe' });
-  if (state.controlReady) return field.guard(state);
-  field.check();
-  const initial = field.initial;
-  if (!state.alive || !field.alertsSafe(state) || state.player.uid !== initial.player.uid ||
-      state.life.session !== initial.life.session || state.life.lastDamageAt !== initial.life.lastDamageAt)
-    throw Error('Gameplay interruption: damage or session changed');
-  field.latest = state;
-  return state;
+  return field.assess(state, { controls: false });
 }
 
 // Aim at one observed container block within native reach and open it: the game shows its dialog after

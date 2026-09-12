@@ -11,13 +11,19 @@ export const lookAt = (eye, p) => ({ yawDegrees: normalize(Math.atan2(p.x - eye.
 // place to stand when it has a floor and enough free cells above for the
 // body; moves between cells are a walk, a step, a jump up one block, or a
 // drop of up to three. Water and fire are walls, unknown is a wall, and a
-// pit is simply a set of cells the search cannot leave. Beside water only a
-// one-block step down is allowed; the landing cell itself is never water.
+// pit is simply a set of cells the search cannot leave. Water one block deep
+// over solid ground is waded through at a cost (a wet node); deeper water is
+// swum only when a route allows it (a swim node); fire is never entered.
+// Beside water only a one-block step down is allowed.
 export const BODY_HEIGHT = 1.85;
 export const STEP_HEIGHT = .6;   // Vintage Story auto-steps sub-block heights; a full block needs a jump.
 export const JUMP_HEIGHT = 1.05;
 export const MAX_DROP = 3.05;    // No fall damage at three blocks; deeper is never planned.
 export const JUMP_HEADROOM = 2.3; // Body top rises about one block during a jump.
+export const WADE_COST = 3;       // Shallow water is slow and cold; a route prefers dry ground.
+export const SWIM_COST = 6;
+// Feet sit about half a block below the surface cell's floor while swimming.
+export const SWIM_DEPTH = .5;
 const cardinals = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const diagonals = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
 const around = [...cardinals, ...diagonals];
@@ -96,10 +102,22 @@ export class TerrainMemory {
     }
     return ok;
   }
-  // A place to stand: a floor in this cell and a body's worth of known free space above it.
+  // A place to stand: a floor in this cell and a body's worth of known free
+  // space above it. A water cell over a solid block is a place to wade: feet
+  // on that block, body above the water. A water cell over more water with
+  // air above is a place to swim, when swimming is allowed.
   standable(x, y, z, missing) {
     const cell = this.get(x, y, z);
     if (!cell) { this.missing(missing, x, y, z); return null; }
+    if (cell.hazard === 'water') {
+      const bed = this.get(x, y - 1, z);
+      if (!bed) { this.missing(missing, x, y - 1, z); return null; }
+      if (!bed.hazard && this.floor(x, y - 1, z) === y && this.clearBetween(x, z, y + 1, y + BODY_HEIGHT, missing))
+        return { x: x + .5, y, z: z + .5, wet: true };
+      if (this.swim && bed.hazard === 'water' && this.clearBetween(x, z, y + 1, y + 1 + BODY_HEIGHT - 1, missing))
+        return { x: x + .5, y: y - SWIM_DEPTH, z: z + .5, swim: true };
+      return null;
+    }
     if (cell.hazard) return null;
     const top = this.floor(x, y, z);
     if (top === null || top === Infinity) return null;
@@ -123,8 +141,9 @@ export class TerrainMemory {
     const x = Math.floor(p.x), z = Math.floor(p.z);
     return this.levels(x, z, p.y, tolerance, tolerance).some(node => Math.abs(node.y - p.y) <= tolerance);
   }
-  // Water or fire touching the node's own level or the one below, in any direction.
+  // Water or fire touching a dry node's own level or the one below, in any direction.
   shore(node) {
+    if (node.wet || node.swim) return false;
     const x = Math.floor(node.x), z = Math.floor(node.z), y = Math.floor(node.y - .01);
     for (const [dx, dz] of around) for (let dy = -1; dy <= 1; dy++)
       if (this.get(x + dx, y + dy, z + dz)?.hazard) return true;
@@ -140,6 +159,16 @@ export class TerrainMemory {
       for (const to of this.levels(x + dx, z + dz, t, JUMP_HEIGHT, MAX_DROP, missing)) {
         const rise = to.y - t;
         let kind, cost;
+        // Into or through water: a wade or a swim, never a jump or a drop.
+        if (to.wet || to.swim || node.wet || node.swim) {
+          if (diagonal && !this.cornerOpen(x, z, dx, dz, Math.max(t, to.y), missing)) continue;
+          if (rise > JUMP_HEIGHT || -rise > 1.05) continue;
+          if (rise > STEP_HEIGHT && !this.clearBetween(x, z, t, t + JUMP_HEADROOM, missing)) continue;
+          kind = to.swim ? 'swim' : to.wet ? 'wade' : rise > STEP_HEIGHT ? 'jump' : 'walk';
+          cost = d + (to.swim ? SWIM_COST : to.wet ? WADE_COST : 1);
+          result.push({ node: { ...to, move: kind }, cost });
+          continue;
+        }
         if (rise > STEP_HEIGHT) {
           if (!this.clearBetween(x, z, t, t + JUMP_HEADROOM, missing) ||
               !this.clearBetween(x + dx, z + dz, to.y, to.y + JUMP_HEADROOM - .3, missing)) continue;

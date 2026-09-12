@@ -16,6 +16,8 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
   const blocks = o => o.kind === 'block' && includes(o.code, match);
   const drops = o => o.kind === 'item' && includes(o.code, item);
   let inventory = await field.send({ action: 'inventory' });
+  if (tool !== undefined && !ownedSlots(inventory).some(s => s.tool === tool && s.toolTier >= minTier && s.durability > 0))
+    throw Error(`Missing tool: no ${tool}${minTier ? ` of tier ${minTier}` : ''} carried`);
   const initial = matchingCount(inventory, item);
   const gained = () => matchingCount(inventory, item) - initial;
   const refresh = async () => { await field.observe(); inventory = await field.send({ action: 'inventory' }); return gained(); };

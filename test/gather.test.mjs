@@ -49,15 +49,22 @@ test('acknowledgements do not count as sticks; cancellation stops continued sear
   assert.equal(f.calls.at(-1).action, 'stop');
 });
 
-test('damage interrupts before another action even with no goal deadline', async () => {
+test('being hurt is reported and the goal carries on; a life alert ends it', async () => {
   const f = fixture();
   const original = f.env.send;
+  let observations = 0;
   f.env.send = async request => {
     const r = await original(request);
-    if (request.action === 'observe') r.life.lastDamageAt = 100;
+    if (request.action === 'observe' && ++observations > 2) r.life.lastDamageAt = 100;
     return r;
   };
-  await assert.rejects(gather(f.env, { manageFood: false, wait: async () => {} }), /damage/);
-  assert.equal(f.picked(), false);
-  assert.equal(f.calls.at(-1).action, 'stop');
+  const result = await gather(f.env, { count: 2, manageFood: false, wait: async () => {} });
+  assert.equal(result.ok, true);
+  assert.ok(f.reports.some(p => p.phase === 'hurt'), 'the hit is an event in the goal progress');
+  const g = fixture();
+  const first = g.env.send;
+  g.env.send = async request => { const r = await first(request); if (request.action === 'observe') r.life.alerts = ['low_health']; return r; };
+  await assert.rejects(gather(g.env, { manageFood: false, wait: async () => {} }), /life/);
+  assert.equal(g.picked(), false);
+  assert.equal(g.calls.at(-1).action, 'stop');
 });

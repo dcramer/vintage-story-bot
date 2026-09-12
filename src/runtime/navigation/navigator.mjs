@@ -27,7 +27,7 @@ export class Navigation {
       remainingCheckpoints: Math.max(0, this.route.length - this.index), replans: this.replans, segments: this.segments,
       cachedCells: this.map.cells.size, lookingAt: this.lookingAt, nextCheckpoint: this.nextCheckpoint,
       desiredYaw: this.desiredYaw, yawError: this.yawError, lastReplan: this.lastReplan, diagnostics: this.diagnostics,
-      evading: this.evading, threat: this.threat, threats: this.threats };
+      evading: this.evading, threat: this.threat, threats: this.threats, events: this.events ?? [] };
   }
   finish(state, reason) { this.state = state; this.reason = reason; this.lookingAt = null; return null; }
   survey(now) {
@@ -53,7 +53,8 @@ export class Navigation {
   tick(state, now = Date.now()) {
     if (!this.active) return null;
     if (now >= this.deadline) return this.finish('blocked', 'deadline');
-    const p = state.position, grounded = state.motion.onGround, map = this.map, w = this.width, h = this.height;
+    // Standing in water counts as support: wading and swimming move on from there.
+    const p = state.position, grounded = state.motion.onGround || !!state.motion.feetInLiquid || !!state.motion.swimming, map = this.map, w = this.width, h = this.height;
     const threats = this.evading ? nearbyUnclearedThreats(state) : nearbyThreats(state);
     const nearby = threats[0] ?? null;
     if (!this.evading && nearby) {
