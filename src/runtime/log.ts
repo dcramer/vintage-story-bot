@@ -1,4 +1,4 @@
-import { createWriteStream, mkdirSync } from 'node:fs';
+import { createWriteStream, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import { join } from 'node:path';
 
@@ -9,6 +9,8 @@ import { join } from 'node:path';
 // context the logger was bound to (a goal's id and kind). The file keeps every
 // level; the mirror shows info unless SERAPH_LOG says debug or off. Writes are
 // never awaited by gameplay; a file that cannot be written is dropped, once noted.
+// Old files go at startup only: those not written to for keepHours, then the
+// oldest until the folder is under keepMb. The file being written is never touched.
 //
 // Scopes: controller (process), mod (requests to the game), tool (requests to the
 // controller), goal (lifecycle, progress, what a goal noted), nav (routes and
@@ -38,6 +40,8 @@ export class SessionLog implements Log {
     mirror = (process.env.SERAPH_LOG as Mirror) ?? 'info',
     stderr = process.stderr as { write(line: string): unknown } | null,
     startedAt = new Date(),
+    keepHours = 24,
+    keepMb = 2048,
   } = {}) {
     this.mirror = mirrors.includes(mirror) ? mirror : 'info';
     this.stderr = stderr;
@@ -46,8 +50,10 @@ export class SessionLog implements Log {
     this.path = join(folder, `${startedAt.toISOString().replace(/[:.]/g, '-')}.ndjson`);
     try {
       mkdirSync(folder, { recursive: true });
+      const pruned = prune(folder, { maxAgeMs: keepHours * 3600000, maxBytes: keepMb * 1048576, now: startedAt.getTime() });
       this.stream = createWriteStream(this.path, { flags: 'a' });
       this.stream.on('error', error => this.fail(error));
+      if (pruned.removed) this.info('controller', 'prune', { ...pruned, keepHours, keepMb });
     } catch (error) {
       this.fail(error);
     }
@@ -57,6 +63,8 @@ export class SessionLog implements Log {
       dir: env.VINTAGE_STORY_LOG_DIR ?? '.runtime/logs',
       bot: env.VINTAGE_STORY_BOT_ID || os.hostname(),
       mirror: env.SERAPH_LOG as Mirror,
+      keepHours: Number(env.VINTAGE_STORY_LOG_KEEP_HOURS) || 24,
+      keepMb: Number(env.VINTAGE_STORY_LOG_KEEP_MB) || 2048,
     });
   }
   info(scope: string, event: string, fields: Fields = {}) {
@@ -108,6 +116,42 @@ class Bound implements Log {
   bind(context: Fields): Log {
     return new Bound(this.parent, { ...this.context, ...context });
   }
+}
+
+// Remove finished session files: first those last written before maxAgeMs ago,
+// then the oldest by start time until the folder holds at most maxBytes. Returns
+// what went; a file that cannot be read or removed is left alone.
+export function prune(folder: string, { maxAgeMs, maxBytes, now = Date.now() }: { maxAgeMs: number; maxBytes: number; now?: number }) {
+  const files = readdirSync(folder)
+    .filter(name => name.endsWith('.ndjson'))
+    .sort()
+    .flatMap(name => {
+      try {
+        const stat = statSync(join(folder, name));
+        return [{ name, bytes: stat.size, writtenAt: stat.mtimeMs }];
+      } catch {
+        return [];
+      }
+    });
+  let removed = 0,
+    bytes = 0;
+  const remove = file => {
+    try {
+      rmSync(join(folder, file.name));
+      removed++;
+      bytes += file.bytes;
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const kept = files.filter(file => !(now - file.writtenAt > maxAgeMs && remove(file)));
+  let total = kept.reduce((sum, file) => sum + file.bytes, 0);
+  for (const file of kept) {
+    if (total <= maxBytes) break;
+    if (remove(file)) total -= file.bytes;
+  }
+  return { removed, bytes };
 }
 
 // A log that keeps nothing: for tests and for pieces built without a session.
