@@ -80,6 +80,8 @@ export class BridgeClient {
   >();
   next = 0;
   buffer = '';
+  // What the mod sends on its own: a line with an event and no request id (the sense feed).
+  onEvent: ((event: any) => void) | null = null;
   constructor({ port = bridgePort(), timeoutMs = 4000, requestMaxBytes = 1024, maxBytes = 262144 }: BridgeOptions = {}) {
     this.port = port;
     this.timeoutMs = timeoutMs;
@@ -155,6 +157,15 @@ export class BridgeClient {
         if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') throw new Error('Expected an object with boolean ok.');
       } catch (error) {
         return this.drop(socket, new Error(`Invalid bridge response: ${error.message}`));
+      }
+      if (typeof result.event === 'string' && result.requestId === undefined) {
+        try {
+          this.onEvent?.(result);
+        } catch {
+          /* a listener's fault never closes the connection */
+        }
+        end = this.buffer.indexOf('\n');
+        continue;
       }
       // A reply without a requestId answers the oldest request still waiting.
       const id = typeof result.requestId === 'number' ? result.requestId : this.pending.keys().next().value;

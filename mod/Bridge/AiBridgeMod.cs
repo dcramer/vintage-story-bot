@@ -126,6 +126,35 @@ public sealed partial class AiBridgeMod : ModSystem
     private const int RequestMaxBytes = 1024;
     private const long RequestDeadlineMs = 3000, StallMs = 1000;
     private long lastTickAt;
+    // One live connection: its reply writer and, once it has subscribed, its feed.
+    private sealed class BridgeConnection(System.Func<string, string?, Task> reply)
+    {
+        public Guid Id { get; } = Guid.NewGuid();
+        public System.Func<string, string?, Task> Reply { get; } = reply;
+        public Subscriber? Subscriber { get; set; }
+    }
+    // A subscribed connection's place in the feed: its cursors, when it was last pushed to, and
+    // whether a push is still being written (a slow reader gets the next tick's, never a queue).
+    private sealed class Subscriber(BridgeConnection connection)
+    {
+        public BridgeConnection Connection { get; } = connection;
+        public long Cursor, Seen, PushedAt;
+        public string? Session;
+        private int inFlight;
+        public void Push(object payload)
+        {
+            if (Interlocked.CompareExchange(ref inFlight, 1, 0) != 0) return;
+            _ = Task.Run(async () =>
+            {
+                try { await Connection.Reply(JsonSerializer.Serialize(payload), null).ConfigureAwait(false); }
+                catch (Exception) { }
+                finally { Interlocked.Exchange(ref inFlight, 0); }
+            });
+        }
+    }
+    private readonly ConcurrentDictionary<Guid, Subscriber> subscribers = new();
+    private BridgeConnection? currentConnection;
+    private const long PushEveryMs = 250;
 
     private async Task ServeAsync(TcpListener server, CancellationToken stopped)
     {
@@ -144,11 +173,12 @@ public sealed partial class AiBridgeMod : ModSystem
 
     private async Task ServeConnectionAsync(TcpClient client, CancellationToken stopped)
     {
-        using var connection = client;
+        using var socket = client;
         using var closed = CancellationTokenSource.CreateLinkedTokenSource(stopped);
         var writes = new SemaphoreSlim(1, 1);
         NetworkStream stream;
         try { stream = client.GetStream(); } catch (Exception) { return; }
+        BridgeConnection connection = null!;
         async Task Reply(string json, string? id)
         {
             // The requestId is spliced in front of the serialized reply so no response type has to carry it.
@@ -159,6 +189,7 @@ public sealed partial class AiBridgeMod : ModSystem
             try { await stream.WriteAsync(output, closed.Token).ConfigureAwait(false); }
             finally { writes.Release(); }
         }
+        connection = new BridgeConnection(Reply);
         try
         {
             var buffer = new byte[4096];
@@ -188,7 +219,7 @@ public sealed partial class AiBridgeMod : ModSystem
                         continue;
                     }
                     var completion = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    requests.Enqueue(new(json, now, closed.Token, completion));
+                    requests.Enqueue(new(json, now, closed.Token, completion, connection));
                     _ = AnswerAsync(completion.Task, id, Reply, closed.Token);
                 }
             }
@@ -197,7 +228,7 @@ public sealed partial class AiBridgeMod : ModSystem
         catch (IOException) { }
         catch (SocketException) { }
         catch (ObjectDisposedException) { }
-        finally { closed.Cancel(); }
+        finally { closed.Cancel(); subscribers.TryRemove(connection.Id, out _); }
     }
 
     private static async Task AnswerAsync(Task<object> answer, string? id, System.Func<string, string?, Task> reply, CancellationToken closed)
@@ -288,7 +319,8 @@ public sealed partial class AiBridgeMod : ModSystem
             {
                 long now = Environment.TickCount64;
                 if (control.Active && (ManualInput() || control.Expire(now))) ReleaseControl(ManualInput() ? "manual_input" : "expired");
-                // Both senses stream only while a controller is reading them.
+                // Both senses stream only while a controller is reading them: by request, or by the feed.
+                if (!subscribers.IsEmpty) lastSenseAt = now;
                 if (now - lastSenseAt < 5000) { terrainSensor.Sample(now, sensorPriority); vision.Sample(now); }
                 UpdateTargetLock();
                 if (control.Active || lockKind != LockKind.None) ApplyCamera(dt);
@@ -335,6 +367,7 @@ public sealed partial class AiBridgeMod : ModSystem
             else if (step != null) ApplyStep(Environment.TickCount64);
             else SetMovement(true);
         }
+        PushSenses(Environment.TickCount64);
 
     }
 
@@ -354,6 +387,7 @@ public sealed partial class AiBridgeMod : ModSystem
                 pending.Completion.TrySetResult(new { ok = false, code = "expired", error = $"Request waited {waited} ms for a game tick; nothing was done." });
                 continue;
             }
+            currentConnection = pending.Connection;
             try { pending.Completion.TrySetResult(Execute(pending.Json, pending.ReceivedAt)); }
             catch (JsonException) { pending.Completion.TrySetResult(new { ok = false, error = "Invalid JSON request." }); }
             catch (Exception exception)
@@ -363,6 +397,7 @@ public sealed partial class AiBridgeMod : ModSystem
                 api.Logger.Error($"AI bridge request failed: {exception}");
                 pending.Completion.TrySetResult(new { ok = false, error = "Game action failed; see client log." });
             }
+            finally { currentConnection = null; }
         }
     }
 
@@ -396,6 +431,8 @@ public sealed partial class AiBridgeMod : ModSystem
         {
             case "observe": return Observe();
             case "sense": return Sense(request);
+            case "subscribe": return Subscribe(request);
+            case "unsubscribe": return Unsubscribe();
             case "inspect_target": return CanControl() ? context.InspectTarget(life.Session) : new { ok = false, error = "Close menus and unpause before inspecting." };
             case "environment": return context.Environment(life.Session);
             case "events": return Events(request);
@@ -495,5 +532,5 @@ public sealed partial class AiBridgeMod : ModSystem
 
     private static double NormalizeDegrees(double degrees) => (degrees % 360 + 360) % 360;
 
-    private sealed record PendingRequest(string Json, long ReceivedAt, CancellationToken Cancellation, TaskCompletionSource<object> Completion);
+    private sealed record PendingRequest(string Json, long ReceivedAt, CancellationToken Cancellation, TaskCompletionSource<object> Completion, BridgeConnection Connection);
 }

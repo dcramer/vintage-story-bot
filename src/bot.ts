@@ -32,6 +32,7 @@ const telemetry = {
 // One connection to the mod for the whole process; requests overlap on it.
 const bridge = new BridgeClient();
 const controller = new Controller(bridge.request, telemetry as any, log);
+bridge.onEvent = event => controller.feed(event);
 controller.budget.watchLoop();
 const sockets = new Set<net.Socket>();
 const maxRequestBytes = 16384;

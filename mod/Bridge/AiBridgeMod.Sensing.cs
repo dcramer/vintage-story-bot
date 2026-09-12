@@ -23,7 +23,7 @@ public sealed partial class AiBridgeMod
         return new
         {
             ok = true,
-            capabilities = new[] { "target_guard", "performance", "directional_move", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "block_sightings", "map_waypoints", "map_waypoint_add", "map_view", "map_hud_state", "drop", "containers", "look_at", "players", "catalog", "chat_messages", "can_see", "ui_close", "catalog_facts" },
+            capabilities = new[] { "target_guard", "performance", "sense_feed", "directional_move", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "block_sightings", "map_waypoints", "map_waypoint_add", "map_view", "map_hud_state", "drop", "containers", "look_at", "players", "catalog", "chat_messages", "can_see", "ui_close", "catalog_facts" },
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
             world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString(),
@@ -124,16 +124,65 @@ public sealed partial class AiBridgeMod
 
     private object Sense(JsonElement request)
     {
-        long cursor = 0;
-        if (request.TryGetProperty("after", out var cursorField) && (!cursorField.TryGetInt64(out cursor) || cursor < 0))
-            return new { ok = false, error = "Invalid terrain cursor." };
-        string? terrainSession = request.TryGetProperty("session", out var terrainSessionField) && terrainSessionField.ValueKind == JsonValueKind.String
-            ? terrainSessionField.GetString() : null;
-        if (ReadSeen(request, out long seen) is { } seenError) return new { ok = false, error = seenError };
+        if (ReadFeedCursors(request, out long cursor, out string? terrainSession, out long seen) is { } error) return new { ok = false, error };
         lastSenseAt = Environment.TickCount64;
-        return new { ok = true, state = Observe(),
-            terrain = terrain.Read(cursor, terrainSession, lastSenseAt),
-            surface = vision.Surface(lastSenseAt), sightings = vision.Sightings(lastSenseAt, seen) };
+        // A subscribed connection reads on from its own place in the feed, whatever cursor it sends.
+        return SensePayload(lastSenseAt, currentConnection?.Subscriber, cursor, terrainSession, seen);
+    }
+
+    private string? ReadFeedCursors(JsonElement request, out long cursor, out string? session, out long seen)
+    {
+        cursor = 0; session = null;
+        if (ReadSeen(request, out seen) is { } seenError) return seenError;
+        if (request.TryGetProperty("after", out var cursorField) && (!cursorField.TryGetInt64(out cursor) || cursor < 0)) return "Invalid terrain cursor.";
+        session = request.TryGetProperty("session", out var sessionField) && sessionField.ValueKind == JsonValueKind.String ? sessionField.GetString() : null;
+        return null;
+    }
+
+    // What the eye sees now, for one sense reply or one push: the surroundings page after the
+    // cursor, the surface in view, the sightings since seen. A subscriber's cursors advance here.
+    private object SensePayload(long now, Subscriber? subscriber, long cursor, string? session, long seen, string? @event = null)
+    {
+        if (subscriber != null) { cursor = subscriber.Cursor; session = subscriber.Session; seen = subscriber.Seen; }
+        var page = terrain.Read(cursor, session, now);
+        var payload = new { ok = true, @event, state = Observe(), terrain = page, surface = vision.Surface(now), sightings = vision.Sightings(now, seen) };
+        if (subscriber != null) { subscriber.Cursor = page.cursor; subscriber.Session = page.session; subscriber.Seen = now; subscriber.PushedAt = now; }
+        return payload;
+    }
+
+    // The feed: from here on this connection is pushed what the eye sees every tick that has
+    // new surroundings for it, and at least four times a second, until it unsubscribes or
+    // closes. The reply is the first payload; the cursors sent set where the feed starts.
+    private object Subscribe(JsonElement request)
+    {
+        if (currentConnection == null) return new { ok = false, error = "No connection to subscribe." };
+        if (ReadFeedCursors(request, out long cursor, out string? session, out long seen) is { } error) return new { ok = false, error };
+        var subscriber = currentConnection.Subscriber ?? new Subscriber(currentConnection);
+        subscriber.Cursor = cursor; subscriber.Session = session; subscriber.Seen = seen;
+        currentConnection.Subscriber = subscriber;
+        subscribers[currentConnection.Id] = subscriber;
+        lastSenseAt = Environment.TickCount64;
+        return SensePayload(lastSenseAt, subscriber, cursor, session, seen);
+    }
+
+    private object Unsubscribe()
+    {
+        if (currentConnection?.Subscriber == null) return new { ok = true, subscribed = false };
+        subscribers.TryRemove(currentConnection.Id, out _);
+        currentConnection.Subscriber = null;
+        return new { ok = true, subscribed = false };
+    }
+
+    // Every tick, each subscriber with surroundings pages waiting or a quarter second since its
+    // last push gets one; a subscriber still writing the last one waits for the next tick.
+    private void PushSenses(long now)
+    {
+        if (subscribers.IsEmpty || api.World?.Player?.Entity == null) return;
+        foreach (var subscriber in subscribers.Values)
+        {
+            if (now - subscriber.PushedAt < PushEveryMs && !terrain.HasMore(subscriber.Cursor, subscriber.Session)) continue;
+            subscriber.Push(SensePayload(now, subscriber, 0, null, 0, "sense"));
+        }
     }
 
     // Other players on this server, from the same server-filtered feed the map

@@ -84,7 +84,9 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
     // A walk adds a wall of about 300 cells per block moved; pages must drain faster than that at a few
     // steps per second, or the feed falls behind and the follower waits on it.
     public const int PageSize = 1024;
-    public object Read(long after, string? session, long now)
+    // Whether a reader at this cursor has pages left: a new session, or publications past it.
+    public bool HasMore(long after, string? session) => session != Session || after < sequence;
+    public TerrainPage Read(long after, string? session, long now)
     {
         bool reset = session != Session || after < lostThrough || after > sequence;
         if (reset) after = 0;
@@ -95,11 +97,14 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
         for (int i = low; i < log.Count && batch.Count < PageSize; i++)
             if (cells.TryGetValue(log[i].Cell, out var value) && value.Sequence == log[i].Sequence) batch.Add((log[i].Cell, value));
         long cursor = batch.Count == 0 ? sequence : batch[^1].Value.Sequence;
-        return new { session = Session, reset, cursor, more = cursor < sequence, clock = now,
-            cells = batch.Select(p => p.Value.Boxes == null
+        return new TerrainPage(Session, reset, cursor, cursor < sequence, now,
+            batch.Select(p => p.Value.Boxes == null
                 ? new object?[] { p.Cell.X, p.Cell.Y, p.Cell.Z, p.Value.At, p.Value.Traits, null, p.Value.Reason ?? "changed" }
                 : new object?[] { p.Cell.X, p.Cell.Y, p.Cell.Z, p.Value.At, p.Value.Traits,
                     p.Value.Boxes.Select(b => new[] { b.X1 - p.Cell.X, b.Y1 - p.Cell.Y, b.Z1 - p.Cell.Z,
-                        b.X2 - p.Cell.X, b.Y2 - p.Cell.Y, b.Z2 - p.Cell.Z }).ToArray(), p.Value.Code }).ToArray() };
+                        b.X2 - p.Cell.X, b.Y2 - p.Cell.Y, b.Z2 - p.Cell.Z }).ToArray(), p.Value.Code }).ToArray());
     }
 }
+
+// One page of the surroundings delta stream, as the wire carries it.
+public sealed record TerrainPage(string session, bool reset, long cursor, bool more, long clock, object?[][] cells);

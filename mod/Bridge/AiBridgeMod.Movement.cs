@@ -172,9 +172,14 @@ public sealed partial class AiBridgeMod
         {
             lastSenseAt = Environment.TickCount64;
             if (step != null) ApplyStep(lastSenseAt);
-            return new { ok = true, sequence, step = step?.View(), state = Observe(),
-                terrain = terrain.Read(stepCursor, stepSession, lastSenseAt),
+            // A subscribed connection's step reads on from its place in the feed, so no page is sent twice.
+            var subscriber = currentConnection?.Subscriber;
+            if (subscriber != null) { stepCursor = subscriber.Cursor; stepSession = subscriber.Session; stepSeen = subscriber.Seen; }
+            var page = terrain.Read(stepCursor, stepSession, lastSenseAt);
+            var sensed = new { ok = true, sequence, step = step?.View(), state = Observe(), terrain = page,
                 surface = vision.Surface(lastSenseAt), sightings = vision.Sightings(lastSenseAt, stepSeen) };
+            if (subscriber != null) { subscriber.Cursor = page.cursor; subscriber.Session = page.session; subscriber.Seen = lastSenseAt; subscriber.PushedAt = lastSenseAt; }
+            return sensed;
         }
         if (step != null) ApplyStep(frameNow);
         return new { ok = true, sequence, step = step?.View() };

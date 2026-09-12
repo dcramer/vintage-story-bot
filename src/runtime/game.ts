@@ -109,6 +109,21 @@ export class GameClient {
     this.remember(batch);
     return batch;
   }
+  // The feed: once subscribed, the mod pushes what the eye sees every tick that has new
+  // surroundings and at least four times a second; nothing is asked for. When it last
+  // arrived and the state it carried, so the eye knows whether it is still flowing.
+  feed = { at: 0, state: null as any };
+  async subscribe(signal?: AbortSignal) {
+    const batch = await this.io({ action: 'subscribe', ...this.cursors() }, signal);
+    this.remember(batch);
+    this.feed = { at: Date.now(), state: batch.state };
+    return batch;
+  }
+  receive(event) {
+    if (event?.event !== 'sense' || !event.ok) return;
+    this.remember(event);
+    this.feed = { at: Date.now(), state: event.state };
+  }
   async snapshot(signal?: AbortSignal) {
     // 16,384 retained entries / 128 per page, plus headroom for live refreshes.
     for (let pages = 0; pages < 256; pages++) {

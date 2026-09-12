@@ -263,9 +263,13 @@ export class Controller {
         try {
           const glanceAt = Date.now();
           if (this.eyeSeenAt) this.budget.eyeGap(glanceAt - this.eyeSeenAt);
-          const batch = await this.game.sense();
+          // With the feed the mod pushes what the eye sees; a glance is only asked for to open
+          // it, to reopen it once it has gone quiet, or from a mod without it.
+          const feed = this.game.capabilities.includes('sense_feed');
+          const state =
+            feed && glanceAt - this.game.feed.at < 1000 ? this.game.feed.state : (feed ? await this.game.subscribe() : await this.game.sense()).state;
           this.eyeSeenAt = Date.now();
-          if (this.eyeTicks % 4 === 0) this.sample(batch.state);
+          if (this.eyeTicks % 4 === 0) this.sample(state);
           if (this.eyeLostAt) {
             this.log.info('eye', 'recovered', { lostMs: Date.now() - this.eyeLostAt });
             this.eyeLostAt = this.eyeStallNoted = null;
@@ -410,6 +414,15 @@ export class Controller {
       this.log.info('tool', 'refused', { action: request.action, by, error: message(error) });
       throw error;
     });
+  }
+  // One push of the feed: remembered, and mirrored to the operator like a sense reply.
+  feed(event) {
+    this.game.receive(event);
+    if (event?.event !== 'sense' || !event.ok) return;
+    this.budget.mod(event.state?.performance);
+    if (!this.telemetry) return;
+    this.telemetry.publish('state', event.state, { coalesce: true });
+    if (event.surface?.columns?.length) this.telemetry.publish('map', { columns: event.surface.columns }, { coalesce: true });
   }
   // Fire-and-forget status chat so other players on the server can follow what the bot is doing.
   // A line is said once: a goal restarted with the same story (a retry, a follow-up recovery) stays quiet
