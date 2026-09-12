@@ -151,7 +151,8 @@ export class Navigation {
     this.avoid = threats.map(entity => ({ point: entity.point, minimumDistance: Math.max(0, horizontal(p, entity.point) - 0.5) }));
     if (
       grounded &&
-      horizontal(p, this.target) < (this.target.arrivalRadius ?? 0.3) &&
+      // A step ends on its point or just past it (within about half a block); the destination is met the same way.
+      horizontal(p, this.target) < Math.max(this.target.arrivalRadius ?? 0.3, 0.5) &&
       (this.target.horizontalOnly || Math.abs(p.y - this.target.y) < 0.6)
     ) {
       if (this.evading && nearby) {
