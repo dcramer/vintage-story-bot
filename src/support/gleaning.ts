@@ -65,8 +65,9 @@ export class Gleaner {
           if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
         }
         if (ok) this.picked++;
-        else field.skip(object, 600000);
-        field.env.sightings?.forget?.(object.key);
+        // A miss (aimed from a bad angle) is set aside briefly by pickup itself; anything else, for ten minutes.
+        else if (!field.skipped.has(object.key)) field.skip(object, 600000);
+        if (ok || !field.skipped.has(object.key)) field.env.sightings?.forget?.(object.key);
       }
     } finally {
       this.pending = false;
@@ -84,7 +85,9 @@ export class Gleaner {
     // Aimed by the block's own selection box from where the body stands now; remembered angles are stale after a walk.
     const selected = await aimAtObject(field, object);
     if (!selected || selected.key !== object.key) {
+      // Something in the way from here: worth another try from another angle in a minute, not ten.
       field.report('pickup_missed', { target: object.key, selected: selected?.key ?? null });
+      field.skip(object, 60000);
       return false;
     }
     const before = carried(await field.observe());
