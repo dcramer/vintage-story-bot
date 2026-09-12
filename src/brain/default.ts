@@ -209,7 +209,7 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   // Below the recovery threshold, food is no longer optional daywork. With
   // nothing in the pack, sheltering through the night guarantees starvation;
   // keep searching and let forage's own threat handling decide when to run.
-  if (s.hunger !== null && s.hunger < HUNGRY) return s.burrowed && s.reserve <= 0 ? 'unburrow' : 'eat';
+  if (s.hunger !== null && s.hunger < HUNGRY) return s.burrowed ? 'unburrow' : 'eat';
   if (s.storm) {
     if (s.home) return s.atHome ? 'wait' : 'go_home';
     if (s.burrowed) return 'wait';
@@ -461,16 +461,14 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'go_home':
       return start('travel', { x: home!.x, z: home!.z, arrivalRadius: 3, timeoutMs: 600000 }, storm ? 'storm coming' : 'night falling');
     case 'eat':
-      return k.reserve > 0
-        ? start('eat', {}, `satiety ${Math.round((satiety ?? 0) * 100)}%`)
-        : start(
-            'forage',
-            // Food recovery may finish once one meal lands within 20 points
-            // of its target. Aim that margin above the brain's own threshold
-            // so one forage run clears the condition that started it.
-            { until: PECKISH + 0.2, keep: 160, timeoutMs: 1800000 },
-            `satiety ${Math.round((satiety ?? 0) * 100)}%, nothing carried`,
-          );
+      return start(
+        'forage',
+        // Food recovery may finish once one meal lands within 20 points of its
+        // target. Aim that margin above the brain's own threshold so one run
+        // eats what is carried, then searches only if that was not enough.
+        { until: PECKISH + 0.2, keep: 160, timeoutMs: 1800000 },
+        `satiety ${Math.round((satiety ?? 0) * 100)}%, ${k.reserve > 0 ? `${k.reserve} carried` : 'nothing carried'}`,
+      );
     case 'dirt':
       return start(
         'harvest',

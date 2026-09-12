@@ -80,9 +80,12 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ storm: true, home: false })), 'burrow', 'a storm sends a homeless bot underground');
   assert.equal(pickJob(situation({ storm: true, home: false, burrowed: true })), 'wait', 'an existing burrow shelters from a storm');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true, reserve: 100 })), 'eat', 'the pack is eaten from at night');
-  assert.equal(pickJob(situation({ hunger: 0.1, night: true, reserve: 100, burrowed: true })), 'eat', 'carried food is eaten inside a burrow');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true, atHome: false })), 'eat', 'critical hunger cannot wait for day');
-  assert.equal(pickJob(situation({ hunger: 0.1, night: true, burrowed: true })), 'unburrow', 'a starving bot opens its burrow first');
+  assert.equal(
+    pickJob(situation({ hunger: 0.1, night: true, reserve: 100, burrowed: true })),
+    'unburrow',
+    'a starving bot opens its burrow before eating or searching',
+  );
   const starvingNight = fresh();
   starvingNight.job = 'burrow';
   const digging = decide(
@@ -536,6 +539,26 @@ test('brain: night waits for forage to finish food already in hand', () => {
     ),
     { wait: 'letting forage finish eating' },
   );
+});
+
+test('brain: carried food enters one complete recovery run', () => {
+  const memory = fresh();
+  const berries = inventory(
+    slot('game:fruit-blackberry', 3, {
+      nutrition: { saturation: 80, health: 0 },
+      freshness: { state: 'fresh', freshHoursLeft: 100 },
+    }),
+  );
+  const choice = decide(
+    reading({
+      inventory: berries,
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+    }),
+    memory,
+  );
+  assert.equal(choice.start, 'forage');
+  assert.ok(Math.abs(choice.args.until - 0.6) < 1e-9);
+  assert.match(choice.why, /240 carried/);
 });
 
 test('brain: digging out of a hole is never interrupted by a threat', () => {
