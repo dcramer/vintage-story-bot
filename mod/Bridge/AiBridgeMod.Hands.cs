@@ -103,6 +103,7 @@ public sealed partial class AiBridgeMod
 
     private object OpenContainer(JsonElement request)
     {
+        if (containers.Adopt() is { } adopted) return adopted;
         if (!CanControl())
             return new { ok = false, error = "Close menus and enter the world before opening." };
         if (!request.TryGetProperty("target", out var target) || target.ValueKind != JsonValueKind.String ||

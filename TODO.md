@@ -22,6 +22,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [ ] **P1 · `block_at {x,y,z}`** — code/state of one cell if observed or remembered; `unknown` otherwise, never air (`game`, `ctl`). Mineflayer `blockAt`. Source: terrain memory + last scan; no hidden-world lookup.
 - [ ] **P1 · `can_see {x,y,z}`** — sampled line of sight from eye to cell (`mod`). Mineflayer `canSeeBlock`. Prerequisite for interact-range goals.
 - [~] sightings — `sense` returns a snapshot of entities, items and watched blocks a line of sight reached; a default salient set plus goal attention; `Fieldwork.scan` reads memory instead of paging `scan`; the controller's eye loop keeps memory fresh. Not live-verified.
+- [~] look-around search — `Fieldwork.lookAround` turns through 360° and reads memory before exploring; `harvest` uses it. Still to do: `find_sticks`/`find_flint`/`find_cattails` example goals with a legible search (look around, nearest seen, walk, repeat; spiral outward, never revisit) replacing heading-based exploration (`skill`, `goal`).
 - [ ] **P1 · `find_blocks {match,radius,limit}`** — controller-local read of remembered sightings only, never a world query; tagged visible/remembered, radius+limit bound the page (`ctl`). Mineflayer `findBlocks`.
 - [~] far view — `sense` returns a snapshot of sight-verified surface columns inside the real field of view (light-limited, coarser with distance); Node remembers them and `terrain` shows them. Not live-verified.
 - [~] `terrain` — merged observed/seen surface view around a point; absent columns unknown. Not live-verified.
@@ -79,12 +80,12 @@ Nothing exists. Blocks day 2 hunting and all threat response.
 
 ## 7. Containers (`openContainer`, `deposit`, `withdraw`, `close`)
 
-Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
+Blocks day 4 (storage vessel, crock) until firepit/vessel specifics land; the day-1 reed basket path is covered.
 
 - [x] `open_container {target}` — right-click chest/vessel/basket, return slots via `OpenedInventories` guard; session token like `inventory.state`.
 - [x] `container_move {from,to,quantity,expectedState}` — own slots plus `container` while open, guarded by the container session token.
 - [x] `close_container` — explicit close via the manager's own sync packet; opening another container closes the first (goal auto-close is future work).
-- [ ] **P0 · `store {target,items[]}` / `take {target,items[]}`** — goal: walk, open, move, verify deltas, close (`skill`, `goal`).
+- [~] `store {target,items[]}` / `take {target,items[]}` — walk, open, move (merge first, then empty slots), verify counts on both sides, close. Not live-verified.
 - [ ] **P1 · firepit** — not a furnace: fuel slot + input slot, or a cooking pot holding up to 4 ingredients making a meal per `recipes/cooking`; needs firestarter to light; verify burning/cooked state (`mod`, `skill`).
 - [ ] **P1 · ground storage piles** — sneak-place stackable items (logs, firewood, stones, cattails) as piles and pick them back up; 182 ground-storable items in assets (`skill`).
 - [ ] **P1 · `open_container` on bags** — handbaskets/backpacks worn in bag slots extend own inventory, they are not world containers; ensure `inventory` addresses cover bag slots (`mod`, `ctl`).
@@ -118,16 +119,18 @@ Nothing exists. Blocks day 1 (chest storage) and day 4 (storage vessel, crock).
 - [~] `map_waypoints`, `map_waypoint_remove`, `retrieve_body` — the game map's own markers (gravestone on death) read as the map screen shows them; removal through the map's remove command; goal walks to the latest death marker, picks up what fits an empty slot, skips the rest, clears the marker. Not live-verified. TODO: pickup policy (partial stacks, priorities, making room), `died` event position fallback when the map is disabled.
 - [ ] **P0 · `GoalGetToBlock` / interact-range arrival** — `move_to {target:blockKey}` stops when the cell is within the player's native `pickingrange` and visible, not at a coordinate (`nav`, `ctl`). Every block goal re-implements this today.
 - [ ] **P1 · `GoalFollow` / `follow {target:entity,range}`** — track a moving entity, re-plan on movement (`nav`, `goal`). Hunting, co-op.
-- [ ] **P1 · movement policy flags** — `allowSwim`, `allowJumpGap`, `allowDoors`, `allowDig` per goal; default all off (`nav`, `ctl`). pathfinder `Movements`.
+- [ ] **P0 · wading and swimming** — the game has swimming; the bot has none: the planner keeps a margin from every liquid and `Fieldwork.guard` ends a goal when feet touch water. Cattails grow in shallow water and death drops land in ponds, so day 1 needs at least wading through one-deep water and swimming across ponds as a per-goal movement flag (`allowSwim`), with oxygen and current as the limits (`nav`, `skill`, `ctl`). Seen live 2026-09-11: harvest circled a shoreline for 20 minutes and a dropped stack in a pond was `no_safe_pickup_position`.
+- [ ] **P1 · movement policy flags** — `allowJumpGap`, `allowDoors`, `allowDig` per goal; default all off (`nav`, `ctl`). pathfinder `Movements`.
 - [ ] **P1 · `path_update` reasons on `goal_status`** — `noPath|timeout|stuck|replanned` phases with counts (`ctl`).
 - [ ] **P1 · `home` shortcut** — `travel {waypoint:'home'}` convention plus `return_home` before sunset check (`skill`).
 - [~] terrain memory persistence — terrain, surface and remembered blocks per save identifier in `.runtime/knowledge`, week-long, invalidated by reported block changes. Not live-verified across a restart.
-- [ ] **P2 · climbable blocks, swim** — VS `Climbable` (ladders, some vines) and water traversal as movement primitives; VS auto-steps sub-block heights via `stepHeight`, full blocks still need jump (`mod`, `nav`).
+- [ ] **P2 · climbable blocks** — VS `Climbable` (ladders, some vines) as a movement primitive; VS auto-steps sub-block heights via `stepHeight`, full blocks still need jump (`mod`, `nav`).
 
 ## 11. Survival and time
 
 - [x] Food priority inside tasks (`manageFood`), attrition classification, low-vital interrupts.
 - [x] `respawn`, `chat`.
+- [ ] **P0 · interrupt policy** — damage, low food, threats and storms become goal events (`goal_status.events`, `events` stream) and the goal re-acquires control and carries on; hard stops stay for death, session loss, a per-goal health floor and missing preconditions (no pickaxe to mine, no knife where the guide requires one) which fail fast with the reason (`skill`, `ctl`). Today `Fieldwork.guard` ends the goal on any health loss.
 - [ ] **P0 · `wait {untilHour|ms}`** — idle goal that holds position, keeps observing, stops on damage; nights indoors (`goal`).
 - [ ] **P1 · torch cycle** — pick up and re-place torches each morning (`skill`): `dig_block` torch → `place_block`.
 - [ ] **P1 · day plan goal** — composite `day1` goal chaining knap → cattails → chest → house, with per-step `goal_status` progress (`goal`). Decide whether composites live in Node or stay LLM-orchestrated.

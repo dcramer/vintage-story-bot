@@ -52,13 +52,20 @@ public sealed class ContainerAdapter(ICoreClientAPI api)
 
     private void CloseSession()
     {
-        if (open != null) Manager.CloseInventoryAndSync(open);
+        // The dialog's own close (the X icon, Escape) sends the close packets itself; closing only the
+        // inventory would leave the dialog on screen, and open dialogs block control.
+        var dialog = open == null ? null : api.Gui.OpenedGuis.OfType<GuiDialogBlockEntity>().FirstOrDefault(d => d.Inventory == open && d.IsOpened());
+        if (dialog != null) dialog.TryClose();
+        else if (open != null) Manager.CloseInventoryAndSync(open);
         open = null;
     }
 
     public object Open(JsonElement request, SystemMouseInWorldInteractions? interactions, float dt)
     {
         if (!api.World.Player.Entity.Alive || api.IsGamePaused) return Error("Cannot open a container while dead or paused.");
+        // The server answers the click with the dialog a moment later; a container that opened after the
+        // previous call is adopted rather than clicked again, which would toggle it closed.
+        if (Candidate() is { } already && (open == null || open == already)) { open = already; mutation++; return Slots(open); }
         CloseSession();
         // A real right-click on the aimed block; the server learns it from the
         // same hand-interaction packet a human's click sends. Pump a few frames
@@ -113,6 +120,19 @@ public sealed class ContainerAdapter(ICoreClientAPI api)
         return new { ok = op.MovedQuantity > 0, status = "submitted", moved = op.MovedQuantity,
             error = op.MovedQuantity > 0 ? null : "No items moved; read open_container before retrying.", state = State(open) };
     }
+
+    // A container the game opened after an earlier click (the dialog blocks control, so the click path
+    // cannot run again): adopt it instead of clicking, which would toggle it closed.
+    public object? Adopt()
+    {
+        if (Candidate() is not { } already || (open != null && open != already)) return null;
+        open = already;
+        mutation++;
+        return Slots(open);
+    }
+
+    // The open container as the player sees it now; a read, no click.
+    public object Read() => open == null ? Error("No container open; open_container first.") : Slots(open);
 
     public object Close()
     {

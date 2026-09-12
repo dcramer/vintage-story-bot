@@ -299,6 +299,7 @@ public sealed partial class AiBridgeMod : ModSystem
             case "open_container": return OpenContainer(request);
             case "container_move": return ContainerMove(request);
             case "close_container": return CloseContainer(request);
+            case "container_slots": return containers.Read();
             case "select": return SelectHotbar(request);
             case "select_recipe": return context.Forming.SelectRecipe(request);
             case "interact":
