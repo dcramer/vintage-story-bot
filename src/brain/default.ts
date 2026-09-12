@@ -45,6 +45,9 @@ export const DANGER_SCARES = 3;
 export const DANGER_RADIUS = 48;
 export const DANGER_MS = 15 * 60 * 1000;
 export const RELOCATE_DISTANCE = 96;
+// A flight ends when no threat has shown for this long and the scare is this far behind.
+export const SAFE_MS = 20000;
+export const SAFE_DISTANCE = 16;
 
 export type Job =
   | 'hide'
@@ -261,6 +264,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (active) {
     // A flight is never interrupted, and neither is digging out: there is no running from a hole.
     if ((threat || hurt) && !['hide', 'dig_out'].includes(memory.job ?? '')) return { stop: threat ? 'threat' : 'hurt' };
+    // A flight is over once nothing has been seen or heard for a while and the scare is well behind.
+    const scare = memory.scares.at(-1);
+    if (memory.job === 'hide' && !threat && !hurt && scare && now - scare.at > SAFE_MS && horizontal(state.position, scare) >= SAFE_DISTANCE)
+      return { stop: 'safe' };
     // Someone else's goal is otherwise left alone; storms and hunger cut short only the brain's own.
     if (active.by !== 'brain') return { wait: `letting ${active.kind} finish (${active.by})` };
     if (storm && !['hide', 'go_home', 'wait'].includes(memory.job ?? '')) return { stop: 'storm' };
@@ -322,7 +329,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       const away = threat ? fleeTarget(state.position, threat) : escapePoint(state.position, state.orientation?.yawDegrees ?? 0, home);
       return start(
         'travel',
-        { x: away.x, z: away.z, arrivalRadius: 3, timeoutMs: 600000 },
+        { x: away.x, z: away.z, arrivalRadius: 8, timeoutMs: 600000 },
         threat ? `${threat.code} at ${Math.round(horizontal(state.position, threat.point))} blocks` : 'hurt by something unseen',
       );
     }
@@ -334,7 +341,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       );
       return start(
         'travel',
-        { x: away.x, z: away.z, arrivalRadius: 4, manageFood: true, timeoutMs: 900000 },
+        { x: away.x, z: away.z, arrivalRadius: 8, manageFood: true, timeoutMs: 900000 },
         `${memory.scares.length} scares around here; moving on`,
       );
     }

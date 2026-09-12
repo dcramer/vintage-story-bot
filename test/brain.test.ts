@@ -113,6 +113,20 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
   memory.job = null;
   const fled = decide(reading({ state: wolf }), memory);
   assert.equal(fled.start, 'travel');
+  assert.equal(
+    decide(reading({ active: { id: 'f', kind: 'travel', state: 'running', by: 'brain' }, now: 2600 }), memory).wait,
+    'letting travel finish',
+    'a flight goes on while the scare is fresh',
+  );
+  const far = { ...state(), position: { x: 40, y: 100, z: 0 } };
+  assert.deepEqual(decide(reading({ state: far, active: { id: 'f', kind: 'travel', state: 'running', by: 'brain' }, now: 30000 }), memory), {
+    stop: 'safe',
+  });
+  memory.job = null;
+  const fledAgain = decide(reading({ state: wolf, now: 31000 }), memory);
+  assert.equal(fledAgain.start, 'travel');
+
+  assert.equal(fled.start, 'travel');
   const again = decide(reading({ state: wolf, last: { id: 'g2', kind: 'travel', ok: false, reason: 'interrupted' }, now: 3000 }), memory);
   assert.equal(again.start, 'travel', 'a failed flight is tried again at once');
   const shelterMemory = fresh();

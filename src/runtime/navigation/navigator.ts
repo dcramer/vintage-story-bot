@@ -37,6 +37,8 @@ export class Navigation {
   blocked = new Set();
   visits = new Map();
   lookingAt = null;
+  // The route index a straight-run merge started from, while one is in effect.
+  mergedFrom: number | null = null;
   jumpAt = 0;
   airborne = false;
   nextPlanAt = 0;
@@ -206,6 +208,7 @@ export class Navigation {
       this.airborne = false;
       this.progressAt = now;
       this.bestNear = undefined;
+      this.mergedFrom = null;
     }
     if (this.index >= this.route.length) {
       // Remember the frontier cell this partial route ended on, by the cell's
@@ -231,6 +234,8 @@ export class Navigation {
           !map.lineWalkable({ x: p.x, y: node.y, z: p.z }, node)
         )
           break;
+        // The merge is undone if the body drifts off the line it was made from (below).
+        if (this.mergedFrom === null) this.mergedFrom = this.index;
         this.index = ahead;
         this.edgeStart = p;
         this.bestNear = undefined;
@@ -309,7 +314,18 @@ export class Navigation {
         fz = Math.floor(p.z + Math.cos(radians) * 0.7);
       const own = fx === Math.floor(p.x) && fz === Math.floor(p.z),
         checkpoint = fx === Math.floor(next.x) && fz === Math.floor(next.z);
-      if (!own && !checkpoint && !map.levels(fx, fz, p.y, JUMP_HEIGHT, MAX_DROP).length) walking = false;
+      if (!own && !checkpoint && !map.levels(fx, fz, p.y, JUMP_HEIGHT, MAX_DROP).length) {
+        walking = false;
+        // A merged run whose straight line no longer fits from here goes back to the
+        // route's own cells, which are known to stand; otherwise this stalls in place.
+        if (this.mergedFrom !== null && this.mergedFrom < this.index) {
+          this.index = this.mergedFrom;
+          this.mergedFrom = null;
+          this.edgeStart = p;
+          this.bestNear = undefined;
+          this.progressAt = now;
+        }
+      }
     }
     // Falling: let gravity land the body on the validated lower cell.
     if (!grounded && !this.jumpAt) return { yawDegrees, pitchDegrees: 15, forward: false, jump: false, sprint: false, sneak: false, durationMs: 120 };

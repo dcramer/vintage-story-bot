@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { habitatsFor, habitatTarget } from '../src/support/habitat.ts';
 
-const column = (x, z, kind) => [`${x},${z}`, { x, z, y: 100, kind, step: 0, code: null }];
+const column = (x, z, kind): [string, any] => [`${x},${z}`, { x, z, y: 100, kind, step: 0, code: null }];
 test('habitat: a search heads for the nearest unwalked place of the right kind', () => {
-  const columns = new Map([
+  const columns = new Map<string, any>([
     ...Array.from({ length: 8 }, (_, i) => column(20 + i, 0, 'canopy')),
     column(40, 0, 'ground'),
     column(41, 0, 'ground'),
