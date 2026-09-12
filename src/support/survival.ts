@@ -101,11 +101,17 @@ export class Survival {
     const threat = nearestThreat(field.latest);
     const guarded = threat ? field.targets(forage).filter(object => foodLeadGuarded(object, threat)) : [];
     if (foodLeadGuarded(target, threat) && !guarded.some(object => object.key === target.key)) guarded.push(target);
-    for (const object of guarded) field.skip(object, 120000);
+    // A lead outside the predator's perimeter can still have its only known
+    // approach cut off by that predator. Put that route aside briefly so the
+    // next iteration considers another meal instead of walking into the same
+    // pause-and-evade loop until starvation. Food actually guarded by the
+    // predator remains set aside for the longer safety window.
+    const skipped = guarded.length ? guarded : [target];
+    for (const object of skipped) field.skip(object, guarded.length ? 120000 : 30000);
     field.report(guarded.length ? 'food_lead_threatened' : 'food_route_threatened', {
       target: target.key,
       threat: threat?.code,
-      skipped: guarded.map(object => object.key),
+      skipped: skipped.map(object => object.key),
     });
   }
   until = 0.8;

@@ -189,6 +189,26 @@ test('only food inside a predator perimeter is abandoned', () => {
   assert.equal(foodLeadGuarded(target(1), null), false);
 });
 
+test('a food lead with a threatened route is briefly set aside instead of retried immediately', () => {
+  const target = { key: 'cranberry', point: { x: 41, y: 0, z: 0 } };
+  const skipped: any[] = [];
+  const reports: any[] = [];
+  const field = {
+    latest: {
+      position: { x: 0, y: 0, z: 0 },
+      nearbyEntities: [{ code: 'game:wolf-eurasian-adult-male', point: { x: 10, y: 0, z: 0 } }],
+    },
+    targets: () => [target],
+    skip: (object, ms) => skipped.push({ object, ms }),
+    report: (phase, detail) => reports.push({ phase, detail }),
+  };
+  new Survival(field).avoidThreatenedFood(target);
+  assert.deepEqual(skipped, [{ object: target, ms: 30000 }]);
+  assert.deepEqual(reports, [
+    { phase: 'food_route_threatened', detail: { target: 'cranberry', threat: 'game:wolf-eurasian-adult-male', skipped: ['cranberry'] } },
+  ]);
+});
+
 test('food search drops an unreachable habitat bias after two stationary legs', () => {
   const destination = { x: 20, z: 20 };
   const habitat = { x: 10, z: 10 };
