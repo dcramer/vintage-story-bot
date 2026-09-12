@@ -203,7 +203,9 @@ export function tasks(s: Situation, tried: Set<Job> = new Set()): { id: Job; tit
 export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   // A sealed burrow is already the safest response to something prowling
   // outside. Opening it to flee turns cover into a trap; only actual damage
-  // proves the shelter is unsafe.
+  // proves the shelter is unsafe. Open the mouth before trying to travel from
+  // two blocks underground; the existing pit escape then gets it outside.
+  if (s.hurt && s.burrowed) return 'unburrow';
   if (s.threat && s.burrowed && !s.hurt) return 'wait';
   if (s.threat || s.hurt) return 'hide';
   // Below the recovery threshold, food is no longer optional daywork. With
@@ -420,7 +422,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     if (danger && !hurt && memory.job === 'eat' && active.kind === 'forage') return { wait: 'letting forage evade threat' };
     // A flight is never interrupted, and neither is digging out: there is no running from a hole.
     // Nor is digging in at night: two blocks down is the safest place from whatever is coming.
-    if ((danger || hurt) && !['hide', 'dig_out', 'burrow'].includes(memory.job ?? '')) return { stop: danger ? 'threat' : 'hurt' };
+    if ((danger || hurt) && !['hide', 'dig_out', 'burrow', 'unburrow'].includes(memory.job ?? '')) return { stop: danger ? 'threat' : 'hurt' };
     if (classifyingHurt) return { wait: 'identifying damage source' };
     // Damage chat can trail the life event by one brain tick. If gravity is
     // identified only after the reflex already launched a flight, end that
@@ -438,7 +440,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // same forage/burrow cycle a few ticks later.
     if (memory.job === 'eat' && active.kind === 'forage') return { wait: 'letting forage finish' };
     // A dig-in is finished whatever is about: two blocks down is safer than any flight at night.
-    const pressing = URGENT.includes(job) && job !== memory.job && !['hide', 'dig_out', 'burrow'].includes(memory.job ?? '');
+    const pressing = URGENT.includes(job) && job !== memory.job && !['hide', 'dig_out', 'burrow', 'unburrow'].includes(memory.job ?? '');
     // Peckish is not an interruption; hungry is, and only when the ladder would actually eat.
     if (pressing && (job !== 'eat' || (satiety !== null && satiety < HUNGRY))) return { stop: job };
     return { wait: `letting ${active.kind} finish` };
@@ -464,7 +466,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'burrow':
       return start('burrow', {}, 'night with no home');
     case 'unburrow':
-      return start('dig_area', { cells: [memory.burrow], timeoutMs: 120000 }, 'morning, opening the burrow');
+      return start(
+        'dig_area',
+        { cells: [memory.burrow], timeoutMs: 120000 },
+        hurt ? 'burrow breached, opening escape' : 'morning, opening the burrow',
+      );
     case 'hide': {
       memory.scares.push({ x: state.position.x, z: state.position.z, at: now });
       const away = danger ? fleeTarget(state.position, danger) : escapePoint(state.position, state.orientation?.yawDegrees ?? 0, home);

@@ -75,7 +75,7 @@ const situation = (extra = {}) => ({
 test('brain: danger, hunger and night come before the kit, and the kit comes in day-1 order', () => {
   assert.equal(pickJob(situation({ threat: true, hunger: 0.1 })), 'hide');
   assert.equal(pickJob(situation({ threat: true, burrowed: true })), 'wait', 'visible threats cannot lure the bot out of a sealed burrow');
-  assert.equal(pickJob(situation({ hurt: true, burrowed: true })), 'hide', 'actual damage proves the burrow is unsafe');
+  assert.equal(pickJob(situation({ hurt: true, burrowed: true })), 'unburrow', 'actual damage opens an escape from the unsafe burrow');
   assert.equal(pickJob(situation({ storm: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ storm: true, home: false })), 'burrow', 'a storm sends a homeless bot underground');
   assert.equal(pickJob(situation({ storm: true, home: false, burrowed: true })), 'wait', 'an existing burrow shelters from a storm');
@@ -396,8 +396,17 @@ test('brain: damage from a nearby threat proves a burrow is unsafe', () => {
     vitals: { health: { current: 17.5, max: 20 }, hunger: { current: 750, max: 1500 } },
   });
   const next = decide(reading({ environment: night, state: attacked, events: [{ id: 1, at: 1, type: 'hurt', health: 17.5 }] }), memory);
-  assert.equal(next.start, 'travel', 'actual damage overrides waiting in the completed burrow');
-  assert.match(next.why, /drifter-normal/);
+  assert.equal(next.start, 'dig_area', 'actual damage opens the completed burrow before attempting to flee');
+  assert.deepEqual(next.args.cells, [memory.burrow]);
+  assert.equal(next.why, 'burrow breached, opening escape');
+
+  memory.job = 'unburrow';
+  const opening = { id: 'mouth', kind: 'dig_area', state: 'running', by: 'brain' };
+  assert.deepEqual(
+    decide(reading({ environment: night, state: attacked, active: opening }), memory),
+    { wait: 'letting dig_area finish' },
+    'the nearby attacker cannot cancel the only route out',
+  );
 });
 
 test('brain: kit reads tools by class and dirt by code', () => {
