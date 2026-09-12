@@ -506,6 +506,22 @@ test('brain: digging out of a hole is never interrupted by a threat', () => {
   assert.equal(during.wait, 'letting dig_out finish');
 });
 
+test('brain: opening a morning burrow is followed by digging steps to the surface', () => {
+  const memory = fresh();
+  memory.burrow = { x: 0, y: 2, z: 0 };
+  memory.job = 'unburrow';
+  const outside = decide(
+    reading({
+      state: state({ position: { x: 0.5, y: 0, z: 0.5 } }),
+      last: { id: 'mouth', kind: 'dig_area', ok: true, result: { dug: 1 } },
+    }),
+    memory,
+  );
+  assert.equal(memory.burrow, null);
+  assert.equal(outside.start, 'dig_out');
+  assert.deepEqual([outside.args.x, outside.args.z], [8.5, 0.5]);
+});
+
 test('brain: three scares around the same spot make it move on; a failed stick search is set aside around here', () => {
   const memory = fresh();
   const wolf = state({ nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }] });

@@ -261,7 +261,13 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // A finished shelter is home.
     if (memory.job === 'shelter' && last.ok && last.result?.home) memory.home = last.result.home;
     if (memory.job === 'burrow' && last.ok && last.result?.mouth) memory.burrow = last.result.mouth;
-    if (memory.job === 'unburrow' && last.ok) memory.burrow = null;
+    if (memory.job === 'unburrow' && last.ok) {
+      // Removing the seal opens the shaft but does not put the body back on
+      // the surface. Hand the existing dig-out goal an arbitrary direction
+      // for its staircase before resuming food or kit work.
+      memory.burrow = null;
+      memory.pit = { x: state.position.x + 8, z: state.position.z };
+    }
     // Whatever the trip's outcome, this place has been judged; judge the new one afresh.
     if (memory.job === 'relocate') memory.scares = [];
     memory.job = null;
