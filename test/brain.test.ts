@@ -1084,6 +1084,7 @@ test("brain: a flight refused for footing is not the flight's fault: it is tried
     id: 'f',
     kind: 'travel',
     ok: false,
+    outcome: 'failed',
     reason: 'Navigation needs grounded/dry/ready player and destination within 128 horizontal/32 vertical blocks.',
   };
   const again = decide(reading({ state: wolf, last: refused, now: 2000 }), memory);
