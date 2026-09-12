@@ -431,6 +431,26 @@ test('lost frame acknowledgement is not retried and releases ownership', async (
   assert.equal(calls.filter(c => c.action === 'control_end').length, 1);
 });
 
+test('a new merged run clears the checkpoint queued by the preceding frame', async () => {
+  const { controller, calls, frame, state } = fixture();
+  const runWalkable = controller.map.runWalkable.bind(controller.map);
+  controller.map.runWalkable = () => false;
+  try {
+    await controller.request({ ...target, x: 4.5 });
+    await frame;
+    const first = calls.find(c => c.action === 'control_step');
+    assert.equal(first.next.x, 2.5);
+    state.position.x = 1.5;
+    controller.map.runWalkable = runWalkable;
+    for (let i = 0; i < 100 && !calls.some(c => c.toward?.x === 4.5); i++) await new Promise(r => setTimeout(r, 5));
+    const merged = calls.find(c => c.toward?.x === 4.5);
+    assert.ok(merged, 'the next run reaches the destination');
+    assert.equal(merged.next, undefined, 'the old point must not send the body back after the new run');
+  } finally {
+    await controller.close();
+  }
+});
+
 test('cancelling an in-flight startup cannot acquire control afterward', async () => {
   let entered;
   const waiting = new Promise(resolve => {

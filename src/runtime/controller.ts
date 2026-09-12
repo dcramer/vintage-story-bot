@@ -613,7 +613,8 @@ export class Controller {
                 reach: frame?.reach ?? input.reach,
                 reachY: frame?.reachY ?? input.reachY,
                 hop: frame?.hop ?? input.hop,
-                next: frame?.next ?? input?.next,
+                // Only paging carries an old frame; a fresh step may deliberately have no next point.
+                next: frame?.toward ? frame.next : input?.next,
               }
             : {}),
         };
