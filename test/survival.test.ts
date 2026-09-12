@@ -3,28 +3,24 @@ import { test } from 'node:test';
 import { elevationDetourDistance, routeRegressed, travel } from '../src/goals/travel.ts';
 import { remember } from '../src/support/facts.ts';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/support/fieldwork.ts';
-import { eatingLooks, edible, foodYield, safeFood } from '../src/support/food.ts';
+import { eatingLooks, edible, foodRecoverySatisfied, foodTolerance, foodYield, safeFood, shouldEat } from '../src/support/food.ts';
 import { leafBlock, leafClearCandidate, threatAllowsLeafClearing } from '../src/support/leaf-clearing.ts';
+import { Places } from '../src/support/places.ts';
 import {
-  accessibleForage,
-  desperateFoodSightRange,
-  exhaustedFoodLead,
-  foodApproachScore,
-  foodElevationDetourDistance,
-  foodLeadGuarded,
-  foodRecoverySatisfied,
-  foodSearchBias,
-  foodSearchDistance,
-  foodSightRange,
-  foodViewChanged,
-  harvestReady,
-  matchingFoodDrops,
-  Survival,
-  sameFoodPatch,
-  stuckFoodRoute,
-  unproductiveFoodApproach,
-  wideFoodSurveyNeeded,
-} from '../src/support/survival.ts';
+  APPROACH_LEG,
+  approachScore,
+  chooseFrontier,
+  elevationDetour,
+  exhaustedLead,
+  FRONTIER_DISTANCE,
+  leadGuarded,
+  Search,
+  samePatch,
+  stuckLeg,
+  unproductiveApproach,
+  viewChanged,
+} from '../src/support/search.ts';
+import { accessibleForage, harvestReady, matchingFoodDrops, Survival } from '../src/support/survival.ts';
 import {
   fleeTarget,
   hostileEntity,
@@ -137,81 +133,112 @@ test('survival pickup recovery selects only exact verified food drops', () => {
   );
 });
 
-test('food exploration uses observed local steps and does not rescan an unchanged distant cone', () => {
-  assert.equal(foodSearchDistance, 24);
-  assert.equal(foodSightRange, 32);
-  assert.equal(desperateFoodSightRange, 48);
+test('a search rescans only when the viewpoint changed and detours for elevation', () => {
+  assert.equal(APPROACH_LEG, 24);
   const view = { position: { x: 10, z: 10 }, yawDegrees: 30 };
   const state = (x, z, yawDegrees) => ({ position: { x, z }, orientation: { yawDegrees } });
-  assert.equal(foodViewChanged(view, state(11.9, 10, 44.9)), false);
-  assert.equal(foodViewChanged(view, state(12.1, 10, 30)), true);
-  assert.equal(foodViewChanged(view, state(10, 10, 46)), true);
-  assert.equal(foodViewChanged(view, state(10, 10, 350)), true);
-  assert.equal(wideFoodSurveyNeeded(0.2), false);
-  assert.equal(wideFoodSurveyNeeded(0.199), true);
-  assert.equal(foodElevationDetourDistance(1.49), 0);
-  assert.equal(foodElevationDetourDistance(3), 6);
-  assert.equal(foodElevationDetourDistance(20), foodSearchDistance);
+  assert.equal(viewChanged(view, state(11.9, 10, 44.9)), false);
+  assert.equal(viewChanged(view, state(12.1, 10, 30)), true);
+  assert.equal(viewChanged(view, state(10, 10, 46)), true);
+  assert.equal(viewChanged(view, state(10, 10, 350)), true);
+  assert.equal(elevationDetour(1.49), 0);
+  assert.equal(elevationDetour(3), 6);
+  assert.equal(elevationDetour(20), APPROACH_LEG);
 });
 
-test('food leads survive productive partial routes but skip stuck ones', () => {
+test('a search with nothing in sight heads a hundred blocks the least-walked way and keeps its line', () => {
+  const places = new Places(() => 1000);
+  const at = { x: 0.5, y: 100, z: 0.5 };
+  const ahead = chooseFrontier(at, 0, { places });
+  assert.equal(ahead.heading, 0, 'unwalked ground ahead: straight on');
+  assert.ok(Math.abs(ahead.z - FRONTIER_DISTANCE) < 1 && Math.abs(ahead.x) < 1);
+  for (let step = 16; step <= FRONTIER_DISTANCE; step += 16) places.walk({ x: 0.5, z: step });
+  const turned = chooseFrontier(at, 0, { places });
+  assert.notEqual(turned.heading, 0, 'walked ground ahead is dull');
+  assert.ok([45, 315].includes(turned.heading), `the smallest turn wins: ${turned.heading}`);
+  const scared = chooseFrontier(at, 0, { places: new Places(() => 1000), avoid: [{ x: 0.5, z: 96 }] });
+  assert.notEqual(scared.heading, 0, 'never back toward the scare');
+  const water = { get: (x, z) => (z > 0 && Math.abs(x) < 1 ? { kind: 'water', y: 99 } : null) };
+  const dry = chooseFrontier(at, 0, { places: new Places(() => 1000), surface: water });
+  assert.notEqual(dry.heading, 0, 'a line of water is walked around');
+  const columns = new Map([
+    ['30,-30', { x: 30, z: -30, y: 101, kind: 'ground' }],
+    ['31,-30', { x: 31, z: -30, y: 101, kind: 'canopy' }],
+  ]);
+  const edge = chooseFrontier(at, 135, { places: new Places(() => 1000), surface: { columns, get: () => null }, habitats: ['edge'] });
+  assert.deepEqual([edge.x, edge.z], [30.5, -29.5], 'a seen forest edge the right way is the frontier');
+});
+
+test('the frontier is shared across goals and forgotten near a predator', async () => {
+  const places = new Places(() => 1000);
+  places.setFrontier('food', { x: 96.5, y: 100, z: 0.5 });
+  assert.equal(places.frontier('food').x, 96.5);
+  assert.equal(places.frontier('stick'), null);
+  const field = new Fieldwork({ places });
+  field.latest = { position: { x: 0.5, y: 100, z: 0.5 }, nearbyEntities: [{ code: 'game:wolf-male', point: { x: 20, y: 100, z: 0 } }] };
+  const search = new Search(field, { kind: 'food', watch: [], wanted: () => false, take: async () => false });
+  search.avoidThreat();
+  assert.equal(places.frontier('food'), null, 'a frontier the wolf stands toward is dropped');
+  places.setFrontier('food', { x: -96.5, y: 100, z: 0.5 });
+  search.avoidThreat();
+  assert.equal(places.frontier('food').x, -96.5, 'one away from it is kept');
+});
+
+test('search leads survive productive partial routes but skip stuck ones', () => {
   const blocked = { state: 'blocked' };
-  assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
-  assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
-  assert.equal(stuckFoodRoute({ state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
+  assert.equal(stuckLeg(blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
+  assert.equal(stuckLeg(blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
+  assert.equal(stuckLeg({ state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
   const target = { point: { x: 10, z: 0 } };
-  assert.equal(unproductiveFoodApproach(target, blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
-  assert.equal(unproductiveFoodApproach(target, blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
-  assert.equal(unproductiveFoodApproach(target, blocked, { x: 2, z: 0 }, { x: 1, z: 0 }), true);
-  assert.equal(unproductiveFoodApproach(target, { state: 'paused', reason: 'threat_near_food' }, { x: 0, z: 0 }, { x: 4, z: 0 }), false);
-  assert.equal(unproductiveFoodApproach(target, { state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
+  assert.equal(unproductiveApproach(target, blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
+  assert.equal(unproductiveApproach(target, blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
+  assert.equal(unproductiveApproach(target, blocked, { x: 2, z: 0 }, { x: 1, z: 0 }), true);
+  assert.equal(unproductiveApproach(target, { state: 'paused', reason: 'route_threatened' }, { x: 0, z: 0 }, { x: 4, z: 0 }), false);
+  assert.equal(unproductiveApproach(target, { state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
 });
 
-test('a predator pauses a food route before navigation can carry it into danger', () => {
-  const survival = new Survival(null);
+test('a predator pauses a search route before navigation can carry it into danger', () => {
+  const field = new Fieldwork({}, { now: () => 5000 });
+  const survival = new Survival(field);
+  const search = new Search(field, { kind: 'food', watch: [], wanted: () => false, take: async () => false, pauseWhen: survival.pauseFoodWalk });
   const state = {
     position: { x: 0, y: 0, z: 0 },
-    vitals: { hunger: { current: 100, max: 1000 } },
+    vitals: { hunger: { current: 300, max: 1000 } },
     nearbyEntities: [],
   };
-  assert.equal(survival.pauseFoodWalk(state), null);
+  assert.equal(search.pause(state), null);
   state.nearbyEntities.push({ code: 'game:wolf-eurasian-adult-male', point: { x: 10, y: 0, z: 0 } });
-  assert.equal(survival.pauseFoodWalk(state), 'threat_near_food');
+  assert.equal(search.pause(state), 'route_threatened');
+  state.nearbyEntities.length = 0;
   survival.reserve = 80;
-  assert.equal(survival.pauseFoodWalk(state), 'food_available');
+  assert.equal(search.pause(state), null, 'a bite in the pack is kept while walking, not eaten at once');
+  state.vitals.hunger.current = 100;
+  assert.equal(search.pause(state), 'food_available', 'hungry: eat what is carried');
 });
 
 test('only food inside a predator perimeter is abandoned', () => {
   const target = distance => ({ point: { x: distance, y: 0, z: 0 } });
   const wolf = { code: 'game:wolf-eurasian-adult-male', point: { x: 0, y: 0, z: 0 } };
-  assert.equal(foodLeadGuarded(target(threatClearDistance(wolf.code)), wolf), true);
-  assert.equal(foodLeadGuarded(target(threatClearDistance(wolf.code) + 0.1), wolf), false);
-  assert.equal(foodLeadGuarded(target(1), null), false);
-});
-
-test('food search drops an unreachable habitat bias after two stationary legs', () => {
-  const destination = { x: 20, z: 20 };
-  const habitat = { x: 10, z: 10 };
-  assert.equal(foodSearchBias(0, destination, habitat), destination);
-  assert.equal(foodSearchBias(1, null, habitat), habitat);
-  assert.equal(foodSearchBias(2, destination, habitat), null);
+  assert.equal(leadGuarded(target(threatClearDistance(wolf.code)), wolf), true);
+  assert.equal(leadGuarded(target(threatClearDistance(wolf.code) + 0.1), wolf), false);
+  assert.equal(leadGuarded(target(1), null), false);
 });
 
 test('food search prefers level meals and abandons a failed elevated patch together', () => {
   const at = { x: 0, y: 100, z: 0 };
   const overhead = { point: { x: 1, y: 109, z: 0 } };
   const level = { point: { x: 20, y: 100, z: 0 } };
-  assert.ok(foodApproachScore(at, level) < foodApproachScore(at, overhead));
-  assert.equal(sameFoodPatch(overhead, { point: { x: 5, y: 108, z: 3 } }), true);
-  assert.equal(sameFoodPatch(overhead, { point: { x: 5, y: 100, z: 3 } }), false);
-  assert.equal(sameFoodPatch(overhead, { point: { x: 10, y: 109, z: 0 } }), false);
+  assert.ok(approachScore(at, level) < approachScore(at, overhead));
+  assert.equal(samePatch(overhead, { point: { x: 5, y: 108, z: 3 } }), true);
+  assert.equal(samePatch(overhead, { point: { x: 5, y: 100, z: 3 } }), false);
+  assert.equal(samePatch(overhead, { point: { x: 10, y: 109, z: 0 } }), false);
 });
 
 test('an unseen remembered food lead expires after reaching its approach cell', () => {
-  assert.equal(exhaustedFoodLead({ visible: false }, { state: 'arrived' }), true);
-  assert.equal(exhaustedFoodLead({ key: 'mushroom', visible: false }, { state: 'arrived' }, [{ key: 'mushroom' }]), false);
-  assert.equal(exhaustedFoodLead({ visible: true }, { state: 'arrived' }), false);
-  assert.equal(exhaustedFoodLead({ visible: false }, { state: 'paused' }), false);
+  assert.equal(exhaustedLead({ visible: false }, { state: 'arrived' }), true);
+  assert.equal(exhaustedLead({ key: 'mushroom', visible: false }, { state: 'arrived' }, [{ key: 'mushroom' }]), false);
+  assert.equal(exhaustedLead({ visible: true }, { state: 'arrived' }), false);
+  assert.equal(exhaustedLead({ visible: false }, { state: 'paused' }), false);
 });
 
 test('recalled blocks enter the goal working set even when the sighting is old', () => {
@@ -371,14 +398,30 @@ test('low-health food recovery remains authorized after eating clears low food',
   assert.equal(fresh.alertsSafe(state(['low_health'])), false);
 });
 
-test('successful food recovery resumes travel without waiting for a local stockpile', () => {
-  assert.equal(foodRecoverySatisfied(0.599, 0, 8), false);
-  assert.equal(foodRecoverySatisfied(0.6, 0, 1), true);
-  assert.equal(foodRecoverySatisfied(0.8, 320, 0), true);
-  assert.equal(foodRecoverySatisfied(0.8, 0, 0), false);
+test('food recovery ends fed with a reserve kept, and rations what is carried', () => {
+  assert.equal(foodRecoverySatisfied(0.499, 160, 0.5, 160), false);
+  assert.equal(foodRecoverySatisfied(0.5, 159, 0.5, 160), false, 'no reserve: the next peckish tick would start the same search');
+  assert.equal(foodRecoverySatisfied(0.5, 160, 0.5, 160), true);
+  assert.equal(foodRecoverySatisfied(0.8, 320), true);
+  assert.equal(foodRecoverySatisfied(0.8, 0), false);
+  assert.equal(shouldEat(0.19, 80, 0.5, 160), true, 'hungry: eat');
+  assert.equal(shouldEat(0.3, 160, 0.5, 160), false, 'peckish with the reserve exactly: keep it');
+  assert.equal(shouldEat(0.3, 240, 0.5, 160), true, 'more than the reserve: eat the surplus');
+  assert.equal(shouldEat(0.6, 800, 0.5, 160), false, 'fed: carry it');
+  assert.equal(shouldEat(0.1, 0, 0.5, 160), false);
+  assert.equal(foodTolerance(0.2), 0);
+  assert.equal(foodTolerance(0.199), 1, 'starving, a bite that costs a point of health is food');
+  assert.equal(edible({ saturation: 80, health: -1 }), false);
+  assert.equal(edible({ saturation: 80, health: -1 }, 1), true);
+  assert.equal(edible({ saturation: 80, health: -6 }, 1), false);
+  assert.deepEqual(
+    foodYield({ kind: 'block', code: 'game:mushroom-deathcap-normal' }, undefined, 2),
+    { code: 'game:mushroom-deathcap-normal', how: 'break' },
+    'tolerance reaches the pages read',
+  );
 });
 
-test('food recovery marks safe search legs as emergency sprint between ten and twenty percent', async () => {
+test('a food search never sprints on its own', async () => {
   const state = {
     ok: true,
     alive: true,
@@ -405,8 +448,8 @@ test('food recovery marks safe search legs as emergency sprint between ten and t
   field.initial = field.latest = state;
   field.recoveringFood = true;
   await field.walk({ x: 8.5, y: 1, z: 0.5 });
-  assert.equal(navigationTarget.sprint, true);
-  assert.equal(navigationTarget.emergency, true);
+  assert.equal(navigationTarget.sprint, undefined);
+  assert.equal(navigationTarget.emergency, undefined);
 });
 
 test('critical food recovery does not stop to glean unrelated supplies', async () => {

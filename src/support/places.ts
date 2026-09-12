@@ -9,6 +9,9 @@ export const PLACE_MS = 20 * 60 * 1000;
 export class Places {
   walkedAreas = new Map<string, { n: number; at: number }>();
   failedAreas = new Map<string, { n: number; at: number }>();
+  // Where each kind of search was heading when nothing was in sight, so a
+  // search restarted after a flight or a night carries on the same way.
+  frontiers = new Map<string, { x: number; y: number; z: number; at: number }>();
   now: () => number;
   constructor(now: () => number = Date.now) {
     this.now = now;
@@ -43,13 +46,29 @@ export class Places {
   known(p) {
     return this.walked(p) > 0 || this.failed(p) > 0;
   }
+  frontier(kind: string) {
+    const entry = this.frontiers.get(kind);
+    if (!entry) return null;
+    if (this.now() - entry.at > PLACE_MS) {
+      this.frontiers.delete(kind);
+      return null;
+    }
+    return entry;
+  }
+  setFrontier(kind: string, point: { x: number; y: number; z: number }) {
+    this.frontiers.set(kind, { x: point.x, y: point.y, z: point.z, at: this.now() });
+  }
+  clearFrontier(kind: string) {
+    this.frontiers.delete(kind);
+  }
   prune(now = this.now()) {
     for (const map of [this.walkedAreas, this.failedAreas]) {
       for (const [id, entry] of map) if (now - entry.at > PLACE_MS) map.delete(id);
       while (map.size > 4096) map.delete(map.keys().next().value);
     }
+    for (const [kind, entry] of this.frontiers) if (now - entry.at > PLACE_MS) this.frontiers.delete(kind);
   }
   summary() {
-    return { walked: this.walkedAreas.size, failed: this.failedAreas.size };
+    return { walked: this.walkedAreas.size, failed: this.failedAreas.size, frontiers: Object.fromEntries(this.frontiers) };
   }
 }

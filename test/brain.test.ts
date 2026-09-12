@@ -650,7 +650,8 @@ test('brain: carried food enters one complete recovery run', () => {
     memory,
   );
   assert.equal(choice.start, 'forage');
-  assert.ok(Math.abs(choice.args.until - 0.6) < 1e-9);
+  assert.ok(Math.abs(choice.args.until - 0.5) < 1e-9);
+  assert.equal(choice.args.keep, 160);
   assert.match(choice.why, /240 carried/);
 });
 

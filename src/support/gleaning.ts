@@ -1,18 +1,19 @@
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { aimAtObject } from './blocks.ts';
-import { ownedSlots } from './inventory.ts';
 import { nearestThreat } from './threats.ts';
 import { has } from './traits.ts';
 
 // Picking up what the bot wants as it passes: loose sticks, stones and flints
-// on the ground (a right-click), and dropped items (walked over). Wants are
-// code substrings the brain or an adapter sets; a walk pauses for one within
-// a few blocks, the pickup happens, the walk goes on. Never a search of its own.
-// Loose sticks, stones and flints: each is one right-click; so is a bush whose berries are on.
+// on the ground (a right-click), dropped items (walked over), and food where
+// it grows (berries off a ripe bush, a mushroom broken off). Wants are code
+// substrings the brain or an adapter sets; a walk pauses for one within a few
+// blocks, the pickup happens, the walk goes on. Never a search of its own.
 export const pickupBlock = object => object?.kind === 'block' && has(object, 'pickup');
 export const handHarvest = object => object?.kind === 'block' && (has(object, 'pickup') || has(object, 'ready'));
+// Food that comes off by hand: a right-click harvest that is ready, or a block that drops food when broken.
+export const foodBlock = object => object?.kind === 'block' && has(object, 'food') && (!has(object, 'harvestable') || has(object, 'ready'));
 export const gleanRadius = 6;
-const carried = inventory => ownedSlots(inventory).reduce((n, s) => n + s.quantity, 0);
+export const carried = state => [...(state.hotbar ?? []), ...(state.backpack ?? [])].reduce((n, s) => n + (s.quantity ?? 0), 0);
 
 export class Gleaner {
   field: any;
@@ -24,7 +25,11 @@ export class Gleaner {
     this.wants = wants;
   }
   wanted(object) {
-    return this.wants.some(w => object.code?.includes(w)) && (object.kind === 'item' || handHarvest(object)) && !this.field.skipped.has(object.key);
+    return (
+      this.wants.some(w => object.code?.includes(w)) &&
+      (object.kind === 'item' || handHarvest(object) || foodBlock(object)) &&
+      !this.field.skipped.has(object.key)
+    );
   }
   // What is wanted and close, nearest first.
   near(position) {
@@ -49,14 +54,15 @@ export class Gleaner {
         field.report('gleaning', { target: object.key, code: object.code });
         let ok = false;
         try {
-          // Loaded here: the collector composes fieldwork, which composes this.
+          // Loaded here: the collector and the food harvest compose fieldwork, which composes this.
           if (object.kind === 'item')
             ok = (
               await (
                 await import('../goals/collect_item.ts')
               ).collectItem(field, { target: object.key, expectedItem: object.code, radius: gleanRadius })
             ).ok;
-          else ok = await this.pickup(object);
+          else if (handHarvest(object) && !foodBlock(object)) ok = await this.pickup(object);
+          else ok = await (await import('./survival.ts')).harvestFood(field, object);
         } catch (error) {
           if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
         }
@@ -83,11 +89,11 @@ export class Gleaner {
       field.report('pickup_missed', { target: object.key, selected: selected?.key ?? null });
       return false;
     }
-    const before = carried(await field.send({ action: 'inventory' }));
+    const before = carried(await field.observe());
     await field.send({ action: 'interact', expectedTarget: object.key, durationMs: 150 });
     await field.wait(500);
-    await field.observe();
+    const after = carried(await field.observe());
     await field.env.send({ action: 'stop' });
-    return carried(await field.send({ action: 'inventory' })) > before;
+    return after > before;
   }
 }

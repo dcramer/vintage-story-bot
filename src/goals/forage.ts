@@ -29,11 +29,12 @@ export default defineGoal({
   schema,
   destructive: true,
   description:
-    'Watch for block codes (default bushes, mushrooms, crops, termite mounds), read the handbook page of ' +
-    'what comes into view, harvest whatever it says yields edible food now, and eat until at least 80% ' +
-    'satiety with 320 satiety in reserve. count instead stockpiles that many additional fresh items after replacing anything eaten. ' +
-    'No default deadline; unavailable food keeps exploration ' +
-    'running. Damage/death/control loss cancels; never respawns or resumes automatically. ' +
+    'Watch for block codes (default bushes, mushrooms, crops, termite mounds, wild hives), read the handbook page of ' +
+    'what comes into view, harvest whatever it says yields edible food now, eat when hungry or when the pack holds more ' +
+    'than is kept, and finish at `until` satiety with `keep` satiety worth in the pack. Starving, it stomachs food that costs ' +
+    'a point of health. count instead stockpiles that many additional fresh items after replacing anything eaten. ' +
+    'Nothing in sight: it takes what was seen before, else ranges toward the least-walked ground, carrying on in the same ' +
+    'direction across restarts. No default deadline. Damage/death/control loss cancels; never respawns or resumes automatically. ' +
     'Returns START and goal.id; poll goal_status. Needs an empty hotbar slot for harvesting. ' +
     'Optional sprint=true permits straight level sprinting only while food is at least 60%.',
   announce: () => 'Foraging for a bite to eat.',

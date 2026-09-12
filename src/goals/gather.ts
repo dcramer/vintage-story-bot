@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
-import { horizontal } from '../runtime/navigation/terrain.ts';
-import { aimAtObject, blockWorkReady, changeBlock, dryBlockWorkPosition } from '../support/blocks.ts';
-import { Fieldwork, sightRange } from '../support/fieldwork.ts';
-import { pickupBlock } from '../support/gleaning.ts';
+import { blockWorkReady, changeBlock, dryBlockWorkPosition } from '../support/blocks.ts';
+import { Fieldwork } from '../support/fieldwork.ts';
+import { Gleaner, pickupBlock } from '../support/gleaning.ts';
 import { habitatsFor } from '../support/habitat.ts';
+import { Search } from '../support/search.ts';
 import { Survival } from '../support/survival.ts';
 import { cleanName, foodFeatures } from '../support/task.ts';
 
@@ -24,7 +24,6 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
   const dropped = o => o.kind === 'item' && wanted(o.code);
   const sticks = wanted('stick');
   const twiggy = o => sticks && o.kind === 'block' && o.code.includes(TWIGS);
-  const looking = sticks ? [match, TWIGS] : match;
   const field = new Fieldwork(env, options);
   const survival = manageFood ? new Survival(field) : null;
   field.recoveringFood = manageFood;
@@ -41,6 +40,40 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
       eaten: survival?.eaten ?? 0,
       ...extra,
     });
+  const picker = new Gleaner(field, []);
+  const search = new Search(field, {
+    kind: match,
+    watch: sticks ? [match, TWIGS] : [match],
+    wanted: o => loose(o) || dropped(o) || twiggy(o),
+    // Loose things in reach are picked up; twigs are broken only with dry footing and when nothing loose is close.
+    ready: (o, state) => o.kind === 'block' && o.withinPickingRange && (loose(o) || blockWorkReady(state)),
+    prefer: (a, b) => Number(twiggy(a)) - Number(twiggy(b)),
+    take: async o => {
+      if (loose(o)) {
+        field.report('pickup', { target: o.key });
+        const ok = await picker.pickup(o);
+        if (ok) field.seen.delete(o.key);
+        else field.skip(o, 5000);
+        field.report('verified', { target: o.key });
+        return true;
+      }
+      field.report('breaking', { target: o.key });
+      let result;
+      try {
+        result = await changeBlock(field, 'dig', { target: o.key, acceptTransform: true, timeoutMs: 20000 });
+      } catch (error) {
+        if (/interruption|cancelled|deadline|Selected item changed/i.test(error.message)) throw error;
+        result = { ok: false, reason: error.message };
+      }
+      field.seen.delete(o.key);
+      field.skip(o, result.ok ? 120000 : 30000);
+      if (!result.ok) field.report('dig_failed', { target: o.key, reason: result.reason });
+      return true;
+    },
+    approachExclude: target => (twiggy(target) ? q => !dryBlockWorkPosition(q) : null),
+    habitats: habitatsFor(match),
+    pauseWhen: survival?.pauseWhen ?? null,
+  });
   try {
     await field.start(manageFood ? foodFeatures : []);
     await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
@@ -61,63 +94,7 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
         };
       await survival?.tend();
       field.report('searching');
-      const objects = await field.scan(8, looking);
-      if (!objects.some(o => (loose(o) || twiggy(o)) && o.withinPickingRange)) await field.scan(sightRange, looking);
-      const ready = objects.find(o => loose(o) && o.withinPickingRange && !field.skipped.has(o.key));
-      const twigs = ready || !blockWorkReady(field.latest) ? null : objects.find(o => twiggy(o) && o.withinPickingRange && !field.skipped.has(o.key));
-      if (ready) {
-        field.report('pickup', { target: ready.key });
-        const selected = await aimAtObject(field, ready);
-        const aimed = await field.observe();
-        if (selected && aimed.target?.key === ready.key) {
-          const before = carried(aimed, item);
-          await field.send({ action: 'interact', expectedTarget: ready.key, durationMs: 150 });
-          await field.wait(500);
-          const after = await field.observe();
-          if (carried(after, item) > before) field.seen.delete(ready.key);
-          else field.skip(ready);
-          field.report('verified', { target: ready.key });
-        } else field.skip(ready, 5000);
-      } else if (twigs) {
-        field.report('breaking', { target: twigs.key });
-        let result;
-        try {
-          result = await changeBlock(field, 'dig', { target: twigs.key, acceptTransform: true, timeoutMs: 20000 });
-        } catch (error) {
-          if (/interruption|cancelled|deadline|Selected item changed/i.test(error.message)) throw error;
-          result = { ok: false, reason: error.message };
-        }
-        field.seen.delete(twigs.key);
-        field.skip(twigs, result.ok ? 120000 : 30000);
-        if (!result.ok) field.report('dig_failed', { target: twigs.key, reason: result.reason });
-      }
-      await field.observe(true);
-      if (gained() >= count) continue;
-      // Nothing in view: what memory holds within sixty blocks is worth going back for.
-      if (!field.targets(o => loose(o) || dropped(o) || twiggy(o)).length) field.recall(64, looking, 'all');
-      // What lies about is picked up first; twigs are for when nothing loose is close.
-      const near = field.targets(o => loose(o) || dropped(o)).filter(o => horizontal(field.latest.position, o.point) <= 16);
-      const target = near[0] ?? field.targets(o => loose(o) || dropped(o) || twiggy(o))[0];
-      if (target) {
-        const destination = field.approach(target, q => twiggy(target) && !dryBlockWorkPosition(q));
-        if (destination) {
-          const result = await field.walk(destination, survival?.pauseWhen);
-          if (!['arrived', 'paused'].includes(result.state)) field.skip(target, 15000);
-          continue;
-        }
-        if (horizontal(field.latest.position, target.point) > 6) {
-          const result = await field.walk(field.explore(target.point), survival?.pauseWhen);
-          if (!['arrived', 'paused'].includes(result.state)) field.skip(target, 15000);
-          continue;
-        }
-        field.skip(target, 15000);
-      }
-      // Sticks lie under trees; anything else is looked for in the open.
-      const tree = o => sticks && o.code.startsWith('game:leaves') && !field.places.known(o.point);
-      if (sticks && !field.targets(tree).length) await field.scan(sightRange, ['leaves', TWIGS], 'blocks');
-      // Nothing seen: toward the nearest unwalked place such things are found.
-      const destination = field.explore(field.targets(tree)[0]?.point ?? field.habitat(habitatsFor(match)));
-      await field.walk(destination, survival?.pauseWhen);
+      await search.step();
     }
   } finally {
     await env.send({ action: 'stop' });
@@ -139,9 +116,10 @@ export default defineGoal({
   destructive: true,
   description:
     'Pick up count more of something lying on the ground: loose sticks, stones and flints by right-click, dropped stacks by ' +
-    'walking over them; look around, nearest seen first, walk, pick up, verify the carried gain, repeat. Sticks are also broken ' +
-    'out of branchy leaves (the twiggy inner canopy, one stick each) when none lie close. No other digging or harvesting. manageFood=true pauses below 20% satiety to forage; sprint=true permits safe, well-fed straight travel. ' +
-    'No default deadline; failed routes lead to more searching. Returns START; poll goal_status.',
+    'walking over them; take what is in reach, walk to what is in view, go back for what was seen, else range toward the ' +
+    'least-walked ground, and verify the carried gain. Sticks are also broken out of branchy leaves (the twiggy inner canopy, ' +
+    'one stick each) when none lie close. No other digging or harvesting. manageFood=true pauses below 20% satiety to forage; ' +
+    'sprint=true permits safe, well-fed straight travel. No default deadline. Returns START; poll goal_status.',
   announce: args => `Collecting some ${cleanName(args.item ?? args.match ?? 'stick')}s.`,
   run: gather,
 });

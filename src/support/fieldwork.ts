@@ -442,15 +442,14 @@ export class Fieldwork {
       120000,
       Math.max(30000, Math.ceil(horizontal(before.position, target) * 3000 + Math.abs((target.y ?? before.position.y) - before.position.y) * 3000)),
     );
-    const food = before.vitals?.hunger;
-    const emergencyFoodSearch = this.recoveringFood && food?.max > 0 && food.current / food.max < 0.2 && food.current / food.max >= 0.1;
+    // A food search never sprints on its own: running doubles the satiety
+    // spent per minute, exactly when the least is left. Flights still do.
     const result = await this.env.navigate(
       {
         ...target,
         dimension: 0,
         timeoutMs,
-        sprint: target.sprint ?? (emergencyFoodSearch ? true : this.sprint),
-        ...(emergencyFoodSearch ? { emergency: true } : {}),
+        sprint: target.sprint ?? this.sprint,
       },
       state => {
         this.guard(state);

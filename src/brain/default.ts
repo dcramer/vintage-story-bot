@@ -514,10 +514,9 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'eat':
       return start(
         'forage',
-        // Food recovery may finish once one meal lands within 20 points of its
-        // target. Aim that margin above the brain's own threshold so one run
-        // eats what is carried, then searches only if that was not enough.
-        { until: PECKISH + 0.2, keep: 160, timeoutMs: 1800000 },
+        // Fed to half with two bites' worth kept in the pack: the pack is
+        // what stops the next peckish tick from starting the same search again.
+        { until: PECKISH + 0.1, keep: 160, timeoutMs: 1800000 },
         `satiety ${Math.round((satiety ?? 0) * 100)}%, ${k.reserve > 0 ? `${k.reserve} carried` : 'nothing carried'}`,
       );
     case 'dirt':
@@ -577,8 +576,9 @@ export function decide(reading: Reading, memory: Memory): Decision {
 export function wants(reading: Reading): string[] {
   const k = kit(reading.inventory);
   const list: string[] = [];
-  // Berries on a bush are always worth a stop.
-  list.push('fruitingbush');
+  // Food where it grows is always worth a stop: berries on a ripe bush, a
+  // mushroom the handbook calls edible, a wild hive's honeycomb.
+  list.push('fruitingbush', 'mushroom', 'wildbeehive');
   if (k.sticks < STICK_MIN) list.push('stick');
   // Loose flint, and the loose stones that knap; claystone and the like are not worth a stop.
   if ((!k.knife || !k.axe || !k.shovel) && !k.stone) list.push('looseflints', ...KNAPPABLE.map(rock => `loosestones-${rock}`));

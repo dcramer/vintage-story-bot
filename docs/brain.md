@@ -12,7 +12,7 @@ resumes on its own.
 - Switch while running: the `brain` action reads status, installs by name, or removes (`null`).
 - The brain sees every goal, whoever started it. Danger (a hostile seen or heard, a hit) stops any goal; storms and hunger cut short only the brain's own; an adapter's goal is otherwise left to finish and never replaced.
 - Nothing happens without the brain: respawning, swimming for shore, running from a hit and marking a find are its decisions. The loop wakes it when the controller notices something (`events`) as well as every couple of seconds.
-- A brain may return `wants`: code substrings every walk picks up when they lie within six blocks (loose sticks, stones, flints, dropped items), whatever the current job. The default brain wants sticks until it has ten, flint and loose stones until it has tools.
+- A brain may return `wants`: code substrings every walk picks up when they lie within six blocks (loose sticks, stones, flints, dropped items, food where it grows), whatever the current job. The default brain always wants berries, edible mushrooms and wild honeycomb, sticks until it has ten, flint and loose stones until it has tools.
 - Code: `src/brain/<name>.ts` default-exports `{ name, description, fresh(), decide(reading, memory), summary?(memory) }`; `src/runtime/brain.ts` owns the loop. `decide` is pure: one reading (`observe`, `inventory`, `environment`, the active goal, the brain's own goal that just finished, the events since the last decision, the player's own map markers, the nearest dry ground while swimming) and the brain's memory in, one decision out (`{ start, args, why }`, `{ act, why }`, `{ stop }`, `{ wait }`). `act` runs actions by hand; alongside a running goal only tools that talk (chat, map markers, memory) are accepted. `test/brain.test.ts` covers it without a game.
 
 Later brains (roles) differ only in `decide`. Behavior sources: [getting-started](getting-started.md), [architecture](architecture.md), [bot API](bot-api-reference.md).
@@ -39,8 +39,8 @@ fights; it runs or hides.
 | unburrow | `dig_area` on the mouth | Morning, dug in |
 | wait | none | Storm at home, night at home, or dug in for the night |
 
-Wants (what every walk stops for within six blocks): berries on a bush always; loose sticks while short of ten; loose flint and stones while a tool head is wanted and nothing knappable is carried.
-| eat | `eat`, else `forage` | Satiety below 20% (or 40% with nothing carried); the pack any time, foraging by day |
+Wants (what every walk stops for within six blocks): berries on a ripe bush, an edible mushroom and a wild hive always; loose sticks while short of ten; loose flint and stones while a tool head is wanted and nothing knappable is carried.
+| eat | `forage` to half with two bites kept | Satiety below 20% (or 40% with nothing carried); eats what is carried when hungry, keeps the rest, searches ever farther in one direction for more, and when starving stomachs a bite that costs a point of health |
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
 | shelter | `shelter` | Enough dirt (by day, or at night with nowhere else) |
 | sticks | `gather stick` (loose sticks, then branchy leaves in reach) | Fewer than 10 sticks |
