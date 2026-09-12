@@ -4,11 +4,14 @@
 // returns by starting or stopping a goal or calling actions by hand, exactly
 // as an adapter would. The loop decides nothing itself: respawning, swimming
 // for shore, running from a hit are all the brain's to choose.
+import { type Log, noLog } from './log.ts';
+
 // The slice of the controller a brain loop uses; the class itself is plain JS.
 export interface ControllerLike {
   active: any;
   last: any;
   brain: any;
+  log?: Log;
   history: Map<string, any>;
   wants: string[];
   map?: any;
@@ -53,8 +56,6 @@ export interface Brain<Memory = unknown> {
   wants?(reading: Reading, memory: Memory): string[];
 }
 
-const say = (text: string) => console.error(`${new Date().toISOString().slice(11, 19)} brain ${text}`);
-
 export class BrainLoop<Memory> {
   memory: Memory;
   ticks = 0;
@@ -71,9 +72,11 @@ export class BrainLoop<Memory> {
   private cursor: number;
   private nudge: (() => void) | null = null;
   private unsubscribe: (() => void) | null = null;
+  private log: Log;
   constructor(controller: ControllerLike, brain: Brain<Memory>, tickMs = 2000) {
     this.controller = controller;
     this.brain = brain;
+    this.log = (controller.log ?? noLog).bind({ brain: brain.name });
     this.tickMs = tickMs;
     this.memory = brain.fresh();
     this.cursor = controller.events?.sequence ?? 0;
@@ -102,7 +105,7 @@ export class BrainLoop<Memory> {
         } catch (error) {
           // A loading world or a lost bridge drops reads for a while; keep trying.
           this.faults++;
-          say(`fault: ${error instanceof Error ? error.message : String(error)}`);
+          this.log.info('brain', 'fault', { faults: this.faults, error: error instanceof Error ? error.message : String(error) });
         }
         await this.rest(this.faults ? Math.min(30000, 2000 * this.faults) : this.tickMs, signal);
       }
@@ -173,17 +176,29 @@ export class BrainLoop<Memory> {
     };
     if (this.brain.wants) controller.wants = this.brain.wants(reading, this.memory);
     const decision = this.brain.decide(reading, this.memory);
+    // What the brain saw when it decided: enough to read the decision back later.
+    const saw = {
+      tick: this.ticks,
+      active: active ? `${active.kind}:${active.state}` : undefined,
+      last: last ? { kind: last.kind, ok: last.ok, reason: last.reason } : undefined,
+      events: batch.events.length ? batch.events.map(e => e.type) : undefined,
+      health: state.vitals?.health?.current,
+      hunger: state.vitals?.hunger?.current,
+    };
     if ('wait' in decision) {
-      this.note(`wait: ${decision.wait}`);
+      this.note('wait', { why: decision.wait, ...saw }, this.lastDecision === `wait: ${decision.wait}` ? 'debug' : 'info');
+      this.lastDecision = `wait: ${decision.wait}`;
       return;
     }
     if ('stop' in decision) {
-      this.note(`stop: ${decision.stop}`);
+      this.note('stop', { why: decision.stop, ...saw });
+      this.lastDecision = `stop: ${decision.stop}`;
       if (active) await controller.stop(`brain: ${decision.stop}`);
       return;
     }
     if ('act' in decision) {
-      this.note(`act ${decision.act.map(a => a.action).join(', ')}: ${decision.why}`);
+      this.note('act', { actions: decision.act.map(a => a.action), why: decision.why, ...saw });
+      this.lastDecision = `act ${decision.act.map(a => a.action).join(', ')}: ${decision.why}`;
       for (const step of decision.act) {
         const done = await controller.request(step, { by: 'brain' });
         if (!done.ok) throw new Error(`${step.action} refused: ${done.error}`);
@@ -191,10 +206,12 @@ export class BrainLoop<Memory> {
       return;
     }
     if (active) {
-      this.note(`cannot start ${decision.start} while ${active.kind} runs; stop it first`);
+      this.note('blocked', { start: decision.start, why: decision.why, ...saw }, 'debug');
+      this.lastDecision = `cannot start ${decision.start} while ${active.kind} runs; stop it first`;
       return;
     }
-    this.note(`${decision.start} ${JSON.stringify(decision.args)}: ${decision.why}`);
+    this.note('start', { start: decision.start, args: decision.args, why: decision.why, ...saw });
+    this.lastDecision = `${decision.start} ${JSON.stringify(decision.args)}: ${decision.why}`;
     const started = await controller.request({ action: decision.start, ...decision.args }, { by: 'brain' });
     if (!started.ok) throw new Error(`${decision.start} refused: ${started.error}`);
     this.goal = { id: started.goal.id, kind: decision.start };
@@ -224,10 +241,10 @@ export class BrainLoop<Memory> {
       }
     return target ? { x: target.x, y: target.y, z: target.z } : null;
   }
-  private note(text: string) {
-    if (text === this.lastDecision) return;
-    this.lastDecision = text;
-    say(text);
+  // Every decision is logged; a wait repeated tick after tick drops to debug so
+  // the mirror stays readable while the file keeps the full record.
+  private note(decision: string, fields: Record<string, unknown>, level: 'info' | 'debug' = 'info') {
+    this.log[level]('brain', decision, fields);
   }
 }
 

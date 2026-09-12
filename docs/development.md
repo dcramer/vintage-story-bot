@@ -6,7 +6,7 @@ Client C# mod → loopback JSON/TCP → Node bot → CLI.
 - [Architecture](architecture.md): module ownership and internal wire contract.
 - [Game API reference](capabilities.md): installed sources and entry points.
 - [Runtime](runtime.md): deployment, control, environment constraints.
-- Game access on game thread; networking queues expiring requests. The bot logs to stderr only.
+- Game access on game thread; networking queues expiring requests. The bot writes a [session log](architecture.md#session-log) under `.runtime/logs/<bot>/` and mirrors its info lines to stderr (`SERAPH_LOG=debug|info|off` sets the mirror); nothing else writes to stdout, which is protocol-only.
 - Preserve `stop`, action deadlines, world-exit cleanup; synchronize schemas with API changes.
 - C#: .NET 10, game 1.22.7; reference installed assemblies, never bundle them.
 - JS/TS: Node 24+, ES modules, pnpm, node:test. New files are TypeScript with erasable syntax only (no enums, parameter properties or namespaces): Node strips types natively, there is no build; `pnpm typecheck` runs tsc without emitting.

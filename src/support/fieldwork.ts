@@ -1,3 +1,4 @@
+import { type Log, noLog } from '../runtime/log.ts';
 import { findRoute } from '../runtime/navigation/planner.ts';
 import { nextLeg, planRoughRoute } from '../runtime/navigation/surface.ts';
 import { horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
@@ -26,6 +27,8 @@ export const explorationReach = (towardDistance, maxDistance, minDistance = 0) =
 // Shared session guard, observed-resource memory and travel; no transport/control ownership.
 export class Fieldwork {
   env: any;
+  // The goal's session log, bound to its id; goals write what they noticed and why they chose.
+  log: Log;
   gleaner: any;
   hurtAt: any;
   lastLook: any;
@@ -67,6 +70,7 @@ export class Fieldwork {
     }: any = {},
   ) {
     this.env = env;
+    this.log = env.log ?? noLog;
     // Things to pick up on the way, whatever the goal: set by the brain or the wants action.
     this.gleaner = Array.isArray(wants) && wants.length ? new Gleaner(this, wants) : null;
     this.signal = signal;
@@ -134,6 +138,7 @@ export class Fieldwork {
   event(type, extra = {}) {
     this.events.push({ type, at: this.now(), ...extra });
     while (this.events.length > 16) this.events.shift();
+    this.log.info('goal', type, extra);
     this.report(type, extra);
   }
   async observe(sync = false) {
@@ -280,6 +285,7 @@ export class Fieldwork {
     while (this.skipped.size > 1024) this.skipped.delete(this.skipped.keys().next().value);
   }
   skip(object, ms = 30000) {
+    this.log.debug('goal', 'skip', { target: object.key, code: object.code, ms });
     this.skipped.set(object.key, this.now() + ms);
     this.env.sightings?.skip?.(object.key, ms);
   }

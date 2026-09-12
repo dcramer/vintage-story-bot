@@ -55,6 +55,24 @@ The dashboard's displayed terrain is not reconstructed from those columns. Vinta
 
 The Preact SPA renders those pixels in a pannable, zoomable canvas, projects retained trails and objectives directly in world coordinates, and overlays both Seraphs and server-visible players. It draws the whole explored-region footprint at overview scale but fetches exact terrain for only the visible and adjacent regions, capped per viewport, so a growing world does not require one giant screenshot or an unbounded browser download. The fleet view combines Seraphs only when their savegame world identifier matches; bot pages request that Seraph's own long-horizon cache. As a fallback, an explicit `pnpm game map` opens the native World Map while gameplay is idle, reads screen/world calibration through `map_view`, captures the verified Vintage Story window, uploads a ≤90 KB WebP to `POST /api/map-image`, and closes the map. Consumers: routes `/`, `/bots/:id`, `/log`; `GET /api/state`; native map manifest/regions; `GET /api/map-image/:id`; legacy atlas reads `GET /api/maps` and `GET /api/maps/:id`; and `GET /api/ws` WebSocket (`snapshot|bot|map|gone`). Reads are unauthenticated. Bot records, screenshots, and their legacy atlas are evicted when unseen for `RETENTION_HOURS` (default 6); persistent native chunks remain bounded independently and are restored to the view when their Seraph reports again.
 
+## Session log
+
+The bot's durable record of one process, for reading back after the fact: [log.ts](../src/runtime/log.ts). One NDJSON file per start under `.runtime/logs/<bot>/<start>.ndjson` (`VINTAGE_STORY_LOG_DIR`, `VINTAGE_STORY_BOT_ID`), every line `{at,level,scope,event,...fields}` with `at` in ISO milliseconds; lines written for a goal also carry `goal` (id) and `kind`. The file keeps both levels; stderr mirrors `info` lines as `HH:MM:SS.mmm scope event k=v …` (`SERAPH_LOG=debug|info|off`). Writes are never awaited by gameplay and a file that cannot be written is dropped once noted. Telemetry is the live view and stays bounded and lossy; the session log is the record.
+
+| Scope | Info | Debug |
+| --- | --- | --- |
+| `controller` | `start` (session, port, pid, file), `brain`, `stop`, `failed`, `knowledge_save_failed` | |
+| `tool` | `refused` (action, by, error) | every non-polling request to the controller (action, by, args) |
+| `mod` | `refused` (action, args, error, code, ms) | every mod request but the polling and per-frame ones (action, args, ms) |
+| `goal` | each state (`starting` with by/args; a finished state with reason, result, ms) and each thing the goal noted through `field.event` | `progress` (the report fields), `skip` (target, ms) |
+| `nav` | `route` (replan, why, from, to, checkpoints, cells), the final state (reason, target, position, replans, remaining, ms, diagnostics) | `frame` (position, yaw, want, to, forward, jump, sprint, ms, checkpoint, paging) |
+| `brain` | `start`, `act`, `stop`, the first `wait` of a run of identical waits, `fault`; each with `why` and what it saw (tick, active, last, events, health, hunger) | repeated `wait`, `blocked` (a start refused while a goal runs) |
+| `event` | every event bus entry but sightings (hurt, died, alive, alert, storm, message, goal_started, goal_finished) | `sighted` |
+| `eye` | `life` (a new life session: life, player, world, dimension) | `sample` once a second (position, yaw, vitals, alive, controlReady, swimming, storm, entities), `lost` |
+| `report` | fleet report `failed`/`recovered` | |
+
+Goals log through `field.log` (a [Fieldwork](../src/support/fieldwork.ts) bound to the goal) or `env.log`; `field.event` and `field.skip` already write. Navigation stays pure: the controller logs its routes and frames.
+
 ## Internal mod protocol
 
 All requests use existing bounded JSON-line transport; game thread executes them. Public tools: [tool contracts](../src/actions/) and [goals](../src/goals/).

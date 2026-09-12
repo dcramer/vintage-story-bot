@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { EventLog } from './events.ts';
 import { GameClient } from './game.ts';
 import { compileGoalScript, runGoalPlan } from './goal-script.ts';
+import { type Log, noLog } from './log.ts';
 import { Knowledge } from './navigation/knowledge.ts';
 import { Navigation } from './navigation/navigator.ts';
 import { findTool, goals, tools } from './registry.ts';
@@ -26,15 +27,32 @@ const defer = () => {
   };
 };
 const message = error => (error instanceof Error ? error.message : String(error));
+// Reads that run in loops: logged only when refused.
+const polling = new Set([
+  'sense',
+  'observe',
+  'inventory',
+  'environment',
+  'messages',
+  'events',
+  'target',
+  'dialogs',
+  'recipes',
+  'scan',
+  'map_waypoints',
+]);
+const looping = new Set(['control_frame', 'control_step', 'block_action_status', 'block_action_continue']);
 
 // One bot: the shared game client, its memory, one active goal at a time, and
 // the tool registry every adapter (MCP, CLI, brain) speaks to.
 export class Controller {
   eyeTimer: any;
+  lifeLogged: string | undefined;
   game: any;
   knowledge: any;
   send: any;
   telemetry: any;
+  log: Log;
   active = null;
   last = null;
   closing = false;
@@ -46,31 +64,44 @@ export class Controller {
   lock = Promise.resolve();
   events = new EventLog();
   chatCursor = { after: 0, session: undefined as string | undefined };
-  constructor(send, telemetry = null) {
+  constructor(send, telemetry = null, log: Log = noLog) {
     this.game = new GameClient(send);
     this.game.events = this.events;
-    this.events.subscribe(event => this.telemetry?.publish('event', event));
+    this.log = log;
+    this.events.subscribe(event => {
+      this.telemetry?.publish('event', event);
+      const { id, at, type, ...data } = event;
+      // A first sighting is frequent and mostly routine: kept in the file, off the mirror.
+      this.log[type === 'sighted' ? 'debug' : 'info']('event', type, { event: id, ...data });
+    });
     this.telemetry = telemetry;
     this.knowledge = this.game.knowledge = new Knowledge(process.env.VINTAGE_STORY_KNOWLEDGE_DIR ?? '.runtime/knowledge', this.game);
-    if (telemetry) {
-      const raw = this.game.send;
-      this.game.send = (request, options) =>
-        raw(request, options).then(
-          result => {
-            this.trace(request, result);
-            return result;
-          },
-          error => {
-            this.trace(request, { ok: false, error: error.message });
-            throw error;
-          },
-        );
-    }
+    const raw = this.game.send;
+    this.game.send = (request, options) => {
+      const since = performance.now();
+      return raw(request, options).then(
+        result => {
+          this.trace(request, result, since);
+          return result;
+        },
+        error => {
+          this.trace(request, { ok: false, error: error.message }, since);
+          throw error;
+        },
+      );
+    };
     this.send = this.game.send;
   }
-  // Operator telemetry only: never awaited, never affects gameplay.
-  trace(request, result) {
+  // What went to the mod and what came back: the session log keeps every request
+  // but the ones that run in loops, which it keeps only when refused; operator
+  // telemetry gets the live topics. Never awaited, never affects gameplay.
+  trace(request, result, since = performance.now()) {
     const { action, ...args } = request;
+    const ms = Math.round(performance.now() - since);
+    if (!result.ok)
+      this.log.info('mod', 'refused', { action, args: looping.has(action) ? undefined : args, error: result.error, code: result.code, ms });
+    else if (!polling.has(action) && !looping.has(action)) this.log.debug('mod', action, { args, ms });
+    if (!this.telemetry) return;
     const perception = () => {
       if (!result.ok) return;
       this.telemetry.publish('state', result.state, { coalesce: true });
@@ -96,9 +127,21 @@ export class Controller {
     }
     this.telemetry.publish('action', { action, args, ok: result.ok, error: result.error, code: result.code });
   }
+  // A goal's state for the operator and the session log: every state change at info,
+  // every progress report at debug.
   track(record, coalesce = false) {
     this.telemetry?.publish('goal', this.goalView(record), { coalesce });
-    logGoal(record);
+    if (coalesce) record.log?.debug('goal', 'progress', record.progress ?? {});
+    else if (record.state !== record.logged) {
+      record.logged = record.state;
+      const done = record.finishedAt != null;
+      record.log?.info('goal', record.state, {
+        ...(record.state === 'starting' ? { by: record.by, args: record.args } : {}),
+        ...(record.progress?.phase ? { phase: record.progress.phase } : {}),
+        reason: record.reason,
+        ...(done ? { result: record.result, ms: record.finishedAt - record.startedAt } : {}),
+      });
+    }
   }
   get map() {
     return this.game.map;
@@ -168,9 +211,11 @@ export class Controller {
       // would only compete with them on the game thread.
       if (!this.active?.nav?.active) {
         try {
-          await this.game.sense();
-        } catch {
+          const batch = await this.game.sense();
+          if (this.eyeTicks % 4 === 0) this.sample(batch.state);
+        } catch (error) {
           delay = 2000;
+          this.log.debug('eye', 'lost', { error: message(error) });
         }
       }
       // Chat lines the player has read since the last look, once a second.
@@ -190,10 +235,34 @@ export class Controller {
         this.knowledge.save();
       } catch (error) {
         this.telemetry?.publish('action', { action: 'knowledge_save', ok: false, error: error.message });
+        this.log.info('controller', 'knowledge_save_failed', { error: error.message });
       }
       if (!this.closing) this.eyeTimer = setTimeout(tick, delay);
     };
     this.eyeTimer = setTimeout(tick, intervalMs);
+  }
+  // Own state once a second, so a session can be replayed as a trajectory: where the
+  // body was, what it looked at and how it was doing. A new life session is noted.
+  sample(state) {
+    if (!state?.ok) return;
+    const p = state.position ?? {};
+    if (state.life?.session !== this.lifeLogged) {
+      this.lifeLogged = state.life?.session;
+      this.log.info('eye', 'life', { life: state.life?.session, player: state.player?.uid, world: state.world?.identifier, dimension: p.dimension });
+    }
+    const tenth = v => (typeof v === 'number' ? Math.round(v * 10) / 10 : v);
+    this.log.debug('eye', 'sample', {
+      position: { x: tenth(p.x), y: tenth(p.y), z: tenth(p.z) },
+      yaw: Math.round(state.orientation?.yawDegrees ?? 0),
+      health: state.vitals?.health?.current,
+      hunger: state.vitals?.hunger?.current,
+      oxygen: state.vitals?.oxygen?.current,
+      alive: state.alive,
+      controlReady: state.controlReady,
+      swimming: state.motion?.swimming || undefined,
+      storm: state.condition?.temporalStorm?.phase,
+      entities: state.nearbyEntities?.length || undefined,
+    });
   }
   async close() {
     this.closing = true;
@@ -258,6 +327,7 @@ export class Controller {
       const parsed = tool.schema.parse(args);
       // A tool that needs the body waits for the goal; one that only talks (chat, map markers, memory) runs alongside it.
       if (this.active && !tool.readOnly && !tool.concurrent) throw new Error('Goal active; stop it before another mutation.');
+      if (!polling.has(action)) this.log.debug('tool', action, { by, args: parsed });
       if (tool.launch) return this.launch(tool.name, parsed, (record, started, signal) => tool.launch(this, parsed, record, started, signal), by);
       if (tool.run) return this.launch(tool.name, parsed, (record, started, signal) => this.runTask(tool.run, parsed, record, started, signal), by);
       if (tool.local) return tool.local(this, parsed);
@@ -269,6 +339,9 @@ export class Controller {
         if (!result.capabilities.includes('move_to')) result.capabilities.push('move_to');
       }
       return result;
+    }).catch(error => {
+      this.log.info('tool', 'refused', { action: request.action, by, error: message(error) });
+      throw error;
     });
   }
   // Fire-and-forget status chat so other players on the server can follow what the bot is doing.
@@ -294,6 +367,7 @@ export class Controller {
       abort,
       ...(typeof args.intent === 'string' ? { intent: args.intent } : {}),
     };
+    record.log = this.log.bind({ goal: record.id, kind });
     this.active = this.last = record;
     this.track(record);
     this.events.emit('goal_started', { goal: record.id, kind, by });
@@ -384,6 +458,7 @@ export class Controller {
     );
     this.map.swim = goal.swim !== false;
     const nav = (record.nav = new Navigation(this.map, initial, goal));
+    let state = initial;
     try {
       if (started) {
         nav.id = record.id;
@@ -391,8 +466,8 @@ export class Controller {
         this.track(record);
         started.resolve({ ok: true, status: 'started', navigation: nav.observe() });
       }
-      let state = initial,
-        terrainMore = false;
+      let terrainMore = false,
+        route = nav.route;
       let input: any = null,
         pagingSince = Date.now();
       while (nav.active) {
@@ -420,12 +495,29 @@ export class Controller {
           durationMs: frame?.durationMs ?? 250,
         };
         this.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
-        if (process.env.SERAPH_TRACE_NAV)
-          console.error(
-            `${new Date().toISOString().slice(11, 23)} nav yaw=${state.orientation.yawDegrees.toFixed(0)} -> ${input.yawDegrees.toFixed(0)} ` +
-              `want=${nav.desiredYaw?.toFixed?.(0)} err=${nav.yawError?.toFixed?.(0)} fwd=${input.forward ? 1 : 0} jump=${input.jump ? 1 : 0} ` +
-              `ms=${input.durationMs} i=${nav.index}/${nav.route?.length ?? 0} re=${nav.replans}${nav.lastReplan ? `(${nav.lastReplan})` : ''} at=${state.position.x.toFixed(1)},${state.position.y.toFixed(1)},${state.position.z.toFixed(1)}`,
-          );
+        if (nav.route !== route) {
+          route = nav.route;
+          record.log?.info('nav', 'route', {
+            replan: nav.replans,
+            why: nav.lastReplan,
+            from: state.position,
+            to: route.at(-1),
+            checkpoints: route.length,
+            route: route.map(n => `${n.x.toFixed(1)},${n.y},${n.z.toFixed(1)}${n.move && n.move !== 'walk' ? `(${n.move})` : ''}`),
+          });
+        }
+        record.log?.debug('nav', 'frame', {
+          position: state.position,
+          yaw: Math.round(state.orientation.yawDegrees),
+          want: nav.desiredYaw == null ? undefined : Math.round(nav.desiredYaw),
+          to: Math.round(input.yawDegrees),
+          forward: input.forward,
+          jump: input.jump,
+          sprint: input.sprint,
+          ms: input.durationMs,
+          checkpoint: `${nav.index}/${nav.route?.length ?? 0}`,
+          paging: terrainMore || undefined,
+        });
         // A refused frame means the hold is gone (expired, revoked, manual
         // input): the walk is cancelled, never blocked terrain.
         let batch;
@@ -489,6 +581,15 @@ export class Controller {
     }
     if (started) record.state = nav.state;
     this.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
+    record.log?.info('nav', nav.state, {
+      reason: nav.reason,
+      target: nav.target,
+      position: state.position,
+      replans: nav.replans,
+      remaining: Math.max(0, nav.route.length - nav.index),
+      ms: Date.now() - record.startedAt,
+      ...(nav.diagnostics ? { diagnostics: nav.diagnostics } : {}),
+    });
     return nav.observe();
   }
   // A goal written as plain async code over a small environment. Cancellation
@@ -511,6 +612,7 @@ export class Controller {
       sync: () => this.snapshot(signal),
       aim: (angles, safety) => this.aim(angles, record, safety, signal),
       navigate: (goal, pauseWhen, safety) => this.navigate(goal, record, undefined, pauseWhen, safety, signal),
+      log: record.log,
       report: progress => {
         record.progress = progress;
         this.track(record, true);
@@ -540,33 +642,6 @@ export class Controller {
       signal,
     );
   }
-}
-
-// One readable line per change of phase, target or state, so a goal's behavior can be followed from
-// the controller's log (stderr: stdout is protocol-only under MCP).
-const brief = value =>
-  value == null
-    ? ''
-    : typeof value === 'object'
-      ? 'x' in value && 'z' in value
-        ? `${Math.round(value.x)},${value.y == null ? '' : `${Math.round(value.y)},`}${Math.round(value.z)}`
-        : Object.entries(value)
-            .filter(([, v]) => v != null && typeof v !== 'object')
-            .map(([k, v]) => `${k}=${v}`)
-            .join(' ')
-      : String(value);
-function logGoal(record) {
-  const p = record.progress ?? {};
-  const fields = Object.entries(p)
-    .filter(([key, value]) => key !== 'phase' && value != null && !(typeof value === 'object' && !('x' in value)))
-    .map(([key, value]) => `${key}=${brief(value)}`)
-    .join(' ');
-  const line =
-    `${record.kind}#${record.id.slice(0, 4)} ${record.state}${p.phase ? ` ${p.phase}` : ''}${fields ? ` ${fields}` : ''}` +
-    `${record.reason ? ` reason=${record.reason}` : ''}${record.result && record.state !== 'running' ? ` result=${brief(record.result)}` : ''}`;
-  if (line === record.logged) return;
-  record.logged = line;
-  console.error(`${new Date().toISOString().slice(11, 19)} ${line}`);
 }
 
 // Short, human-sounding description of a starting goal for server chat.

@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { type Log, noLog } from './log.ts';
 
 // Fire-and-forget batches to the fleet report service (report/worker.mjs). Same `publish(topic, data, {coalesce})` contract as
 // Telemetry: latest value per topic plus a bounded log, trimmed to fleet-relevant fields, one POST per interval. Never awaited
@@ -101,7 +102,7 @@ export class Reporter {
   inflight = null;
   closed = false;
   failures = 0;
-  static fromEnv(env = process.env) {
+  static fromEnv(env = process.env, log: Log = noLog) {
     if (!env.VINTAGE_STORY_REPORT_URL) return null;
     return new Reporter({
       url: env.VINTAGE_STORY_REPORT_URL,
@@ -109,8 +110,10 @@ export class Reporter {
       id: env.VINTAGE_STORY_BOT_ID || os.hostname(),
       intervalMs: Number(env.VINTAGE_STORY_REPORT_INTERVAL_MS) || 10000,
       stream: env.VINTAGE_STORY_STREAM_URL,
+      log,
     });
   }
+  session: Log;
   url: string;
   token: string;
   id: string;
@@ -136,8 +139,10 @@ export class Reporter {
     mapBytes = 65536,
     timeoutMs = 8000,
     fetch = globalThis.fetch,
+    log = noLog as Log,
   }) {
     if (!idPattern.test(id)) throw new Error('VINTAGE_STORY_BOT_ID must match ' + idPattern.source);
+    this.session = log;
     Object.assign(this, {
       url: new URL('/api/report', url).href,
       token,
@@ -202,11 +207,11 @@ export class Reporter {
       })
       .then(
         () => {
-          if (this.failures) console.error(`Fleet report recovered after ${this.failures} failures`);
+          if (this.failures) this.session.info('report', 'recovered', { failures: this.failures });
           this.failures = 0;
         },
         error => {
-          if (!this.failures++) console.error(`Fleet report failed: ${error.message}`);
+          if (!this.failures++) this.session.info('report', 'failed', { error: error.message });
           for (const [topic, entry] of Object.entries(topics) as [string, any][]) {
             const current = this.latest.get(topic);
             if (topic === 'map' && current)

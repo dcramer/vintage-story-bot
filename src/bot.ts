@@ -7,6 +7,7 @@ import { once } from 'node:events';
 import net from 'node:net';
 import { installBrain } from './runtime/brain.ts';
 import { Controller } from './runtime/controller.ts';
+import { SessionLog } from './runtime/log.ts';
 import { Reporter } from './runtime/reporter.ts';
 import { controllerPort } from './runtime/rpc.ts';
 import { Telemetry } from './runtime/telemetry.ts';
@@ -17,7 +18,8 @@ const argument = (name: string): string | undefined => {
 };
 const brainName = argument('--brain') ?? process.env.VINTAGE_STORY_BRAIN ?? null;
 
-const sinks: any[] = [new Telemetry(), Reporter.fromEnv()].filter(Boolean);
+const log = SessionLog.fromEnv();
+const sinks: any[] = [new Telemetry(), Reporter.fromEnv(process.env, log)].filter(Boolean);
 const telemetry = {
   publish: (...args: unknown[]) => {
     for (const sink of sinks) sink.publish(...args);
@@ -26,7 +28,7 @@ const telemetry = {
     for (const sink of sinks) sink.close();
   },
 };
-const controller = new Controller(undefined, telemetry as any);
+const controller = new Controller(undefined, telemetry as any, log);
 const sockets = new Set<net.Socket>();
 const maxRequestBytes = 16384;
 
@@ -63,20 +65,29 @@ for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => shutdown.
 try {
   server.listen(controllerPort(), '127.0.0.1');
   await once(server, 'listening');
-  console.error(`Vintage Story controller 0.1.0 on 127.0.0.1:${controllerPort()} (structured data only)`);
+  log.info('controller', 'start', {
+    version: '0.1.0',
+    port: controllerPort(),
+    session: controller.session,
+    pid: process.pid,
+    bot: process.env.VINTAGE_STORY_BOT_ID || undefined,
+    file: log.path,
+  });
   controller.eye();
   telemetry.publish('controller', controller.info());
   if (brainName) {
     await installBrain(controller, brainName);
-    console.error(`brain ${brainName} installed`);
+    log.info('controller', 'brain', { brain: brainName });
   }
   await new Promise<void>(resolve => shutdown.signal.addEventListener('abort', () => resolve(), { once: true }));
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  log.info('controller', 'failed', { error: error instanceof Error ? error.message : String(error) });
   process.exitCode = 1;
 } finally {
+  log.info('controller', 'stop', { session: controller.session, uptimeMs: Math.round(process.uptime() * 1000) });
   await controller.close();
   telemetry.close();
+  log.close();
   for (const socket of sockets) socket.destroy();
   await new Promise(resolve => server.close(resolve));
 }
