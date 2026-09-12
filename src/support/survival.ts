@@ -39,6 +39,8 @@ export const harvestReady = (object, position, halfWidth = 0.3) =>
 export const foodViewChanged = (view, state) =>
   !view || horizontal(view.position, state.position) > 2 || Math.abs(normalize(state.orientation.yawDegrees - view.yawDegrees + 180) - 180) > 15;
 export const stuckFoodRoute = (result, before, after) => !['arrived', 'paused'].includes(result.state) && horizontal(before, after) <= 2;
+export const unproductiveFoodApproach = (target, result, before, after) =>
+  !['arrived', 'paused'].includes(result.state) && horizontal(after, target.point) + 2 >= horizontal(before, target.point);
 export const exhaustedFoodLead = (target, result) => result.state === 'arrived' && target.visible === false;
 export const foodSearchBias = (stuckSearches, toward, habitat) => (stuckSearches >= 2 ? null : (toward ?? habitat));
 export const matchingFoodDrops = (objects, foodCode, point) =>
@@ -199,7 +201,10 @@ export class Survival {
             // orbit alternate approach cells around an occluded or gone block.
             field.skip(target, 120000);
             field.report('food_lead_unseen', { target: target.key });
-          } else if (stuckFoodRoute(result, before, field.latest.position)) {
+          } else if (
+            stuckFoodRoute(result, before, field.latest.position) ||
+            unproductiveFoodApproach(target, result, before, field.latest.position)
+          ) {
             field.skip(target, 120000);
             await clearLeafPath(field, target.point);
           }

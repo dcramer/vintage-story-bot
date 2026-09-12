@@ -18,6 +18,7 @@ import {
   harvestReady,
   matchingFoodDrops,
   stuckFoodRoute,
+  unproductiveFoodApproach,
   wideFoodSurveyNeeded,
 } from '../src/support/survival.ts';
 import {
@@ -154,6 +155,11 @@ test('food leads survive productive partial routes but skip stuck ones', () => {
   assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
   assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
   assert.equal(stuckFoodRoute({ state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
+  const target = { point: { x: 10, z: 0 } };
+  assert.equal(unproductiveFoodApproach(target, blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
+  assert.equal(unproductiveFoodApproach(target, blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
+  assert.equal(unproductiveFoodApproach(target, blocked, { x: 2, z: 0 }, { x: 1, z: 0 }), true);
+  assert.equal(unproductiveFoodApproach(target, { state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
 });
 
 test('food search drops an unreachable habitat bias after two stationary legs', () => {
