@@ -15,7 +15,9 @@ export const wideFoodSurveyNeeded = ratio => ratio < 0.2;
 export const foodSearchDistance = Math.min(12, foodSightRange * 0.75);
 export const foodElevationDetourDistance = verticalRemaining =>
   verticalRemaining < 1.5 ? 0 : Math.min(foodSearchDistance, Math.max(6, verticalRemaining * 2));
-export const foodRecoverySatisfied = (ratio, reserve, eaten) => (ratio >= 0.8 && reserve >= 320) || (eaten > 0 && ratio >= 0.6);
+// Done when fed to `until` with `keep` satiety in the pack, or once something was eaten and the bar is near `until`.
+export const foodRecoverySatisfied = (ratio, reserve, eaten, until = 0.8, keep = 320) =>
+  (ratio >= until && reserve >= keep) || (eaten > 0 && ratio + 0.2 >= until - 1e-9);
 const breaks = object => foodYield(object)?.how === 'break';
 // Worth walking to: yields food now and the server lets this player take it.
 const forage = object => foodYield(object) && accessibleForage(object);
@@ -71,8 +73,26 @@ export class Survival {
     return objects;
   }
   pauseWhen = state => (hunger(state) < 0.2 ? 'food_needed' : null);
-  eatWhen = state => (this.reserve > 0 && hunger(state) < 0.8 ? 'food_available' : null);
-  async tend({ force = false, toward, watch, count }: { force?: boolean; toward?: any; watch?: string[]; count?: number } = {}) {
+  eatWhen = state => (this.reserve > 0 && hunger(state) < this.until ? 'food_available' : null);
+  until = 0.8;
+  keep = 320;
+  async tend({
+    force = false,
+    toward,
+    watch,
+    count,
+    until,
+    keep,
+  }: {
+    force?: boolean;
+    toward?: any;
+    watch?: string[];
+    count?: number;
+    until?: number;
+    keep?: number;
+  } = {}) {
+    if (until !== undefined) this.until = until;
+    if (keep !== undefined) this.keep = keep;
     const field = this.field;
     this.watch = watch?.length ? watch : forageWatch;
     await field.observe();
@@ -101,13 +121,15 @@ export class Survival {
         retained: this.retained,
         count,
       });
-      if (count === undefined ? foodRecoverySatisfied(hunger(field.latest), this.reserve, this.eaten) : this.retained >= count) {
+      if (
+        count === undefined ? foodRecoverySatisfied(hunger(field.latest), this.reserve, this.eaten, this.until, this.keep) : this.retained >= count
+      ) {
         this.tending = false;
         field.recoveringFood = false;
         await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
         return;
       }
-      if (this.reserve > 0 && hunger(field.latest) < 0.8) {
+      if (this.reserve > 0 && hunger(field.latest) < this.until) {
         const result = await consume(field);
         this.eaten += result.consumed;
         continue;

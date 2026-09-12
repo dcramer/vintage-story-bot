@@ -13,6 +13,8 @@ export const schema = z
       .max(256)
       .optional()
       .describe('Additional fresh food items to retain after anything eaten during the goal; omitted uses normal recovery targets.'),
+    until: z.number().min(0.2).max(1).default(0.8).describe('Satiety fraction to eat up to; getting-started says half.'),
+    keep: z.number().int().min(0).max(2000).default(320).describe('Satiety worth of fresh food to keep in the pack afterwards.'),
     match: z
       .array(z.string().min(1).max(32))
       .min(1)
@@ -37,7 +39,7 @@ export default defineGoal({
   announce: () => 'Foraging for a bite to eat.',
   run: (env, options) =>
     runField(env, { ...options, manageFood: true }, [], async (field, survival) => {
-      await survival.tend({ force: true, watch: options.match, count: options.count });
+      await survival.tend({ force: true, watch: options.match, count: options.count, until: options.until, keep: options.keep });
       return {
         ok: true,
         goal: 'forage',

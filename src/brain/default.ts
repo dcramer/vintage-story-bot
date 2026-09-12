@@ -244,7 +244,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'eat':
       return k.reserve > 0
         ? start('eat', {}, `satiety ${Math.round((satiety ?? 0) * 100)}%`)
-        : start('forage', { timeoutMs: 1800000 }, `satiety ${Math.round((satiety ?? 0) * 100)}%, nothing carried`);
+        : start('forage', { until: 0.5, keep: 160, timeoutMs: 1800000 }, `satiety ${Math.round((satiety ?? 0) * 100)}%, nothing carried`);
     case 'dirt':
       return start(
         'harvest',
