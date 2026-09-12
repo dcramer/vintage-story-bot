@@ -169,6 +169,25 @@ test('a search with nothing in sight heads a hundred blocks the least-walked way
   assert.deepEqual([edge.x, edge.z], [30.5, -29.5], 'a seen forest edge the right way is the frontier');
 });
 
+test('a lead with a threatened route is briefly set aside instead of retried immediately', () => {
+  const target = { key: 'cranberry', point: { x: 41, y: 0, z: 0 } };
+  const places = new Places(() => 1000);
+  const field = new Fieldwork({ places }, { now: () => 1000 });
+  field.latest = {
+    position: { x: 0, y: 0, z: 0 },
+    nearbyEntities: [{ code: 'game:wolf-eurasian-adult-male', point: { x: 10, y: 0, z: 0 } }],
+  };
+  field.seen.set(target.key, target);
+  const reports: any[] = [];
+  field.report = (phase, detail) => reports.push({ phase, detail });
+  const search = new Search(field, { kind: 'food', watch: [], wanted: () => true, take: async () => false });
+  search.avoidThreat(target);
+  assert.equal(field.skipped.get('cranberry'), 1000 + 30000, 'outside the perimeter: a short pause, another meal first');
+  assert.deepEqual(reports, [
+    { phase: 'route_threatened', detail: { target: 'cranberry', threat: 'game:wolf-eurasian-adult-male', skipped: ['cranberry'] } },
+  ]);
+});
+
 test('the frontier is shared across goals and forgotten near a predator', async () => {
   const places = new Places(() => 1000);
   places.setFrontier('food', { x: 96.5, y: 100, z: 0.5 });

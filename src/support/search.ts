@@ -163,11 +163,15 @@ export class Search {
     const threat = nearestThreat(field.latest);
     const guarded = threat ? this.targets().filter(object => leadGuarded(object, threat)) : [];
     if (target && leadGuarded(target, threat) && !guarded.some(object => object.key === target.key)) guarded.push(target);
-    for (const object of guarded) field.skip(object, 120000);
+    // A lead outside the perimeter can still have its only known approach cut
+    // off by the predator: it is put aside briefly so the next step considers
+    // another one instead of walking into the same pause-and-evade loop.
+    const skipped = guarded.length ? guarded : target ? [target] : [];
+    for (const object of skipped) field.skip(object, guarded.length ? 120000 : 30000);
     field.report(guarded.length ? 'lead_threatened' : 'route_threatened', {
       target: target?.key ?? null,
       threat: threat?.code ?? null,
-      skipped: guarded.map(object => object.key),
+      skipped: skipped.map(object => object.key),
     });
     const frontier = field.places.frontier(this.options.kind);
     if (frontier && frontierGuarded(field.latest.position, frontier, threat)) field.places.clearFrontier(this.options.kind);
