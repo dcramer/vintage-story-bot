@@ -6,6 +6,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { requestBridge } from '../runtime/bridge.ts';
 import { root } from './display.ts';
+import { ensureMinimap, scanWorldMap } from './world-map.ts';
 
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const chunkMask = (1n << 27n) - 1n,
@@ -109,8 +110,8 @@ async function upload(body) {
   return result;
 }
 
-export async function syncNativeMap({ known = new Map() } = {}) {
-  const sample = await requestBridge({ action: 'map_view' });
+export async function syncNativeMap({ known = new Map(), sample = null } = {}) {
+  sample ??= await requestBridge({ action: 'map_view' });
   if (!sample.ok || !idPattern.test(sample.map?.id ?? '')) throw new Error(sample.error ?? 'Native World Map metadata is unavailable.');
   const world = sample.map.id,
     chunks = readNativeMap(world),
@@ -139,18 +140,24 @@ export async function syncNativeMap({ known = new Map() } = {}) {
 }
 
 export function superviseNativeMap({
-  intervalMs = Number(process.env.VINTAGE_STORY_NATIVE_MAP_INTERVAL_MS) || 30000,
+  intervalMs = Number(process.env.VINTAGE_STORY_NATIVE_MAP_INTERVAL_MS) || 5000,
   onChange = (_status?: any) => {},
   log = (_line?: any) => {},
 } = {}) {
-  intervalMs = Math.max(10000, intervalMs);
+  intervalMs = Math.max(5000, intervalMs);
   const known = new Map();
   let stopped = false,
     running = false,
     lastAt = null,
-    nextAt = Date.now() + 25000,
-    reason = null;
-  const status = () => ({ running, lastAt, nextAt, reason });
+    nextAt = 0,
+    reason = null,
+    world = null,
+    connection = null,
+    bootstrappedAt = null,
+    bootstrapReason = null,
+    minimap = false,
+    minimapReason = null;
+  const status = () => ({ running, lastAt, nextAt, reason, world, connection, bootstrappedAt, bootstrapReason, minimap, minimapReason });
   const changed = () => onChange(status());
   async function tick() {
     if (stopped || running || Date.now() < nextAt) return;
@@ -158,13 +165,44 @@ export function superviseNativeMap({
     reason = null;
     changed();
     try {
-      const result = await syncNativeMap({ known });
+      const sample = await requestBridge({ action: 'map_view' });
+      if (!sample.ok || !idPattern.test(sample.map?.id ?? '')) throw new Error(sample.error ?? 'Native World Map metadata is unavailable.');
+      const nextConnection = sample.session ?? sample.map.id;
+      if (connection !== nextConnection) {
+        connection = nextConnection;
+        world = sample.map.id;
+        bootstrappedAt = sample.scanned === true ? Date.now() : null;
+        bootstrapReason = null;
+        minimap = false;
+        minimapReason = null;
+      }
+      if (!bootstrappedAt) {
+        try {
+          const scan = await scanWorldMap();
+          if (scan.scanned) {
+            bootstrappedAt = Date.now();
+            bootstrapReason = null;
+            log(`scanned World Map on connect for ${world}`);
+          } else bootstrapReason = scan.reason;
+        } catch (error) {
+          bootstrapReason = error.message;
+        }
+      }
+      try {
+        const hud = await ensureMinimap();
+        minimap = hud.enabled === true;
+        minimapReason = minimap ? null : (hud.reason ?? 'Minimap is not active.');
+      } catch (error) {
+        minimap = false;
+        minimapReason = error.message;
+      }
+      const result = await syncNativeMap({ known, sample });
       lastAt = Date.now();
       nextAt = lastAt + intervalMs;
       if (result.changed) log(`synced ${result.changed}/${result.total} native map chunks for ${result.world}`);
     } catch (error) {
       reason = error.message;
-      nextAt = Date.now() + 30000;
+      nextAt = Date.now() + 5000;
       log(reason);
     } finally {
       running = false;

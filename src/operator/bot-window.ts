@@ -44,8 +44,8 @@ export const uiTools = [
   },
   {
     name: 'ui_key',
-    schema: z.object({ key: z.enum(['Escape', 'Return', 'Tab', 'Up', 'Down', 'Left', 'Right', 'm']) }).strict(),
-    description: 'Send a key directly to the bot. Escape opens/closes the pause menu; m opens/closes the World Map. No retries.',
+    schema: z.object({ key: z.enum(['Escape', 'Return', 'Tab', 'Up', 'Down', 'Left', 'Right', 'F6', 'm']) }).strict(),
+    description: 'Send a key directly to the bot. Escape opens/closes pause, F6 toggles the minimap and m toggles the World Map. No retries.',
   },
 ];
 

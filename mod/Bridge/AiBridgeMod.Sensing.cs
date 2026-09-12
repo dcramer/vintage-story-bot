@@ -23,7 +23,7 @@ public sealed partial class AiBridgeMod
         return new
         {
             ok = true,
-            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "map_waypoints", "map_waypoint_add", "map_view", "drop", "containers", "look_at", "players", "catalog", "chat_messages", "can_see", "ui_close" },
+            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "map_waypoints", "map_waypoint_add", "map_view", "map_hud_state", "drop", "containers", "look_at", "players", "catalog", "chat_messages", "can_see", "ui_close" },
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
             world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString(),
@@ -87,7 +87,10 @@ public sealed partial class AiBridgeMod
             };
         }).ToArray() ?? [];
         var map = new { id = api.World.SavegameIdentifier, chunkSize = 32 };
-        if (manager?.IsOpened != true) return new { ok = true, opened = false, map, players };
+        if (manager?.IsOpened != true) return new { ok = true, opened = false, mode = "closed", scanned = worldMapScanned, session = life.Session, map, players };
+        string mode = manager.worldMapDlg.DialogType == EnumDialogType.HUD ? "minimap" : "world";
+        if (mode != "world") return new { ok = true, opened = true, mode, scanned = worldMapScanned, session = life.Session, map, players };
+        worldMapScanned = true;
         var position = api.World.Player.Entity.Pos;
         var origin = new Vec3d(position.X, position.Y, position.Z);
         var here = new Vec2f(); var east = new Vec2f(); var south = new Vec2f();
@@ -95,12 +98,15 @@ public sealed partial class AiBridgeMod
         manager.TranslateWorldPosToViewPos(new Vec3d(origin.X + 100, origin.Y, origin.Z), ref east);
         manager.TranslateWorldPosToViewPos(new Vec3d(origin.X, origin.Y, origin.Z + 100), ref south);
         var bounds = manager.worldMapDlg?.SingleComposer?.GetElement("mapElem")?.Bounds;
-        if (bounds == null) return new { ok = true, opened = false, map, players };
+        if (bounds == null) return new { ok = true, opened = true, mode, scanned = worldMapScanned, session = life.Session, map, players };
         float offsetX = (float)bounds.absX, offsetY = (float)bounds.absY;
         return new
         {
             ok = true,
             opened = true,
+            mode,
+            scanned = worldMapScanned,
+            session = life.Session,
             map,
             players,
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),

@@ -4,7 +4,7 @@ import net from 'node:net';
 import { test } from 'node:test';
 import { isBotCommand, uiTools, validateClick } from '../src/operator/bot-window.ts';
 import { decodeChunkIndex, decodeMapPiece } from '../src/operator/native-map.ts';
-import { normalizeMapView } from '../src/operator/world-map.ts';
+import { mapMode, normalizeMapView } from '../src/operator/world-map.ts';
 import { bridgePort, requestBridge } from '../src/runtime/bridge.ts';
 import { tools as actions } from '../src/runtime/registry.ts';
 
@@ -116,6 +116,7 @@ test('UI restricts bot identity, keys and click bounds without touching a displa
   }
   const key = uiTools.find(tool => tool.name === 'ui_key').schema;
   assert.equal(key.safeParse({ key: 'Escape' }).success, true);
+  assert.equal(key.safeParse({ key: 'F6' }).success, true);
   assert.equal(key.safeParse({ key: 'm' }).success, true);
   assert.equal(key.safeParse({ key: 'Alt+F4' }).success, false);
 });
@@ -128,6 +129,10 @@ test('normalizes native World Map calibration to the captured game window', () =
   );
   assert.deepEqual(view, { world: { x: 512000, z: 512000, dimension: 0 }, here: [0.5, 0.5], east100: [740 / 1280, 0.5], south100: [0.5, 460 / 720] });
   assert.equal(normalizeMapView({ opened: false }, 1280, 720), null);
+  assert.equal(mapMode({ mode: 'minimap', opened: true }), 'minimap');
+  assert.equal(mapMode({ mode: 'world', opened: true }), 'world');
+  assert.equal(mapMode({ mode: 'closed', opened: false }), 'closed');
+  assert.equal(mapMode({ opened: true }), 'world');
 });
 
 test('decodes Vintage Story native map chunk keys and protobuf RGBA pixels', () => {

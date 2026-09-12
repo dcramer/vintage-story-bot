@@ -7,6 +7,7 @@ export default defineAction({
   readOnly: true,
   idempotent: true,
   description:
-    'Read the native map id and the game server-filtered player positions. When the World Map is open, also returns ' +
-    'pixel/world calibration for a real game-window capture. Terrain pixels remain in the operator-owned game map database.',
+    'Read the native map id, connection session, whether the full map was scanned, current mode (closed, minimap or world), and the server-filtered ' +
+    'player positions. When the World Map is open, also returns pixel/world calibration for a real game-window capture. ' +
+    'Terrain pixels remain in the operator-owned game map database.',
 });

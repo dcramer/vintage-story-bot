@@ -1,5 +1,5 @@
-// Operator-only capture of Vintage Story's native World Map. This opens the map only while the Seraph is idle,
-// screenshots the verified game window, compresses it, uploads it to the fleet service, and closes the map again.
+// Operator-only map UI. The connect bootstrap opens the World Map once while idle, then leaves the minimap active so
+// Vintage Story continuously writes its visible native chunks. Explicit capture also screenshots that verified window.
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -28,14 +28,69 @@ export function normalizeMapView(sample, width, height) {
   return here && east100 && south100 ? { world, here, east100, south100 } : null;
 }
 
-async function waitForMap(opened) {
+export function mapMode(sample) {
+  return ['closed', 'minimap', 'world'].includes(sample?.mode) ? sample.mode : sample?.opened ? 'world' : 'closed';
+}
+
+async function waitForMap(mode) {
   for (let attempt = 0; attempt < 15; attempt++) {
     const view = await requestBridge({ action: 'map_view' });
     if (!view.ok) throw new Error(view.error ?? 'World Map state unavailable.');
-    if (view.opened === opened) return view;
+    if (mapMode(view) === mode) return view;
     await sleep(100);
   }
-  throw new Error(`World Map did not ${opened ? 'open' : 'close'}.`);
+  throw new Error(`Map did not enter ${mode} mode.`);
+}
+
+async function mapInputReady(force = false) {
+  const state = await requestBridge({ action: 'observe' });
+  if (!state.ok) throw new Error(state.error ?? 'Seraph state unavailable.');
+  if (!state.alive || !state.controlReady || state.control?.active) {
+    if (!force) return { state, reason: 'Seraph is busy or cannot change the map UI.' };
+    if (!state.alive) throw new Error('A dead Seraph cannot change the map UI.');
+  }
+  return { state, reason: null };
+}
+
+async function openWorldMap(force) {
+  const ready = await mapInputReady(force);
+  if (ready.reason) return { reason: ready.reason };
+  const initial = await requestBridge({ action: 'map_view' });
+  if (!initial.ok) throw new Error(initial.error ?? 'Map state unavailable.');
+  const priorMode = mapMode(initial);
+  if (priorMode === 'world') return { view: initial, priorMode, opened: false };
+  await callUi('ui_key', { key: 'm' });
+  return { view: await waitForMap('world'), priorMode, opened: true };
+}
+
+async function restoreMap(operation) {
+  if (!operation.opened) return;
+  await callUi('ui_key', { key: 'm' }).catch(() => {});
+  await waitForMap(operation.priorMode).catch(() => {});
+}
+
+export async function ensureMinimap() {
+  const current = await requestBridge({ action: 'map_view' });
+  if (!current.ok) throw new Error(current.error ?? 'Map state unavailable.');
+  const mode = mapMode(current);
+  if (mode === 'minimap') return { ok: true, enabled: true, mode, world: current.map?.id, session: current.session };
+  if (mode === 'world') return { ok: true, enabled: false, mode, world: current.map?.id, session: current.session, reason: 'World Map is open.' };
+  const ready = await mapInputReady();
+  if (ready.reason) return { ok: true, enabled: false, mode, world: current.map?.id, session: current.session, reason: ready.reason };
+  await callUi('ui_key', { key: 'F6' });
+  const view = await waitForMap('minimap');
+  return { ok: true, enabled: true, mode: 'minimap', world: view.map?.id, session: view.session };
+}
+
+export async function scanWorldMap({ force = false } = {}) {
+  const operation = await openWorldMap(force);
+  if (operation.reason) return { ok: true, scanned: false, reason: operation.reason };
+  try {
+    await sleep(750);
+    return { ok: true, scanned: true, world: operation.view.map?.id, session: operation.view.session };
+  } finally {
+    await restoreMap(operation);
+  }
 }
 
 async function compress(png, env) {
@@ -74,17 +129,9 @@ async function upload(image, capture, { url, token, id }) {
 }
 
 export async function captureWorldMap({ force = false, uploadImage = true } = {}) {
-  const state = await requestBridge({ action: 'observe' });
-  if (!state.ok) throw new Error(state.error ?? 'Seraph state unavailable.');
-  if (!state.alive || !state.controlReady || state.control?.active) {
-    if (!force) return { ok: true, captured: false, reason: 'Seraph is busy or cannot open the World Map.' };
-    if (!state.alive) throw new Error('A dead Seraph cannot open the World Map.');
-  }
-  let opened = false;
+  const operation = await openWorldMap(force);
+  if (operation.reason) return { ok: true, captured: false, reason: operation.reason };
   try {
-    await callUi('ui_key', { key: 'm' });
-    const view = await waitForMap(true);
-    opened = true;
     await sleep(350);
     const screenshot = await callUi('ui_screenshot', {}),
       geometry = JSON.parse(screenshot.content[0].text);
@@ -92,7 +139,7 @@ export async function captureWorldMap({ force = false, uploadImage = true } = {}
       ui = await uiEnv();
     const image = await compress(png, ui.env),
       at = Date.now();
-    const capture = { at, width: geometry.width, height: geometry.height, view: normalizeMapView(view, geometry.width, geometry.height) };
+    const capture = { at, width: geometry.width, height: geometry.height, view: normalizeMapView(operation.view, geometry.width, geometry.height) };
     if (uploadImage)
       await upload(image, capture, {
         url: process.env.VINTAGE_STORY_REPORT_URL,
@@ -101,61 +148,6 @@ export async function captureWorldMap({ force = false, uploadImage = true } = {}
       });
     return { ok: true, captured: true, at, bytes: image.length, width: geometry.width, height: geometry.height, uploaded: uploadImage, image };
   } finally {
-    if (opened) {
-      await callUi('ui_key', { key: 'm' }).catch(() => {});
-      await waitForMap(false).catch(() => {});
-    }
+    await restoreMap(operation);
   }
-}
-
-export function superviseWorldMap({
-  intervalMs = Number(process.env.VINTAGE_STORY_MAP_CAPTURE_INTERVAL_MS) || 900000,
-  onChange = (_status?: any) => {},
-  log = (_line?: any) => {},
-} = {}) {
-  intervalMs = Math.max(60000, intervalMs);
-  let stopped = false,
-    running = false,
-    lastAt = null,
-    nextAt = Date.now() + 15000,
-    reason = null;
-  const status = () => ({ running, lastAt, nextAt, reason });
-  const changed = () => onChange(status());
-  async function tick() {
-    if (stopped || running || Date.now() < nextAt) return;
-    running = true;
-    reason = null;
-    changed();
-    try {
-      const result = await captureWorldMap();
-      if (result.captured) {
-        lastAt = result.at;
-        nextAt = Date.now() + intervalMs;
-        log(`captured native World Map (${result.bytes} bytes)`);
-      } else {
-        reason = result.reason;
-        nextAt = Date.now() + 60000;
-      }
-    } catch (error) {
-      reason = error.message;
-      nextAt = Date.now() + 60000;
-      log(reason);
-    } finally {
-      running = false;
-      changed();
-    }
-  }
-  const timer = setInterval(tick, 5000);
-  changed();
-  return {
-    status,
-    capture: () => {
-      nextAt = 0;
-      return tick();
-    },
-    stop: () => {
-      stopped = true;
-      clearInterval(timer);
-    },
-  };
 }

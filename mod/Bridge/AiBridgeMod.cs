@@ -38,6 +38,7 @@ public sealed partial class AiBridgeMod : ModSystem
     private TerrainSensor terrainSensor = null!;
     private MapWaypointSensor mapWaypoints = null!;
     private ChatSensor chat = new();
+    private bool worldMapScanned;
 
     public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Client;
 
@@ -85,6 +86,7 @@ public sealed partial class AiBridgeMod : ModSystem
         inventory = new InventoryAdapter(api);
         containers = new ContainerAdapter(api);
         blockActions.Reset();
+        worldMapScanned = false;
         SampleLife();
         // The bridge controls this client whenever a world is loaded; there is no in-game opt-in.
         string? failure = StartListener();
