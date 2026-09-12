@@ -316,9 +316,9 @@ public sealed partial class AiBridgeMod
             hunger?.TryGetFloat("currentsaturation"), hunger?.TryGetFloat("maxsaturation"),
             oxygen?.TryGetFloat("currentoxygen"), oxygen?.TryGetFloat("maxoxygen"), (float?)ContextSensor.Number(entity.WatchedAttributes, "temporalStability")))
         {
-            if (!entity.Alive || life.LastDamageAt != previousDamage || NavigationDanger(control.StarvingRecovery)) ReleaseControl("danger");
-            StopMovement();
-            StopHandAction();
+            // Death releases everything. Damage and life alerts are reported, not enforced: the brain
+            // decides what being hurt means, and a frozen bot next to a bear is the worst policy.
+            if (!entity.Alive) { ReleaseControl("dead"); StopMovement(); StopHandAction(); }
             ClearTargetLock();
         }
     }
@@ -326,8 +326,6 @@ public sealed partial class AiBridgeMod
     // The caller may request this narrow scope only for an explicit food
     // recovery episode. Keep low health tolerated after eating clears the
     // low-food alert so that the same episode can finish building a reserve.
-    private bool NavigationDanger(bool starvingRecovery = false) => life.Alerts.Any(alert => alert != "low_food" &&
-        !(alert == "low_health" && starvingRecovery));
 
     private int? RemainingLives()
     {

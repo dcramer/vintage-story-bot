@@ -90,7 +90,7 @@ test('acknowledgements do not count as sticks; cancellation stops continued sear
   assert.equal(f.calls.at(-1).action, 'stop');
 });
 
-test('being hurt is reported and the goal carries on; a life alert ends it', async () => {
+test('being hurt is reported and the goal carries on; death ends it', async () => {
   const f = fixture();
   const original = f.env.send;
   let observations = 0;
@@ -109,7 +109,7 @@ test('being hurt is reported and the goal carries on; a life alert ends it', asy
   const first = g.env.send;
   g.env.send = async request => {
     const r: any = await first(request);
-    if (request.action === 'observe') r.life.alerts = ['low_health'];
+    if (request.action === 'observe') r.alive = false;
     return r;
   };
   await assert.rejects(gather(g.env, { manageFood: false, wait: async () => {} }), /life/);

@@ -330,14 +330,12 @@ export class Controller {
   async navigate(goal, record, started?, pauseWhen?, { allowStarvingRecovery = false } = {}, signal?: AbortSignal) {
     const initial = await this.snapshot(signal);
     if (goal.sprint && !initial.capabilities.includes('background_sprint')) throw new Error('Update mod: background_sprint required');
-    const alertsSafe = state => state.life.alerts.every(alert => alert === 'low_food' || (alert === 'low_health' && allowStarvingRecovery));
     if (
       !initial.controlReady ||
       !initial.alive ||
       (!initial.motion.onGround && !initial.motion.feetInLiquid) ||
       (initial.motion.swimming && !goal.swim) ||
       initial.mounted ||
-      !alertsSafe(initial) ||
       initial.position.dimension !== 0 ||
       Math.abs(goal.x - initial.position.x) > 128 ||
       Math.abs(goal.z - initial.position.z) > 128 ||
@@ -404,7 +402,6 @@ export class Controller {
           state.control.owner !== control.owner ||
           !state.controlReady ||
           !state.alive ||
-          !alertsSafe(state) ||
           (state.motion.swimming && !goal.swim) ||
           state.mounted ||
           state.position.dimension !== 0

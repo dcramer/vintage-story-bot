@@ -177,3 +177,42 @@ test('brain loop: a swimming bot with no goal swims for the nearest dry ground, 
   assert.equal(Math.round(look.yawDegrees), 90, 'faces the dry cell to the east');
   assert.deepEqual([move.jump, move.sneak, move.direction], [true, false, 'forward']);
 });
+
+test('brain loop: an act decision runs its actions in order by hand', async () => {
+  const calls: any[] = [];
+  const controller = {
+    active: null,
+    last: null,
+    brain: null,
+    history: new Map(),
+    wants: [],
+    send: async request => (request.action === 'observe' ? state() : request.action === 'inventory' ? inventory() : { ok: true, ...day }),
+    request: async (request, options) => {
+      calls.push({ ...request, by: options?.by });
+      return { ok: true };
+    },
+    stop: async () => {},
+    goalView: () => null,
+  };
+  const reflex = {
+    name: 'reflex',
+    description: '',
+    fresh: () => ({}),
+    decide: () => ({
+      act: [
+        { action: 'look', yawDegrees: 90, pitchDegrees: 0 },
+        { action: 'move', durationMs: 500, direction: 'forward' },
+      ],
+      why: 'test',
+    }),
+  };
+  const loop = new BrainLoop(controller as any, reflex as any, 5);
+  loop.start();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  await loop.stop();
+  assert.deepEqual(
+    calls.slice(0, 2).map(c => c.action),
+    ['look', 'move'],
+  );
+  assert.equal(calls[0].by, 'brain');
+});

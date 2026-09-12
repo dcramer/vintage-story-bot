@@ -140,7 +140,7 @@ public sealed partial class AiBridgeMod
         if (request.TryGetProperty("allowStarvingRecovery", out blockRecoveryField) &&
             blockRecoveryField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
             return new { ok = false, error = "allowStarvingRecovery must be boolean." };
-        if (!CanControl() || ManualInput() || NavigationDanger(blockRecovery) || !entity.OnGround || entity.FeetInLiquid || entity.MountedOn != null)
+        if (!CanControl() || ManualInput() || !entity.OnGround || entity.FeetInLiquid || entity.MountedOn != null)
             return new { ok = false, error = "Block actions need grounded, dry, ready controls." };
         StopMovement(); StopHandAction();
         return blockActions.Begin(request, inventory, blockRecovery);

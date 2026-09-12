@@ -46,7 +46,7 @@ public sealed partial class AiBridgeMod
         if (request.TryGetProperty("allowStarvingRecovery", out controlRecoveryField) &&
             controlRecoveryField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
             return new { ok = false, error = "allowStarvingRecovery must be boolean." };
-        if (!CanControl() || ManualInput() || NavigationDanger(controlRecovery) || entity.MountedOn != null)
+        if (!CanControl() || ManualInput() || entity.MountedOn != null)
             return new { ok = false, error = "Controls unavailable." };
         if (!control.Begin(ownerField.GetString()!, epoch, Environment.TickCount64, controlRecovery))
             return new { ok = false, error = "Control epoch changed or another controller owns inputs." };
@@ -106,7 +106,7 @@ public sealed partial class AiBridgeMod
                 return new { ok = false, error = "Focus must be a nearby cell; it never bypasses visibility." };
             focus = new(fx, fy, fz);
         }
-        if (!CanControl() || ManualInput() || NavigationDanger(control.StarvingRecovery) || entity.MountedOn != null)
+        if (!CanControl() || ManualInput() || entity.MountedOn != null)
         { ReleaseControl("control_unavailable"); return new { ok = false, error = "Controls unavailable." }; }
         long frameNow = Environment.TickCount64;
         if (!control.Frame(frameOwner.GetString()!, sequence, receivedAt ?? frameNow, frameNow, frameDuration))

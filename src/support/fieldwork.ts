@@ -48,6 +48,7 @@ export class Fieldwork {
   seen = new Map();
   skipped = new Map();
   events: any[] = [];
+  alertsAt = '';
   recoveringFood = false;
   constructor(
     env,
@@ -95,14 +96,7 @@ export class Fieldwork {
   // goes on, unless the goal asked to stop when hurt.
   assess(state, { controls = true } = {}) {
     this.check();
-    if (
-      !state.ok ||
-      !state.alive ||
-      (controls && !state.controlReady) ||
-      !this.alertsSafe(state) ||
-      (state.motion.swimming && !this.swim) ||
-      state.mounted
-    )
+    if (!state.ok || !state.alive || (controls && !state.controlReady) || (state.motion.swimming && !this.swim) || state.mounted)
       throw Error('Gameplay interruption: life, controls or liquid');
     const initial = this.initial;
     if (
@@ -112,6 +106,11 @@ export class Fieldwork {
         state.position.dimension !== initial.position.dimension)
     )
       throw Error('Gameplay interruption: session changed');
+    const alerts = (state.life?.alerts ?? []).join(',');
+    if (initial && alerts !== this.alertsAt) {
+      this.alertsAt = alerts;
+      if (alerts) this.event('alert', { alerts: state.life.alerts, health: state.vitals?.health?.current ?? null });
+    }
     if (initial && state.life.lastDamageAt !== this.hurtAt) {
       this.hurtAt = state.life.lastDamageAt;
       this.event('hurt', { health: state.vitals?.health?.current ?? null });
@@ -136,6 +135,7 @@ export class Fieldwork {
   async start(features = []) {
     this.initial = await this.env.sync();
     this.hurtAt = this.initial.life?.lastDamageAt ?? null;
+    this.alertsAt = (this.initial.life?.alerts ?? []).join(',');
     this.guard(this.initial);
     if (!this.initial.motion.onGround) throw Error('Start grounded');
     for (const feature of ['nearby_awareness', ...features])

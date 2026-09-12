@@ -27,7 +27,12 @@ export type Reading = {
   last: { id: string; kind: string; ok: boolean; reason?: string; result?: any } | null;
   now: number;
 };
-export type Decision = { start: string; args: Record<string, unknown>; why: string } | { stop: string } | { wait: string };
+// start: run a goal. act: call actions by hand, in order (a brain's own reflex, e.g. flee when no goal may walk).
+export type Decision =
+  | { start: string; args: Record<string, unknown>; why: string }
+  | { act: Record<string, unknown>[]; why: string }
+  | { stop: string }
+  | { wait: string };
 export interface Brain<Memory = unknown> {
   name: string;
   description: string;
@@ -157,6 +162,14 @@ export class BrainLoop<Memory> {
       return;
     }
     if (active) return;
+    if ('act' in decision) {
+      this.note(`act ${decision.act.map(a => a.action).join(', ')}: ${decision.why}`);
+      for (const step of decision.act) {
+        const done = await controller.request(step, { by: 'brain' });
+        if (!done.ok) throw new Error(`${step.action} refused: ${done.error}`);
+      }
+      return;
+    }
     this.note(`${decision.start} ${JSON.stringify(decision.args)}: ${decision.why}`);
     const started = await controller.request({ action: decision.start, ...decision.args }, { by: 'brain' });
     if (!started.ok) throw new Error(`${decision.start} refused: ${started.error}`);

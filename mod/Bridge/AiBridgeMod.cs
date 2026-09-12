@@ -198,7 +198,7 @@ public sealed partial class AiBridgeMod : ModSystem
             if (control.Active) ReleaseControl("control_unavailable");
             ClearTargetLock();
         }
-        blockActions.Tick(CanControl() && !ManualInput() && !NavigationDanger(blockActions.StarvingRecovery) &&
+        blockActions.Tick(CanControl() && !ManualInput() &&
             api.World.Player.Entity.OnGround && !api.World.Player.Entity.FeetInLiquid);
         if (handAction != null)
         {
