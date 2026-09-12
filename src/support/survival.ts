@@ -13,6 +13,8 @@ export const wideFoodSurveyNeeded = ratio => ratio < 0.2;
 // Twelve-block steps overlap a 16-block sight cone while covering useful new
 // ground before starvation. Navigation still validates every traversed cell.
 export const foodSearchDistance = Math.min(24, foodSightRange * 0.75);
+// How far back a remembered bush or patch is worth walking to when nothing is in sight.
+export const foodMemoryRange = 128;
 export const foodElevationDetourDistance = verticalRemaining =>
   verticalRemaining < 1.5 ? 0 : Math.min(foodSearchDistance, Math.max(6, verticalRemaining * 2));
 // Done when fed to `until` with `keep` satiety in the pack, or once something was eaten and the bar is near `until`.
@@ -170,6 +172,14 @@ export class Survival {
           this.lastFarView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
           if (field.targets(forage).length) break;
         }
+      }
+      // Nothing in sight: what was seen before within walking distance is worth going back for.
+      if (!field.targets(forage).length) {
+        const remembered = field.recall(foodMemoryRange, this.watch, 'blocks');
+        await learnYields(
+          field,
+          remembered.map(object => object.code),
+        );
       }
       const target = field.targets(forage)[0];
       if (target) {

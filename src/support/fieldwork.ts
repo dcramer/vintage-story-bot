@@ -249,6 +249,24 @@ export class Fieldwork {
     this.prune();
     return objects;
   }
+  // What memory holds of a thing around here, as a player remembers where the berries were:
+  // remembered sightings within radius join the goal's targets without a look. Nothing is queried.
+  recall(radius, match?, kind = 'blocks') {
+    if (!this.attentive) return [];
+    const matches = Array.isArray(match) ? match : match ? [match] : [];
+    const p = this.latest.position,
+      eye = { ...p, y: p.y + (this.latest.body?.eyeHeight ?? 1.6) };
+    const kinds = { all: null, blocks: 'block', items: 'item', entities: 'entity' };
+    const objects = this.env.sightings.view(eye, {
+      matches,
+      kind: kinds[kind] ?? null,
+      radius,
+      remembered: true,
+      reach: this.latest.pickingRange ?? 4.5,
+    });
+    for (const object of objects) if (!this.seen.has(object.key)) this.seen.set(object.key, { ...object, seenAt: this.now() - object.ageMs });
+    return objects;
+  }
   // Turn through a full circle from where the bot stands, letting the vision
   // feed take in every direction before choosing where to go, the way a
   // player looks around from a rise. Then read what is now remembered.

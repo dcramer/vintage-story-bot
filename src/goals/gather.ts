@@ -93,6 +93,8 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
       }
       await field.observe(true);
       if (gained() >= count) continue;
+      // Nothing in view: what memory holds within sixty blocks is worth going back for.
+      if (!field.targets(o => loose(o) || dropped(o) || twiggy(o)).length) field.recall(64, looking, 'all');
       // What lies about is picked up first; twigs are for when nothing loose is close.
       const near = field.targets(o => loose(o) || dropped(o)).filter(o => horizontal(field.latest.position, o.point) <= 16);
       const target = near[0] ?? field.targets(o => loose(o) || dropped(o) || twiggy(o))[0];
