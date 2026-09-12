@@ -2,6 +2,7 @@ import { useOnBlock } from '../goals/use_block.ts';
 import { lookAt, normalize } from '../runtime/navigation/terrain.ts';
 import { parseBlockKey, replaceablePlant } from './blocks.ts';
 import { equip, itemCount, ownedSlots } from './inventory.ts';
+import { clearLeafPath, leafBlock } from './leaf-clearing.ts';
 import { has } from './traits.ts';
 
 export const kinds = {
@@ -53,8 +54,9 @@ async function aimGround(field) {
       if (!sel.key?.startsWith('block:') || sel.face !== 'up' || replaceablePlant(sel.code)) continue;
       const hit = parseBlockKey(sel.key);
       if (hit.x !== x || hit.y !== y || hit.z !== z) continue; // occluded or grazed a neighbour
-      const above = field.env.map.get(hit.x, hit.y + 1, hit.z);
-      if (above?.boxes.length) continue; // top not free for a surface
+      // Free above for the surface, and clear sky for three blocks over it: leaves or branches over a
+      // surface catch the aim at its voxels from where the body stands, and every click then takes minutes.
+      if ([1, 2, 3].some(dy => field.env.map.get(hit.x, hit.y + dy, hit.z)?.boxes.length)) continue;
       return sel;
     }
   return null;
@@ -162,7 +164,12 @@ export async function form(field, { kind, output, material }) {
         (kind === 'knapping' || d.forming.aimedVoxel[1] === v[1])
       )
         aimed = d;
-      else if (attempt === 3) skipped.add(v.join(','));
+      else {
+        // A leaf between the eye and the voxel is cut, once, the way a player clears the view of the surface.
+        const blocking = await field.send({ action: 'inspect_target' }).catch(() => null);
+        if (blocking?.code && leafBlock({ kind: 'block', code: blocking.code })) await clearLeafPath(field, point, 1);
+        if (attempt === 3) skipped.add(v.join(','));
+      }
     }
     if (!aimed) {
       detail = await inspectSurface(field, cell);
