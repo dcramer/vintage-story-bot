@@ -2,7 +2,7 @@ import { collectItem } from '../goals/collect_item.ts';
 import { horizontal, normalize } from '../runtime/navigation/terrain.ts';
 import { changeBlock } from './blocks.ts';
 import { learnYields } from './facts.ts';
-import { sightRange, temporalStormUnsafe } from './fieldwork.ts';
+import { sightRange } from './fieldwork.ts';
 import { consume, emptyHand, foodCount, foodReserve, foodYield, forageWatch, hunger } from './food.ts';
 import { ownedSlots } from './inventory.ts';
 import { clearLeafPath } from './leaf-clearing.ts';
@@ -70,13 +70,12 @@ export class Survival {
     );
     return objects;
   }
-  pauseWhen = state => (temporalStormUnsafe(state) ? 'temporal_storm' : hunger(state) < 0.2 ? 'food_needed' : null);
-  eatWhen = state => (temporalStormUnsafe(state) ? 'temporal_storm' : this.reserve > 0 && hunger(state) < 0.8 ? 'food_available' : null);
+  pauseWhen = state => (hunger(state) < 0.2 ? 'food_needed' : null);
+  eatWhen = state => (this.reserve > 0 && hunger(state) < 0.8 ? 'food_available' : null);
   async tend({ force = false, toward, watch, count }: { force?: boolean; toward?: any; watch?: string[]; count?: number } = {}) {
     const field = this.field;
     this.watch = watch?.length ? watch : forageWatch;
     await field.observe();
-    if (temporalStormUnsafe(field.latest)) throw Error('Temporal storm active or imminent; food work postponed.');
     if (!this.tending && !force && hunger(field.latest) >= 0.2) {
       field.recoveringFood = false;
       return;
@@ -85,7 +84,6 @@ export class Survival {
     field.recoveringFood = true;
     while (this.tending) {
       await field.observe(true);
-      if (temporalStormUnsafe(field.latest)) throw Error('Temporal storm active or imminent; food work postponed.');
       if (await field.evadeThreat(target => clearLeafPath(field, target))) {
         this.surveyed = false;
         this.searchTarget = null;

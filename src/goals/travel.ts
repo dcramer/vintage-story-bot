@@ -2,17 +2,12 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { pitLimit, reachable } from '../support/digging.ts';
-import { temporalStormUnsafe } from '../support/fieldwork.ts';
 import { clearLeafPath } from '../support/leaf-clearing.ts';
 import { runField } from '../support/task.ts';
 import { nearestThreat } from '../support/threats.ts';
 
 export const routeRegressed = (best, current, margin = 12) => current > best + margin;
 export const elevationDetourDistance = verticalRemaining => (verticalRemaining < 1.5 ? 0 : Math.min(24, Math.max(12, verticalRemaining * 2)));
-
-const guardStorm = state => {
-  if (temporalStormUnsafe(state)) throw Error('Temporal storm active or imminent; travel postponed.');
-};
 
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
 export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { x: number; y?: number; z: number; arrivalRadius?: number }) {
@@ -30,7 +25,6 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
   const summary = () => ({ moved: +field.moved.toFixed(1), legs, stuck, routeResets });
   while (true) {
     let state = await field.observe(true);
-    guardStorm(state);
     let goal = { x, y: y ?? state.position.y, z };
     const beforeFood = state.position;
     await survival?.tend({ toward: goal });
@@ -61,14 +55,12 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
         : (continuation ?? field.explore(goal, Math.min(48, Math.max(remaining, elevationDetour)), elevationDetour));
     const before = state.position;
     const result = await field.walk(leg, current => {
-      if (temporalStormUnsafe(current)) return 'temporal_storm';
       const survivalReason = survival?.pauseWhen(current);
       if (survivalReason) return survivalReason;
       const currentRemaining = horizontal(current.position, goal);
       bestRemaining = Math.min(bestRemaining, currentRemaining);
       return !nearestThreat(current) && routeRegressed(bestRemaining, currentRemaining) ? 'route_regressed' : null;
     });
-    guardStorm(field.latest);
     legs++;
     const progress = horizontal(before, field.latest.position);
     // A partial frontier can end a valid leg after moving only partway around

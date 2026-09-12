@@ -50,6 +50,7 @@ export class Fieldwork {
   events: any[] = [];
   alertsAt = '';
   lookedAround: any = null;
+  stormAt = 'clear';
   recoveringFood = false;
   constructor(
     env,
@@ -112,6 +113,11 @@ export class Fieldwork {
       this.alertsAt = alerts;
       if (alerts) this.event('alert', { alerts: state.life.alerts, health: state.vitals?.health?.current ?? null });
     }
+    const storm = state.condition?.temporalStorm?.phase ?? 'clear';
+    if (initial && storm !== this.stormAt) {
+      this.stormAt = storm;
+      if (temporalStormUnsafe(state)) this.event('storm', { phase: storm });
+    }
     if (initial && state.life.lastDamageAt !== this.hurtAt) {
       this.hurtAt = state.life.lastDamageAt;
       this.event('hurt', { health: state.vitals?.health?.current ?? null });
@@ -137,6 +143,7 @@ export class Fieldwork {
     this.initial = await this.env.sync();
     this.hurtAt = this.initial.life?.lastDamageAt ?? null;
     this.alertsAt = (this.initial.life?.alerts ?? []).join(',');
+    this.stormAt = this.initial.condition?.temporalStorm?.phase ?? 'clear';
     this.guard(this.initial);
     if (!this.initial.motion.onGround) throw Error('Start grounded');
     for (const feature of ['nearby_awareness', ...features])
