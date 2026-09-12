@@ -17,7 +17,7 @@ import {
 } from './food.ts';
 import { ownedSlots } from './inventory.ts';
 import { clearLeafPath } from './leaf-clearing.ts';
-import { Search } from './search.ts';
+import { SEARCH_PATIENCE, Search } from './search.ts';
 import { nearestThreat } from './threats.ts';
 
 // How far back a remembered bush or patch is worth walking to when nothing is in sight.
@@ -150,8 +150,8 @@ export async function harvestFood(
 // handbook says yields food, harvest it, eat, and keep a reserve. A forced
 // tend is the forage goal itself. Navigation checks pauseWhen every sensing
 // tick; food work owns no parallel inputs.
-// Unproductive search steps in a row before the food search reports none_found.
-export const FORAGE_PATIENCE = 12;
+// The food search gives up after the same stretch as any search.
+export const FORAGE_PATIENCE = SEARCH_PATIENCE;
 
 export class Survival {
   field: any;

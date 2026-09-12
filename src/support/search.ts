@@ -116,6 +116,8 @@ export const STALL_SKIP_MS = 5 * 60 * 1000;
 export const ATTEMPT_PENALTY = 32;
 // A step that moved less than this without taking or seeing anything new was unproductive.
 export const PRODUCTIVE_DISTANCE = 6;
+// Unproductive steps in a row before a search reports none_found to its goal.
+export const SEARCH_PATIENCE = 12;
 
 export class Search {
   field: any;
@@ -240,7 +242,15 @@ export class Search {
       field.heading = frontier.heading;
     }
     field.report('ranging', { frontier: { x: Math.round(frontier.x), z: Math.round(frontier.z) }, distance: Math.round(horizontal(p, frontier)) });
-    const result = await field.walk({ x: frontier.x, y: frontier.y, z: frontier.z, horizontalOnly: true, arrivalRadius: 4 }, this.pause);
+    let result = await field.walk({ x: frontier.x, y: frontier.y, z: frontier.z, horizontalOnly: true, arrivalRadius: 4 }, this.pause);
+    // The far view shows no way there (under trees, in a dip): walk a short leg that way on what
+    // memory knows and look again from there, the way a player walks on through a wood. Standing
+    // still choosing frontiers is not looking.
+    if (result.state === 'blocked' && result.reason === 'no_visible_route') {
+      const leg = field.explore(frontier, APPROACH_LEG);
+      if (leg) result = await field.walk(leg, this.pause);
+      else await field.wait(1000);
+    }
     if (result.state === 'paused' && result.reason === 'route_threatened') this.avoidThreat();
     if (stuckLeg(result, p, field.latest.position)) {
       // Stopped short: turn first; stuck again on the same spot, cut through the leaves.
