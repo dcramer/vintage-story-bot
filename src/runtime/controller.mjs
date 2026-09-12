@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Deferred, Effect, Fiber } from 'effect';
 import { z } from 'zod';
 import { findTool, goals, tools } from './registry.mjs';
 import { compileGoalScript, runGoalPlan } from './goal-script.mjs';
@@ -7,12 +6,22 @@ import { GameClient } from './game.mjs';
 import { Navigation } from './navigation/navigator.mjs';
 import { Knowledge } from './navigation/knowledge.mjs';
 
-const attempt = fn => Effect.tryPromise({ try: fn, catch: error => error instanceof Error ? error : new Error(String(error)) });
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+// A promise settled once, from wherever settles it first.
+const defer = () => {
+  let resolve;
+  const promise = new Promise(r => { resolve = r; });
+  let settled = false;
+  return { promise, resolve: value => { if (!settled) { settled = true; resolve(value); } } };
+};
+const message = error => error instanceof Error ? error.message : String(error);
 
+// One bot: the shared game client, its memory, one active goal at a time, and
+// the tool registry every adapter (MCP, CLI, brain) speaks to.
 export class Controller {
-  active = null; last = null; closing = false;
+  active = null; last = null; closing = false; brain = null;
   session = randomUUID(); history = new Map(); waypoints = new Map();
-  gate = Effect.runSync(Effect.makeSemaphore(1));
+  lock = Promise.resolve();
   constructor(send, telemetry = null) {
     this.game = new GameClient(send); this.telemetry = telemetry;
     this.knowledge = this.game.knowledge = new Knowledge(process.env.VINTAGE_STORY_KNOWLEDGE_DIR ?? '.runtime/knowledge', this.game);
@@ -47,22 +56,28 @@ export class Controller {
   get map() { return this.game.map; }
   get surface() { return this.game.surface; }
   get sightings() { return this.game.sightings; }
-  io(request) { return this.game.io(request); }
+  io(request, signal) { return this.game.io(request, signal); }
   view() { return this.last?.nav?.observe() ?? { state: 'idle' }; }
-  info() { return { version: '0.1.0', session: this.session, active: !!this.active, terrainCells: this.map.cells.size, knowledge: this.knowledge.status() }; }
+  info() {
+    return { version: '0.1.0', session: this.session, active: !!this.active, terrainCells: this.map.cells.size,
+      knowledge: this.knowledge.status(), brain: this.brain?.status() ?? null };
+  }
   goalView(record = this.last) {
     if (!record) return null;
     return { id: record.id, kind: record.kind, args: record.args, state: record.kind === 'move_to' ? record.nav?.state ?? record.state : record.state,
       active: this.active === record, startedAt: record.startedAt, finishedAt: record.finishedAt,
       intent: record.intent, reason: record.reason ?? (record.kind === 'move_to' ? record.nav?.reason : undefined),
-      progress: record.progress, result: record.result, cleanupError: record.cleanupError };
+      progress: record.progress, result: record.result, cleanupError: record.cleanupError, by: record.by };
   }
+  // Cancel the active goal and wait for its cleanup, so nothing else can hold
+  // the inputs until every finalizer (control_end, stop) has run.
   async stop(reason = 'stopped') {
     const active = this.active;
     if (!active) return;
     active.nav?.finish('cancelled', reason); active.state = 'cancelled'; active.reason = reason;
     this.track(active);
-    await Effect.runPromise(Fiber.interrupt(active.fiber));
+    active.abort.abort();
+    await active.done;
   }
   // The eye: read what the player sees at a steady cadence whether or not a
   // goal is walking, so memory and threats are never older than a glance.
@@ -74,17 +89,26 @@ export class Controller {
       let delay = intervalMs;
       // A walking goal's control frames already carry the feed; extra reads
       // would only compete with them on the game thread.
-      if (!this.active?.nav?.active) { try { await Effect.runPromise(this.game.sense()); } catch { delay = 2000; } }
+      if (!this.active?.nav?.active) { try { await this.game.sense(); } catch { delay = 2000; } }
       try { this.knowledge.save(); } catch (error) { this.telemetry?.publish('action', { action: 'knowledge_save', ok: false, error: error.message }); }
       if (!this.closing) this.eyeTimer = setTimeout(tick, delay);
     };
     this.eyeTimer = setTimeout(tick, intervalMs);
   }
   async close() {
-    this.closing = true; clearTimeout(this.eyeTimer); await this.stop('controller_shutdown');
+    this.closing = true; clearTimeout(this.eyeTimer);
+    await this.brain?.stop().catch(() => {});
+    await this.stop('controller_shutdown');
     try { this.knowledge.save(true); } catch { /* nothing to keep, or nowhere to keep it */ }
   }
-  request(request) {
+  // One request at a time past the control-plane reads, so a goal cannot start
+  // while another mutation is still being judged.
+  withLock(work) {
+    const run = this.lock.then(work, work);
+    this.lock = run.then(() => {}, () => {});
+    return run;
+  }
+  request(request, { by } = {}) {
     if (!request || typeof request !== 'object' || Array.isArray(request)) return Promise.reject(new Error('Expected an action object'));
     // Control-plane reads never wait for a game request or an in-flight goal startup.
     if (request.action === 'api' || request.action === 'goal_status') {
@@ -106,15 +130,15 @@ export class Controller {
       const hadGoal = !!this.active;
       return this.stop().then(() => hadGoal ? { ok: true, status: 'stopped' } : this.send({ action: 'stop' }));
     }
-    return Effect.runPromise(this.gate.withPermits(1)(attempt(async () => {
+    return this.withLock(async () => {
       if (this.closing) throw new Error('Controller shutting down');
       const tool = findTool(request.action);
       if (!tool) throw new Error('Unknown controller action; screenshots/UI and raw control frames are not exposed.');
       const { action, ...args } = request;
       const parsed = tool.schema.parse(args);
       if (this.active && !tool.readOnly) throw new Error('Goal active; stop it before another mutation.');
-      if (tool.launch) return this.launch(tool.name, parsed, (record, started) => tool.launch(this, parsed, record, started));
-      if (tool.run) return this.launch(tool.name, parsed, (record, started) => this.runTask(tool.run, parsed, record, started));
+      if (tool.launch) return this.launch(tool.name, parsed, (record, started, signal) => tool.launch(this, parsed, record, started, signal), by);
+      if (tool.run) return this.launch(tool.name, parsed, (record, started, signal) => this.runTask(tool.run, parsed, record, started, signal), by);
       if (tool.local) return tool.local(this, parsed);
       const result = await this.send({ action: tool.action ?? tool.name, ...parsed });
       if (tool.name === 'observe' && result.ok) {
@@ -124,96 +148,91 @@ export class Controller {
         if (!result.capabilities.includes('move_to')) result.capabilities.push('move_to');
       }
       return result;
-    })));
+    });
   }
   // Fire-and-forget status chat so other players on the server can follow what the bot is doing.
   announce(kind, args) {
     const message = describeGoal(kind, args);
     if (message) Promise.resolve().then(() => this.send({ action: 'chat', message })).catch(() => {});
   }
-  launch(kind, args, work) {
-    const started = Effect.runSync(Deferred.make());
-    const record = { id: randomUUID(), kind, args, state: 'starting', startedAt: Date.now(),
+  // Start one goal: the record is active until its work and cleanup finish,
+  // whatever the outcome. START resolves as soon as the work reports it.
+  launch(kind, args, work, by = 'operator') {
+    const started = defer(), abort = new AbortController();
+    const record = { id: randomUUID(), kind, args, by, state: 'starting', startedAt: Date.now(), abort,
       ...(typeof args.intent === 'string' ? { intent: args.intent } : {}) };
     this.active = this.last = record;
     this.track(record);
     this.announce(kind, args);
-    const program = Effect.scoped(work(record, started)).pipe(
-      Effect.catchAllCause(cause => Effect.gen(function* () {
-        const error = String(Cause.squash(cause));
-        if (record.state !== 'cancelled') { record.nav?.finish('blocked', error); record.state = 'blocked'; record.reason = error; }
+    record.done = (async () => {
+      try {
+        await work(record, started, abort.signal);
+      } catch (error) {
+        const reason = message(error);
+        if (record.state !== 'cancelled') { record.nav?.finish('blocked', reason); record.state = 'blocked'; record.reason = reason; }
         this.track(record);
-        yield* Deferred.succeed(started, { ok: false, error });
-      })),
-      Effect.ensuring(Effect.gen(this, function* () {
-        yield* Deferred.succeed(started, { ok: false, error: record.reason ?? 'Goal cancelled before start' });
+        started.resolve({ ok: false, error: reason });
+      } finally {
+        started.resolve({ ok: false, error: record.reason ?? 'Goal cancelled before start' });
         if (this.active === record) this.active = null;
         record.finishedAt = Date.now();
         this.history.set(record.id, this.goalView(record));
         this.track(record);
         while (this.history.size > 64) this.history.delete(this.history.keys().next().value);
-      })),
-    );
-    record.fiber = Effect.runFork(program);
-    return Effect.runPromise(Deferred.await(started)).then(result => ({ ...result, goal: this.goalView(record), controller: this.info() }));
-  }
-  snapshot() { return this.game.snapshot(); }
-  aim(angles, record, safety) {
-    const self = this;
-    return Effect.scoped(Effect.gen(function* () {
-      const initial = yield* self.io({ action: 'observe' });
-      const control = yield* self.game.control(initial, error => { record.cleanupError = error.message; }, safety);
-      for (let i = 0; i < 60; i++) {
-        const batch = yield* control.step({ ...angles, forward: false, jump: false });
-        const state = batch.state;
-        if (state.control.owner !== control.owner) return yield* Effect.fail(new Error('Aiming interrupted'));
-        const yawError = Math.abs(((angles.yawDegrees - state.orientation.yawDegrees + 540) % 360) - 180);
-        if (yawError < 2 && Math.abs(angles.pitchDegrees - state.orientation.pitchDegrees) < 2) {
-          yield* Effect.sleep('100 millis'); return;
-        }
       }
-      return yield* Effect.fail(new Error('Camera did not settle'));
-    }));
+    })();
+    return started.promise.then(result => ({ ...result, goal: this.goalView(record), controller: this.info() }));
   }
-  navigate(goal, record, started, pauseWhen, { allowStarvingRecovery = false } = {}) {
-    const self = this;
-    return Effect.scoped(Effect.gen(function* () {
-      const initial = yield* self.snapshot();
-      if (goal.sprint && !initial.capabilities.includes('background_sprint'))
-        return yield* Effect.fail(new Error('Update mod: background_sprint required'));
-      const alertsSafe = state => state.life.alerts.every(alert => alert === 'low_food' ||
-        alert === 'low_health' && allowStarvingRecovery);
-      if (!initial.controlReady || !initial.alive || !initial.motion.onGround || initial.motion.swimming || initial.motion.feetInLiquid || initial.mounted ||
-        !alertsSafe(initial) || initial.position.dimension !== 0 ||
-        Math.abs(goal.x - initial.position.x) > 128 || Math.abs(goal.z - initial.position.z) > 128 || Math.abs(goal.y - initial.position.y) > 32)
-        return yield* Effect.fail(new Error('Navigation needs grounded/dry/ready player and destination within 128 horizontal/32 vertical blocks.'));
-      const control = yield* self.game.control(initial, error => { record.cleanupError = error.message; }, { allowStarvingRecovery });
-      const nav = record.nav = new Navigation(self.map, initial, goal);
+  snapshot(signal) { return this.game.snapshot(signal); }
+  async aim(angles, record, safety, signal) {
+    const initial = await this.io({ action: 'observe' }, signal);
+    const control = await this.game.control(initial, error => { record.cleanupError = error.message; }, safety, signal);
+    try {
+      for (let i = 0; i < 60; i++) {
+        const batch = await control.step({ ...angles, forward: false, jump: false });
+        const state = batch.state;
+        if (state.control.owner !== control.owner) throw new Error('Aiming interrupted');
+        const yawError = Math.abs(((angles.yawDegrees - state.orientation.yawDegrees + 540) % 360) - 180);
+        if (yawError < 2 && Math.abs(angles.pitchDegrees - state.orientation.pitchDegrees) < 2) { await sleep(100); return; }
+      }
+      throw new Error('Camera did not settle');
+    } finally {
+      await control.release();
+    }
+  }
+  async navigate(goal, record, started, pauseWhen, { allowStarvingRecovery = false } = {}, signal) {
+    const initial = await this.snapshot(signal);
+    if (goal.sprint && !initial.capabilities.includes('background_sprint')) throw new Error('Update mod: background_sprint required');
+    const alertsSafe = state => state.life.alerts.every(alert => alert === 'low_food' || alert === 'low_health' && allowStarvingRecovery);
+    if (!initial.controlReady || !initial.alive || !initial.motion.onGround || initial.motion.swimming || initial.motion.feetInLiquid || initial.mounted ||
+      !alertsSafe(initial) || initial.position.dimension !== 0 ||
+      Math.abs(goal.x - initial.position.x) > 128 || Math.abs(goal.z - initial.position.z) > 128 || Math.abs(goal.y - initial.position.y) > 32)
+      throw new Error('Navigation needs grounded/dry/ready player and destination within 128 horizontal/32 vertical blocks.');
+    if (signal?.aborted) throw new Error('Goal cancelled');
+    const control = await this.game.control(initial, error => { record.cleanupError = error.message; }, { allowStarvingRecovery }, signal);
+    const nav = record.nav = new Navigation(this.map, initial, goal);
+    try {
       if (started) {
         nav.id = record.id; record.state = 'running';
-        self.track(record);
-        yield* Deferred.succeed(started, { ok: true, status: 'started', navigation: nav.observe() });
+        this.track(record);
+        started.resolve({ ok: true, status: 'started', navigation: nav.observe() });
       }
-      let state = initial;
-      let terrainMore = false;
+      let state = initial, terrainMore = false;
       while (nav.active) {
         const pausing = pauseWhen?.(state);
         // Pause only on supported ground; a food task must not take over mid-jump.
-        if (pausing && state.motion.onGround && self.map.standingOn(state.position)) {
-          nav.finish('paused', pausing);
-          break;
-        }
+        if (pausing && state.motion.onGround && this.map.standingOn(state.position)) { nav.finish('paused', pausing); break; }
         const frame = terrainMore ? null : nav.tick(state);
         const input = {
           yawDegrees: frame?.yawDegrees ?? state.orientation.yawDegrees, pitchDegrees: frame?.pitchDegrees ?? 15,
           forward: frame?.forward ?? false, jump: frame?.jump ?? false, sprint: frame?.sprint ?? false,
           sneak: frame?.sneak ?? false, focus: frame?.focus ?? null, durationMs: frame?.durationMs ?? 500 };
-        self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
+        this.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
         // A refused frame means the hold is gone (expired, revoked, manual
         // input): the walk is cancelled, never blocked terrain.
-        const stepped = yield* Effect.either(control.step(input));
-        if (stepped._tag === 'Left') { nav.finish('cancelled', 'control_lost: ' + stepped.left.message); break; }
-        const batch = stepped.right;
+        let batch;
+        try { batch = await control.step(input); }
+        catch (error) { nav.finish('cancelled', 'control_lost: ' + message(error)); break; }
         state = batch.state;
         if (state.player.uid !== initial.player.uid || state.life.session !== initial.life.session || state.control.owner !== control.owner ||
           !state.controlReady || !state.alive || state.life.lastDamageAt !== initial.life.lastDamageAt ||
@@ -224,63 +243,54 @@ export class Controller {
         terrainMore = batch.terrain.more;
         if (!nav.active) break;
         const nextPause = pauseWhen?.(state);
-        if (nextPause && state.motion.onGround && self.map.standingOn(state.position)) {
-          nav.finish('paused', nextPause); break;
-        }
+        if (nextPause && state.motion.onGround && this.map.standingOn(state.position)) { nav.finish('paused', nextPause); break; }
         // Renew immediately after the sensed step, before deterministic route
         // planning on the next iteration. Repeating the already-vetted frame for
         // one game tick keeps planning time outside the heartbeat critical path.
-        const renewed = yield* Effect.either(control.frame(batch.terrain.reset ? {
-          yawDegrees: state.orientation.yawDegrees, pitchDegrees: 15,
-          forward: false, jump: false, sprint: false, sneak: false, focus: null,
-        } : input));
-        if (renewed._tag === 'Left') { nav.finish('cancelled', 'control_lost: ' + renewed.left.message); break; }
+        try {
+          await control.frame(batch.terrain.reset ? {
+            yawDegrees: state.orientation.yawDegrees, pitchDegrees: 15,
+            forward: false, jump: false, sprint: false, sneak: false, focus: null,
+          } : input);
+        } catch (error) { nav.finish('cancelled', 'control_lost: ' + message(error)); break; }
       }
-      if (started) record.state = nav.state;
-      self.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
-      return nav.observe();
-    }));
+    } finally {
+      await control.release();
+    }
+    if (started) record.state = nav.state;
+    this.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
+    return nav.observe();
   }
-  runTask(policy, args, record, started) {
-    const self = this;
-    return Effect.gen(function* () {
-      const cancellation = new AbortController();
-      let running;
-      yield* Effect.acquireRelease(Effect.succeed(cancellation), () => Effect.promise(async () => {
-        cancellation.abort();
-        // Wait for the Promise policy's own cleanup before another goal can acquire control.
-        await running?.catch(() => {});
-      }));
-      record.state = 'running';
-      self.track(record);
-      yield* Deferred.succeed(started, { ok: true, status: 'started', goal: { id: record.id, kind: record.kind } });
-      const send = request => {
-        if (cancellation.signal.aborted && request.action !== 'stop') return Promise.reject(new Error('Goal cancelled'));
-        return self.send(request);
-      };
-      const run = effect => Effect.runPromise(effect, { signal: cancellation.signal });
-      running = policy({
-        send, map: self.map, surface: self.surface, sightings: self.sightings, watch: list => self.game.attend(list),
-        sync: () => run(self.snapshot()),
-        aim: (angles, safety) => run(self.aim(angles, record, safety)),
-        navigate: (goal, pauseWhen, safety) => run(self.navigate(goal, record, undefined, pauseWhen, safety)),
-        report: progress => { record.progress = progress; self.track(record, true); },
-      }, { ...args, signal: cancellation.signal });
-      record.result = yield* attempt(() => running);
-      record.state = record.result.ok ? 'arrived' : 'blocked';
-    });
+  // A goal written as plain async code over a small environment. Cancellation
+  // aborts the signal; the policy's own cleanup runs before the goal is over.
+  async runTask(policy, args, record, started, signal) {
+    record.state = 'running';
+    this.track(record);
+    started.resolve({ ok: true, status: 'started', goal: { id: record.id, kind: record.kind } });
+    const send = request => {
+      if (signal.aborted && request.action !== 'stop') return Promise.reject(new Error('Goal cancelled'));
+      return this.send(request);
+    };
+    const env = {
+      send, map: this.map, surface: this.surface, sightings: this.sightings, watch: list => this.game.attend(list),
+      sync: () => this.snapshot(signal),
+      aim: (angles, safety) => this.aim(angles, record, safety, signal),
+      navigate: (goal, pauseWhen, safety) => this.navigate(goal, record, undefined, pauseWhen, safety, signal),
+      report: progress => { record.progress = progress; this.track(record, true); },
+    };
+    record.result = await policy(env, { ...args, signal });
+    record.state = record.result.ok ? 'arrived' : 'blocked';
   }
-  runGoalScript(args, record, started) {
-    const self = this;
+  runGoalScript(args, record, started, signal) {
     return this.runTask(async (env, { goalScript, signal }) => {
       const plan = compileGoalScript(goalScript, goals);
       const results = await runGoalPlan(plan, async (step, report) => {
         const stepEnv = { ...env, report };
         const stepArgs = { ...step.args, signal };
-        return step.goal.compose ? step.goal.compose(self, stepEnv, stepArgs, record) : step.goal.run(stepEnv, stepArgs);
+        return step.goal.compose ? step.goal.compose(this, stepEnv, stepArgs, record) : step.goal.run(stepEnv, stepArgs);
       }, env.report);
       return { ok: true, goal: 'goal_script', intent: args.intent, steps: results };
-    }, args, record, started);
+    }, args, record, started, signal);
   }
 }
 

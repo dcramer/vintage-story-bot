@@ -18,7 +18,7 @@
 
 - Controller/goals/navigation cannot use screenshots, UI tools, OS focus, or hidden world queries.
 - One shared controller, one active goal. START ≠ completion; observe ids. Restart cancels goals; never auto-resume. Memory is ephemeral.
-- Effect owns interruption/finalizers; mod deadlines remain independent. Never retry mutations, including frames. [Finalization reference](https://effect.website/docs/v3/resource-management/introduction).
+- Plain async everywhere: a goal is cancelled through its AbortSignal and its own cleanup (control_end, stop) runs before the next goal can hold the inputs; mod deadlines remain independent. Never retry mutations, including frames.
 
 ## Design intent
 
@@ -32,7 +32,7 @@
 - Transport acknowledgement is not gameplay completion. Verify arrival, inventory deltas and life state. Lost replies imply uncertain effects; inspect, never blindly resend.
 - Memory must be session-scoped, bounded and invalidatable. Share observations across skills; geometry, resource sightings and failed approaches have different expiry rules. No persistence until world identity/invalidation are defined.
 - Prefer this small client/skills/goals split over a second game engine, screenshot loops, or a generic workflow framework.
-- Survival runs only inside an assigned task, not an idle autonomous process. Food priority pauses navigation on supported ground; control release precedes eating/foraging. Planned pauses preserve parent progress; damage/death/session changes abort the entire task. Thresholds live in `src/support/`.
+- With no brain installed, survival runs only inside an assigned task, never as an idle process; a [brain](brain.md) is the one loop that assigns tasks on its own. Food priority pauses navigation on supported ground; control release precedes eating/foraging. Planned pauses preserve parent progress; damage/death/session changes abort the entire task. Thresholds live in `src/support/`.
 
 ## Controller RPC
 

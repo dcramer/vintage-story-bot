@@ -33,5 +33,5 @@ export default defineGoal({
     return { ok: true, goal: 'move_to', navigation };
   },
   // Pure navigation holds control directly instead of a Fieldwork task.
-  launch: (runtime, args, record, started) => runtime.navigate(args, record, started),
+  launch: (runtime, args, record, started, signal) => runtime.navigate(args, record, started, undefined, {}, signal),
 });

@@ -146,5 +146,5 @@ export default defineGoal({
   announce: args => args.waypoint ? `Traveling to ${args.waypoint}.` : 'Setting off on a journey.',
   compose: (runtime, env, args) => task(env, resolve(runtime, args)),
   // Resolves a named point from controller memory before the task starts.
-  launch: (runtime, args, record, started) => runtime.runTask(task, resolve(runtime, args), record, started),
+  launch: (runtime, args, record, started, signal) => runtime.runTask(task, resolve(runtime, args), record, started, signal),
 });

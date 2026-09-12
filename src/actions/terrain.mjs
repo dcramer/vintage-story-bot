@@ -1,4 +1,3 @@
-import { Effect } from 'effect';
 import { z } from 'zod';
 import { defineAction } from '../runtime/define.mjs';
 
@@ -49,7 +48,7 @@ export default defineAction({
   local: async (runtime, { x, z, radius }) => {
     // Drain pending perception deltas first so look-then-terrain reflects the
     // current view; own position anchors the vertical window of the geometry.
-    const state = await Effect.runPromise(runtime.snapshot());
+    const state = await runtime.snapshot();
     const center = { x: Math.floor(x ?? state.position.x), z: Math.floor(z ?? state.position.z), y: state.position.y };
     return terrainView(runtime.map, runtime.surface, center, radius);
   },

@@ -23,11 +23,15 @@
     "goal:gather": "node scripts/gather.mjs",
     "mcp:smoke": "node scripts/mcp-smoke.mjs",
     "report:dev": "pnpm --filter seraph-fleet run dev",
-    "report:deploy": "pnpm --filter seraph-fleet run deploy"
+    "report:deploy": "pnpm --filter seraph-fleet run deploy",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "effect": "3.22.2",
     "zod": "4.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.4",
+    "typescript": "^5.9.3"
   }
 }

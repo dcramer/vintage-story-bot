@@ -9,14 +9,15 @@ Client C# mod → loopback JSON/TCP → Node controller → stdio MCP/CLI.
 - Game access on game thread; networking queues expiring requests. MCP stdout is protocol-only.
 - Preserve `stop`, action deadlines, world-exit cleanup; synchronize schemas with API changes.
 - C#: .NET 10, game 1.22.7; reference installed assemblies, never bundle them.
-- JS: Node 22+, ES modules, pnpm, node:test.
-- `pnpm controller:dev`: watch/restart Node only; cancels active goals, never resumes them. No screenshot/UI dependencies in controller, navigation, goals, or MCP.
+- JS/TS: Node 24+, ES modules, pnpm, node:test. New files are TypeScript with erasable syntax only (no enums, parameter properties or namespaces): Node strips types natively, there is no build; `pnpm typecheck` runs tsc without emitting.
+- `pnpm bot [--brain default]` runs the Seraph process (`pnpm controller` is the same); `pnpm controller:dev` watches/restarts it and cancels active goals, never resumes them. No screenshot/UI dependencies in controller, navigation, goals, or MCP.
 
 ## Checks
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm test
+pnpm typecheck
 pnpm test:mod
 DOTNET_CLI_HOME="$PWD/.runtime/dotnet-home" .dotnet/dotnet build mod/VintageStoryAI.csproj -c Release -p:VintageStoryPath="$PWD/.runtime/linux-client"
 pnpm mcp:smoke
