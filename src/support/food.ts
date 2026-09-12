@@ -124,7 +124,13 @@ export async function consume(field, { match, tolerance = 0 }: { match?: string;
     // inventory-state token is too broad here: incidental nearby pickups can
     // change an unrelated slot between verification and the hold, even though
     // the intended food remains selected and safe.
-    await field.send({ action: 'interact', durationMs: 1200, expectedTarget: null, expectedItem: { slot: food.slot, code: food.code } });
+    // Against a wall of earth the wall is the aimed target and must be named; in clear air there is none.
+    await field.send({
+      action: 'interact',
+      durationMs: 1200,
+      expectedTarget: before.target?.key ?? null,
+      expectedItem: { slot: food.slot, code: food.code },
+    });
     // Native consumption takes ~1s; poll life while the bounded hold runs.
     for (let i = 0; i < 7; i++) {
       await field.wait(200);
