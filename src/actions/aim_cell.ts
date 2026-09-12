@@ -20,5 +20,5 @@ export default defineAction({
     .strict(),
   description:
     "Aim the camera at a cell by coordinates using the block's real selection-box geometry, instead of caller-computed " +
-    'angles. Requires controlReady; cell within 8 blocks and loaded. Verify with inspect_target after a frame. Returns applied angles.',
+    'angles. Requires controlReady; cell within 8 blocks and loaded. Verify with target after a frame. Returns applied angles.',
 });

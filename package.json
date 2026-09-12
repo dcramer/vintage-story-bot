@@ -18,7 +18,6 @@
     "game": "node scripts/game.ts",
     "worktree": "node scripts/worktree.ts",
     "setup:linux": "bash scripts/setup-linux.sh",
-    "goal:stick": "node scripts/collect-stick.ts",
     "goal:gather": "node scripts/gather.ts",
     "report:dev": "pnpm --filter seraph-fleet run dev",
     "report:deploy": "pnpm --filter seraph-fleet run deploy",

@@ -2,10 +2,10 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { blockTarget } from '../runtime/schemas.ts';
 import { cleanName, runField } from '../support/task.ts';
-import { exchange, wanted } from './store.ts';
+import { exchange, wanted } from './store_items.ts';
 
 export default defineGoal({
-  name: 'take',
+  name: 'take_items',
   schema: z
     .object({
       target: blockTarget.describe('Observed key of a chest, vessel or basket block.'),

@@ -17,5 +17,5 @@ export default defineAction({
   description:
     'Toss owned items from one slot onto the ground. Requires fresh ' +
     'inventory.state. Drops 1 item (quantity 1) or the whole stack (quantity at least the stack size); ' +
-    'for other counts split the stack with inventory_move first. Verify after server sync; never blindly retry.',
+    'for other counts split the stack with move_item first. Verify after server sync; never blindly retry.',
 });

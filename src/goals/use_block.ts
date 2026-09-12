@@ -78,7 +78,7 @@ export async function useOnBlock(field, { target, item, sneak = false, holdMs = 
 }
 
 export default defineGoal({
-  name: 'use_on_block',
+  name: 'use_block',
   schema: z
     .object({
       target: blockTarget,

@@ -10,6 +10,7 @@ Client C# mod → loopback JSON/TCP → Node bot → CLI.
 - Preserve `stop`, action deadlines, world-exit cleanup; synchronize schemas with API changes.
 - C#: .NET 10, game 1.22.7; reference installed assemblies, never bundle them.
 - JS/TS: Node 24+, ES modules, pnpm, node:test. New files are TypeScript with erasable syntax only (no enums, parameter properties or namespaces): Node strips types natively, there is no build; `pnpm typecheck` runs tsc without emitting.
+- `pnpm lint` checks formatting and lint with Biome (`pnpm lint:fix` writes); a pre-commit hook (simple-git-hooks + lint-staged, installed by `pnpm install`) runs it on staged files.
 - `pnpm bot [--brain default]` runs the Seraph process (`pnpm controller` is the same); `pnpm controller:dev` watches/restarts it and cancels active goals, never resumes them. No screenshot/UI dependencies in controller, navigation, goals, or the CLI.
 
 ## Checks
@@ -18,6 +19,7 @@ Client C# mod → loopback JSON/TCP → Node bot → CLI.
 pnpm install --frozen-lockfile
 pnpm test
 pnpm typecheck
+pnpm lint
 pnpm test:mod
 DOTNET_CLI_HOME="$PWD/.runtime/dotnet-home" .dotnet/dotnet build mod/VintageStoryAI.csproj -c Release -p:VintageStoryPath="$PWD/.runtime/linux-client"
 ```

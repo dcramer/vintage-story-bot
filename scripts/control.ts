@@ -5,7 +5,7 @@ const [name = 'observe', ...params] = process.argv.slice(2);
 const tool = tools.find(tool => tool.name === name || tool.action === name);
 let args = {};
 let expectedParams = 0;
-if (['move', 'interact', 'attack', 'attack_block'].includes(name)) args = { durationMs: Number(params[0]) };
+if (['move', 'interact', 'attack'].includes(name)) args = { durationMs: Number(params[0]) };
 if (['select', 'select_hotbar'].includes(name)) args = { slot: Number(params[0]) };
 if (name === 'look') args = { yawDegrees: Number(params[0]), pitchDegrees: Number(params[1]) };
 expectedParams = Object.keys(args).length;

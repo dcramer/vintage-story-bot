@@ -60,9 +60,9 @@ test('validates bridge ports and bounded action inputs', () => {
   for (const args of [{ match: '' }, { match: 'stick', limit: 9 }, { match: 'stick', offset: -1 }])
     assert.equal(schema('recipes').safeParse(args).success, false);
   const transfer = { from: { inventory: 'hotbar', slot: 0 }, to: { inventory: 'craftinggrid', slot: 0 }, expectedState: 'a'.repeat(64), quantity: 1 };
-  assert.equal(schema('inventory_move').safeParse(transfer).success, true);
+  assert.equal(schema('move_item').safeParse(transfer).success, true);
   for (const change of [{ expectedState: '' }, { quantity: 0 }, { quantity: 65 }, { to: { inventory: 'creative', slot: 0 } }]) {
-    assert.equal(schema('inventory_move').safeParse({ ...transfer, ...change }).success, false);
+    assert.equal(schema('move_item').safeParse({ ...transfer, ...change }).success, false);
   }
 });
 

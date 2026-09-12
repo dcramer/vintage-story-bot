@@ -8,7 +8,8 @@ export const schema = z
   .strict();
 
 export default defineAction({
-  name: 'map_waypoint_remove',
+  name: 'remove_map_waypoint',
+  action: 'map_waypoint_remove',
   schema,
   destructive: true,
   description:

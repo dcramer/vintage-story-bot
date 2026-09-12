@@ -2,7 +2,8 @@ import { defineAction } from '../runtime/define.ts';
 import { empty as schema } from '../runtime/schemas.ts';
 
 export default defineAction({
-  name: 'inspect_target',
+  name: 'target',
+  action: 'inspect_target',
   schema,
   readOnly: true,
   idempotent: true,

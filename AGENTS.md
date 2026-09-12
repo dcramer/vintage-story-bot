@@ -82,7 +82,13 @@ Details and rationale: [architecture](docs/architecture.md#design-intent), [game
 
 ## Where behavior lives
 
-The split is by what a player does in one act, never by convenience.
+Three layers, by what a thing is to the player:
+
+- **Actions** are the primitives a player has: one look or one input (`move`, `look`, `interact`, `attack`, `select_hotbar`, `move_item`, `inventory`, `target`…). They map to mod actions one to one.
+- **Goals** are scripted compounds of actions (`harvest`, `travel`, `build`, `store_items`…): interruptible, verified by observed change, and they end with a reason when they cannot go on (`pit`, `no_progress`, `none_found`). A goal never decides what to do next.
+- **Brains** are end-to-end behavior: which goal now, with which knobs, what a result means, what to do when hurt. A brain may run goals or call actions by hand.
+
+The mod/Node split inside that is by what a player does in one act, never by convenience.
 
 - **Mod = one player act, sensed or performed.** Every mod action is exactly one of: a read of what the camera is seeing right now (own state, the surroundings feed, the far view feed, objects in view, the HUD of the aimed target, inventory as the player sees it) or an act of input (hold keys for a bounded duration, aim, select a slot, press or hold a mouse button on the aimed target, move one inventory slot). Each returns what the game shows and finishes on its own. The mod never decides where to look, where to go, what to do next, or whether to retry, and never chains two acts. The only logic it keeps is safety that must hold even if Node dies: the control hold and its expiry, life sampling that releases inputs on damage/death/menus, F8 and manual-input release, mutation refusals while control is held.
 - **Node = anything with a decision in it, and all memory.** The mod reports what the eye sees this instant; Node keeps what was seen, for how long, and what it means. Planning (where to look next, routes, rough routes), sequencing (look, walk, then act), verification by observed deltas, retries, food and threat policy, goals. If a behavior needs "then", "until", "unless", "remember" or "toward", it is Node, composed from existing actions.
@@ -96,6 +102,13 @@ The split is by what a player does in one act, never by convenience.
 | `watch`: what the eye is currently looking for | `scan`: set attention, wait one sweep, choose targets from what was seen |
 | `block_action_begin`: hold click on the aimed cell until it changes or expires | `dig_block`: pick the cell, walk into range, aim, act, verify air, handle drops |
 | `aim_cell`: aim at a cell face by its selection box | `place_block`: choose a standing spot and face, select the item, verify the change |
+
+## Naming
+
+- Queries are nouns for what they return (`inventory`, `environment`, `terrain`, `target`, `dialogs`, `players`, `recipes`, `events`, `container_slots`, `goal_status`); the two senses keep their verbs, `observe` (own state) and `scan` (what is in view).
+- Commands and goals are `verb` or `verb_object`, the verb first: `open_container`, `move_item`, `move_container_item`, `remove_map_waypoint`, `activate_dialog`, `dig_block`, `place_block`, `use_block`, `store_items`, `take_items`, `gather_sticks`, `fell_tree`, `dig_out`. A goal's name is the outcome (`harvest`, `travel`, `forage`, `eat`, `build`), never how it is done.
+- The public name is the file basename; a differing mod wire name is the tool's `action`, used only inside Node.
+- Arguments: `target` is an observed block key; `item` an item code substring; `output` an exact recipe output code; `match` a block code substring; `count` how many; `x`, `y`, `z` block coordinates; `timeoutMs`, `manageFood`, `sprint`, `arrivalRadius` the shared goal knobs; `expectedState` the inventory token. Results carry `ok`, `goal`, `reason` on failure, and what was verified (`verification`).
 
 ## Layout and ownership
 
@@ -133,7 +146,7 @@ Linux, headless, one bot client per profile; flags, phases and constraints in [R
 1. Once: `pnpm install --frozen-lockfile`, `pnpm setup:linux`, sign in once with the bot account.
 2. `pnpm bot` (`pnpm controller` is the same; `scripts/control.ts` talks to it). `--brain default` makes the bot play on its own ([brain](docs/brain.md)); without it the bot only does what it is told.
 3. `pnpm game start --world <save>` (or `--new <name> --play-style surviveandbuild`, `--server host:port`); returns at `world_ready`. `pnpm game status` any time.
-4. Blocking dialogs (character creation, death): `node scripts/control.ts ui_dialogs`, then `ui_activate --json '{"dialog":"…","element":"…"}'` until `observe` reports `controlReady`.
+4. Blocking dialogs (character creation, death): `node scripts/control.ts dialogs`, then `activate_dialog --json '{"dialog":"…","element":"…"}'` until `observe` reports `controlReady`.
 5. Play through `node scripts/control.ts <action> [--json …]`; goals via `pnpm goal:*`.
 6. `pnpm game stop` (the game's own saving exit path; never kill a loaded world), then redeploy the mod if rebuilt.
 

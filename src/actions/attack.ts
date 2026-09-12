@@ -2,7 +2,7 @@ import { defineAction } from '../runtime/define.ts';
 import { hand as schema } from '../runtime/schemas.ts';
 
 export default defineAction({
-  name: 'attack_block',
+  name: 'attack',
   action: 'attack',
   schema,
   destructive: true,

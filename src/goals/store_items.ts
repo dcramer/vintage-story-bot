@@ -167,7 +167,7 @@ export const wanted = z
   .max(16);
 
 export default defineGoal({
-  name: 'store',
+  name: 'store_items',
   schema: z
     .object({
       target: blockTarget.describe('Observed key of a chest, vessel or basket block.'),

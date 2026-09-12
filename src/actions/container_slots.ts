@@ -8,5 +8,5 @@ export default defineAction({
   idempotent: true,
   description:
     'Re-read the container opened by open_container: slots [{slot,code,quantity}] and the current state ' +
-    'token for container_move. No click; errors when none is open.',
+    'token for move_container_item. No click; errors when none is open.',
 });

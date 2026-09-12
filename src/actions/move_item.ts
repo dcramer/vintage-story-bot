@@ -12,7 +12,8 @@ export const schema = z
   .strict();
 
 export default defineAction({
-  name: 'inventory_move',
+  name: 'move_item',
+  action: 'inventory_move',
   schema,
   destructive: true,
   description:

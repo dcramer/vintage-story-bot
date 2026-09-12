@@ -1,4 +1,4 @@
-import { useOnBlock } from '../goals/use_on_block.ts';
+import { useOnBlock } from '../goals/use_block.ts';
 import { lookAt, normalize } from '../runtime/navigation/terrain.ts';
 import { parseBlockKey, replaceablePlant } from './blocks.ts';
 import { equip, itemCount, ownedSlots } from './inventory.ts';
