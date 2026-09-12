@@ -10,6 +10,7 @@ export interface ControllerLike {
   brain: any;
   history: Map<string, any>;
   wants: string[];
+  map?: any;
   send(request: object): Promise<any>;
   request(request: object, options?: { by?: string }): Promise<any>;
   stop(reason?: string): Promise<void>;
@@ -116,6 +117,11 @@ export class BrainLoop<Memory> {
       if (!respawn.ok) throw new Error(respawn.error ?? 'respawn refused');
       return;
     }
+    // Deep water is the one thing no goal handles once a life alert is up: swim for the nearest dry ground.
+    if (state.motion?.swimming && !controller.active) {
+      await this.surface(state);
+      return;
+    }
     const record = controller.active as any;
     const active = record ? { id: record.id, kind: record.kind, state: record.state, by: record.by } : null;
     let last: Reading['last'] = null;
@@ -155,6 +161,33 @@ export class BrainLoop<Memory> {
     const started = await controller.request({ action: decision.start, ...decision.args }, { by: 'brain' });
     if (!started.ok) throw new Error(`${decision.start} refused: ${started.error}`);
     this.goal = { id: started.goal.id, kind: decision.start };
+  }
+  // Swim toward the nearest known dry ground with the jump key held (in water it keeps the head up),
+  // one bounded stroke per tick; with no dry ground remembered, keep the current heading.
+  private async surface(state: any) {
+    const p = state.position;
+    let yaw = state.orientation?.yawDegrees ?? 0,
+      target: any = null;
+    const map = this.controller.map;
+    if (map) {
+      let best = Infinity;
+      for (let dx = -16; dx <= 16; dx++)
+        for (let dz = -16; dz <= 16; dz++) {
+          const node = map.nodeAt(Math.floor(p.x) + dx, Math.floor(p.z) + dz, p.y, 2, 4);
+          if (!node || node.wet || node.swim) continue;
+          const far = Math.hypot(node.x - p.x, node.z - p.z);
+          if (far < best) {
+            best = far;
+            target = node;
+          }
+        }
+      if (target) yaw = ((Math.atan2(target.x - p.x, target.z - p.z) * 180) / Math.PI + 360) % 360;
+    }
+    this.note(
+      `surfacing: swimming ${target ? `toward ${Math.round(target.x)},${Math.round(target.z)}` : 'ahead'}, oxygen ${Math.round(((state.vitals?.oxygen?.current ?? 0) / (state.vitals?.oxygen?.max || 1)) * 100)}%`,
+    );
+    await this.controller.send({ action: 'look', yawDegrees: yaw, pitchDegrees: 0 });
+    await this.controller.send({ action: 'move', durationMs: 1500, direction: 'forward', jump: true, sprint: false, sneak: false });
   }
   private note(text: string) {
     if (text === this.lastDecision) return;

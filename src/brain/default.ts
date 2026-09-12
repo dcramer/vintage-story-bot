@@ -188,8 +188,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // A walk that ended in a hole is not a failed job: the hole is dealt with first.
     if (last.reason === 'pit' && last.result?.position) memory.pit = { x: last.result.position.x + 8, z: last.result.position.z };
     else if (memory.job === 'shelter') shelterAdvance(memory, last.ok, now);
-    // Running away is tried again at once; every other failed job rests a while.
-    else if (!last.ok && memory.job && !['hide', 'dig_out'].includes(memory.job)) memory.cool.set(memory.job, now + COOLDOWN_MS);
+    // Running away is tried again at once, and a job the surroundings refused before it began (water, lost
+    // controls) is not the job's fault; every other failed job rests a while.
+    else if (!last.ok && memory.job && !['hide', 'dig_out'].includes(memory.job) && !/interruption/.test(last.reason ?? ''))
+      memory.cool.set(memory.job, now + COOLDOWN_MS);
     if (memory.job === 'dig_out') memory.pit = null;
     memory.job = null;
   }

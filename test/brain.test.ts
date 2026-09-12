@@ -140,3 +140,40 @@ test('brain loop: respawns when dead, waits behind an operator goal, starts and 
   await loop.stop();
   assert.equal(controller.active.by, 'operator', 'an operator goal is never cancelled by the brain');
 });
+
+test('brain loop: a swimming bot with no goal swims for the nearest dry ground, jump held', async () => {
+  const calls: any[] = [];
+  const dry = { x: 3.5, y: 100, z: 0.5 };
+  const controller = {
+    active: null,
+    last: null,
+    brain: null,
+    history: new Map(),
+    wants: [],
+    map: { nodeAt: (x, z) => (x === 3 && z === 0 ? dry : null) },
+    send: async request => {
+      calls.push(request);
+      return request.action === 'observe'
+        ? state({
+            position: { x: 0.5, y: 99, z: 0.5 },
+            motion: { swimming: true, feetInLiquid: true },
+            orientation: { yawDegrees: 180 },
+            vitals: { hunger: { current: 500, max: 1500 }, oxygen: { current: 10000, max: 40000 } },
+          })
+        : { ok: true };
+    },
+    request: async () => {
+      throw new Error('no goal should start while swimming');
+    },
+    stop: async () => {},
+    goalView: () => null,
+  };
+  const loop = new BrainLoop(controller as any, brain, 5);
+  loop.start();
+  await new Promise(resolve => setTimeout(resolve, 25));
+  await loop.stop();
+  const look = calls.find(c => c.action === 'look'),
+    move = calls.find(c => c.action === 'move');
+  assert.equal(Math.round(look.yawDegrees), 90, 'faces the dry cell to the east');
+  assert.deepEqual([move.jump, move.sneak, move.direction], [true, false, 'forward']);
+});

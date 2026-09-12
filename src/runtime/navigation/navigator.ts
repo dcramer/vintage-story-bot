@@ -302,6 +302,8 @@ export class Navigation {
     }
     // Falling: let gravity land the body on the validated lower cell.
     if (!grounded && !this.jumpAt) return { yawDegrees, pitchDegrees: 15, forward: false, jump: false, sprint: false, sneak: false, durationMs: 120 };
+    // In water the jump key keeps the head up and climbs the bank; never sneak there.
+    const wet = !!(state.motion.feetInLiquid || state.motion.swimming);
     const food = state.vitals?.hunger;
     const emergency = this.evading || this.target.emergency;
     const straight = turn < 5 && next.move === 'walk' && near > 3 && yawMagnitude < 5;
@@ -312,7 +314,7 @@ export class Navigation {
       pitchDegrees: 15,
       forward: walking && near > 0.12,
       durationMs,
-      jump: !!this.jumpAt && now - this.jumpAt < 200,
+      jump: wet || (!!this.jumpAt && now - this.jumpAt < 200),
       sprint,
       sneak: false,
     };

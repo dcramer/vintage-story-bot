@@ -94,24 +94,12 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
     else {
       stuck++;
       // The planner has already exhausted non-mutating routes for this leg.
-      // Clear an explicitly observed leaf now; waiting through two identical
-      // 20-second surveys wastes the food window in dense forest. Keep the
-      // less constrained physical nudge behind the established stuck count.
-      // Exploration targets are disposable probes around hard terrain. Do not
-      // cut permanent openings toward a sideways or reverse probe: in dense
-      // forest that clears random canopy while moving away from the trip. Aim
-      // leaf clearing at the actual destination; non-mutating routes may still
-      // detour around cliffs, water and other hard obstacles.
+      // Clear an explicitly observed leaf now, aimed at the actual destination
+      // (never at a sideways or reverse probe, which would carve random canopy);
+      // the cleared cell is then ordinary ground for the next route.
       const cleared = await clearLeafPath(field, goal);
-      // Enter the gap we just verified and opened. Without this bounded
-      // sneaking probe, a dense canopy can make the planner return to the same
-      // pre-clearing cell and spend the whole day carving without advancing.
-      const nudged = cleared ? await field.nudge(goal) : stuck >= 3 ? await field.nudge(leg) : 0;
-      if (cleared || nudged > 0.1) {
-        // Once a cautious probe proves this opening is physically
-        // traversable, retry it after one planner failure instead of
-        // waiting through three identical surveys for every half block.
-        stuck = nudged > 0.1 ? 2 : 0;
+      if (cleared) {
+        stuck = 0;
         continuation = null;
         localDetour = false;
         field.report('route_cleared', { remaining: +horizontal(field.latest.position, goal).toFixed(1), legs });

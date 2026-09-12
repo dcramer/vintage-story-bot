@@ -187,11 +187,8 @@ export class Survival {
       if (stuckFoodRoute(result, before, field.latest.position)) {
         this.stuckSearches++;
         const cleared = await clearLeafPath(field, destination);
-        // A short sneaking step makes newly cleared forage gaps useful
-        // immediately while still refusing threats and unsupported ledges.
-        const nudged = cleared ? await field.nudge(destination) : this.stuckSearches >= 3 ? await field.nudge(destination) : 0;
-        if (cleared || nudged > 0.1) {
-          this.stuckSearches = nudged > 0.1 ? 2 : 0;
+        if (cleared) {
+          this.stuckSearches = 0;
           this.surveyed = false;
           this.desperateSurveyed = false;
           this.lastFarView = null;
