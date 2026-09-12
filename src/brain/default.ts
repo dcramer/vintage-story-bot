@@ -82,7 +82,7 @@ export type Memory = {
   tried_now: Job[];
   job: Job | null;
   // Where the last walk was heading when it ended in a pit; dig_out cuts stairs that way.
-  pit: { x: number; z: number } | null;
+  pit: { x: number; y: number; z: number } | null;
   // The pocket the bot dug in for the night: its mouth cell, to dig open again at dawn.
   burrow: { x: number; y: number; z: number } | null;
   // Physical burrow recovery is only valid before this controller has moved.
@@ -257,7 +257,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (last) {
     if (last.ok) memory.done[last.kind] = (memory.done[last.kind] ?? 0) + 1;
     // A walk that ended in a hole is not a failed job: the hole is dealt with first.
-    if (last.reason === 'pit' && last.result?.position) memory.pit = { x: last.result.position.x + 8, z: last.result.position.z };
+    if (last.reason === 'pit' && last.result?.position)
+      memory.pit = { x: last.result.position.x + 8, y: last.result.position.y, z: last.result.position.z };
     // Running away is tried again at once, and a job the surroundings refused before it began (water, lost
     // controls) is not the job's fault. A body recovery interrupted by danger is different: immediately
     // returning to the same grave makes the fresh life repeat the death, so leave it alone for a while.
@@ -269,10 +270,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
         (memory.job === 'recover' && /^brain: (threat|hurt|relocate)$/.test(last.reason ?? '')))
     )
       memory.tried[memory.job] = { x: state.position.x, z: state.position.z, at: now };
-    // A partial staircase is useful progress, not proof the pit is gone. Keep
-    // the same escape heading so the next bounded dig-out resumes one level
-    // higher; abandon only a motionless attempt or a verified success.
-    if (memory.job === 'dig_out' && (last.ok || !(last.result?.climbed > 0))) memory.pit = null;
+    // A partial staircase is useful progress, not proof the pit is gone. The
+    // action RPC can reject a changed block after a successful step and omit
+    // dig_out's result, so the observed height is also evidence of progress.
+    if (memory.job === 'dig_out' && (last.ok || (!(last.result?.climbed > 0) && (!memory.pit || state.position.y <= memory.pit.y + 0.5))))
+      memory.pit = null;
     // A finished shelter is home.
     if (memory.job === 'shelter' && last.ok && last.result?.home) memory.home = last.result.home;
     if (memory.job === 'burrow' && last.ok && last.result?.mouth) memory.burrow = last.result.mouth;
@@ -281,7 +283,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       // the surface. Hand the existing dig-out goal an arbitrary direction
       // for its staircase before resuming food or kit work.
       memory.burrow = null;
-      memory.pit = { x: state.position.x + 8, z: state.position.z };
+      memory.pit = { x: state.position.x + 8, y: state.position.y, z: state.position.z };
     }
     // Whatever the trip's outcome, this place has been judged; judge the new one afresh.
     if (memory.job === 'relocate') memory.scares = [];
@@ -308,7 +310,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       observedShaft = !state.motion?.swimming && !state.motion?.feetInLiquid && reading.terrain ? dugInState(reading.terrain, bx, by, bz) : null;
     if (observedShaft === 'sealed' || (observedShaft === 'open' && (isNight(environment) || temporalStormUnsafe(state))))
       memory.burrow = { x: bx, y: by + 2, z: bz };
-    if (observedShaft === 'open' && !memory.burrow) memory.pit = { x: state.position.x + 8, z: state.position.z };
+    if (observedShaft === 'open' && !memory.burrow) memory.pit = { x: state.position.x + 8, y: state.position.y, z: state.position.z };
   }
   const threat = nearestThreat(state);
   if (threat) memory.lastThreat = { point: threat.point, code: threat.code, at: now };
