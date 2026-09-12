@@ -10,7 +10,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [x] `environment` — calendar, season, daylight, climate, wind, light.
 - [x] `inventory` — hotbar/backpack/grid/mouse, equipment read-only, tool tiers, freshness.
 - [x] `goal_status`, `api`.
-- [ ] **P1 · `players`** — other players on server: name, distance, visible flag (`ctl`, `mod`). Mineflayer `bot.players`. Needed for co-op/follow.
+- [x] `players` — other players on server: name, uid, position, distance, visible flag; tracking feed plus loaded entities.
 - [~] `observe.nearbyEntities` — entities seen in the field of view, near within 8, or heard within 16 this instant; Node overlays 20 s memory; hostile allowlist and `nearestThreat` in [threats](src/skills/threats.mjs). Sight-limited path not live-verified.
 - [ ] **P2 · `observe.time.untilSunset/untilDawn`** — derived from calendar so goals can budget daylight without recomputing (`ctl`).
 
