@@ -11,19 +11,31 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
     // forgotten geometry and drops only changed cells.
     private sealed record Observation(Bounds[]? Boxes, string? Traits, long At, long Sequence, long PublishedAt, string? Reason = null);
     private readonly Dictionary<Cell, Observation> cells = new();
-    // Every published observation by its sequence, so a page is a slice and the
-    // oldest is the first entry, never a sort or a scan of the whole map.
-    private readonly SortedList<long, Cell> published = new();
+    // Every publication in sequence order, appended only: a page is a slice of it and the oldest
+    // live cell is at its head. An entry whose cell has since been published again or evicted is
+    // dead and skipped; the log is compacted when dead entries outnumber live ones.
+    private readonly List<(long Sequence, Cell Cell)> log = new();
+    private int head, dead;
     private long sequence, lostThrough;
     public string Session { get; private set; } = Guid.NewGuid().ToString("N");
-    public void Clear() { cells.Clear(); published.Clear(); sequence = lostThrough = 0; Session = Guid.NewGuid().ToString("N"); }
+    public void Clear() { cells.Clear(); log.Clear(); head = dead = 0; sequence = lostThrough = 0; Session = Guid.NewGuid().ToString("N"); }
     public bool Fresh(Cell cell, long now, long age = 500) =>
         cells.TryGetValue(cell, out var value) && value.Boxes != null && now - value.At <= Math.Min(age, ttlMs);
+    private bool Live(int index) => cells.TryGetValue(log[index].Cell, out var value) && value.Sequence == log[index].Sequence;
     private void Set(Cell cell, Observation? prior, Observation next)
     {
-        if (prior != null && prior.Sequence != next.Sequence) published.Remove(prior.Sequence);
-        if (prior == null || prior.Sequence != next.Sequence) published[next.Sequence] = cell;
         cells[cell] = next;
+        if (prior != null && prior.Sequence == next.Sequence) return;
+        if (prior != null) dead++;
+        log.Add((next.Sequence, cell));
+        if (head + dead > log.Count / 2 && log.Count > 64) Compact();
+    }
+    private void Compact()
+    {
+        int kept = 0;
+        for (int i = head; i < log.Count; i++) if (Live(i)) log[kept++] = log[i];
+        log.RemoveRange(kept, log.Count - kept);
+        head = dead = 0;
     }
     public void Invalidate(Cell cell, string reason = "changed")
     {
@@ -54,11 +66,13 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
     }
     private void Bound()
     {
-        if (cells.Count <= capacity || published.Count == 0) return;
-        long oldest = published.Keys[0];
-        lostThrough = Math.Max(lostThrough, oldest);
-        cells.Remove(published.Values[0]);
-        published.RemoveAt(0);
+        while (cells.Count > capacity && head < log.Count)
+        {
+            if (!Live(head)) { head++; dead--; continue; }
+            var (oldest, cell) = log[head++];
+            lostThrough = Math.Max(lostThrough, oldest);
+            cells.Remove(cell);
+        }
     }
     public void Prune(Point3 center, long now, Func<Cell, bool>? loaded = null)
     {
@@ -73,14 +87,13 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
     {
         bool reset = session != Session || after < lostThrough || after > sequence;
         if (reset) after = 0;
-        // First published sequence above the cursor, by binary search over the ordered keys.
-        var keys = published.Keys;
-        int low = 0, high = keys.Count;
-        while (low < high) { int mid = (low + high) / 2; if (keys[mid] > after) high = mid; else low = mid + 1; }
-        int count = Math.Min(PageSize, keys.Count - low);
-        var batch = new (Cell Cell, Observation Value)[count];
-        for (int i = 0; i < count; i++) { var cell = published.Values[low + i]; batch[i] = (cell, cells[cell]); }
-        long cursor = count == 0 ? sequence : batch[^1].Value.Sequence;
+        // First entry above the cursor, by binary search over the ordered log.
+        int low = head, high = log.Count;
+        while (low < high) { int mid = (low + high) / 2; if (log[mid].Sequence > after) high = mid; else low = mid + 1; }
+        var batch = new List<(Cell Cell, Observation Value)>(Math.Min(PageSize, log.Count - low));
+        for (int i = low; i < log.Count && batch.Count < PageSize; i++)
+            if (cells.TryGetValue(log[i].Cell, out var value) && value.Sequence == log[i].Sequence) batch.Add((log[i].Cell, value));
+        long cursor = batch.Count == 0 ? sequence : batch[^1].Value.Sequence;
         return new { session = Session, reset, cursor, more = cursor < sequence, clock = now,
             cells = batch.Select(p => p.Value.Boxes == null
                 ? new object?[] { p.Cell.X, p.Cell.Y, p.Cell.Z, p.Value.At, p.Value.Traits, null, p.Value.Reason ?? "changed" }

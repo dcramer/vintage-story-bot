@@ -140,7 +140,8 @@ public sealed partial class AiBridgeMod
         long frameNow = Environment.TickCount64;
         if (!control.Frame(frameOwner.GetString()!, sequence, receivedAt ?? frameNow, frameNow, frameDuration))
             return new { ok = false, error = control.RefusalReason(frameOwner.GetString()!, sequence, receivedAt ?? frameNow, frameDuration) };
-        StopMovement(); StopHandAction();
+        // The step in flight is kept: the next frame may roll on from it.
+        StopMovement(keepStep: true); StopHandAction();
         sensorPriority = focus; controlYaw = frameYaw; controlPitch = framePitch;
         bool frameForward = forwardField.GetBoolean(), jumping = frameJump.GetBoolean();
         if (toward is Point3 point)
@@ -255,6 +256,8 @@ public sealed partial class AiBridgeMod
                 return new { ok = false, error = "Supply integer cell x, y, z." };
             if (!CanControl()) return new { ok = false, error = "Close menus and enter the world before aiming." };
             if (!entity.Alive || api.IsGamePaused) return new { ok = false, error = "Cannot aim while dead or paused." };
+            // Aiming is a look of its own: a target lock would swing the crosshair back next tick.
+            ClearTargetLock();
             var cellPos = new BlockPos(ax, ay, az, 0);
             if (api.World.BlockAccessor.GetChunkAtBlockPos(cellPos) == null)
                 return new { ok = false, error = "Target cell unloaded." };
@@ -428,8 +431,12 @@ public sealed partial class AiBridgeMod
         api.Input.MousePitch = entity.Pos.Pitch = (float)(Math.PI + (pitch + Math.Clamp((controlPitch - pitch) * blend, -turn, turn)) * Math.PI / 180);
     }
 
-    private void StopMovement()
+    // Every stop ends the step in flight too (a stopped walk is not "walking"), so a later frame
+    // toward the same point starts a fresh tracker instead of judging itself blocked or arrived
+    // by a clock and a start point that stopped with the keys.
+    private void StopMovement(bool keepStep = false)
     {
+        if (!keepStep) step?.Expire();
         bool jumping = moveJump;
         bool sprinting = moveSprint;
         bool sneaking = moveSneak;

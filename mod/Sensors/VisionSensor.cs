@@ -48,7 +48,7 @@ public sealed class SurfaceMap(long ttlMs = 30000, int radius = 96)
         {
             // A column seen again later is in the queue twice; only its latest sighting counts.
             if (!columns.TryGetValue(column, out var value) || value.SeenAt != seenAt) continue;
-            double planar = Math.Sqrt(Math.Pow(column.X + .5 - eye.X, 2) + Math.Pow(column.Z + .5 - eye.Z, 2));
+            double planar = Math.Sqrt(SceneGeometry.Square(column.X + .5 - eye.X) + SceneGeometry.Square(column.Z + .5 - eye.Z));
             if (planar > 8)
             {
                 double bearing = SceneGeometry.Normalize(Math.Atan2(column.X + .5 - eye.X, column.Z + .5 - eye.Z) * 180 / Math.PI);
@@ -129,9 +129,8 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
         for (int i = 0, n = (int)Math.Ceiling(distance * 2); i <= n; i++)
         {
             double t = n == 0 ? 0 : (double)i / n;
-            var along = new BlockPos((int)Math.Floor(origin.X + (end.X - origin.X) * t),
-                (int)Math.Floor(origin.Y + (end.Y - origin.Y) * t), (int)Math.Floor(origin.Z + (end.Z - origin.Z) * t), 0);
-            if (blocks.GetChunkAtBlockPos(along) == null) return new { ok = true, known = false, visible = false, reason = "unloaded", summary.distance, summary.code, summary.look };
+            if (blocks.GetChunkAtBlockPos((int)Math.Floor(origin.X + (end.X - origin.X) * t),
+                (int)Math.Floor(origin.Y + (end.Y - origin.Y) * t), (int)Math.Floor(origin.Z + (end.Z - origin.Z) * t)) == null) return new { ok = true, known = false, visible = false, reason = "unloaded", summary.distance, summary.code, summary.look };
         }
         BlockSelection? hit = null; EntitySelection? entityHit = null;
         api.World.RayTraceForSelection(origin, end, ref hit, ref entityHit,
@@ -198,7 +197,7 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
             var candidates = new List<(Column Column, double Angle, double Distance)>();
             for (int x = eyeX - radius; x <= eyeX + radius; x++) for (int z = eyeZ - radius; z <= eyeZ + radius; z++)
             {
-                double planar = Math.Sqrt(Math.Pow(x + .5 - eye.X, 2) + Math.Pow(z + .5 - eye.Z, 2));
+                double planar = Math.Sqrt(SceneGeometry.Square(x + .5 - eye.X) + SceneGeometry.Square(z + .5 - eye.Z));
                 if (planar > radius) continue;
                 int step = Step(planar);
                 if (Math.Abs(x) % step != 0 || Math.Abs(z) % step != 0) continue;
@@ -259,9 +258,8 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
             for (int i = 0, n = (int)Math.Ceiling(distance * 2); i <= n; i++)
             {
                 double t = n == 0 ? 0 : (double)i / n;
-                var along = new BlockPos((int)Math.Floor(origin.X + (end.X - origin.X) * t),
-                    (int)Math.Floor(origin.Y + (end.Y - origin.Y) * t), (int)Math.Floor(origin.Z + (end.Z - origin.Z) * t), 0);
-                if (blocks.GetChunkAtBlockPos(along) == null) { sightLoaded = false; break; }
+                if (blocks.GetChunkAtBlockPos((int)Math.Floor(origin.X + (end.X - origin.X) * t),
+                    (int)Math.Floor(origin.Y + (end.Y - origin.Y) * t), (int)Math.Floor(origin.Z + (end.Z - origin.Z) * t)) == null) { sightLoaded = false; break; }
             }
             if (!sightLoaded) continue;
             BlockSelection? hit = null; EntitySelection? entityHit = null;
@@ -270,7 +268,7 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
             if (hit != null && !hit.Position.Equals(target)) continue;
             int mapColor = surfaceBlock!.GetColor(api, target);
             int rgb = ColorUtil.ColorR(mapColor) << 16 | ColorUtil.ColorG(mapColor) << 8 | ColorUtil.ColorB(mapColor);
-            map.Put(column, surface, kind, Step(Math.Sqrt(Math.Pow(x + .5 - eye.X, 2) + Math.Pow(z + .5 - eye.Z, 2))), code, rgb, now);
+            map.Put(column, surface, kind, Step(Math.Sqrt(SceneGeometry.Square(x + .5 - eye.X) + SceneGeometry.Square(z + .5 - eye.Z))), code, rgb, now);
             // Blocks Node is looking for, on or just around the visible surface.
             if (Watch.Length == 0) continue;
             for (int dy = -3; dy <= 3 && rays < 64; dy++)

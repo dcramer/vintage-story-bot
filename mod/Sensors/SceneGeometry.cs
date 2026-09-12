@@ -16,7 +16,8 @@ public static class SceneGeometry
 
     public static double Normalize(double degrees) => (degrees % 360 + 360) % 360;
     public static double Distance(Point3 a, Point3 b) => Math.Sqrt(
-        Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2) + Math.Pow(a.Z - b.Z, 2));
+        Square(a.X - b.X) + Square(a.Y - b.Y) + Square(a.Z - b.Z));
+    public static double Square(double v) => v * v;
 
     public static (double Yaw, double Pitch) LookAt(Point3 eye, Point3 target)
     {

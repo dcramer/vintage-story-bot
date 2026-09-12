@@ -216,6 +216,19 @@ public sealed partial class AiBridgeMod : ModSystem
         catch (ObjectDisposedException) { }
     }
 
+    private static bool TouchesInputs(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("action", out var action) ||
+                action.ValueKind != JsonValueKind.String) return false;
+            string name = action.GetString()!;
+            return Mutations.Contains(name) || name.StartsWith("control_");
+        }
+        catch (JsonException) { return false; }
+    }
+
     // The raw JSON text of a request's requestId, if it carries one; anything else is answered without.
     private static string? RequestId(string json)
     {
@@ -250,9 +263,8 @@ public sealed partial class AiBridgeMod : ModSystem
             {
                 long now = Environment.TickCount64;
                 if (control.Active && (ManualInput() || control.Expire(now))) ReleaseControl(ManualInput() ? "manual_input" : "expired");
-                terrainSensor.Sample(now, sensorPriority);
-                // Far view vision streams only while a controller is reading it.
-                if (now - lastSenseAt < 5000) vision.Sample(now);
+                // Both senses stream only while a controller is reading them.
+                if (now - lastSenseAt < 5000) { terrainSensor.Sample(now, sensorPriority); vision.Sample(now); }
                 UpdateTargetLock();
                 if (control.Active || lockKind != LockKind.None) ApplyCamera(dt);
             }
@@ -322,9 +334,8 @@ public sealed partial class AiBridgeMod : ModSystem
             catch (JsonException) { pending.Completion.TrySetResult(new { ok = false, error = "Invalid JSON request." }); }
             catch (Exception exception)
             {
-                ReleaseControl("action_error");
-                StopMovement();
-                StopHandAction();
+                // Only an act that may have touched the inputs lets go of them; a failed read never does.
+                if (TouchesInputs(pending.Json)) { ReleaseControl("action_error"); StopMovement(); StopHandAction(); }
                 api.Logger.Error($"AI bridge request failed: {exception}");
                 pending.Completion.TrySetResult(new { ok = false, error = "Game action failed; see client log." });
             }

@@ -45,6 +45,25 @@ static class ControlHoldTests
         Check(!map.Fresh(new(1, 2, 3), 1), "invalidation");
         map.Clear();
         Check(map.Session != before, "world reset invalidates cursors");
-        Console.WriteLine("17 control/terrain checks passed.");
+        // The publication log: pages are continuous slices, a republished cell appears once at its
+        // newest sequence, and capacity evicts the cell published longest ago, never a live one twice.
+        var small = new TerrainMap(capacity: 8);
+        for (int i = 0; i < 8; i++) small.Put(new(i, 0, 0), [], null, 0);
+        small.Put(new(0, 0, 0), [new(0, 0, 0, 1, 1, 1)], null, 1); // republished: cell 0 now newest
+        small.Put(new(8, 0, 0), [], null, 1);                    // over capacity: cell 1 is the oldest live one
+        Check(!small.Fresh(new(1, 0, 0), 1) && small.Fresh(new(0, 0, 0), 1), "capacity evicts the oldest publication, not a republished cell");
+        var seen = new List<string>();
+        long at = 0; bool more = true;
+        while (more)
+        {
+            var page = JsonSerializer.SerializeToElement(small.Read(at, small.Session, 2));
+            foreach (var row in page.GetProperty("cells").EnumerateArray()) seen.Add(row[0].GetInt32() + "," + row[1].GetInt32() + "," + row[2].GetInt32());
+            at = page.GetProperty("cursor").GetInt64(); more = page.GetProperty("more").GetBoolean();
+        }
+        Check(seen.Count == 8 && seen.Distinct().Count() == 8 && seen[^1] == "8,0,0" && seen[^2] == "0,0,0", "pages cover every live cell once, in sequence order");
+        for (int round = 0; round < 40; round++) for (int i = 0; i < 8; i++) small.Put(new(i + 100, 0, round), [], null, 2 + round);
+        var tail = JsonSerializer.SerializeToElement(small.Read(0, small.Session, 50));
+        Check(tail.GetProperty("cells").GetArrayLength() == 8, "a compacted log still pages every live cell");
+        Console.WriteLine("20 control/terrain checks passed.");
     }
 }

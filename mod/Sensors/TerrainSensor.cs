@@ -24,11 +24,15 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
             if (x == 0 && y == 0 && z == 0) map.Invalidate(cell);
             else map.Stale(cell);
         }
+        // Only a change near the body restarts the sweep; a far one (water flowing, another player
+        // building) is merely remembered as unknown until the disk reaches it again.
+        var body = api.World?.Player?.Entity?.Pos;
+        if (body != null && (Math.Abs(pos.X + .5 - body.X) > 10 || Math.Abs(pos.Y + .5 - body.Y) > 10 || Math.Abs(pos.Z + .5 - body.Z) > 10)) return;
         pending.Clear();
         nextBatch = 0;
     }
     private static long RefreshMs(Cell cell, EntityPos pos) =>
-        Math.Pow(cell.X + .5 - pos.X, 2) + Math.Pow(cell.Z + .5 - pos.Z, 2) <= 16 ? 500 : 1500;
+        SceneGeometry.Square(cell.X + .5 - pos.X) + SceneGeometry.Square(cell.Z + .5 - pos.Z) <= 16 ? 500 : 1500;
     public void Sample(long now, Cell? priority = null)
     {
         var player = api.World.Player.Entity;
@@ -43,7 +47,7 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
         var foot = new Point3(pos.X, pos.Y, pos.Z);
         var blocks = api.World.BlockAccessor;
         // Forgetting is a once-a-second sweep over the whole map, not a per-tick one.
-        if (now >= nextPrune) { map.Prune(foot, now, cell => blocks.GetChunkAtBlockPos(new BlockPos(cell.X, cell.Y, cell.Z, 0)) != null); nextPrune = now + 1000; }
+        if (now >= nextPrune) { map.Prune(foot, now, cell => blocks.GetChunkAtBlockPos(cell.X, cell.Y, cell.Z) != null); nextPrune = now + 1000; }
         if (pending.Count == 0 && now >= nextBatch)
         {
             var cells = new List<Cell>();
@@ -54,7 +58,7 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
             for (int x = -8; x <= 8; x++) for (int z = -8; z <= 8; z++) for (int y = -3; y <= 6; y++)
                 if (x * x + z * z <= 64) cells.Add(new((int)Math.Floor(pos.X) + x, (int)Math.Floor(pos.Y) + y, (int)Math.Floor(pos.Z) + z));
             foreach (var cell in cells.OrderBy(c => c == priority ? 0 : map.Fresh(c, now, RefreshMs(c, pos)) ? 2 : 1)
-                .ThenBy(c => Math.Pow(c.X + .5 - pos.X, 2) + Math.Pow(c.Z + .5 - pos.Z, 2))) pending.Enqueue(cell);
+                .ThenBy(c => SceneGeometry.Square(c.X + .5 - pos.X) + SceneGeometry.Square(c.Z + .5 - pos.Z))) pending.Enqueue(cell);
             nextBatch = now + 100;
         }
         var watch = Stopwatch.StartNew();
@@ -79,8 +83,8 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
                 for (int i = 0, n = (int)Math.Ceiling(SceneGeometry.Distance(origin, target) * 4); i <= n; i++)
                 {
                     double t = n == 0 ? 0 : (double)i / n;
-                    if (blocks.GetChunkAtBlockPos(new BlockPos((int)Math.Floor(eye.X + (target.X - eye.X) * t),
-                        (int)Math.Floor(eye.Y + (target.Y - eye.Y) * t), (int)Math.Floor(eye.Z + (target.Z - eye.Z) * t), 0)) == null) { loaded = false; break; }
+                    if (blocks.GetChunkAtBlockPos((int)Math.Floor(eye.X + (target.X - eye.X) * t),
+                        (int)Math.Floor(eye.Y + (target.Y - eye.Y) * t), (int)Math.Floor(eye.Z + (target.Z - eye.Z) * t)) == null) { loaded = false; break; }
                 }
                 if (!loaded) continue;
                 BlockSelection? hit = null; EntitySelection? entityHit = null;
