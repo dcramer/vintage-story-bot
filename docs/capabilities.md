@@ -43,6 +43,7 @@ Tool contracts: [tool contracts](../src/actions/) and [goals](../src/goals/); wi
 - Structured data only: ≤8-block omnidirectional surroundings; farther terrain, entities and objects need the client's real field of view plus a sampled line of sight, maximum 64 blocks by day and a torch's reach in the dark. Living entities within 16 blocks count as heard in any direction: an approximation of a sense the client does not model, documented as such. IsRendered alone does not prove visibility. No pixel, fog or apparent-size model; not exact human eyesight.
 - Selection rays ≠ rendered silhouettes. Center rays miss partial objects; sparse samples miss thin sticks.
 - Non-colliding Plant/Leaves with light absorption ≤1 do not occlude sensing rays; their selection boxes are not opaque walls. Actual interaction still requires the native aimed target.
+- Surroundings rays can pass through at most two blocks of sampled water within their eight-block range, so a visible submerged layer distinguishes wading from swimming. Solid blocks and lava still occlude; far-view rays retain their surface limit.
 - Missing/unloaded ≠ air. No server-private state or whole-world scans.
 - Separate observed/remembered/inferred; include time/source/coordinates. Revalidate targets before actions.
 - API presence ≠ valid multiplayer action; preserve server validation.

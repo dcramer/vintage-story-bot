@@ -85,17 +85,24 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map, Sighting
                 if (SceneGeometry.Distance(origin, target) > 8) continue;
                 if (++rays > 128) break;
                 bool loaded = true;
-                for (int i = 0, n = (int)Math.Ceiling(SceneGeometry.Distance(origin, target) * 4); i <= n; i++)
+                double distance = SceneGeometry.Distance(origin, target), waterDistance = 0;
+                for (int i = 0, n = Math.Max(1, (int)Math.Ceiling(distance * 4)); i <= n; i++)
                 {
-                    double t = n == 0 ? 0 : (double)i / n;
-                    if (blocks.GetChunkAtBlockPos((int)Math.Floor(eye.X + (target.X - eye.X) * t),
-                        (int)Math.Floor(eye.Y + (target.Y - eye.Y) * t), (int)Math.Floor(eye.Z + (target.Z - eye.Z) * t)) == null) { loaded = false; break; }
+                    double t = (double)i / n;
+                    var along = new BlockPos((int)Math.Floor(eye.X + (target.X - eye.X) * t),
+                        (int)Math.Floor(eye.Y + (target.Y - eye.Y) * t), (int)Math.Floor(eye.Z + (target.Z - eye.Z) * t), 0);
+                    if (blocks.GetChunkAtBlockPos(along) == null) { loaded = false; break; }
+                    // Nearby clear water reveals its first submerged layer, not an
+                    // unlimited underwater ray. Bound the sampled water path to two blocks.
+                    if (blocks.GetBlock(along, BlockLayersAccess.Fluid).BlockMaterial == EnumBlockMaterial.Water)
+                        waterDistance += distance / n;
+                    if (waterDistance > 2) { loaded = false; break; }
                 }
                 if (!loaded) continue;
                 BlockSelection? hit = null; EntitySelection? entityHit = null;
                 // Selection boxes of translucent, non-colliding foliage are not opaque walls.
                 api.World.RayTraceForSelection(eye, new Vec3d(target.X, target.Y, target.Z), ref hit, ref entityHit,
-                    (at, b) => at.Equals(blockPos) || Sight.Occludes(blocks, at, b), _ => false);
+                    (at, b) => at.Equals(blockPos) || (b.BlockMaterial != EnumBlockMaterial.Water && Sight.Occludes(blocks, at, b)), _ => false);
                 if (hit == null || hit.Position.Equals(blockPos)) { visible = true; break; }
             }
             if (!visible) continue;
