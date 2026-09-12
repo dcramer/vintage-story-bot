@@ -89,8 +89,12 @@ public sealed class DialogAdapter(ICoreClientAPI api)
         var dialog = candidates[^1];
         var escape = new KeyEvent { KeyCode = (int)GlKeys.Escape };
         dialog.OnKeyDown(escape);
+        // A dialog that ignores the key event (the recipe selector) still closes the way a player's Escape does:
+        // the game hands Escape to the top dialog's own handler, which cancels it.
+        bool handled = escape.Handled;
+        if (!handled && dialog.IsOpened()) handled = dialog.OnEscapePressed();
         bool open = dialog.IsOpened();
-        return new { ok = true, dialog = dialog.DebugName, handled = escape.Handled, closed = !open, stillOpen = open };
+        return new { ok = true, dialog = dialog.DebugName, handled, closed = !open, stillOpen = open };
     }
 
     // A dialog may register one composer under several names; report each element once.

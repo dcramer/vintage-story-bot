@@ -254,7 +254,7 @@ export class BrainLoop<Memory> {
   // The dialogs open while the controls are blocked, when the mod reports them; a refusal reads as unknown.
   private async dialogs(state: any) {
     if (state.controlReady !== false || !state.alive || !state.capabilities?.includes?.('ui_dialogs')) return null;
-    const read = await this.controller.send({ action: 'dialogs' }).catch(() => null);
+    const read = await this.controller.send({ action: 'ui_dialogs' }).catch(() => null);
     return read?.ok ? (read.dialogs ?? []).map(d => ({ name: d.name, blocksControl: !!d.blocksControl })) : null;
   }
   // The player's own map markers, when the mod reports them; a refusal reads as none.
