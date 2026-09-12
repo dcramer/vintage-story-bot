@@ -9,7 +9,7 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
     // A null Boxes row is either a real change (the block was replaced) or
     // the eye merely forgetting a cell it no longer keeps; Node's map keeps
     // forgotten geometry and drops only changed cells.
-    private sealed record Observation(Bounds[]? Boxes, string? Traits, long At, long Sequence, long PublishedAt, string? Reason = null);
+    private sealed record Observation(Bounds[]? Boxes, string? Traits, string? Code, long At, long Sequence, long PublishedAt, string? Reason = null);
     private readonly Dictionary<Cell, Observation> cells = new();
     // Every publication in sequence order, appended only: a page is a slice of it and the oldest
     // live cell is at its head. An entry whose cell has since been published again or evicted is
@@ -42,7 +42,7 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
         // Forget only knowledge we held; unrelated world updates must not flood the delta stream.
         if (!cells.TryGetValue(cell, out var prior) || prior.Boxes == null) return;
         long now = Environment.TickCount64;
-        Set(cell, prior, new(null, null, now, ++sequence, now, reason));
+        Set(cell, prior, new(null, null, null, now, ++sequence, now, reason));
         Bound();
     }
     public void Stale(Cell cell)
@@ -53,15 +53,16 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
         if (cells.TryGetValue(cell, out var prior) && prior.Boxes != null)
             cells[cell] = prior with { At = 0 };
     }
-    public void Put(Cell cell, Bounds[] boxes, string? traits, long now)
+    // What the cell holds: its shape, the trait words, and the block's code (null for air).
+    public void Put(Cell cell, Bounds[] boxes, string? traits, long now, string? code = null)
     {
         cells.TryGetValue(cell, out var prior);
-        if (prior != null && prior.Boxes != null && prior.Traits == traits && prior.Boxes.AsSpan().SequenceEqual(boxes))
+        if (prior != null && prior.Boxes != null && prior.Traits == traits && prior.Code == code && prior.Boxes.AsSpan().SequenceEqual(boxes))
         {
             bool publish = now - prior.PublishedAt >= RefreshDeltaMs;
-            Set(cell, prior, new(prior.Boxes, traits, now, publish ? ++sequence : prior.Sequence, publish ? now : prior.PublishedAt));
+            Set(cell, prior, new(prior.Boxes, traits, code, now, publish ? ++sequence : prior.Sequence, publish ? now : prior.PublishedAt));
         }
-        else Set(cell, prior, new(boxes, traits, now, ++sequence, now));
+        else Set(cell, prior, new(boxes, traits, code, now, ++sequence, now));
         Bound();
     }
     private void Bound()
@@ -99,6 +100,6 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
                 ? new object?[] { p.Cell.X, p.Cell.Y, p.Cell.Z, p.Value.At, p.Value.Traits, null, p.Value.Reason ?? "changed" }
                 : new object?[] { p.Cell.X, p.Cell.Y, p.Cell.Z, p.Value.At, p.Value.Traits,
                     p.Value.Boxes.Select(b => new[] { b.X1 - p.Cell.X, b.Y1 - p.Cell.Y, b.Z1 - p.Cell.Z,
-                        b.X2 - p.Cell.X, b.Y2 - p.Cell.Y, b.Z2 - p.Cell.Z }).ToArray() }).ToArray() };
+                        b.X2 - p.Cell.X, b.Y2 - p.Cell.Y, b.Z2 - p.Cell.Z }).ToArray(), p.Value.Code }).ToArray() };
     }
 }

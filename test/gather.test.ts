@@ -17,13 +17,14 @@ function fixture({ gain = true, interruptAfter = Infinity } = {}) {
     reports = [];
   let walks = 0,
     scans = 0,
+    sweeps = 0,
     inventory = 0,
     picked = false,
     target;
   const cancellation = new AbortController();
   const state = () => ({
     ok: true,
-    capabilities: ['nearby_awareness'],
+    capabilities: ['nearby_awareness', 'block_sightings'],
     player: { uid: 'bot' },
     alive: true,
     controlReady: true,
@@ -36,8 +37,25 @@ function fixture({ gain = true, interruptAfter = Infinity } = {}) {
     backpack: [],
     target,
   });
+  // What the eye has seen, as memory answers a goal's look: leaves until the
+  // second walk, then a loose stick in reach.
+  const view = () => {
+    scans++;
+    if (scans >= interruptAfter) cancellation.abort();
+    if (walks < 2) return [{ kind: 'block', code: 'game:leaves-grown-birch', key: 'leaf', point: { x: 3, y: 2, z: 0.5 }, withinPickingRange: true }];
+    target = { key: `stick:${scans}`, code: 'game:loosestick-free' };
+    return [
+      { ...target, kind: 'block', point: { x: walks * 3, y: 0.1, z: 0.5 }, withinPickingRange: true, look: { yawDegrees: 90, pitchDegrees: 30 } },
+    ];
+  };
   const env = {
     map: { cells: new Map(), stand: () => null },
+    sightings: { view: (_eye, options) => (options?.remembered ? [] : view()), skip: () => {}, forget: () => {} },
+    surface: {
+      get sweeps() {
+        return ++sweeps;
+      },
+    },
     sync: async () => state(),
     aim: async () => {},
     report: p => reports.push(p),
@@ -48,28 +66,6 @@ function fixture({ gain = true, interruptAfter = Infinity } = {}) {
     send: async request => {
       calls.push(request);
       if (request.action === 'observe') return state();
-      if (request.action === 'scan') {
-        scans++;
-        if (scans >= interruptAfter) cancellation.abort();
-        if (walks < 2)
-          return {
-            ok: true,
-            objects: [{ kind: 'block', code: 'game:leaves-grown-birch', key: 'leaf', point: { x: 3, y: 2, z: 0.5 }, withinPickingRange: true }],
-          };
-        target = { key: `stick:${scans}`, code: 'game:loosestick-free' };
-        return {
-          ok: true,
-          objects: [
-            {
-              ...target,
-              kind: 'block',
-              point: { x: walks * 3, y: 0.1, z: 0.5 },
-              withinPickingRange: true,
-              look: { yawDegrees: 90, pitchDegrees: 30 },
-            },
-          ],
-        };
-      }
       if (request.action === 'interact') {
         picked = true;
         if (gain) inventory++;

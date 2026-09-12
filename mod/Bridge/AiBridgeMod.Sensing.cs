@@ -12,7 +12,7 @@ using Vintagestory.GameContent;
 
 namespace VintageStoryAI;
 
-// Read-only perception: own state, life sampling, terrain deltas, sight scans, target keys.
+// Read-only perception: own state, life sampling, terrain deltas, the eye's snapshots, target keys.
 public sealed partial class AiBridgeMod
 {
 
@@ -23,7 +23,7 @@ public sealed partial class AiBridgeMod
         return new
         {
             ok = true,
-            capabilities = new[] { "target_guard", "performance", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "map_waypoints", "map_waypoint_add", "map_view", "map_hud_state", "drop", "containers", "look_at", "players", "catalog", "chat_messages", "can_see", "ui_close", "catalog_facts" },
+            capabilities = new[] { "target_guard", "performance", "directional_move", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "block_sightings", "map_waypoints", "map_waypoint_add", "map_view", "map_hud_state", "drop", "containers", "look_at", "players", "catalog", "chat_messages", "can_see", "ui_close", "catalog_facts" },
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
             world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString(),
@@ -129,11 +129,11 @@ public sealed partial class AiBridgeMod
             return new { ok = false, error = "Invalid terrain cursor." };
         string? terrainSession = request.TryGetProperty("session", out var terrainSessionField) && terrainSessionField.ValueKind == JsonValueKind.String
             ? terrainSessionField.GetString() : null;
-        if (!TryWatch(request, out string? watchError)) return new { ok = false, error = watchError };
+        if (ReadSeen(request, out long seen) is { } seenError) return new { ok = false, error = seenError };
         lastSenseAt = Environment.TickCount64;
         return new { ok = true, state = Observe(),
             terrain = terrain.Read(cursor, terrainSession, lastSenseAt),
-            surface = vision.Surface(lastSenseAt), sightings = vision.Sightings(lastSenseAt) };
+            surface = vision.Surface(lastSenseAt), sightings = vision.Sightings(lastSenseAt, seen) };
     }
 
     // Other players on this server, from the same server-filtered feed the map
@@ -201,53 +201,12 @@ public sealed partial class AiBridgeMod
             .OrderBy(sighting => sighting.distance).Take(limit).Cast<object>().ToArray();
     }
 
-    // An optional watch list sets what blocks the eye is currently looking for.
-    private bool TryWatch(JsonElement request, out string? error)
+    // The sightings cursor: the eye's clock at the reader's last look; absent or zero reads everything current.
+    private static string? ReadSeen(JsonElement request, out long seen)
     {
-        error = null;
-        if (!request.TryGetProperty("watch", out var watchField)) return true;
-        if (watchField.ValueKind != JsonValueKind.Array || watchField.GetArrayLength() > 16 ||
-            watchField.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.String || value.GetString()!.Length is < 1 or > 64))
-        { error = "watch must be up to 16 strings of 1–64 characters."; return false; }
-        vision.SetWatch(watchField.EnumerateArray().Select(value => value.GetString()!).ToArray());
-        return true;
-    }
-
-    private object Scan(JsonElement request)
-    {
-        int radius = 8, limit = 16;
-        if (request.TryGetProperty("radius", out _) && (!TryInteger(request, "radius", out radius) || radius < 1 || radius > 64) ||
-            request.TryGetProperty("limit", out _) && (!TryInteger(request, "limit", out limit) || limit < 1 || limit > 32))
-            return new { ok = false, error = "radius: integer 1–64; limit: integer 1–32." };
-        string kind = "all";
-        string[] matches = [];
-        if (request.TryGetProperty("kind", out var kindField))
-        {
-            if (kindField.ValueKind != JsonValueKind.String) return new { ok = false, error = "kind must be a string." };
-            kind = kindField.GetString()!;
-        }
-        if (request.TryGetProperty("match", out var matchField))
-        {
-            if (matchField.ValueKind != JsonValueKind.String || matchField.GetString()!.Length > 64)
-                return new { ok = false, error = "match must be a string of at most 64 characters." };
-            if (matchField.GetString()!.Length > 0) matches = [matchField.GetString()!];
-        }
-        if (request.TryGetProperty("matches", out var matchesField))
-        {
-            if (matches.Length != 0 || matchesField.ValueKind != JsonValueKind.Array || matchesField.GetArrayLength() is < 1 or > 4 ||
-                matchesField.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.String || value.GetString()!.Length is < 1 or > 64))
-                return new { ok = false, error = "matches must be 1–4 strings of 1–64 characters and cannot accompany match." };
-            matches = matchesField.EnumerateArray().Select(value => value.GetString()!).ToArray();
-        }
-        if (kind is not ("all" or "blocks" or "items" or "entities")) return new { ok = false, error = "Invalid scan kind." };
-        string? scanCursor = null;
-        if (request.TryGetProperty("cursor", out var scanCursorField))
-        {
-            if (scanCursorField.ValueKind != JsonValueKind.String || !Guid.TryParseExact(scanCursorField.GetString(), "N", out _))
-                return new { ok = false, error = "cursor must be a returned scan cursor." };
-            scanCursor = scanCursorField.GetString();
-        }
-        return sensor.Scan(radius, limit, kind, matches, scanCursor);
+        seen = 0;
+        return request.TryGetProperty("seen", out var field) && (field.ValueKind != JsonValueKind.Number || !field.TryGetInt64(out seen) || seen < 0)
+            ? "seen must be a nonnegative integer." : null;
     }
 
     private object Events(JsonElement request) =>

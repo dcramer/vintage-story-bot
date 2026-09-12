@@ -1,11 +1,15 @@
-// Entities, ground items and watched blocks the camera has seen or the ears
-// could plausibly hear. The mod returns what is in view this instant with
-// every sense; this memory marks those visible, keeps what left the view as
-// last seen for a while, and forgets the rest. Absent means unknown. Blocks
-// are part of the bot's lasting knowledge; entities and items are not.
+// Entities, ground items and blocks the camera has seen or the ears could
+// plausibly hear. The mod returns what it confirmed since the last sense;
+// this memory marks visible what was confirmed within the eye's window, keeps
+// what left the view as last seen for a while, and forgets the rest. Absent
+// means unknown. Blocks are part of the bot's lasting knowledge; entities and
+// items are not.
 import { distance, lookAt } from './terrain.ts';
 
 export const rememberMs = { entity: 20000, item: 60000, block: 7 * 24 * 60 * 60 * 1000 };
+// How long after its last confirmation, on the eye's clock, a sighting still counts as in view:
+// entities every tick, a block only when its column or cell is sampled again.
+export const windowMs = { entity: 1000, item: 1000, block: 8000 };
 // The cell a block sighting names: keys are block:<dimension>:<x>:<y>:<z>:<code>.
 export const cellOfKey = key => {
   const m = /^block:\d+:(-?\d+):(-?\d+):(-?\d+):/.exec(key ?? '');
@@ -26,7 +30,6 @@ export class SightingsMemory {
     if (!snapshot) return [];
     this.now = snapshot.clock ?? this.now;
     this.wall = wall;
-    for (const record of this.records.values()) record.visible = false;
     const fresh = [];
     for (const [key, kind, code, x, y, z, how, at, extra] of snapshot.sightings ?? []) {
       const record = { key, kind, code, point: { x, y, z }, how, at: at ?? this.now, seenAt: wall, extra: extra ?? null, visible: true };
@@ -34,6 +37,9 @@ export class SightingsMemory {
       if (!this.records.delete(key)) fresh.push(record);
       this.records.set(key, record);
     }
+    // The snapshot carries only what was confirmed since the last look; a
+    // sighting is in view while its last confirmation is inside the eye's window.
+    for (const record of this.records.values()) record.visible = record.at > 0 && this.now - record.at <= (windowMs[record.kind] ?? 1000);
     this.prune();
     return fresh;
   }
@@ -116,7 +122,7 @@ export class SightingsMemory {
       }))
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
   }
-  // The watched block remembered at a cell, if any.
+  // The block remembered at a cell, if any.
   blockAt(cell) {
     for (const record of this.records.values()) {
       if (record.kind !== 'block') continue;

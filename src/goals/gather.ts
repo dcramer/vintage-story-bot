@@ -43,7 +43,7 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
   const picker = new Gleaner(field, []);
   const search = new Search(field, {
     kind: match,
-    watch: sticks ? [match, TWIGS] : [match],
+    match: sticks ? [match, TWIGS] : [match],
     wanted: o => loose(o) || dropped(o) || twiggy(o),
     // Loose things in reach are picked up; twigs are broken only with dry footing and when nothing loose is close.
     ready: (o, state) => o.kind === 'block' && o.withinPickingRange && (loose(o) || blockWorkReady(state)),

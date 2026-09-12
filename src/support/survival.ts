@@ -10,7 +10,7 @@ import {
   foodReserve,
   foodTolerance,
   foodYield,
-  forageWatch,
+  forageMatch,
   HUNGRY,
   hunger,
   shouldEat,
@@ -166,7 +166,7 @@ export class Survival {
   harvested = 0;
   initialFood = null;
   retained = 0;
-  watch = forageWatch;
+  match = forageMatch;
   until = 0.8;
   keep = 320;
   search: Search | null = null;
@@ -190,14 +190,14 @@ export class Survival {
   async tend({
     force = false,
     toward,
-    watch,
+    match,
     count,
     until,
     keep,
   }: {
     force?: boolean;
     toward?: any;
-    watch?: string[];
+    match?: string[];
     count?: number;
     until?: number;
     keep?: number;
@@ -205,7 +205,7 @@ export class Survival {
     if (until !== undefined) this.until = until;
     if (keep !== undefined) this.keep = keep;
     const field = this.field;
-    this.watch = watch?.length ? watch : forageWatch;
+    this.match = match?.length ? match : forageMatch;
     await field.observe();
     if (!this.tending && !force && hunger(field.latest) >= HUNGRY) {
       field.recoveringFood = false;
@@ -215,7 +215,7 @@ export class Survival {
     field.recoveringFood = true;
     const search = (this.search = new Search(field, {
       kind: 'food',
-      watch: this.watch,
+      match: this.match,
       wanted: this.forage,
       ready: (object, state) => harvestReady(object, state.position, state.body?.halfWidth, this.tolerance),
       take: object => this.harvest(object),

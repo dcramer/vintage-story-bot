@@ -99,7 +99,7 @@ internal sealed class ContextSensor(ICoreClientAPI api)
             return new
             {
                 ok = true, observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), session,
-                kind = "block", key = SceneSensor.BlockKey(pos, block), code = block.Code.ToString(),
+                kind = "block", key = Sight.BlockKey(pos, block), code = block.Code.ToString(),
                 position = new { x = pos.X, y = pos.Y, z = pos.Z, dimension = pos.dimension },
                 face = selection.Face?.Code, selectionBox = selection.SelectionBoxIndex,
                 hit = new { x = pos.X + selection.HitPosition.X, y = pos.Y + selection.HitPosition.Y, z = pos.Z + selection.HitPosition.Z },

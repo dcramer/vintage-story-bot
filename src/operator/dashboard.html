@@ -285,7 +285,7 @@ function apply(entry) {
     case 'goal': renderGoal(entry.data); break;
     case 'navigation': renderNav(entry.data); break;
     case 'frame': renderFrame(entry.data); break;
-    case 'scan': renderScan(entry.data); break;
+    case 'sightings': renderScan(entry.data); break;
   }
 }
 function producers(count) { const el = $('producer'); el.className = 'pill ' + (count > 0 ? 'on' : 'off'); el.textContent = count > 0 ? `controller streaming (${count})` : 'controller not connected'; }

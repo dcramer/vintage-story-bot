@@ -16,18 +16,19 @@ export const schema = z
   .strict()
   .refine(value => !(value.match && value.matches), { message: 'Use match or matches, not both' });
 
-// The noun for what the eye has confirmed: entities, dropped items and watched
-// blocks, in view now or remembered at their last known point. Controller
-// memory only; nothing is queried from the world.
+// The noun for what the eye has confirmed: entities, dropped items and blocks,
+// in view now or remembered at their last known point. Controller memory
+// only; nothing is queried from the world.
 export default defineAction({
   name: 'sightings',
   schema,
   readOnly: true,
   description:
-    'What the eye has confirmed, nearest first: entities, dropped items and watched blocks a line of sight reached, ' +
+    'What the eye has confirmed, nearest first: entities, dropped items and blocks a line of sight reached, ' +
     'each visible (in view now) or remembered (last seen ageMs ago; entities 20 s, items 60 s, blocks a week). ' +
-    'Memory only, never a world query: absent means unknown. Blocks appear only while their code is on the watch list; ' +
-    'the eye keeps looking while the head turns, so look_around first to see what is behind you. Each object carries traits ' +
+    'Memory only, never a world query: absent means unknown. Every block in view that is not bulk terrain (soil, rock, sand, ' +
+    'gravel, snow, ice, water, leaves, grass) and is big enough to make out from where the bot stands is seen, within 8 blocks all around ' +
+    'and beyond that in the field of view; the eye keeps looking while the head turns, so look_around first to see what is behind you. Each object carries traits ' +
     '(what it affords: pickup, harvestable/ready/growing, food, choppable, diggable, mineable, hostile...); trait keeps only those. ' +
     'Revalidate keys before acting.',
   local: async (runtime, { match, matches, trait, kind, radius, limit, remembered }) => {
@@ -44,7 +45,6 @@ export default defineAction({
       .filter(o => !trait || o.traits.includes(trait));
     return {
       ok: true,
-      watch: runtime.game.watch,
       visible: objects.filter(o => o.visible).length,
       remembered: objects.length - objects.filter(o => o.visible).length,
       more: objects.length > limit,

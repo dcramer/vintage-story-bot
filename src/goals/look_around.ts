@@ -7,7 +7,7 @@ export default defineGoal({
   name: 'look_around',
   schema: z
     .object({
-      match: z.string().min(1).max(64).optional().describe('Block code substring to watch for while turning.'),
+      match: z.string().min(1).max(64).optional().describe('Block code substring to keep from what came into view.'),
       matches: z.array(z.string().min(1).max(64)).min(1).max(4).optional(),
       kind: z.enum(['all', 'blocks', 'items', 'entities']).default('all'),
       radius: z.number().int().min(1).max(64).default(64),
@@ -18,8 +18,8 @@ export default defineGoal({
     .refine(value => !(value.match && value.matches), { message: 'Use match or matches, not both' }),
   description:
     'Turn the head through a full circle without moving, letting the eye take in every direction, then report what is in ' +
-    'view: counts per code and the nearest objects (memory; revalidate keys before acting). match adds to the watch list ' +
-    'for the sweep. Damage, death and control loss interrupt. Returns START; poll goal_status.',
+    'view: counts per code and the nearest objects (memory; revalidate keys before acting). match narrows what is ' +
+    'reported. Damage, death and control loss interrupt. Returns START; poll goal_status.',
   announce: () => 'Having a look around.',
   run: (env, { match, matches, kind, radius, limit, ...options }) =>
     runField(env, { manageFood: false, ...options }, [], async field => {

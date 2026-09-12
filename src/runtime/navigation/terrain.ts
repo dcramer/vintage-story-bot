@@ -63,11 +63,22 @@ export class TerrainMemory {
     this.session = batch.session;
     this.cursor = batch.cursor;
     this.now = batch.clock;
-    for (const [x, y, z, at, hazard, boxes, reason] of batch.cells) {
+    // A live row ends with the block's code (null for air); a null row ends with the reason it was dropped.
+    for (const [x, y, z, at, hazard, boxes, tail] of batch.cells) {
       const id = cellKey(x, y, z);
       if (boxes === null) {
-        if (reason !== 'forgot') this.forget(id);
-      } else this.put({ x, y, z, at, seenAt: wall, traits: traitsOf(hazard), boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) });
+        if (tail !== 'forgot') this.forget(id);
+      } else
+        this.put({
+          x,
+          y,
+          z,
+          at,
+          seenAt: wall,
+          traits: traitsOf(hazard),
+          code: tail ?? null,
+          boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])),
+        });
     }
     // Forgetting by age is a once-a-minute sweep; over capacity the least recently seen
     // cell goes (put keeps the map in seen order), never a sweep on every batch.
@@ -98,13 +109,23 @@ export class TerrainMemory {
       c.seenAt,
       c.traits.join(',') || null,
       c.boxes.map(b => b.map((n, i) => n - [c.x, c.y, c.z][i % 3])),
+      c.code ?? null,
     ]);
   }
   restore(rows) {
     this.cells.clear();
     this.hazards.clear();
-    for (const [x, y, z, seenAt, hazard, boxes] of rows)
-      this.put({ x, y, z, at: 0, seenAt, traits: traitsOf(hazard), boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) });
+    for (const [x, y, z, seenAt, hazard, boxes, code] of rows)
+      this.put({
+        x,
+        y,
+        z,
+        at: 0,
+        seenAt,
+        traits: traitsOf(hazard),
+        code: code ?? null,
+        boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])),
+      });
   }
   forget(id) {
     this.cells.delete(id);

@@ -158,9 +158,6 @@ export const traitsOfPage = page => traitsOf({ kind: page.type === 'entity' ? 'e
 export function decorate(request, result) {
   if (!result?.ok) return result;
   switch (request?.action) {
-    case 'scan':
-      for (const object of result.objects ?? []) object.traits = traitsOf(object);
-      break;
     case 'inspect_target':
       if (result.code) result.traits = traitsOf(result);
       break;

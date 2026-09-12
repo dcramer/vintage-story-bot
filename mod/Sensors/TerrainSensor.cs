@@ -6,7 +6,12 @@ using Vintagestory.API.MathTools;
 
 namespace VintageStoryAI;
 
-internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
+// The surroundings: every cell within eight blocks, in every direction, that a
+// line of sight from the eye reaches. Each is reported with its shape, its
+// trait words and its code; a block that is not bulk terrain is also a
+// sighting with its facts, so what is around the body is known without
+// looking for it by name.
+internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map, SightingsMap sightings)
 {
     private readonly Queue<Cell> pending = new();
     private long nextBatch, nextPrune;
@@ -90,7 +95,7 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
                 BlockSelection? hit = null; EntitySelection? entityHit = null;
                 // Selection boxes of translucent, non-colliding foliage are not opaque walls.
                 api.World.RayTraceForSelection(eye, new Vec3d(target.X, target.Y, target.Z), ref hit, ref entityHit,
-                    (at, b) => at.Equals(blockPos) || SceneSensor.Occludes(blocks, at, b), _ => false);
+                    (at, b) => at.Equals(blockPos) || Sight.Occludes(blocks, at, b), _ => false);
                 if (hit == null || hit.Position.Equals(blockPos)) { visible = true; break; }
             }
             if (!visible) continue;
@@ -110,7 +115,11 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
             int tier = boxes.Length > 0 ? block.GetRequiredMiningTier(api.World, blockPos) : 0;
             if (tier > 0) traits.Add($"tier{tier}");
             map.Put(cell, boxes.Take(16).Select(b => new Bounds(cell.X + b.X1, cell.Y + b.Y1, cell.Z + b.Z1,
-                cell.X + b.X2, cell.Y + b.Y2, cell.Z + b.Z2)).ToArray(), traits.Count == 0 ? null : string.Join(",", traits), now);
+                cell.X + b.X2, cell.Y + b.Y2, cell.Z + b.Z2)).ToArray(), traits.Count == 0 ? null : string.Join(",", traits), now,
+                block.Id == 0 ? null : block.Code?.ToString());
+            if (block.Id == 0 || block.Code == null || Sight.Bulk(blocks, blockPos, block)) continue;
+            sightings.Put(Sight.BlockKey(blockPos, block), "block", block.Code.ToString(), Sight.Aim(blocks, blockPos, block).Point, "near",
+                Sight.Extra(api, blockPos, block), now);
         }
     }
 }

@@ -233,7 +233,7 @@ test('a lead with a threatened route is briefly set aside instead of retried imm
   field.seen.set(target.key, target);
   const reports: any[] = [];
   field.report = (phase, detail) => reports.push({ phase, detail });
-  const search = new Search(field, { kind: 'food', watch: [], wanted: () => true, take: async () => false });
+  const search = new Search(field, { kind: 'food', match: [], wanted: () => true, take: async () => false });
   search.avoidThreat(target);
   assert.equal(field.skipped.get('cranberry'), 1000 + 30000, 'outside the perimeter: a short pause, another meal first');
   assert.deepEqual(reports, [
@@ -248,7 +248,7 @@ test('the frontier is shared across goals and forgotten near a predator', async 
   assert.equal(places.frontier('stick'), null);
   const field = new Fieldwork({ places });
   field.latest = { position: { x: 0.5, y: 100, z: 0.5 }, nearbyEntities: [{ code: 'game:wolf-male', point: { x: 20, y: 100, z: 0 } }] };
-  const search = new Search(field, { kind: 'food', watch: [], wanted: () => false, take: async () => false });
+  const search = new Search(field, { kind: 'food', match: [], wanted: () => false, take: async () => false });
   search.avoidThreat();
   assert.equal(places.frontier('food'), null, 'a frontier the wolf stands toward is dropped');
   places.setFrontier('food', { x: -96.5, y: 100, z: 0.5 });
@@ -272,7 +272,7 @@ test('search leads survive productive partial routes but skip stuck ones', () =>
 test('a predator pauses a search route before navigation can carry it into danger', () => {
   const field = new Fieldwork({}, { now: () => 5000 });
   const survival = new Survival(field);
-  const search = new Search(field, { kind: 'food', watch: [], wanted: () => false, take: async () => false, pauseWhen: survival.pauseFoodWalk });
+  const search = new Search(field, { kind: 'food', match: [], wanted: () => false, take: async () => false, pauseWhen: survival.pauseFoodWalk });
   const state = {
     position: { x: 0, y: 0, z: 0 },
     vitals: { hunger: { current: 300, max: 1000 } },
@@ -328,7 +328,7 @@ test('recalled blocks enter the goal working set even when the sighting is old',
     { now: () => 1000 },
   );
   field.latest = {
-    capabilities: ['sightings'],
+    capabilities: ['block_sightings'],
     position: { x: 0.5, y: 1, z: 0.5 },
     body: { eyeHeight: 1.6 },
     pickingRange: 4.5,
@@ -337,13 +337,13 @@ test('recalled blocks enter the goal working set even when the sighting is old',
   assert.equal(field.targets(object => object.key === remembered.key).length, 1);
 });
 
-test('nearby field scans use the native 360-degree pass when the directional stream misses', async () => {
+test('a field scan waits one sweep and reads what the eye saw; nothing is asked of the world', async () => {
   const state = {
     ok: true,
     alive: true,
     controlReady: true,
     mounted: false,
-    capabilities: ['sightings'],
+    capabilities: ['block_sightings'],
     player: { uid: 'test' },
     position: { x: 0.5, y: 1, z: 0.5, dimension: 0 },
     body: { eyeHeight: 1.6 },
@@ -357,20 +357,34 @@ test('nearby field scans use the native 360-degree pass when the directional str
     code: 'game:mushroom-witchhat-normal',
     point: { x: 1.5, y: 2.2, z: 0.5 },
   };
-  const requests: any[] = [];
+  const requests: any[] = [],
+    views: any[] = [];
+  let sweeps = 0;
   const field = new Fieldwork({
-    sightings: { view: () => [] },
+    sightings: {
+      view: (_eye, options) => {
+        views.push(options);
+        return options.remembered ? [] : [mushroom];
+      },
+    },
+    surface: {
+      get sweeps() {
+        return ++sweeps;
+      },
+    },
+    sync: async () => state,
     send: async request => {
       requests.push(request);
-      return request.action === 'scan' ? { ok: true, objects: [mushroom], more: false } : state;
+      return state;
     },
   });
   field.latest = state;
   assert.deepEqual(await field.scan(8, 'mushroom', 'blocks'), [mushroom]);
-  assert.equal(
-    requests.some(request => request.action === 'scan'),
-    true,
+  assert.ok(
+    requests.every(request => request.action === 'observe'),
+    "only the bot's own state is read; the view comes from memory",
   );
+  assert.deepEqual(views.at(-1), { matches: ['mushroom'], kind: 'block', radius: 8, remembered: false, reach: 4.5 });
   assert.equal(field.targets(object => object.key === mushroom.key).length, 1);
 });
 

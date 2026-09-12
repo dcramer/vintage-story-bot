@@ -7,9 +7,6 @@ import { type Habitat, habitatTarget } from './habitat.ts';
 import { area, Places } from './places.ts';
 import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.ts';
 
-// Most substrings the mod's native scan filters on in one request.
-const SCAN_MATCHES = 4;
-
 export { area } from './places.ts';
 export const sightRange = 64;
 // Beyond this the fine navigator's observed disk cannot see the destination;
@@ -229,22 +226,18 @@ export class Fieldwork {
     if (!point || horizontal(p, point) < 2) return null;
     return { x: point.x, y: point.y, z: point.z, horizontalOnly: true, arrivalRadius: Math.min(3, Math.max(1, point.step)), roughRoute: plan.status };
   }
-  // Whether the vision feed carries entities, items and watched blocks.
+  // Whether the eye reports what it sees: entities, items and every block it can make out.
   get attentive() {
-    return !!this.env.sightings && !!this.latest?.capabilities?.includes('sightings');
+    return !!this.env.sightings && !!this.latest?.capabilities?.includes('block_sightings');
   }
-  // Look for something: set the eye's attention to the codes, wait for one
-  // pass over the current view, and read what the feed has seen. Nothing
-  // is queried; a mod without the feed falls back to the paged scan read.
+  // Look for something: wait for one pass of the eye over the current view,
+  // then read what it has seen that matches. Nothing is asked of the world and
+  // nothing has to be named before it can be seen; match only narrows what
+  // memory returns. Within eight blocks the surroundings pass sees all around.
   async scan(radius, match?, kind = 'all') {
     const matches = Array.isArray(match) ? match : match ? [match] : [];
     await this.observe();
-    // The streamed eye is intentionally directional. Native scan's close pass
-    // is 360 degrees, so use it inside the eight-block awareness radius: a
-    // mushroom above the shoulder or flint underfoot must not be missed while
-    // the long-range stream still supplies remembered search leads.
-    if (!this.attentive || radius <= 8) return this.scanView(radius, match, kind);
-    this.env.watch?.(matches);
+    if (!this.attentive) throw new Error('The mod does not report block sightings; update the mod.');
     await this.settle();
     const p = this.latest.position,
       eye = { ...p, y: p.y + (this.latest.body?.eyeHeight ?? 1.6) };
@@ -288,7 +281,6 @@ export class Fieldwork {
     if (this.lookedAround && this.now() - this.lookedAround.at < 45000 && horizontal(p0, this.lookedAround.position) < 3)
       return this.scan(radius, match, kind);
     this.lookedAround = { position: { ...p0 }, at: this.now() };
-    this.env.watch?.(Array.isArray(match) ? match : match ? [match] : []);
     const p = this.latest.position,
       start = this.latest.orientation.yawDegrees;
     for (const offset of [60, 120, 180, 240, 300, 0]) {
@@ -298,35 +290,6 @@ export class Fieldwork {
     }
     this.report('looking_around');
     return this.scan(radius, match, kind);
-  }
-  async scanView(radius, match?, kind = 'all') {
-    const objects = [],
-      keys = new Set();
-    // The mod's scan filters on at most four substrings at once; a longer watch list is several sweeps of the same view.
-    const filters = Array.isArray(match)
-      ? Array.from({ length: Math.ceil(match.length / SCAN_MATCHES) }, (_, i) => ({ matches: match.slice(i * SCAN_MATCHES, (i + 1) * SCAN_MATCHES) }))
-      : [{ match }];
-    for (const filter of filters) {
-      let cursor;
-      // A scan is read-only and stationary. Guard once around the paged sweep
-      // instead of spending an extra game-thread round trip on every page.
-      do {
-        const page = await this.env.send({ action: 'scan', kind, ...filter, radius, limit: 32, ...(cursor ? { cursor } : {}) });
-        if (page.code === 'scan_expired') break;
-        if (!page.ok) throw Error(page.error ?? 'Scan refused');
-        for (const object of page.objects) {
-          if (keys.has(object.key)) continue;
-          keys.add(object.key);
-          objects.push(object);
-          this.seen.set(object.key, { ...object, seenAt: this.now() });
-        }
-        cursor = page.more ? page.cursor : null;
-      } while (cursor);
-    }
-    await this.observe();
-    this.searched++;
-    this.prune();
-    return objects;
   }
   prune() {
     for (const [id, object] of this.seen) if (this.now() - object.seenAt > 120000) this.seen.delete(id);

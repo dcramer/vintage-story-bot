@@ -84,8 +84,8 @@ export function chooseFrontier(
 export type SearchOptions = {
   // Shared frontier key: searches for the same kind of thing carry on from each other.
   kind: string;
-  // Block/item code substrings the eye watches for.
-  watch: string[];
+  // Block/item code substrings the thing is known by; what memory of the view is narrowed to.
+  match: string[];
   // Whether a sighting is worth taking.
   wanted: (object: any) => boolean;
   // Take one that is in reach; false when it could not be taken (it is then set aside).
@@ -116,8 +116,8 @@ export class Search {
     this.field = field;
     this.options = options;
   }
-  get watch() {
-    return this.options.watch;
+  get match() {
+    return this.options.match;
   }
   wanted(object) {
     return this.options.wanted(object) && !this.field.skipped.has(object.key);
@@ -131,11 +131,11 @@ export class Search {
     return this.options.ready ? this.options.ready(object, this.field.latest) : object.withinPickingRange;
   }
   async look(radius) {
-    const objects = await this.field.scan(radius, this.watch, 'all');
+    const objects = await this.field.scan(radius, this.match, 'all');
     await this.options.learn?.(objects);
     return objects;
   }
-  // A walk pauses when something watched and not yet judged comes into view,
+  // A walk pauses when something looked for and not yet judged comes into view,
   // so the eye is read before the leg carries the body past it.
   pause = state => {
     const requested = this.options.pauseWhen?.(state);
@@ -153,7 +153,7 @@ export class Search {
     const p = state.position,
       eye = { ...p, y: p.y + (state.body?.eyeHeight ?? 1.6) };
     return sightings
-      .view(eye, { matches: this.watch, radius: sightRange, remembered: false, reach: state.pickingRange ?? 4.5 })
+      .view(eye, { matches: this.match, radius: sightRange, remembered: false, reach: state.pickingRange ?? 4.5 })
       .some(object => !this.field.seen.has(object.key) && !this.field.skipped.has(object.key));
   }
   // A predator seen: leads it guards are set aside, and a frontier it stands
@@ -181,7 +181,7 @@ export class Search {
   async step({ toward = null }: { toward?: any } = {}): Promise<'taken' | 'approached' | 'ranged'> {
     const field = this.field,
       { kind, approachExclude, memoryRange = 64, habitats = ['edge', 'open'] } = this.options;
-    // In reach: the native close pass sees all around, including behind.
+    // In reach: the surroundings pass sees all around, including behind.
     const near = await this.look(8);
     const ready = near.filter(o => this.wanted(o) && this.ready(o)).sort(this.options.prefer ?? (() => 0))[0];
     if (ready) {
@@ -195,10 +195,10 @@ export class Search {
       this.lastView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
     }
     if (!this.targets().length) {
-      await this.options.learn?.(await field.lookAround(this.watch, 'all'));
+      await this.options.learn?.(await field.lookAround(this.match, 'all'));
       this.lastView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
     }
-    if (!this.targets().length) await this.options.learn?.(field.recall(memoryRange, this.watch, 'all'));
+    if (!this.targets().length) await this.options.learn?.(field.recall(memoryRange, this.match, 'all'));
     const target = this.targets()[0];
     if (target) {
       await this.approach(target, approachExclude?.(target) ?? null);
@@ -231,8 +231,8 @@ export class Search {
     const destination = field.approach(target, exclude);
     if (destination) {
       const result = await field.walk(destination, this.pause);
-      // The streamed eye is directional: reaching an old lead, ask the close
-      // pass all around before calling the thing gone.
+      // The far eye is directional: reaching an old lead, read the surroundings
+      // all around before calling the thing gone.
       const nearby = result.state === 'arrived' && target.visible === false ? await this.look(8) : [];
       if (exhaustedLead(target, result, nearby)) {
         // Blocks are remembered for days; one that is not there when its cell

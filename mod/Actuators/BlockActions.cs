@@ -41,7 +41,7 @@ internal sealed class BlockActions(ICoreClientAPI api)
             api.World.BlockAccessor.GetChunkAtBlockPos(selection.Position) == null)
             return Error("Aim at a loaded block in the main dimension.");
         var block = api.World.BlockAccessor.GetBlock(selection.Position);
-        if (String("target") != SceneSensor.BlockKey(selection.Position, block) ||
+        if (String("target") != Sight.BlockKey(selection.Position, block) ||
             !inventory.Matches(String("expectedState")) ||
             !request.TryGetProperty("slot", out var slotField) || !slotField.TryGetInt32(out int selectedSlot) ||
             selectedSlot is < 0 or > 9 || selectedSlot != player.InventoryManager.ActiveHotbarSlotNumber ||
@@ -132,7 +132,7 @@ internal sealed class BlockActions(ICoreClientAPI api)
         var player = api.World.Player;
         var selection = player.CurrentBlockSelection;
         if (System.Environment.TickCount64 >= expires) Cancel("expired");
-        else if (selection == null || target != SceneSensor.BlockKey(selection.Position, api.World.BlockAccessor.GetBlock(selection.Position)))
+        else if (selection == null || target != Sight.BlockKey(selection.Position, api.World.BlockAccessor.GetBlock(selection.Position)))
             Cancel("target_changed");
         else if (player.InventoryManager.ActiveHotbarSlotNumber != slot ||
             player.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible.Code.ToString() != item)
@@ -193,7 +193,7 @@ internal sealed class BlockActions(ICoreClientAPI api)
         // next stair block. Items do not prevent the game's block selection
         // or digging input, so they must not invalidate that observation.
         return (selectedEntity == null || selectedEntity.Entity is EntityItem) && (selected == null || selected.Position.Equals(position) ||
-            SceneSensor.BlockKey(selected.Position, blocks.GetBlock(selected.Position)) == target);
+            Sight.BlockKey(selected.Position, blocks.GetBlock(selected.Position)) == target);
     }
 
     public object Observe() => new { ok = true, id, kind, state, reason, target,

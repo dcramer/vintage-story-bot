@@ -6,9 +6,6 @@ import { SightingsMemory } from './navigation/sightings.ts';
 import { SurfaceMemory } from './navigation/surface.ts';
 import { TerrainMemory } from './navigation/terrain.ts';
 
-// Blocks a player notices without looking for them; goals add to this, never replace it.
-export const salient = ['ore', 'berry', 'stick', 'flint', 'loose', 'mushroom', 'cattail', 'chest', 'basket', 'vessel', 'fire', 'torch'];
-
 // Game RPC only. Policies never construct control owners, sequences or terrain cursors.
 // Perception memory lives here: the mod reports what the eye sees this instant,
 // Node remembers.
@@ -22,8 +19,6 @@ export class GameClient {
   map = new TerrainMemory();
   surface = new SurfaceMemory();
   sightings = new SightingsMemory(traitsOf);
-  // Attention: block code substrings the eye is currently looking for.
-  watch = [...salient];
   constructor(send = requestBridge) {
     this.send = async (request, options) => {
       // Whatever names a thing carries its traits, for agents and goals alike.
@@ -40,19 +35,16 @@ export class GameClient {
       return result;
     };
   }
-  attend(list = []) {
-    this.watch = [...new Set([...salient, ...list])].slice(0, 16);
-  }
   // A request whose refusal is an error; a cancelled signal rejects before it is sent.
   async io(request: object, signal?: AbortSignal): Promise<any> {
     const result = await this.send(request, { signal });
     if (!result.ok) throw new Error(result.error ?? 'Game refused action');
     return result;
   }
-  // One request carries the surroundings geometry deltas plus snapshots of what
-  // the eye sees right now (surface, sightings) and the current attention.
+  // One request carries the surroundings deltas, a snapshot of the surface the
+  // eye sees right now, and the sightings confirmed since the last look.
   cursors() {
-    return { session: this.map.session, after: this.map.cursor, watch: this.watch };
+    return { session: this.map.session, after: this.map.cursor, seen: this.sightings.now };
   }
   remember(batch) {
     // Memory is per world: the save identifier selects which one is loaded.

@@ -50,7 +50,8 @@ Seraph system:
 - **unknown**: not seen, not loaded or too old; never assume air or safe.
 - **sighting**: an entity, item or watched block the eye confirmed: where, when and how (`seen`, `near`, `heard`).
 - **heard**: a living creature within 16 blocks with no line of sight; the only non-visual sense.
-- **watch list**: block codes the eye is looking out for (`watch`).
+- **bulk terrain**: what the ground is made of (soil, rock, sand, gravel, snow, ice, water, lava, leaves, grass); reported per column, never as a sighting (`Sight.Bulk`).
+- **acuity**: the smallest angular size the eye makes a block out at; beyond eight blocks only blocks that big are sightings (`SceneGeometry.Resolves`).
 - **checkpoint**: a cell along a route where the body fits and has support; the bot walks from one to the next.
 - **route**: checkpoints joined by straight steps, each checked against memory before moving.
 - **rough route**: a long route over far-view columns toward a distant target.
@@ -59,7 +60,7 @@ Seraph system:
 - **leaf clearing**: breaking up to three leaf blocks to get unstuck; never used to plan routes.
 - **threat**: a hostile seen, heard or recently seen within range; the bot moves away until it is clear.
 - **forage**: picking food from the world (berries, mushrooms, wild crops) that the handbook says yields something edible.
-- **facts**: what a player can see or read about a thing: a block's name, variant and growth state (`facts` on `sightings`, `block_at`, `scan` and `target`), an item's handbook page (`item_info`); never what it is for.
+- **facts**: what a player can see or read about a thing: a block's name, variant and growth state (`facts` on `sightings`, `block_at` and `target`), an item's handbook page (`item_info`); never what it is for.
 - **trait**: what a thing affords, as Node reads it from facts (`traits` on every reported object: `pickup`, `harvestable`/`ready`/`growing`, `food`, `choppable`, `diggable`, `mineable`, `hostile`…; vocabulary in `src/support/traits.ts`). The mod never assigns one.
 - **pause**: stopping travel for something more urgent (food, storm), then carrying on.
 - **skip**: ignoring a target for a while after a failed attempt.
@@ -74,7 +75,7 @@ A stand-in for one human's mouse, keyboard and eyes on an ordinary game client. 
 
 - Every effect goes through the client's normal input pipeline (key/mouse state, aim, hotbar, native dialogs' own packets) so the server receives exactly what a human's inputs would send and validates them the same way.
 - No cheating: no teleport, speed, reach, no-clip or god mode; no direct block/entity/inventory writes; no creative/admin/server commands; no server-side mod, world config or rule changes; no client settings that change gameplay outcomes.
-- Perception is what a player at that camera could know, and it arrives the way a player gets it: as a feed of what the camera currently sees, streamed while the head turns, remembered in Node. Own state and inventory, HUD/handbook text, loaded blocks and entities in the surroundings (≤8 blocks, all directions) or sampled line of sight in the client's real field of view (≤64 blocks by day, a torch's reach in the dark). Nothing is learned by asking: no request may return what the player did not look at. Not: occluded/unloaded cells, unopened container contents, entity internals or AI targets, world seed, other players' private data, whole-world scans. Unknown ≠ air; stale ≠ safe.
+- Perception is what a player at that camera could know, and it arrives the way a player gets it: as a feed of what the camera currently sees, streamed while the head turns, remembered in Node. Nothing has to be named before it can be seen: the eye reports every entity, item and non-bulk block a line of sight reaches and is big enough to make out (acuity), and Node decides what matters ([vision](docs/navigation.md#vision-what-the-eye-reports-and-why)). Own state and inventory, HUD/handbook text, loaded blocks and entities in the surroundings (≤8 blocks, all directions) or sampled line of sight in the client's real field of view (≤64 blocks by day, a torch's reach in the dark). Nothing is learned by asking: no request may return what the player did not look at. Not: occluded/unloaded cells, unopened container contents, entity internals or AI targets, world seed, other players' private data, whole-world scans. Unknown ≠ air; stale ≠ safe.
 - Client prediction is not server truth. Verify by observed deltas (blocks, inventory, life); acknowledgement is not completion. Never blindly retry a mutation.
 - Default behavior is to stand there and do nothing. The bot acts only on an assigned goal, one at a time; a goal can be interrupted (`stop`) at any moment and nothing resumes on its own. No idle routines: no foraging, fleeing, eating or exploring unless the running goal asked for it. Perception keeps streaming while idle, which is looking, not acting.
 - The brain controls everything, and nothing stops it. With a brain installed, the runtime senses, reports events and carries out decisions; it never acts on its own, not to respawn, swim for shore, run from a hit or mark a find. Danger is an event (`hurt`, a hostile `sighted`) the brain decides on, the way the default brain decides to run. The brain sees every goal, whoever started it, may stop any of them, and may act alongside one through tools that only talk (chat, map markers, memory). The event bus wakes it; it never waits for a tick to notice.
@@ -102,14 +103,14 @@ The mod/Node split inside that is by what a player does in one act, never by con
 | --- | --- |
 | `sense`: the camera's current view as deltas: surroundings within 8 blocks, far view in the camera's view, entities/items/watched blocks a line of sight reached | `walk`: turn toward the destination, remember what came into view, choose a rough route, look again per leg; `findRoute`: safe checkpoints and steps, new routes, getting unstuck |
 | `look`: turn the head | `lookAhead`: where to look, for how long, and what the landscape means |
-| `watch`: what the eye is currently looking for | `scan`: set attention, wait one sweep, choose targets from what was seen |
+| `sense`: every non-bulk block the eye can make out, with its facts, as a delta since the last look | `Fieldwork.scan`: wait one sweep, choose targets from memory by code or trait |
 | `block_action_begin`: hold click on the aimed cell until it changes or expires | `dig_block`: pick the cell, walk into range, aim, act, verify air, handle drops |
 | `control_step` with `toward`: face a point within 8 blocks and walk to it, hand on the keys every tick, until on it, blocked or expired | `Navigation.tick`: plan the route, pick the next checkpoint, read the outcome, merge runs, replan when blocked |
 | `aim_cell`: aim at a cell face by its selection box | `place_block`: choose a standing spot and face, select the item, verify the change |
 
 ## Naming
 
-- Queries are nouns for what they return (`inventory`, `environment`, `terrain`, `sightings`, `block_at`, `route`, `target`, `dialogs`, `players`, `recipes`, `events`, `messages`, `container_slots`, `goal_status`, `goals`); the two senses keep their verbs, `observe` (own state) and `scan` (what is in view).
+- Queries are nouns for what they return (`inventory`, `environment`, `terrain`, `sightings`, `block_at`, `route`, `target`, `dialogs`, `players`, `recipes`, `events`, `messages`, `container_slots`, `goal_status`, `goals`); the one sense keeps its verb, `observe` (own state); what is in view is `sightings`.
 - Commands and goals are `verb` or `verb_object`, the verb first: `open_container`, `move_item`, `move_container_item`, `remove_map_waypoint`, `activate_dialog`, `dig_block`, `place_block`, `use_block`, `store_items`, `take_items`, `fell_tree`, `dig_out`, `look_around`. A goal's name is the outcome (`harvest`, `travel`, `forage`, `eat`, `build`), never how it is done.
 - The public name is the file basename; a differing mod wire name is the tool's `action`, used only inside Node.
 - Arguments: `target` is an observed block key; `item` an item code substring; `output` an exact recipe output code; `match` a block code substring; `count` how many; `x`, `y`, `z` block coordinates; `timeoutMs`, `manageFood`, `sprint`, `arrivalRadius` the shared goal knobs; `expectedState` the inventory token. Results carry `ok`, `goal`, `reason` on failure, and what was verified (`verification`).

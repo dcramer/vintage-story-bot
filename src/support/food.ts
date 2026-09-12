@@ -1,11 +1,11 @@
 import { known } from './facts.ts';
 import { ownedSlots } from './inventory.ts';
 
-// Prior knowledge a player brings to a new world: where food tends to be
-// found, so the eye watches for it. Everything else is read from the game:
-// the tooltip of what is held, the handbook page of what is seen. Nothing
-// here gates what may be tried.
-export const forageWatch = ['bush', 'mushroom', 'crop-', 'termitemound-', 'wildbeehive'];
+// Prior knowledge a player brings to a new world: what food tends to grow
+// on, so a food search picks those out of what the eye has seen. Everything
+// else is read from the game: the tooltip of what is held, the handbook page
+// of what is seen. Nothing here gates what may be tried.
+export const forageMatch = ['bush', 'mushroom', 'crop-', 'termitemound-', 'wildbeehive'];
 // Below this the bot is hungry: it eats what it carries and, when starving,
 // stomachs food that costs a little health rather than none at all.
 export const HUNGRY = 0.2;

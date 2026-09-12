@@ -19,6 +19,18 @@ public static class SceneGeometry
         Square(a.X - b.X) + Square(a.Y - b.Y) + Square(a.Z - b.Z));
     public static double Square(double v) => v * v;
 
+    // How big a box looks: the side of a cube of the same volume, with every
+    // side at least a twentieth of a block so a flat thing still has a size.
+    public static double Size(Point3 min, Point3 max) =>
+        Math.Cbrt(Math.Max(0.05, max.X - min.X) * Math.Max(0.05, max.Y - min.Y) * Math.Max(0.05, max.Z - min.Z));
+
+    // Acuity: the smallest angle a thing must subtend to be made out. At 1.2
+    // degrees a full block is resolved to about 48 blocks, a loose stone or a
+    // stick to about 16; terrain itself is seen as columns, not blocks.
+    public const double AcuityDegrees = 1.2;
+    public static bool Resolves(double size, double distance, double acuityDegrees = AcuityDegrees) =>
+        distance <= 0.01 || size / distance >= Math.Tan(acuityDegrees * Math.PI / 180);
+
     public static (double Yaw, double Pitch) LookAt(Point3 eye, Point3 target)
     {
         double x = target.X - eye.X, y = target.Y - eye.Y, z = target.Z - eye.Z;

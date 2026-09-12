@@ -22,23 +22,22 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 
 ## 2. Perception (`blockAt`, `findBlocks`, `canSeeBlock`, `blockAtCursor`, `nearestEntity`)
 
-- [x] `scan` — surroundings ≤8, cone sight ≤64, paged cursors, block facts (name, variant, growth).
 - [x] `target` — crosshair block/entity, HUD text, hints, forming state (wire `inspect_target`).
 - [x] `aim_cell` — aim at a cell/face/voxel by coordinates using the block's real selection-box geometry; used by forming placement instead of caller-computed angles.
-- [~] `block_at {x,y,z}` — one cell from memory: surroundings kind (unknown|air|solid|hazard, traits, age), the watched block sighted there (code, facts, access) and the far-view column; never air when unknown (`ctl`). Mineflayer `blockAt`. Not live-verified.
+- [~] `block_at {x,y,z}` — one cell from memory: surroundings kind (unknown|air|solid|hazard, traits, age), the block sighted there (code, facts, access) and the far-view column; never air when unknown (`ctl`). Mineflayer `blockAt`. Not live-verified.
 - [~] `can_see {x,y,z}` — one ray from the eye under the sweep's rules (8 blocks all around, farther only in view and in light; unloaded is unknown); `blockedBy` names the cell in the way (`mod`, `ctl`). Mineflayer `canSeeBlock`. Not live-verified.
-- [~] sightings — `sense` returns a snapshot of entities, items and watched blocks a line of sight reached; a default salient set plus goal attention; `Fieldwork.scan` reads memory instead of paging `scan`; the controller's eye loop keeps memory fresh. Not live-verified.
+- [~] sightings — `sense` returns entities, items and every block a line of sight reached and could make out, as a delta since the last read; nothing is named first and nothing is asked of the world ([vision](docs/navigation.md#vision-what-the-eye-reports-and-why)); `Fieldwork.scan` waits one sweep and reads memory; the controller's eye loop keeps memory fresh. Not live-verified.
 - [~] finding things by where they occur — `support/habitat.ts`: with nothing in sight, `gather`, `harvest` and `forage` head for the nearest unwalked far-view column of the habitat the thing is found in (canopy, forest edge, shore, open ground). Kinds come from far view, not the handbook yet; not live-verified.
 - [~] look-around search — `Fieldwork.lookAround` turns through 360° and reads memory before exploring; `harvest` uses it. Still to do: `find_sticks`/`find_flint`/`find_cattails` example goals with a legible search (look around, nearest seen, walk, repeat; spiral outward, never revisit) replacing heading-based exploration (`support`, `goal`).
-- [~] `sightings {match?,kind?,radius?,limit?,remembered?}` — what the eye has confirmed: entities, dropped items and watched blocks from `SightingsMemory.view`, visible or remembered with age and distance, nearest first; `Fieldwork.scan` reads the same view (`ctl`). Mineflayer `findBlocks`/`nearestEntity`/`entities`. Not live-verified.
-- [~] `watch {list?}` — read or set the watch list, the sibling of `wants`; a running goal replaces it while it looks (`ctl`). Not live-verified.
+- [~] `sightings {match?,kind?,radius?,limit?,remembered?}` — what the eye has confirmed: entities, dropped items and blocks from `SightingsMemory.view`, visible or remembered with age and distance, nearest first; `Fieldwork.scan` reads the same view (`ctl`). Mineflayer `findBlocks`/`nearestEntity`/`entities`. Not live-verified.
+- [ ] **P2 · faces beyond eight blocks** — the eye's column sweep sees each column's top surface; a block on a cliff face or under an overhang farther than eight blocks is unseen until the bot is near. If it matters in play, one extra ray at the exposed face where neighbouring columns differ by more than three (`mod`).
 - [~] `look_around` goal — one sweep of the head, then counts per code and the nearest objects from memory; `Fieldwork.lookAround` underneath. Not live-verified.
 - [~] far view — `sense` returns a snapshot of sight-verified surface columns inside the real field of view (light-limited, coarser with distance); Node remembers them and `terrain` shows them. Not live-verified.
 - [~] `terrain` — merged observed/seen surface view around a point; absent columns unknown. Not live-verified.
 - [ ] **P2 · `ground_at {x,z}`** — one-column projection of the remembered `terrain` view; absent columns unknown, never air (`ctl`). Site picking, `travel` with omitted y.
 - [ ] **P2 · entity detail** — `inspect_target` on entities: health if visible, hostile/passive class, tameable/harvestable hints (`mod`).
 - [~] entity catalog — `catalog`/`item_info` list creatures (class, drops); hostility stays prior knowledge in [threats](src/support/threats.ts) and shows as the `hostile` trait. Not live-verified.
-- [~] traits — every reported object (`sightings`, `scan`, `target`, `block_at`, `inventory`, `sighted` events) carries `traits`, Node's reading of the handbook facts and the eye's growth facts ([traits](src/support/traits.ts)); `sightings`/`search_items` filter by `trait`. Not live-verified.
+- [~] traits — every reported object (`sightings`, `target`, `block_at`, `inventory`, `sighted` events) carries `traits`, Node's reading of the handbook facts and the eye's growth facts ([traits](src/support/traits.ts)); `sightings`/`search_items` filter by `trait`. Not live-verified.
 
 ## 3. Controls (`setControlState`, `clearControlStates`, `look`, `lookAt`)
 

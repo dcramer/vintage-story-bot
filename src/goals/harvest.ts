@@ -48,7 +48,7 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
   };
   const search = new Search(field, {
     kind: match,
-    watch: [match.slice(0, 64), item.slice(0, 64)],
+    match: [match.slice(0, 64), item.slice(0, 64)],
     wanted: o => blocks(o) || drops(o),
     // Drops lie nearby and vanish over time, so they come first. A player digs
     // into a bank or the surface around, never a shaft under their own feet:

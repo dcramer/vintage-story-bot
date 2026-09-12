@@ -19,12 +19,12 @@ export default defineGoal({
   destructive: true,
   description:
     'Forage until count additional fresh food items remain after anything eaten during the work, then travel to x/z at any ' +
-    'surface elevation. match limits watched block codes; default bush. Uses normal food, threat, storm, route and verification ' +
+    'surface elevation. match limits the block codes food is looked for on; default bush. Uses normal food, threat, storm, route and verification ' +
     'rules throughout. No default deadline. Returns START; poll goal_status.',
   announce: () => 'Gathering provisions, then heading home.',
   run: (env, { count, match, x, z, arrivalRadius, ...options }) =>
     runField(env, { ...options, manageFood: true }, [], async (field, survival) => {
-      await survival.tend({ force: true, watch: match, count });
+      await survival.tend({ force: true, match, count });
       const forage = {
         count,
         harvested: survival.harvested,

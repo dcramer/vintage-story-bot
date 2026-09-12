@@ -22,7 +22,6 @@ public sealed partial class AiBridgeMod : ModSystem
     private DialogAdapter dialogs = null!;
     private PausedDispatcher? pausedDispatcher;
     private long tickListener;
-    private SceneSensor sensor = null!;
     private readonly SurfaceMap surface = new(30000, 96);
     private readonly SightingsMap sightings = new();
     private VisionSensor vision = null!;
@@ -46,10 +45,9 @@ public sealed partial class AiBridgeMod : ModSystem
     {
         this.api = api;
         control.Release("world_changed");
-        terrainSensor = new TerrainSensor(api, terrain);
+        terrainSensor = new TerrainSensor(api, terrain, sightings);
         api.Event.BlockChanged += terrainSensor.Changed;
         api.Input.InWorldAction += RetainOwnedMovement;
-        sensor = new SceneSensor(api, CanControl);
         vision = new VisionSensor(api, surface, sightings);
         inventory = new InventoryAdapter(api);
         containers = new ContainerAdapter(api);
@@ -77,7 +75,6 @@ public sealed partial class AiBridgeMod : ModSystem
     {
         worldInteractions = (api.World as ClientMain)?.clientSystems
             .OfType<SystemMouseInWorldInteractions>().FirstOrDefault();
-        sensor.Reset();
         vision.Reset();
         terrainSensor.Reset();
         control.Release("world_changed");
@@ -400,7 +397,6 @@ public sealed partial class AiBridgeMod : ModSystem
         {
             case "observe": return Observe();
             case "sense": return Sense(request);
-            case "scan": return Scan(request);
             case "inspect_target": return CanControl() ? context.InspectTarget(life.Session) : new { ok = false, error = "Close menus and unpause before inspecting." };
             case "environment": return context.Environment(life.Session);
             case "events": return Events(request);
@@ -462,7 +458,6 @@ public sealed partial class AiBridgeMod : ModSystem
     {
         ReleaseControl("bridge_off");
         terrainSensor?.Reset();
-        sensor?.Reset();
         vision?.Reset();
         StopMovement();
         StopHandAction();

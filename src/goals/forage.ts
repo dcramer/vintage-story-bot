@@ -20,7 +20,7 @@ export const schema = z
       .min(1)
       .max(8)
       .optional()
-      .describe('Block code substrings the eye watches for; default bush, mushroom, crop-, termitemound-.'),
+      .describe('Block code substrings food is looked for on; default bush, mushroom, crop-, termitemound-.'),
   })
   .strict();
 
@@ -29,7 +29,7 @@ export default defineGoal({
   schema,
   destructive: true,
   description:
-    'Watch for block codes (default bushes, mushrooms, crops, termite mounds, wild hives), read the handbook page of ' +
+    'Look for blocks (default bushes, mushrooms, crops, termite mounds, wild hives), read the handbook page of ' +
     'what comes into view, harvest whatever it says yields edible food now, eat when hungry or when the pack holds more ' +
     'than is kept, and finish at `until` satiety with `keep` satiety worth in the pack. Starving, it stomachs food that costs ' +
     'a point of health. count instead stockpiles that many additional fresh items after replacing anything eaten. ' +
@@ -40,7 +40,7 @@ export default defineGoal({
   announce: () => 'Foraging for a bite to eat.',
   run: (env, options) =>
     runField(env, { ...options, manageFood: true }, [], async (field, survival) => {
-      await survival.tend({ force: true, watch: options.match, count: options.count, until: options.until, keep: options.keep });
+      await survival.tend({ force: true, match: options.match, count: options.count, until: options.until, keep: options.keep });
       return {
         ok: true,
         goal: 'forage',

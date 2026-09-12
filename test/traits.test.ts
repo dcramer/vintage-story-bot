@@ -68,8 +68,6 @@ test('creatures: hostility is prior knowledge, the young are not hunters', () =>
 });
 
 test('direct reads carry traits', () => {
-  const scan = decorate({ action: 'scan' }, { ok: true, objects: [{ kind: 'block', code: 'game:loosestick-imagined' }] });
-  assert.deepEqual(scan.objects[0].traits, ['pickup']);
   const target = decorate({ action: 'inspect_target' }, { ok: true, kind: 'entity', code: 'game:wolf-male' });
   assert.deepEqual(target.traits, ['hostile']);
   const inventory = decorate(

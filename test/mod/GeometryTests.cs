@@ -31,6 +31,10 @@ Check(SceneGeometry.BoxSamples(new(0, 0, 0), new(1, 0.01, 1)).All(p => p.Y > 0 &
 // while a far-top ray clears it. Regression for missed one-block descents.
 double EdgeHeight(Point3 end) => 3.7 + (end.Y - 3.7) * (0.62 / (end.Z + 0.62));
 Check(EdgeHeight(samples[0]) < 2 && samples.Skip(1).Any(p => EdgeHeight(p) > 2), "top sample clears ledge");
+// Acuity: a full block is made out to about 48 blocks, a stick-sized thing to about 16, nothing at all beyond that.
+Check(SceneGeometry.Resolves(1, 40) && !SceneGeometry.Resolves(1, 60), "a block resolves to the day radius but not beyond");
+Check(SceneGeometry.Resolves(SceneGeometry.Size(new(0, 0, 0), new(1, 0.06, 1)), 12) &&
+    !SceneGeometry.Resolves(SceneGeometry.Size(new(0, 0, 0), new(1, 0.06, 1)), 30), "a stick is made out near, not far");
 Console.WriteLine($"{checks} geometry checks passed.");
 LifeTests.Run();
 ControlHoldTests.Run();
