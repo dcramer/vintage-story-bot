@@ -155,8 +155,16 @@ public sealed partial class AiBridgeMod
         while (chatText.Length > 0 && (chatText[0] == '/' || chatText[0] == '.')) chatText = chatText[1..].TrimStart();
         if (chatText.Length == 0) return new { ok = false, error = "Empty chat message." };
         if (chatText.Length > 256) chatText = chatText[..256];
-        api.SendChatMessage(chatText, GlobalConstants.GeneralChatGroup, null);
-        return new { ok = true, status = "sent", message = chatText };
+        string? to = null;
+        if (request.TryGetProperty("to", out var toField))
+        {
+            if (toField.ValueKind != JsonValueKind.String || !System.Text.RegularExpressions.Regex.IsMatch(toField.GetString()!, "^[A-Za-z0-9_-]{1,64}$"))
+                return new { ok = false, error = "to must be a player name." };
+            to = toField.GetString();
+        }
+        // A private message is the game's own /pm; the text itself never starts a command.
+        api.SendChatMessage(to == null ? chatText : $"/pm {to} {chatText}", GlobalConstants.GeneralChatGroup, null);
+        return new { ok = true, status = "sent", message = chatText, to };
     }
 
     private object MapWaypointRemove(JsonElement request)

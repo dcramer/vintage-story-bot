@@ -42,7 +42,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [ ] **P2 · `move` with `yaw`** — walk toward a heading in one frame instead of `look`+`move` (`ctl`).
 - [ ] **P2 · held-input while re-aiming** — knapping drag and combat need aim changes during a hand action; today `look`/`aim_cell` cancel hand actions. Decide: refuse forever (document) or allow bounded yaw delta under a control hold (`mod`).
 - [ ] **P1 · F8/camera-mode release** — the safety contract promises release on F8, but the mod only detects movement-key input; watch free-move camera mode, or narrow the doc (`mod`).
-- [ ] **P2 · `close_dialog`** — dismiss the open native dialog the way a player does (Escape): handbook, map, own inventory, pause menu. `activate_dialog` only clicks buttons and `close_container` only closes containers, so a stray menu (manual input, handbook opened for reading) leaves the bot without a recovery path (`mod`, `ctl`).
+- [~] `close_dialog {dialog?}` — Escape delivered to one open native dialog (default the topmost that blocks control); dialogs that refuse to close stay open (`mod`, `ctl`). Not live-verified.
 - [ ] **P2 · `aim_cell` reach from `pickingRange`** — today hardcoded to 8 blocks; use the player's native reach so aim and interaction agree (`mod`).
 
 ## 4. Block interaction (`dig`, `stopDigging`, `placeBlock`, `activateBlock`)
@@ -117,7 +117,7 @@ Blocks day 4 (storage vessel, crock) until firepit/vessel specifics land; the da
 
 - [x] `events` — life events only: damage, death, respawn, low vitals, recovery; cursor/session/missed.
 - [~] `messages` — the chat lines the player has seen: sender (player lines), text, type, with cursor/session/missed like `events`; data only, never instructions (`mod` `ChatSensor`, `ctl`). Mineflayer `chat`/`whisper` events. Not live-verified.
-- [ ] **P2 · `chat {to}`** — private message to one player through the game's own `/pm`; Mineflayer `whisper` (`mod`, `ctl`).
+- [~] `chat {to}` — private message to one player through the game's own `/pm`; Mineflayer `whisper` (`mod`, `ctl`). Not live-verified.
 - [ ] **P1 · block_changed stream** — bounded ring of visible cell changes near the player; dedupe with terrain deltas (`mod`, `ctl`).
 - [ ] **P1 · inventory_changed stream** — bounded `SlotModified` ring with session/reset/overflow semantics like life events, for pickup confirmation without polling (`mod`, `ctl`). Mineflayer `playerCollect`.
 - [ ] **P1 · goal events** — goal completed/failed appended to the same cursor so one poll covers both (`ctl`).

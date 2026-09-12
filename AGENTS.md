@@ -105,7 +105,7 @@ The mod/Node split inside that is by what a player does in one act, never by con
 
 ## Naming
 
-- Queries are nouns for what they return (`inventory`, `environment`, `terrain`, `target`, `dialogs`, `players`, `recipes`, `events`, `container_slots`, `goal_status`); the two senses keep their verbs, `observe` (own state) and `scan` (what is in view).
+- Queries are nouns for what they return (`inventory`, `environment`, `terrain`, `sightings`, `block_at`, `route`, `target`, `dialogs`, `players`, `recipes`, `events`, `messages`, `container_slots`, `goal_status`, `goals`); the two senses keep their verbs, `observe` (own state) and `scan` (what is in view).
 - Commands and goals are `verb` or `verb_object`, the verb first: `open_container`, `move_item`, `move_container_item`, `remove_map_waypoint`, `activate_dialog`, `dig_block`, `place_block`, `use_block`, `store_items`, `take_items`, `fell_tree`, `dig_out`, `look_around`. A goal's name is the outcome (`harvest`, `travel`, `forage`, `eat`, `build`), never how it is done.
 - The public name is the file basename; a differing mod wire name is the tool's `action`, used only inside Node.
 - Arguments: `target` is an observed block key; `item` an item code substring; `output` an exact recipe output code; `match` a block code substring; `count` how many; `x`, `y`, `z` block coordinates; `timeoutMs`, `manageFood`, `sprint`, `arrivalRadius` the shared goal knobs; `expectedState` the inventory token. Results carry `ok`, `goal`, `reason` on failure, and what was verified (`verification`).

@@ -73,6 +73,26 @@ public sealed class DialogAdapter(ICoreClientAPI api)
         return new { ok = true, dialog = dialogName, element = key, text, x, y, stillOpen = dialog.IsOpened() };
     }
 
+    // Escape, delivered to one named dialog (default: the topmost that blocks control), exactly as the
+    // key would reach it. Dialogs that refuse to close (death, character creation) stay open: read ui_dialogs.
+    public object Close(JsonElement request)
+    {
+        string? name = null;
+        if (request.TryGetProperty("dialog", out var dialogField))
+        {
+            if (dialogField.ValueKind != JsonValueKind.String || dialogField.GetString()!.Length is 0 or > 80) return new { ok = false, error = "dialog must be a name from ui_dialogs." };
+            name = dialogField.GetString();
+        }
+        var candidates = (name == null ? OpenDialogs().Where(BlocksControl) : OpenDialogs().Where(dialog => dialog.DebugName == name)).ToArray();
+        if (candidates.Length == 0) return new { ok = true, closed = false, dialog = name, reason = "none_open" };
+        if (name != null && candidates.Length > 1) return new { ok = false, error = $"Expected one open dialog named {name}; found {candidates.Length}." };
+        var dialog = candidates[^1];
+        var escape = new KeyEvent { KeyCode = (int)GlKeys.Escape };
+        dialog.OnKeyDown(escape);
+        bool open = dialog.IsOpened();
+        return new { ok = true, dialog = dialog.DebugName, handled = escape.Handled, closed = !open, stillOpen = open };
+    }
+
     // A dialog may register one composer under several names; report each element once.
     private static IEnumerable<(string Key, GuiElement Element)> Elements(GuiDialog dialog)
     {

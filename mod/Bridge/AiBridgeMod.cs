@@ -295,6 +295,7 @@ public sealed partial class AiBridgeMod : ModSystem
             case "respawn": return Respawn(request);
             case "ui_dialogs": return dialogs.Observe();
             case "ui_activate": return dialogs.Activate(request);
+            case "ui_close": return dialogs.Close(request);
             case "inventory": return inventory.Observe();
             case "recipes": return Recipes(request);
             case "item_info": return ItemInfo(request);
@@ -338,7 +339,7 @@ public sealed partial class AiBridgeMod : ModSystem
     }
 
     // Wire actions refused while a control hold owns the inputs; stop releases it first.
-    private static readonly HashSet<string> Mutations = ["move_to", "move", "look", "aim_cell", "select", "interact", "attack", "stop", "respawn", "craft", "inventory_move", "drop", "open_container", "container_move", "close_container", "look_at", "block_action_begin", "block_action_continue", "select_recipe", "ui_activate"];
+    private static readonly HashSet<string> Mutations = ["move_to", "move", "look", "aim_cell", "select", "interact", "attack", "stop", "respawn", "craft", "inventory_move", "drop", "open_container", "container_move", "close_container", "look_at", "block_action_begin", "block_action_continue", "select_recipe", "ui_activate", "ui_close"];
     private bool CanControl() => api.World?.Player?.Entity?.Alive == true && !api.IsGamePaused &&
         !api.Gui.OpenedGuis.Any(dialog => dialog.IsOpened() && DialogAdapter.BlocksControl(dialog));
 
