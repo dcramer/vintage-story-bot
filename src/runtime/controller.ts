@@ -31,7 +31,19 @@ const defer = () => {
 };
 const message = error => (error instanceof Error ? error.message : String(error));
 // Reads that run in loops: logged only when refused.
-const polling = new Set(['sense', 'observe', 'inventory', 'environment', 'messages', 'events', 'target', 'dialogs', 'recipes', 'map_waypoints']);
+const polling = new Set([
+  'sense',
+  'observe',
+  'inventory',
+  'environment',
+  'messages',
+  'events',
+  'target',
+  'dialogs',
+  'recipes',
+  'scan',
+  'map_waypoints',
+]);
 const looping = new Set(['control_frame', 'control_step', 'block_action_status', 'block_action_continue']);
 const cleanupActions = new Set(['stop', 'close_container', 'ui_close']);
 // Server chat: a goal announces itself once it has run this long, and never repeats the line it just said.
@@ -126,13 +138,6 @@ export class Controller {
       if (!result.ok) return;
       this.telemetry.publish('state', result.state, { coalesce: true });
       if (result.surface?.columns?.length) this.telemetry.publish('map', { columns: result.surface.columns }, { coalesce: true });
-      const p = result.state?.position;
-      if (result.sightings && p)
-        this.telemetry.publish(
-          'sightings',
-          { objects: this.sightings.view({ ...p, y: p.y + (result.state.body?.eyeHeight ?? 1.6) }, { remembered: false }).slice(0, 64) },
-          { coalesce: true },
-        );
     };
     if (action === 'sense') {
       perception();
@@ -146,6 +151,10 @@ export class Controller {
       const { owner, session, after, ...frame } = args;
       this.telemetry.publish('frame', frame, { coalesce: true });
       if (action === 'control_step') perception();
+      return;
+    }
+    if (action === 'scan' && result.ok) {
+      this.telemetry.publish('scan', { match: args.match, kind: args.kind, radius: args.radius, objects: result.objects }, { coalesce: true });
       return;
     }
     this.telemetry.publish('action', { action, args, ok: result.ok, error: result.error, code: result.code });
@@ -687,6 +696,7 @@ export class Controller {
       map: this.map,
       surface: this.surface,
       sightings: this.sightings,
+      watch: list => this.game.attend(list),
       wants: this.wants,
       places: this.places,
       looks: this.looks,
