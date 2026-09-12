@@ -423,6 +423,30 @@ test('brain: hunger does not interrupt a flight; danger outranks it', () => {
   );
 });
 
+test('brain: forage keeps its own threat evasion instead of being cancelled', () => {
+  const memory = fresh();
+  memory.job = 'eat';
+  const wolf = state({
+    nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }],
+    vitals: { hunger: { current: 100, max: 1500 } },
+  });
+  assert.deepEqual(decide(reading({ state: wolf, active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' } }), memory), {
+    wait: 'letting forage evade threat',
+  });
+  assert.deepEqual(
+    decide(
+      reading({
+        state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+        active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' },
+        events: [{ id: 1, at: 1, type: 'hurt', health: 10 }],
+      }),
+      memory,
+    ),
+    { stop: 'hurt' },
+    'damage still interrupts food recovery',
+  );
+});
+
 test('brain: digging out of a hole is never interrupted by a threat', () => {
   const digging = fresh();
   digging.job = 'dig_out';

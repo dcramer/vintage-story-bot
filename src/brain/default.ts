@@ -335,6 +335,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // A goal of its own is running. What cuts it short is what the ladder would rather do now:
   // danger first, then a storm, night, a bad place, or food in hand when hungry.
   if (active) {
+    // Forage owns a deterministic evade-and-resume loop. Cancelling it on the
+    // same sighting throws away its food leads and starts a second flight on
+    // top of navigation's evasion, which is especially costly near starvation.
+    // Actual damage still interrupts below, as it may be from an unseen source.
+    if (threat && !hurt && memory.job === 'eat' && active.kind === 'forage') return { wait: 'letting forage evade threat' };
     // A flight is never interrupted, and neither is digging out: there is no running from a hole.
     // Nor is digging in at night: two blocks down is the safest place from whatever is coming.
     if ((threat || hurt) && !['hide', 'dig_out', 'burrow'].includes(memory.job ?? '')) return { stop: threat ? 'threat' : 'hurt' };
