@@ -716,15 +716,22 @@ test('brain: opening a morning burrow is followed by digging steps to the surfac
 
 test('brain: a fresh controller recovers a sealed burrow from observed terrain', () => {
   const full = { hazard: null, boxes: [[0, 0, 0, 1, 1, 1]] };
-  let sealed = true;
+  let ready = false,
+    sealed = true;
   const terrain = {
     get(x, y, z) {
+      if (!ready) return null;
       if (y === 102 && (x !== 0 || z !== 0)) return full;
       if (x === 0 && y === 102 && z === 0) return sealed ? full : { hazard: null, boxes: [] };
       return { hazard: null, boxes: [] };
     },
   };
   const memory = fresh();
+  assert.deepEqual(decide(reading({ state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain }), memory), {
+    wait: 'inspecting surroundings after startup',
+  });
+  assert.equal(memory.startupChecked, false, 'an empty first terrain delta cannot trigger a second burrow');
+  ready = true;
   const next = decide(reading({ state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain }), memory);
   assert.deepEqual(memory.burrow, { x: 0, y: 102, z: 0 });
   assert.equal(next.start, 'dig_area');

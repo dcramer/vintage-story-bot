@@ -314,11 +314,25 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // observed shaft before choosing work, and treat an already-open shaft as
   // a pit to climb out of in safe daylight.
   if (!memory.startupChecked) {
-    memory.startupChecked = true;
     const bx = Math.floor(state.position.x),
       by = Math.floor(state.position.y),
       bz = Math.floor(state.position.z),
-      observedShaft = !state.motion?.swimming && !state.motion?.feetInLiquid && reading.terrain ? dugInState(reading.terrain, bx, by, bz) : null;
+      wet = state.motion?.swimming || state.motion?.feetInLiquid;
+    if (
+      !wet &&
+      reading.terrain &&
+      ![
+        [bx, by + 1, bz],
+        [bx, by + 2, bz],
+        [bx + 1, by + 2, bz],
+        [bx - 1, by + 2, bz],
+        [bx, by + 2, bz + 1],
+        [bx, by + 2, bz - 1],
+      ].every(([x, y, z]) => reading.terrain.get(x, y, z))
+    )
+      return { wait: 'inspecting surroundings after startup' };
+    memory.startupChecked = true;
+    const observedShaft = !wet && reading.terrain ? dugInState(reading.terrain, bx, by, bz) : null;
     if (observedShaft === 'sealed' || (observedShaft === 'open' && (isNight(environment) || temporalStormUnsafe(state))))
       memory.burrow = { x: bx, y: by + 2, z: bz };
     if (observedShaft === 'open' && !memory.burrow) memory.pit = { x: state.position.x + 8, y: state.position.y, z: state.position.z };
