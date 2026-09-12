@@ -146,7 +146,10 @@ internal sealed class BlockActions(ICoreClientAPI api)
         // Stop observing once the short verification window ends. Never become a remote block query.
         if (changedAt != 0 && System.Environment.TickCount64 - changedAt > 5000) { Cancel("verification_expired"); return; }
         var entity = api.World.Player.Entity;
-        if (origin == null || entity.Pos.XYZ.DistanceTo(origin) > .35 || entity.Pos.Dimension != position.dimension || !Visible())
+        // The body may drop into the hole it digs under itself; walking away is what loses the observation.
+        if (origin == null || entity.Pos.Dimension != position.dimension || !Visible() ||
+            Math.Sqrt((entity.Pos.X - origin.X) * (entity.Pos.X - origin.X) + (entity.Pos.Z - origin.Z) * (entity.Pos.Z - origin.Z)) > .35 ||
+            entity.Pos.Y - origin.Y > .35 || origin.Y - entity.Pos.Y > 1.2)
         { Cancel("observation_lost"); return; }
         after = api.World.BlockAccessor.GetBlock(position).Code.ToString();
         observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
