@@ -174,7 +174,7 @@ export class BrainLoop<Memory> {
       last,
       events: batch.events,
       markers,
-      ground: state.motion?.swimming ? this.dryGround(state) : null,
+      ground: state.motion?.swimming || state.motion?.feetInLiquid ? this.dryGround(state) : null,
       terrain: controller.map ?? null,
       now: Date.now(),
     };
