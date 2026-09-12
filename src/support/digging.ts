@@ -85,7 +85,21 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       reason = null;
       break;
     }
-    const plan = stairStep(map, origin, toward);
+    let plan = stairStep(map, origin, toward);
+    if (!plan) {
+      // A narrow shaft can hide its foot-level neighbours from the passive
+      // terrain stream. Look directly at each wall once before concluding
+      // there is no block from which to cut the next stair.
+      field.report('surveying_exit', { at: origin });
+      const h = Math.floor(origin.y),
+        x = Math.floor(origin.x),
+        z = Math.floor(origin.z);
+      for (const [dx, dz] of cardinals) {
+        const eye = { ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight };
+        await field.aim(lookAt(eye, { x: x + dx + 0.5, y: h + 0.5, z: z + dz + 0.5 }));
+      }
+      plan = stairStep(map, origin, toward);
+    }
     if (!plan) {
       reason = 'no_wall_to_cut';
       break;
