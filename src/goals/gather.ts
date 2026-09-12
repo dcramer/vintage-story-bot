@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
-import { aimAtObject, changeBlock } from '../support/blocks.ts';
+import { aimAtObject, blockWorkReady, changeBlock, dryBlockWorkPosition } from '../support/blocks.ts';
 import { Fieldwork, sightRange } from '../support/fieldwork.ts';
 import { pickupBlock } from '../support/gleaning.ts';
 import { habitatsFor } from '../support/habitat.ts';
@@ -64,7 +64,7 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
       const objects = await field.scan(8, looking);
       if (!objects.some(o => (loose(o) || twiggy(o)) && o.withinPickingRange)) await field.scan(sightRange, looking);
       const ready = objects.find(o => loose(o) && o.withinPickingRange && !field.skipped.has(o.key));
-      const twigs = ready ? null : objects.find(o => twiggy(o) && o.withinPickingRange && !field.skipped.has(o.key));
+      const twigs = ready || !blockWorkReady(field.latest) ? null : objects.find(o => twiggy(o) && o.withinPickingRange && !field.skipped.has(o.key));
       if (ready) {
         field.report('pickup', { target: ready.key });
         const selected = await aimAtObject(field, ready);
@@ -99,7 +99,7 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
       const near = field.targets(o => loose(o) || dropped(o)).filter(o => horizontal(field.latest.position, o.point) <= 16);
       const target = near[0] ?? field.targets(o => loose(o) || dropped(o) || twiggy(o))[0];
       if (target) {
-        const destination = field.approach(target);
+        const destination = field.approach(target, q => twiggy(target) && !dryBlockWorkPosition(q));
         if (destination) {
           const result = await field.walk(destination, survival?.pauseWhen);
           if (!['arrived', 'paused'].includes(result.state)) field.skip(target, 15000);

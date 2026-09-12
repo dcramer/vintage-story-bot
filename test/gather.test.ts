@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { gather } from '../src/goals/gather.ts';
+import { blockWorkReady, dryBlockWorkPosition } from '../src/support/blocks.ts';
+
+test('block work requires dry ground and rejects wet approach cells', () => {
+  assert.equal(blockWorkReady({ motion: { onGround: true } }), true);
+  assert.equal(blockWorkReady({ motion: { onGround: true, feetInLiquid: true } }), false);
+  assert.equal(blockWorkReady({ motion: { onGround: false, swimming: true } }), false);
+  assert.equal(dryBlockWorkPosition({ x: 0, y: 0, z: 0 }), true);
+  assert.equal(dryBlockWorkPosition({ x: 0, y: 0, z: 0, wet: true }), false);
+  assert.equal(dryBlockWorkPosition({ x: 0, y: 0, z: 0, swim: true }), false);
+});
 
 function fixture({ gain = true, interruptAfter = Infinity } = {}) {
   const calls = [],

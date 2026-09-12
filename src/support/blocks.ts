@@ -9,6 +9,9 @@ const count = (inventory, code) =>
     .filter(s => s.code === code)
     .reduce((sum, s) => sum + s.quantity, 0);
 
+export const blockWorkReady = state => !!state.motion?.onGround && !state.motion?.feetInLiquid && !state.motion?.swimming;
+export const dryBlockWorkPosition = node => !node?.wet && !node?.swim;
+
 export type BlockChange = {
   target: string;
   point?: any;
@@ -24,6 +27,7 @@ export async function changeBlock(field, kind, { target, point, face, slot, expe
   if (Number(dimension) !== field.latest.position.dimension || Object.values(cell).some(n => !Number.isSafeInteger(n)))
     throw Error('Invalid target coordinates/dimension');
   const state = await field.observe();
+  if (!blockWorkReady(state)) throw Error('Block actions need dry, grounded footing');
   if (distance(state.position, cell) > 8) throw Error('Target out of local reach; move closer first');
   if (point && ['x', 'y', 'z'].some(axis => point[axis] < cell[axis] || point[axis] > cell[axis] + 1))
     throw Error('Aim point must lie in the target cell');
