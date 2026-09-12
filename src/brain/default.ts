@@ -247,7 +247,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       !last.ok &&
       memory.job &&
       !['hide', 'dig_out'].includes(memory.job) &&
-      (!/interruption|^brain:/.test(last.reason ?? '') || (memory.job === 'recover' && /^brain: (threat|hurt)$/.test(last.reason ?? '')))
+      (!/interruption|^brain:/.test(last.reason ?? '') || (memory.job === 'recover' && /^brain: (threat|hurt|relocate)$/.test(last.reason ?? '')))
     )
       memory.tried[memory.job] = { x: state.position.x, z: state.position.z, at: now };
     if (memory.job === 'dig_out') memory.pit = null;

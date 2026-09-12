@@ -178,9 +178,9 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
 });
 
 test('brain: danger interrupts body recovery and backs it off across a flight', () => {
+  const grave = [{ guid: 'g', title: 'You died here', icon: 'gravestone', position: { x: 0, y: 100, z: 0 } }];
   const memory = fresh();
   memory.job = 'recover';
-  const grave = [{ guid: 'g', title: 'You died here', icon: 'gravestone', position: { x: 0, y: 100, z: 0 } }];
   const afterDanger = decide(
     reading({
       markers: grave,
@@ -200,6 +200,11 @@ test('brain: danger interrupts body recovery and backs it off across a flight', 
   memory.job = null;
   const retry = decide(reading({ markers: grave, state: state({ position: { x: 100, y: 100, z: 0 } }), now: 2001 + 5 * 60 * 1000 }), memory);
   assert.equal(retry.start, 'retrieve_body', 'the grave is tried again after the cooldown');
+
+  const clusteredDanger = fresh();
+  clusteredDanger.job = 'recover';
+  decide(reading({ markers: grave, last: { id: 'body', kind: 'retrieve_body', ok: false, reason: 'brain: relocate' }, now: 4000 }), clusteredDanger);
+  assert.ok(clusteredDanger.tried.recover, 'relocating from a dangerous grave also backs recovery off');
 });
 
 test('brain: a hit from nowhere is danger, and copper seen in passing is marked once and told', () => {
