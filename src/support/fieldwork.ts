@@ -510,14 +510,21 @@ export class Fieldwork {
       position: p,
       body: { halfWidth: w, height: h },
     } = this.latest;
-    const candidates = [];
+    const stands = [];
     for (let dx = -2; dx <= 2; dx++)
       for (let dz = -2; dz <= 2; dz++) {
         const q = this.env.map.stand(Math.floor(object.point.x) + 0.5 + dx, Math.floor(object.point.z) + 0.5 + dz, object.point.y, w, h);
         if (!q || horizontal(p, q) < 0.5 || (object.kind === 'item' && horizontal(q, object.point) > 0.8) || exclude?.(q)) continue;
-        const route = findRoute(this.env.map, p, q, w, h, { partial: false });
-        if (route) candidates.push({ q: { ...q, arrivalRadius: 0.35 }, score: route.length + horizontal(q, object.point) * 2 });
+        stands.push(q);
       }
+    // Routes are the expensive part: the closest few standable cells are tried, nearest the thing first.
+    stands.sort((a, b) => horizontal(a, object.point) - horizontal(b, object.point));
+    const candidates = [];
+    for (const q of stands) {
+      if (candidates.length >= 3) break;
+      const route = findRoute(this.env.map, p, q, w, h, { partial: false });
+      if (route) candidates.push({ q: { ...q, arrivalRadius: 0.35 }, score: route.length + horizontal(q, object.point) * 2 });
+    }
     return candidates.sort((a, b) => a.score - b.score)[0]?.q;
   }
   // Where to look for something not in sight: the nearest unwalked place of

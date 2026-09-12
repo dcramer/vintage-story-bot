@@ -33,8 +33,12 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
     state = field.latest;
     goal = { x, y: y ?? state.position.y, z };
     const remaining = horizontal(state.position, goal);
-    if (horizontal(beforeFood, state.position) > 2) bestRemaining = remaining;
-    else bestRemaining = Math.min(bestRemaining, remaining);
+    // A food detour moves the body; progress is measured from where it ended, not from before it.
+    if (horizontal(beforeFood, state.position) > 2) {
+      bestRemaining = remaining;
+      closest = remaining;
+      closestAt = clock();
+    } else bestRemaining = Math.min(bestRemaining, remaining);
     if (remaining < closest - 2) {
       closest = remaining;
       closestAt = clock();

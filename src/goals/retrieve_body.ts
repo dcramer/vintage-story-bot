@@ -80,9 +80,11 @@ export async function retrieveBody(field, survival, { guid, radius = 12, arrival
     await field.wait(200);
     markerRemoved = !(await readMarkers(field)).some(w => w.guid === marker.guid);
   }
+  // A marker still on the map means the body is not recovered as far as anyone can see.
   return {
-    ok: true,
+    ok: markerRemoved,
     goal: 'retrieve_body',
+    ...(markerRemoved ? {} : { reason: 'marker_persists' }),
     marker: marker.guid,
     body,
     moved: +field.moved.toFixed(1),

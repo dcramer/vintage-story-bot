@@ -118,6 +118,7 @@ export async function form(field, { kind, output, material }) {
   let stuck = 0,
     lastRemaining = detail.forming.remaining;
   const skipped = new Set();
+  let lastLayerWaits = 0;
   while (true) {
     await field.observe(true);
     if (!detail?.forming) {
@@ -131,6 +132,8 @@ export async function form(field, { kind, output, material }) {
     }
     const f = detail.forming;
     if (kind === 'clayforming' && f.layer >= 16 && f.remaining === 0) {
+      // The finished form should hand over its output within a few seconds; it does not spin on it.
+      if (++lastLayerWaits > 20) return { ok: false, reason: 'output_not_granted', ...summary() };
       await field.wait(300);
       detail = await inspectSurface(field, cell);
       continue;

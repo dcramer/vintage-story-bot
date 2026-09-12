@@ -216,7 +216,9 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   // two blocks underground; the existing pit escape then gets it outside.
   if (s.hurt && s.burrowed) return 'unburrow';
   if (s.threat && s.burrowed && !s.hurt) return 'wait';
-  if (s.threat || s.hurt) return 'hide';
+  if (s.hurt) return 'hide';
+  // A hostile that cannot be run from (across water, on a ledge) is not run from again at once.
+  if (s.threat && !tried.has('hide')) return 'hide';
   // Below the recovery threshold, food is no longer optional daywork. With
   // nothing in the pack, sheltering through the night guarantees starvation;
   // keep searching and let forage's own threat handling decide when to run.
@@ -279,16 +281,22 @@ export function decide(reading: Reading, memory: Memory): Decision {
     else if (
       !last.ok &&
       memory.job &&
-      !['hide', 'dig_out'].includes(memory.job) &&
+      // A dig-out that climbed is progress worth repeating; one that did not is set aside like any job.
+      // A flight that ended stuck (nowhere to run) is set aside too, so an unreachable hostile
+      // does not keep the bot from eating; one cut short by the brain itself is not.
+      !(memory.job === 'dig_out' && (last.result ? last.result.climbed > 0 : !!memory.pit && state.position.y > memory.pit.y + 0.5)) &&
       (!/interruption|^brain:|^Start grounded$/.test(last.reason ?? '') ||
         (memory.job === 'recover' && /^brain: (threat|hurt|relocate)$/.test(last.reason ?? '')))
     )
       memory.tried[memory.job] = { x: state.position.x, z: state.position.z, at: now };
-    // A partial staircase is useful progress, not proof the pit is gone. The
-    // action RPC can reject a changed block after a successful step and omit
-    // dig_out's result, so the observed height is also evidence of progress.
-    if (memory.job === 'dig_out' && (last.ok || (!(last.result?.climbed > 0) && (!memory.pit || state.position.y <= memory.pit.y + 0.5))))
-      memory.pit = null;
+    // A partial staircase is useful progress and keeps the pit; a run whose result says it
+    // climbed nothing forgets it, whatever the height, or the same failing dig-out would
+    // restart every tick (the next walk that ends in a hole names the pit again). Only when
+    // an action error omits the result altogether is the observed height taken as progress.
+    if (memory.job === 'dig_out') {
+      const climbed = last.result ? last.result.climbed > 0 : !!memory.pit && state.position.y > memory.pit.y + 0.5;
+      if (last.ok || !climbed) memory.pit = null;
+    }
     // A finished shelter is home.
     if (memory.job === 'shelter' && last.ok && last.result?.home) setHome(memory, last.result.home);
     if (memory.job === 'burrow' && last.ok && last.result?.mouth) memory.burrow = last.result.mouth;

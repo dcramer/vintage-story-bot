@@ -72,8 +72,12 @@ export async function equip(field, { item, tool, minTier = 0, slot }: { item?: a
   }
   await field.observe();
   await field.send({ action: 'select', slot: destination.slot });
-  await field.wait(200);
-  const after = await field.observe();
+  let after = await field.observe();
+  // The selection usually shows on the next look; wait only when it has not.
+  if (after.activeSlot !== destination.slot) {
+    await field.wait(200);
+    after = await field.observe();
+  }
   inventory = await field.send({ action: 'inventory' });
   const held = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
   if (after.activeSlot !== destination.slot || !held || !matches(held) || held.code !== source.code)

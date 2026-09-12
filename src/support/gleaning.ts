@@ -35,10 +35,8 @@ export class Gleaner {
   near(position) {
     const sightings = this.field.env.sightings;
     if (!sightings || !this.wants.length) return [];
-    return sightings
-      .visible(null)
-      .filter(o => this.wanted(o) && horizontal(o.point, position) <= gleanRadius)
-      .sort((a, b) => horizontal(a.point, position) - horizontal(b.point, position));
+    // Described sightings carry their traits, so wanted() does not derive them again on every frame.
+    return sightings.view(position, { radius: gleanRadius, remembered: false }).filter(o => this.wanted(o));
   }
   // Nothing is worth stopping for with a hostile about: a flight is never paused for a stick.
   pauseWhen = state => (!this.pending && !nearestThreat(state) && this.near(state.position).length ? 'want_in_reach' : null);

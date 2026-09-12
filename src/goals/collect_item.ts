@@ -24,10 +24,12 @@ export async function collectItem(field, { target, expectedItem, radius = 8 }) {
     moved: +field.moved.toFixed(1),
     verification: 'inventory_delta',
   });
-  while (true) {
+  for (let approaches = 0; ; approaches++) {
     await field.observe(true);
     let gained = itemCount(await field.send({ action: 'inventory' }), expectedItem) - initialCount;
     if (gained >= wanted) return success(gained);
+    // A drop that six approaches did not pick up (pack full, unreachable) is left where it lies.
+    if (approaches >= 6) return { ok: false, reason: 'pickup_failed', target, wanted, gained };
     field.report('collecting', { target, item: expectedItem, wanted, gained });
     if (!drop || horizontal(field.latest.position, drop.point) < 1.2) {
       // Native pickup/server inventory updates can lag behind arrival or entity removal.

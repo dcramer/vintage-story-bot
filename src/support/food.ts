@@ -99,7 +99,11 @@ export async function consume(field, { match, tolerance = 0 }: { match?: string;
     await field.aim(look);
     before = await field.observe();
     if (!before.target) break;
-    if (!wall && inertTarget(before.target)) wall = look;
+    // Sealed in, the first wall of earth will do; forty more turns find no air.
+    if (inertTarget(before.target)) {
+      wall = look;
+      break;
+    }
   }
   if (before.target && wall) {
     await field.aim(wall);
@@ -124,7 +128,8 @@ export async function consume(field, { match, tolerance = 0 }: { match?: string;
     // Native consumption takes ~1s; poll life while the bounded hold runs.
     for (let i = 0; i < 7; i++) {
       await field.wait(200);
-      await field.observe();
+      // The bite is in as soon as satiety rises; no need to sit out the whole hold.
+      if (hunger(await field.observe()) > hunger(before) + 0.005) break;
     }
     await field.send({ action: 'stop' });
     for (let i = 0; i < 10; i++) {

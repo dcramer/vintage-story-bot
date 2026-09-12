@@ -152,10 +152,10 @@ export class SightingsMemory {
   // (unless visible only) what left the view but is still remembered.
   view(eye, { matches = [], kind = null, radius = 64, remembered = true, reach = 4.5 }: any = {}) {
     const wanted = matches.map(m => m.toLowerCase());
+    // Distance and code are checked on the raw record; describing (traits, look) is for what is kept.
     return (remembered ? this.remembered(kind) : this.visible(kind))
-      .filter(record => !wanted.length || wanted.some(m => record.code.toLowerCase().includes(m)))
+      .filter(record => (!wanted.length || wanted.some(m => record.code.toLowerCase().includes(m))) && distance(eye, record.point) <= radius)
       .map(record => this.describe(record, eye, reach))
-      .filter(object => object.distance <= radius)
       .sort((a, b) => a.distance - b.distance);
   }
   // Persistence: remembered blocks only.

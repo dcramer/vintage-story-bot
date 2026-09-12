@@ -53,6 +53,8 @@ export async function digArea(field, survival, { cells, tool, minTier = 0 }) {
     let reason = 'no_stand_position';
     for (let attempt = 0; attempt < 3; attempt++) {
       if (!(await standNear(field, survival, cell, attempt > 0))) {
+        // No second place to stand keeps the first attempt's reason; it is what actually failed.
+        if (attempt > 0) break;
         reason = 'no_stand_position';
         continue;
       }
@@ -84,7 +86,14 @@ export async function digArea(field, survival, { cells, tool, minTier = 0 }) {
     }
     if (reason) failed.push({ ...cell, reason });
   }
-  return { ok: failed.length === 0, goal: 'dig_area', ...summary(), failed, verification: 'client_observed' };
+  return {
+    ok: failed.length === 0,
+    goal: 'dig_area',
+    ...(failed.length ? { reason: failed[0].reason } : {}),
+    ...summary(),
+    failed,
+    verification: 'client_observed',
+  };
 }
 
 export async function build(field, survival, { cells }) {
@@ -117,6 +126,8 @@ export async function build(field, survival, { cells }) {
     let reason = 'no_support';
     for (let attempt = 0; attempt < 2 && reason; attempt++) {
       if (!(await standNear(field, survival, cell, attempt > 0))) {
+        // No second place to stand keeps the first attempt's reason; it is what actually failed.
+        if (attempt > 0) break;
         reason = 'no_stand_position';
         continue;
       }
@@ -146,7 +157,14 @@ export async function build(field, survival, { cells }) {
     }
     if (reason) failed.push({ ...cell, reason });
   }
-  return { ok: failed.length === 0, goal: 'build', ...summary(), failed, verification: 'client_observed' };
+  return {
+    ok: failed.length === 0,
+    goal: 'build',
+    ...(failed.length ? { reason: failed[0].reason } : {}),
+    ...summary(),
+    failed,
+    verification: 'client_observed',
+  };
 }
 
 const cell = z.object({ x: z.number().int(), y: z.number().int(), z: z.number().int() }).strict();

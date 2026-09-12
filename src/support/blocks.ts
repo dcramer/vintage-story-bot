@@ -21,7 +21,12 @@ export type BlockChange = {
   acceptTransform?: boolean;
   timeoutMs?: number;
 };
-export async function changeBlock(field, kind, { target, point, face, slot, expectedItem, acceptTransform = false, timeoutMs = 60000 }: BlockChange) {
+// A dig can take most of a minute with a poor tool; a placement is over in a second or has failed.
+export async function changeBlock(
+  field,
+  kind,
+  { target, point, face, slot, expectedItem, acceptTransform = false, timeoutMs = kind === 'dig' ? 60000 : 15000 }: BlockChange,
+) {
   const [, dimension, x, y, z] = target.split(':');
   const cell = { x: Number(x), y: Number(y), z: Number(z) };
   if (Number(dimension) !== field.latest.position.dimension || Object.values(cell).some(n => !Number.isSafeInteger(n)))
@@ -67,7 +72,12 @@ export async function changeBlock(field, kind, { target, point, face, slot, expe
         return { ok: false, reason: 'Block transformed, not removed; inspect before another attempt', operation };
       const contents = await field.send({ action: 'inventory' });
       const consumed = kind === 'place' ? count(inventory, held.code) - count(contents, held.code) : 0;
-      const itemVerified = kind === 'dig' || field.latest.world.gameMode === 'Creative' || consumed === 1;
+      // The block standing there is the evidence; the count is a cross-check that a pickup meanwhile can disturb.
+      const itemVerified =
+        kind === 'dig' ||
+        field.latest.world.gameMode === 'Creative' ||
+        consumed === 1 ||
+        (operation.after !== 'game:air' && operation.after !== operation.before);
       // Client prediction may be corrected asynchronously. Observe a stable change, never claim server ACK.
       if (operation.changedForMs >= 1000 && itemVerified)
         return {
@@ -78,7 +88,7 @@ export async function changeBlock(field, kind, { target, point, face, slot, expe
           before: operation.before,
           after: operation.after,
           ...(kind === 'place' ? { consumed } : {}),
-          verification: 'client_observed',
+          verification: kind === 'place' && consumed !== 1 ? 'block_observed' : 'client_observed',
           operation: id,
         };
     }

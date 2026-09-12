@@ -37,6 +37,7 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
     // code or name contains match, stable-sorted by code, a page at a time.
     // Facts only unless text:true asks for a short description, which renders
     // each page on the game thread and is slow.
+    private readonly Dictionary<string, (CollectibleObject[] All, EntityProperties[] Creatures)> catalogListings = new();
     public object CatalogPage(JsonElement request)
     {
         int offset = 0, limit = 50;
@@ -47,14 +48,23 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
         string match = request.TryGetProperty("match", out var matchField) && matchField.ValueKind == JsonValueKind.String ? matchField.GetString()!.ToLowerInvariant() : "";
         if (match.Length > 64) return new { ok = false, error = "match: at most 64 characters." };
         string? type = request.TryGetProperty("type", out var typeField) && typeField.ValueKind == JsonValueKind.String ? typeField.GetString() : null;
-        bool Matches(string code, string? name) => match.Length == 0 || code.ToLowerInvariant().Contains(match) || (name?.ToLowerInvariant().Contains(match) ?? false);
-        var all = type == "entity" ? [] : api.World.Collectibles
-            .Where(collectible => collectible != null && collectible.Code != null && collectible.Id != 0 && (type == null || (collectible is Block ? "block" : "item") == type))
-            .Where(collectible => Matches(collectible.Code.ToString(), collectible.GetHeldItemName(new ItemStack(collectible))))
-            .OrderBy(collectible => collectible.Code.ToString(), StringComparer.Ordinal).ToArray();
-        var creatures = type != null && type != "entity" ? [] : api.World.EntityTypes.Where(t => t?.Code != null)
-            .Where(t => Matches(t.Code.ToString(), CreatureName(t)))
-            .OrderBy(t => t.Code.ToString(), StringComparer.Ordinal).ToArray();
+        bool Matches(string code, Func<string?> name) => match.Length == 0 || code.ToLowerInvariant().Contains(match) || (name()?.ToLowerInvariant().Contains(match) ?? false);
+        // The filtered, sorted listing is the expensive part (a name rendered per collectible): kept per
+        // query for the session, so paging through it costs one page, not the whole catalog each time.
+        string listing = match + "|" + (type ?? "");
+        if (!catalogListings.TryGetValue(listing, out var listed))
+        {
+            CollectibleObject[] collectibles = type == "entity" ? [] : api.World.Collectibles
+                .Where(collectible => collectible != null && collectible.Code != null && collectible.Id != 0 && (type == null || (collectible is Block ? "block" : "item") == type))
+                .Where(collectible => Matches(collectible.Code.ToString(), () => collectible.GetHeldItemName(new ItemStack(collectible))))
+                .OrderBy(collectible => collectible.Code.ToString(), StringComparer.Ordinal).ToArray();
+            EntityProperties[] entities = type != null && type != "entity" ? [] : api.World.EntityTypes.Where(t => t?.Code != null)
+                .Where(t => Matches(t.Code.ToString(), () => CreatureName(t)))
+                .OrderBy(t => t.Code.ToString(), StringComparer.Ordinal).ToArray();
+            if (catalogListings.Count >= 16) catalogListings.Clear();
+            catalogListings[listing] = listed = (collectibles, entities);
+        }
+        var (all, creatures) = listed;
         int total = all.Length + creatures.Length;
         var entries = all.Skip(offset).Take(limit).Select(collectible => Entry(collectible, text ? 3 : 0))
             .Concat(creatures.Skip(Math.Max(0, offset - all.Length)).Take(Math.Max(0, limit - Math.Max(0, all.Length - offset))).Select(Entry))

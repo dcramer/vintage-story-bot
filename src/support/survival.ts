@@ -118,6 +118,8 @@ export async function harvestFood(
       for (let i = 0; i < 7; i++) {
         await field.wait(200);
         await field.observe();
+        // The harvest is in the pack as soon as the count rises; no need to sit out the whole hold.
+        if (await gained()) break;
       }
       await field.send({ action: 'stop' });
     }
