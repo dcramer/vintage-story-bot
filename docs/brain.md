@@ -33,8 +33,8 @@ fights; it runs or hides.
 | wait | none | Storm at home, night with nowhere to go, or a job cooling down |
 | eat | `eat`, else `forage` | Satiety below 20% |
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
-| shelter | `build` walls in chunks, `travel` in, `build` the door, place a torch | Enough dirt (by day, or at night with nowhere else) |
-| sticks | `gather_sticks` | Fewer than 10 sticks |
+| shelter | `shelter` | Enough dirt (by day, or at night with nowhere else) |
+| sticks | `gather stick` | Fewer than 10 sticks |
 | stone | `harvest loosestone` | No knife or axe and nothing knappable |
 | tools | `knap` a flint blade, `craft_item` the tool | Missing the knife or the axe |
 | grass | `harvest tallgrass` | Wants torches, no dry grass or cattail tops |

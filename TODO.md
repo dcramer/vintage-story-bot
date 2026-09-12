@@ -9,7 +9,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [x] `observe` — identity, position, orientation, vitals, body condition, target, action timers.
 - [x] `environment` — calendar, season, daylight, climate, wind, light.
 - [x] `inventory` — hotbar/backpack/grid/mouse, equipment read-only, tool tiers, freshness.
-- [x] `goal_status`, `api`, `goal_script` (linear composite of existing goals), `brain`, `wants` (pickup list read/set).
+- [x] `goal_status`, `goals` (recent records), `api`, `goal_script` (linear composite of existing goals), `brain`, `wants` (pickup list read/set).
 - [x] `players` — other players on server: name, uid, position, distance, visible flag; tracking feed plus loaded entities.
 - [~] `observe.nearbyEntities` — entities seen in the field of view, near within 8, or heard within 16 this instant; Node overlays 20 s memory; hostile allowlist and `nearestThreat` in [threats](src/support/threats.ts). Sight-limited path not live-verified.
 - [ ] **P2 · `observe.time.untilSunset/untilDawn`** — derived from calendar so goals can budget daylight without recomputing (`ctl`).
@@ -19,13 +19,13 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [x] `scan` — surroundings ≤8, cone sight ≤64, paged cursors, block facts (name, variant, growth).
 - [x] `target` — crosshair block/entity, HUD text, hints, forming state (wire `inspect_target`).
 - [x] `aim_cell` — aim at a cell/face/voxel by coordinates using the block's real selection-box geometry; used by forming placement instead of caller-computed angles.
-- [ ] **P1 · `block_at {x,y,z}`** — code, block facts (name, variant, growth state; the `facts` of AGENTS.md) and when it was last seen for one cell if observed or remembered; `unknown` otherwise, never air (`ctl`). Mineflayer `blockAt`. Source: terrain memory + sightings; no hidden-world lookup.
+- [~] `block_at {x,y,z}` — one cell from memory: surroundings kind (unknown|air|solid|hazard, traits, age), the watched block sighted there (code, facts, access) and the far-view column; never air when unknown (`ctl`). Mineflayer `blockAt`. Not live-verified.
 - [ ] **P1 · `can_see {x,y,z}`** — sampled line of sight from eye to cell (`mod`). Mineflayer `canSeeBlock`. Prerequisite for interact-range goals. Small: the LOS primitive already exists inside `SceneSensor`/`VisionSensor`; needs only a wire action.
 - [~] sightings — `sense` returns a snapshot of entities, items and watched blocks a line of sight reached; a default salient set plus goal attention; `Fieldwork.scan` reads memory instead of paging `scan`; the controller's eye loop keeps memory fresh. Not live-verified.
 - [~] look-around search — `Fieldwork.lookAround` turns through 360° and reads memory before exploring; `harvest` uses it. Still to do: `find_sticks`/`find_flint`/`find_cattails` example goals with a legible search (look around, nearest seen, walk, repeat; spiral outward, never revisit) replacing heading-based exploration (`support`, `goal`).
-- [ ] **P1 · `sightings {match?,kind?,radius?,limit?}`** — the noun for what the eye has confirmed: entities, dropped items and watched blocks from `SightingsMemory` (`visible`/`remembered`/`entities`), each tagged visible or remembered with its age and distance, nearest first; controller-local, never a world query (`ctl`). Mineflayer `findBlocks`/`nearestEntity`/`entities`. Replaces the earlier `find_blocks` idea (queries are nouns). Today only goals read this memory through `Fieldwork.scan`; an agent has to page `scan` and gets no memory.
-- [ ] **P1 · `watch {list?}`** — read or set the eye's watch list (block code substrings the `sense` feed reports), the sibling of `wants`; AGENTS.md already names it. Today only goals set it through `env.watch`, so an agent driving actions by hand cannot make the eye look for cattails (`ctl`).
-- [ ] **P1 · `look_around`** — one bounded 360° sweep of the head, then a summary of what came into view from memory (counts per code, nearest of each); `Fieldwork.lookAround` exists but only goals can call it (`ctl`). Blocks like `look_at`; never walks.
+- [~] `sightings {match?,kind?,radius?,limit?,remembered?}` — what the eye has confirmed: entities, dropped items and watched blocks from `SightingsMemory.view`, visible or remembered with age and distance, nearest first; `Fieldwork.scan` reads the same view (`ctl`). Mineflayer `findBlocks`/`nearestEntity`/`entities`. Not live-verified.
+- [~] `watch {list?}` — read or set the watch list, the sibling of `wants`; a running goal replaces it while it looks (`ctl`). Not live-verified.
+- [~] `look_around` goal — one sweep of the head, then counts per code and the nearest objects from memory; `Fieldwork.lookAround` underneath. Not live-verified.
 - [~] far view — `sense` returns a snapshot of sight-verified surface columns inside the real field of view (light-limited, coarser with distance); Node remembers them and `terrain` shows them. Not live-verified.
 - [~] `terrain` — merged observed/seen surface view around a point; absent columns unknown. Not live-verified.
 - [ ] **P2 · `ground_at {x,z}`** — one-column projection of the remembered `terrain` view; absent columns unknown, never air (`ctl`). Site picking, `travel` with omitted y.
@@ -55,7 +55,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [ ] **P0 · `ignite {target}`** — firestarter/torch on pit kiln or firepit, verified by block-state change to burning (`support`; probably `use_block` + `expectAfter`).
 - [ ] **P1 · `door {target,open}`** — open/close doors and gates; navigation still excludes doors (`support`, later `nav` movement flag). Mineflayer `openDoor`. Day 1 door is two hay bales, so `place_block`/`dig_block` covers that first.
 - [ ] **P1 · `pickup_ground {target}`** — right-click pickup of ground-stored stacks and loose items other than sticks (generalize `gather_sticks`) (`support`).
-- [ ] **P1 · `gather {match,count}`** — the day-1 list is sticks, loose stones, flint, clay and dropped stacks, but `gather_sticks` is sticks only and `harvest` digs; one goal for things lying on the ground (look around, nearest seen, walk, pick up, verify gain, repeat), with `gather_sticks` becoming `gather {match:'stick'}` (`goal`).
+- [~] `gather {match,item?,count}` — things lying on the ground: loose sticks, stones and flints by right-click, dropped stacks by walking over; replaces `gather_sticks` (`gather {match:'stick'}`); the brain uses it. Only the stick path is live-verified.
 - [ ] **P2 · `dig_block` with drop collection option** — `collect:true` chains `collect_item` for the produced entity (`goal`).
 
 ## 5. Entity interaction (`attack`, `activateEntity`, `useOn`)
@@ -128,11 +128,10 @@ Blocks day 4 (storage vessel, crock) until firepit/vessel specifics land; the da
 
 - [x] `move_to` — bounded route, level/±1, replan, arrivalRadius.
 - [~] `travel`, `explore` — legs + detours; not live-verified. Every `walk` beyond 12 blocks now turns toward the target and reads the far view (straight, then ±50° if no full rough route) and follows a rough route leg by leg (`success|partial|noPath`, pathfinder partial-path semantics) before the final fine leg; `no_visible_route` hands over to the caller's stuck recovery. Rough route status is reported in goal progress. Fine planner takes diagonals. Surroundings sampling widened to 8 blocks, -3/+6. See [navigation](docs/navigation.md).
-- [x] `set_waypoint`, `waypoints` — session memory.
+- [x] `set_waypoint`, `waypoints`, `remove_waypoint` — session memory.
 - [~] `map_waypoints`, `remove_map_waypoint`, `retrieve_body` — the game map's own markers (gravestone on death) read as the map screen shows them; removal through the map's remove command; goal walks to the latest death marker, picks up what fits an empty slot, skips the rest, clears the marker. Not live-verified. TODO: pickup policy (partial stacks, priorities, making room), `died` event position fallback when the map is disabled.
 - [ ] **P1 · `add_map_waypoint {name,x,y,z,icon?,color?}`** — a marker on the game's own map through the map's add command, the pair of `remove_map_waypoint`; day 1 says "place chest, mark map", and `set_waypoint` is controller memory lost on restart (`mod`, `ctl`).
-- [ ] **P2 · `remove_waypoint {name}`** — forget one `set_waypoint` entry; today the list only grows to its cap (`ctl`).
-- [ ] **P2 · `route {x,y,z}`** — plan only: the checkpoints `findRoute` would take from memory and its status (`success|partial|noPath`) without moving; pathfinder `getPathTo`. The offline capture-and-reproduce workflow below already calls the planner; this exposes it to an agent deciding whether a target is worth walking to (`ctl`, `nav`).
+- [~] `route {x,y?,z,arrivalRadius?}` — plan only: fine checkpoints from the surroundings (`success|partial|noPath`) and, beyond 12 blocks, the rough route over far-view columns; hostiles in memory avoided (`ctl`). pathfinder `getPathTo`. Not live-verified.
 - [ ] **P0 · `GoalGetToBlock` / interact-range arrival** — `move_to {target:blockKey}` stops when the cell is within the player's native `pickingrange` and visible, not at a coordinate (`nav`, `ctl`). Every block goal re-implements this today.
 - [ ] **P1 · `GoalFollow` / `follow {target:entity,range}`** — track a moving entity, re-plan on movement (`nav`, `goal`). Hunting, co-op.
 - [~] **P0 · wading and swimming** — `travel` wades shallow water (wet nodes) and swims deep water by default (swim nodes: the body floats half a block under the surface cell's floor, a one-block bank is climbed with jump held, a fall of up to three blocks into deep water is allowed; `swim: false` forbids); the follower holds jump while the feet are wet and never sneaks there; with no goal running the core loop swims a floating bot to the nearest remembered dry ground. Wading live-verified 2026-09-12; swimming, oxygen and current still to verify live (`nav`, `skill`).
@@ -157,8 +156,8 @@ Blocks day 4 (storage vessel, crock) until firepit/vessel specifics land; the da
 - [x] Food priority inside tasks (`manageFood`), attrition classification, low-vital interrupts.
 - [x] `respawn`, `chat`.
 - [x] interrupt policy — damage, alerts and storms are events on the goal (`events` in progress) and the walk carries on; hard stops are death, lost controls, a changed player or world, deep water when a route forbids swimming. A pit ends `travel` with reason `pit` and `dig_out` is the brain's answer. Missing preconditions fail fast (`harvest` without its tool).
-- [ ] **P0 · `wait {untilHour|ms}`** — idle goal that holds position, keeps observing, stops on damage or a threat sighting, and ends at the hour; nights indoors, kiln firing, storms (`goal`). The default brain's `wait` job runs no goal at all today, so nothing watches while it waits.
-- [ ] **P1 · `shelter {item?}`** — the emergency dirt hut around the player (walls, roof, seal the door) as a goal any brain or agent can ask for; today the cell layout and phases (`shelterCells`, walls → seal) are hardcoded in `src/brain/default.ts` and drive `build` piecewise (`goal`).
+- [~] `wait {untilHour|ms}` — holds position and keeps observing; ends with reason `threat` when a hostile is seen or heard, at the game hour (past midnight when earlier than now) or after the milliseconds (`goal`). Not live-verified. Still to do: the default brain's `wait` job should run it instead of idling.
+- [~] `shelter {item?,torch?}` — the tiny shelter as one goal (walls, walk in, seal, torch; blueprint in `support/structures.ts`); the brain's shelter job starts it and takes `result.home` (`goal`). Not live-verified.
 - [ ] **P1 · torch cycle** — pick up and re-place torches each morning (`support`): `dig_block` torch → `place_block`.
 - [~] day plan — the default brain (`src/brain/default.ts`, [brain](docs/brain.md)) walks days 1–2 on its own: danger, storm, hunger, night, shelter, then sticks, stone, tools, torches, logs; live on the multiplayer server 2026-09-12 (respawns, flees, forages). Not yet: shelter phases live, pottery, the full house.
 - [ ] **P2 · sit** — VS sitting reduces hunger drain; useful during `wait` indoors (`mod`, `goal`).
@@ -181,7 +180,6 @@ Not planned (Minecraft-only): fishing, enchanting, furnace, villager trades, bed
 ## 12. Cross-cutting
 
 - [ ] **P0 · live verification pass** — `use_block`, `travel`, `explore`, `fell_tree`, `knap`, `clayform`, `select_recipe` on the MP server; record outcomes in handoff, not docs.
-- [ ] **P2 · `goals`** — list the retained goal records (id, kind, state, started, reason) so an agent can find one without knowing its id; `goal_status` takes an id or the latest only (`ctl`).
 - [ ] **P1 · unified target addressing** — accept `{x,y,z}` or block key everywhere a `target` is taken; keys stay the guard (`ctl`).
 - [ ] **P1 · schema field alignment** — `timeoutMs`, `manageFood`, `sprint`, `count` defaults consistent across goals (`ctl`).
 - [ ] **P2 · MCP tool count** — 40+ tools; consider grouping raw primitives (`move`, `look`, `interact`, `attack_block`, `select_hotbar`) behind an `advanced` flag in `api`.
