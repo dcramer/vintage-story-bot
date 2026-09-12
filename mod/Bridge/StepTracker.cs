@@ -67,11 +67,13 @@ public sealed class StepTracker
         double sx = Toward.X - Start.X, sz = Toward.Z - Start.Z, length = Math.Sqrt(sx * sx + sz * sz);
         bool passed = length > 0.05 && (dx * sx + dz * sz) / length < 0 && Math.Abs(dx * sz - dz * sx) / length <= PassedLateral;
         if (onGround || wet) airborneCarry = false;
-        // A queued continuation over level ground or one block down can receive a jump or a shallow descent in stride.
+        // A queued continuation receives a jump or descent in stride. A two-block drop needs
+        // level ground beyond it; Node verifies the longer landing run before queuing it.
         // Final points, sharp turns, climbs and deep drops still wait for the landing.
         bool carry = false;
         if (Next is Point3 continuation && continuation.Y <= Toward.Y + 0.05 && Toward.Y - continuation.Y <= 1.05 && !NextHop &&
-            Start.Y - Toward.Y <= 1.05 && position.Y >= Toward.Y - ReachY && position.Y <= Toward.Y + 1.6)
+            Start.Y - Toward.Y <= 2.05 && (Start.Y - Toward.Y <= 1.05 || Math.Abs(continuation.Y - Toward.Y) <= 0.05) &&
+            position.Y >= Toward.Y - ReachY && position.Y <= Toward.Y + Math.Max(1.6, Start.Y - Toward.Y + 0.1))
         {
             double nx = continuation.X - Toward.X, nz = continuation.Z - Toward.Z;
             double nlength = Math.Sqrt(nx * nx + nz * nz);

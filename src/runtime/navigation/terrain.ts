@@ -289,9 +289,10 @@ export class TerrainMemory {
           // A one-block step down onto dry ground is an ordinary move even at the
           // water's edge; a longer fall beside water is not planned.
           if (diagonal || (-rise > 1.05 && this.shore(to)) || !this.clearBetween(x + dx, z + dz, to.y, t + BODY_HEIGHT, missing)) continue;
-          // Stepping down is cheap; a stair of big drops is not a shortcut.
+          // A two-block descent with a known landing run is an ordinary way down.
+          const run = -rise <= 2.05 && this.runWalkable(to, { ...to, x: to.x + dx * 2, z: to.z + dz * 2 });
           kind = 'drop';
-          cost = d + (-rise > 1.5 ? 1.5 * -rise : 0.4 * -rise);
+          cost = d + (-rise > 1.5 && !run ? 1.5 * -rise : 0.4 * -rise);
         } else {
           // Level or step diagonal: don't cut a corner through a solid block;
           // one open orthogonal side is enough to round it, as a player does.

@@ -306,13 +306,22 @@ export class Navigation {
         this.edgeStart = p;
         this.bestNear = undefined;
       }
-    // Start a straight uphill jump before the body hits the riser. The preceding
-    // checkpoint is only a takeoff point; verify the earlier arc's headroom too.
+    // Hand over a straight rise or descent before the edge. Jumps need headroom;
+    // descents need a known level run beyond their landing.
     const takeoff = this.route[this.index],
-      landing = this.route[this.index + 1];
+      landing = this.route[this.index + 1],
+      beyond = this.route[this.index + 3];
+    const dropAhead =
+      landing?.move === 'drop' &&
+      takeoff.y - landing.y <= 2.05 &&
+      beyond &&
+      Math.abs(beyond.y - landing.y) < 0.05 &&
+      horizontal(landing, beyond) >= 2 &&
+      Math.abs(angle(lookAt(landing, beyond).yawDegrees, lookAt(takeoff, landing).yawDegrees)) < 20 &&
+      map.runWalkable(landing, beyond);
     if (
       grounded &&
-      landing?.move === 'jump' &&
+      (landing?.move === 'jump' || dropAhead) &&
       Math.abs(takeoff.y - p.y) < 0.1 &&
       // Hand over before the native 2.8-block sprint takeoff, allowing for the sense/frame delay.
       horizontal(p, landing) <= (state.motion.sprinting ? 3.8 : 1.8) &&
@@ -327,7 +336,7 @@ export class Navigation {
       const straight = length > 0.05 && (ax * bx + az * bz) / (length * nextLength) > 0.94;
       const samples = Math.max(1, Math.ceil(length * 4));
       let clear = straight;
-      for (let i = 0; clear && i <= samples; i++)
+      for (let i = 0; !dropAhead && clear && i <= samples; i++)
         clear = map.clearBetween(Math.floor(p.x + (ax * i) / samples), Math.floor(p.z + (az * i) / samples), p.y, p.y + JUMP_HEADROOM);
       if (clear) {
         this.index++;
@@ -403,7 +412,7 @@ export class Navigation {
     // A step down of a block is walked off in stride too; only a real drop waits for the landing.
     const rollOn =
       after && (['walk', 'jump', 'step', 'swim', 'wade', undefined].includes(after.move) || (after.move === 'drop' && next.y - after.y <= 1.05));
-    const next2 =
+    let next2 =
       rollOn && horizontal(p, after) <= 7.4 && Math.abs(after.y - p.y) <= 3
         ? { x: after.x, y: after.y, z: after.z, hop: after.move === 'jump' || after.y - next.y > STEP_HEIGHT }
         : undefined;
@@ -423,6 +432,15 @@ export class Navigation {
           break;
         runEnd = candidate;
       }
+    // Two blocks down can be walked off in stride only with enough observed level landing
+    // ground to receive the body's momentum. Otherwise the step waits for the landing.
+    const drop = this.edgeStart.y - next.y;
+    if (
+      next.move === 'drop' &&
+      drop > 1.05 &&
+      (drop > 2.05 || !runEnd || horizontal(next, runEnd) < 2 || Math.abs(runEnd.y - next.y) > 0.05 || !map.runWalkable(next, runEnd))
+    )
+      next2 = undefined;
     const continuesRun =
       !!next2 &&
       ['walk', 'step'].includes(after.move) &&
@@ -431,8 +449,7 @@ export class Navigation {
       Math.abs(angle(lookAt(next, after).yawDegrees, desiredYaw)) < 20;
     const sprint =
       this.target.sprint !== false &&
-      (['walk', 'step'].includes(next.move) ||
-        (continuesRun && (next.move === 'jump' || (next.move === 'drop' && this.edgeStart.y - next.y <= 1.05)))) &&
+      (['walk', 'step'].includes(next.move) || (continuesRun && (next.move === 'jump' || (next.move === 'drop' && drop <= 2.05)))) &&
       (near > 2 || continuesRun) &&
       (emergency || (food?.max > 0 && food.current / food.max >= SPRINT_FOOD));
     return {

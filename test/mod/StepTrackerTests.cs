@@ -105,6 +105,12 @@ static class StepTrackerTests
         var deep = new StepTracker(new Point3(1.5, 97, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
         deep.Queue(new Point3(3.5, 97, 0.5), false);
         Check(!deep.Update(new Point3(1.1, 98.5, 0.5), 90, false, false, 100).Forward, "deep drop still releases forward");
+        var twoDown = new StepTracker(new Point3(1.5, 98, .5), new Point3(.5, 100, .5), .35, .6, false, 0);
+        twoDown.Queue(new Point3(3.5, 98, .5), false);
+        Check(twoDown.Update(new Point3(1.1, 99.9, .5), 90, false, false, 100).Forward, "two blocks down carries onto a verified level landing run");
+        var twoCorner = new StepTracker(new Point3(1.5, 98, .5), new Point3(.5, 100, .5), .35, .6, false, 0);
+        twoCorner.Queue(new Point3(1.5, 98, 2.5), false);
+        Check(!twoCorner.Update(new Point3(1.1, 99.9, .5), 90, false, false, 100).Forward, "two blocks down waits before a sharp turn");
         Console.WriteLine("Step checks passed.");
     }
 }

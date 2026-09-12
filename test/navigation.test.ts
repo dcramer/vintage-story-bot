@@ -54,6 +54,23 @@ test('a shortcut refused by the cliff guard follows its original checkpoint and 
   assert.ok(nav.replans > 0, 'a stationary body must replan instead of renewing the same shortcut');
 });
 
+test('a two-block descent carries only with an observed level run beyond the landing', () => {
+  for (const length of [1, 2]) {
+    const map = new TerrainMemory();
+    for (let x = 0; x <= length + 1; x++)
+      for (let y = -3; y < 3; y++)
+        map.put({ x, y, z: 0, seenAt: Date.now(), traits: [], boxes: y === (x === 0 ? -1 : -3) ? [[x, y, 0, x + 1, y + 1, 1]] : [] });
+    const state = { ...stateAt({ x: 0.5, y: 0, z: 0.5 }), vitals: { hunger: { current: 1000, max: 1500 } } };
+    const route = Array.from({ length: length + 1 }, (_, i) => ({ x: i + 1.5, y: -2, z: 0.5, move: i ? 'walk' : 'drop' }));
+    const nav = new Navigation(map, state, { ...route.at(-1), sprint: true }, 0);
+    nav.adopt(route, state.position, 0);
+    const frame = nav.tick(state, 0);
+    assert.equal(!!frame.next, length === 2);
+    assert.equal(frame.sprint, length === 2);
+    assert.equal(map.moves(state.position).find(({ node }) => node.x === 1.5).cost, length === 2 ? 1.8 : 4);
+  }
+});
+
 test('a partial route extends in stride when new terrain replaces old cells at capacity', () => {
   const map = new TerrainMemory();
   for (let x = 0; x <= 4; x++) column(map, x, 0);
