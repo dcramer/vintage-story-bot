@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { fleeTarget, nearbyThreats, nearbyUnclearedThreats } from '../../support/threats.ts';
 import { findRoute } from './planner.ts';
-import { angle, distance, horizontal, JUMP_HEIGHT, key, lookAt, MAX_DROP, STEP_HEIGHT } from './terrain.ts';
+import { angle, distance, horizontal, JUMP_HEADROOM, JUMP_HEIGHT, key, lookAt, MAX_DROP, STEP_HEIGHT } from './terrain.ts';
 
 // Follows a route of standing cells the way a player walks: aim at the next
 // cell, keep walking through bends while the head turns, jump when the next
@@ -293,6 +293,29 @@ export class Navigation {
         this.edgeStart = p;
         this.bestNear = undefined;
       }
+    // Start a straight uphill jump before the body hits the riser. The preceding
+    // checkpoint is only a takeoff point; verify the earlier arc's headroom too.
+    const takeoff = this.route[this.index],
+      landing = this.route[this.index + 1];
+    if (grounded && landing?.move === 'jump' && Math.abs(takeoff.y - p.y) < 0.1 && horizontal(p, landing) <= 1.8 && map.runWalkable(p, takeoff)) {
+      const ax = takeoff.x - p.x,
+        az = takeoff.z - p.z;
+      const bx = landing.x - takeoff.x,
+        bz = landing.z - takeoff.z;
+      const length = Math.hypot(ax, az),
+        nextLength = Math.hypot(bx, bz);
+      const straight = length > 0.05 && (ax * bx + az * bz) / (length * nextLength) > 0.94;
+      const samples = Math.max(1, Math.ceil(length * 4));
+      let clear = straight;
+      for (let i = 0; clear && i <= samples; i++)
+        clear = map.clearBetween(Math.floor(p.x + (ax * i) / samples), Math.floor(p.z + (az * i) / samples), p.y, p.y + JUMP_HEADROOM);
+      if (clear) {
+        this.index++;
+        this.edgeStart = p;
+        this.mergedFrom = null;
+        this.bestNear = undefined;
+      }
+    }
     const next = this.route[this.index];
     this.nextCheckpoint = next;
     // A route that leads back toward a threat is replanned like any other failure, so the

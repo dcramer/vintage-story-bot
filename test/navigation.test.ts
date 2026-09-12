@@ -71,3 +71,19 @@ test('a merged run keeps input reach margin and falls back when the body drifts 
   assert.ok(distance(state.position, turning.toward) <= 7, 'a previously merged point cannot drift out of reach');
   assert.equal(turning.toward.x, 1.5, 'return to the original nearby checkpoint');
 });
+
+test('an uphill takeoff starts before the riser only with a clear earlier jump arc', () => {
+  for (const ceiling of [false, true]) {
+    const map = new TerrainMemory();
+    for (let x = 0; x <= 3; x++) column(map, x, 0);
+    map.put({ x: 2, y: 0, z: 0, seenAt: Date.now(), traits: [], boxes: [[2, 0, 0, 3, 1, 1]] });
+    if (ceiling) map.put({ x: 0, y: 2, z: 0, seenAt: Date.now(), traits: [], boxes: [[0, 2, 0, 1, 3, 1]] });
+    const state = stateAt({ x: 0.8, y: 0, z: 0.5 });
+    const landing = { x: 2.5, y: 1, z: 0.5, move: 'jump' };
+    const nav = new Navigation(map, state, landing, 0);
+    nav.adopt([{ x: 1.5, y: 0, z: 0.5, move: 'walk' }, landing], state.position, 0);
+    const frame = nav.tick(state, 0);
+    assert.equal(frame.toward.x, ceiling ? 1.5 : 2.5);
+    assert.equal(frame.hop, !ceiling);
+  }
+});

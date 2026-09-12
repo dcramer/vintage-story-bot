@@ -35,7 +35,7 @@ static class StepTrackerTests
         Check(wall.State == "blocked", "no progress while walking is blocked");
         // A hop: jump only close and facing, forward kept in the air; arrival waits for the landing.
         var up = new StepTracker(new Point3(1.5, 101, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
-        var far = up.Update(new Point3(0.2, 100, 0.5), 90, true, false, 0);
+        var far = up.Update(new Point3(-0.4, 100, 0.5), 90, true, false, 0);
         Check(far.Forward && !far.Jump, "no jump from afar");
         // Already up at the point's level (a thin layer auto-stepped): no hop over it.
         var level = new StepTracker(new Point3(1.5, 101, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
@@ -69,6 +69,27 @@ static class StepTrackerTests
         Check(!chain.Continues(new Point3(2.5, 100, 0.5), null), "a frame naming only the reached point does not");
         chain.Queue(new Point3(4.5, 100, 0.5), false);
         Check(chain.Next == null, "the current point is never queued behind itself");
-        Console.WriteLine("18 step checks passed.");
+        var bend = new StepTracker(toward, new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
+        bend.Queue(new Point3(4.5, 100, 2.5), false);
+        Check(bend.Update(new Point3(2.4, 100, 0.5), 90, true, false, 500).Forward, "roll-on keeps walking through a gentle turn");
+        var landing = new StepTracker(new Point3(1.5, 101, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
+        landing.Queue(new Point3(3.5, 101, 0.5), false);
+        Check(landing.Update(new Point3(1.7, 102, 0.5), 90, false, false, 300).Forward && landing.Arrived is Point3, "jump carries into a queued level landing");
+        Check(landing.Update(new Point3(1.9, 101.9, 0.5), 90, false, false, 350).Forward, "airborne carry persists after promotion");
+        var descent = new StepTracker(new Point3(1.5, 99, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
+        descent.Queue(new Point3(3.5, 99, 0.5), false);
+        Check(descent.Update(new Point3(1.1, 99.6, 0.5), 90, false, false, 100).Forward, "shallow descent carries toward known level continuation");
+        var stairs = new StepTracker(new Point3(1.5, 99, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
+        stairs.Queue(new Point3(2.5, 98, 0.5), false);
+        Check(stairs.Update(new Point3(1.4, 99.9, 0.5), 90, false, false, 100).Forward, "successive shallow descents carry");
+        stairs.Queue(new Point3(3.5, 98, 0.5), false);
+        Check(stairs.Update(new Point3(2.4, 98.5, 0.5), 90, false, false, 200).Forward && stairs.Toward.X == 3.5, "descent height comes from the route, not the airborne body");
+        var corner = new StepTracker(new Point3(1.5, 99, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
+        corner.Queue(new Point3(1.5, 99, 1.5), false);
+        Check(!corner.Update(new Point3(1.1, 99.6, 0.5), 90, false, false, 100).Forward, "a sharp turn waits for the descent to land");
+        var deep = new StepTracker(new Point3(1.5, 97, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
+        deep.Queue(new Point3(3.5, 97, 0.5), false);
+        Check(!deep.Update(new Point3(1.1, 98.5, 0.5), 90, false, false, 100).Forward, "deep drop still releases forward");
+        Console.WriteLine("Step checks passed.");
     }
 }
