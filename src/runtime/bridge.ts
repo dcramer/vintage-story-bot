@@ -175,11 +175,11 @@ export class BridgeClient {
     else entry.resolve(result);
   }
   drop(socket: net.Socket, error: Error) {
-    if (this.socket === socket) {
-      this.socket = null;
-      this.ready = null;
-    }
     socket.destroy();
+    // A socket already replaced (its error came before its close) must not reject what waits on the new one.
+    if (this.socket !== socket) return;
+    this.socket = null;
+    this.ready = null;
     for (const id of [...this.pending.keys()]) this.settle(id, error);
   }
   close() {

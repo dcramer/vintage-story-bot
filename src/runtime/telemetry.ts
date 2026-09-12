@@ -35,7 +35,8 @@ export class Telemetry {
     }, this.flushMs).unref();
   }
   flush() {
-    if (!this.ready || !this.request?.writable) return;
+    // A dashboard that stops reading is not a reason to buffer without bound: wait for drain.
+    if (!this.ready || !this.request?.writable || this.request.writableNeedDrain) return;
     const lines = [...this.pending, ...this.latest.values()];
     this.pending.length = 0;
     this.latest.clear();

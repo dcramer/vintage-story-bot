@@ -69,11 +69,13 @@ export class TerrainMemory {
         if (reason !== 'forgot') this.forget(id);
       } else this.put({ x, y, z, at, seenAt: wall, traits: traitsOf(hazard), boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) });
     }
-    if (this.cells.size > this.capacity || wall - (this.prunedAt ?? 0) > 60000) {
+    // Forgetting by age is a once-a-minute sweep; over capacity the least recently seen
+    // cell goes (put keeps the map in seen order), never a sweep on every batch.
+    if (wall - (this.prunedAt ?? 0) > 60000) {
       this.prunedAt = wall;
       for (const [id, cell] of this.cells) if (wall - cell.seenAt > REMEMBER_MS) this.forget(id);
-      while (this.cells.size > this.capacity) this.forget(this.cells.keys().next().value);
     }
+    while (this.cells.size > this.capacity) this.forget(this.cells.keys().next().value);
   }
   put(cell) {
     // What blocks the body: fire and lava always, water when nothing solid stands in it, a shape
@@ -81,6 +83,8 @@ export class TerrainMemory {
     const has = trait => cell.traits.includes(trait);
     cell.hazard = has('fire') || has('lava') ? 'fire' : has('water') && !cell.boxes.length ? 'water' : has('shape') ? 'shape' : null;
     const id = cellKey(cell.x, cell.y, cell.z);
+    // A re-seen cell moves to the end, so eviction takes the least recently seen first.
+    this.cells.delete(id);
     this.cells.set(id, cell);
     if (cell.hazard) this.hazards.set(id, cell);
     else this.hazards.delete(id);

@@ -7,7 +7,13 @@ export const schema = z
     session: z.string().max(64).optional(),
     types: z.array(z.string().min(1).max(32)).min(1).max(16).optional().describe('Keep only these types; the cursor still advances past the rest.'),
     limit: z.number().int().min(1).max(128).default(64),
-    waitMs: z.number().int().min(0).max(30000).default(0).describe('Block up to this long for the next event when none is pending.'),
+    waitMs: z
+      .number()
+      .int()
+      .min(0)
+      .max(8000)
+      .default(0)
+      .describe('Block up to this long for the next event when none is pending; the controller connection is closed after 10 s idle.'),
   })
   .strict();
 

@@ -67,8 +67,19 @@ export function findRoute(
     if (closed.has(id)) continue;
     closed.add(id);
     if (reached(at)) return path(at);
+    // One expansion per node: the unknown cells it borders (its frontier) fall out of the same pass.
+    const missing = new Map();
+    const moves = map.moves(at, missing);
+    const stepped = new Set(
+      moves.map(m => `${Math.sign(Math.floor(m.node.x) - Math.floor(at.x))},${Math.sign(Math.floor(m.node.z) - Math.floor(at.z))}`),
+    );
+    // Gap jumps are escape edges: only where no ordinary move leaves that way.
+    for (const m of map.gapMoves(at, missing)) {
+      const dir = `${Math.sign(Math.floor(m.node.x) - Math.floor(at.x))},${Math.sign(Math.floor(m.node.z) - Math.floor(at.z))}`;
+      if (!stepped.has(dir)) moves.push(m);
+    }
     // A frontier in deep water is not progress: the far bank is what counts, and only a full route reaches it.
-    if (partial && horizontal(start, at) >= 1 && !at.swim && !visits.has(id) && map.frontier(at).size) {
+    if (partial && horizontal(start, at) >= 1 && !at.swim && !visits.has(id) && missing.size) {
       // A frontier down a hole is not worth walking into: what looks closer
       // to the goal from below may have no way back up. Prefer frontiers at
       // the start's level or above.
@@ -77,15 +88,6 @@ export function findRoute(
         best = score;
         frontier = at;
       }
-    }
-    const moves = map.moves(at);
-    const stepped = new Set(
-      moves.map(m => `${Math.sign(Math.floor(m.node.x) - Math.floor(at.x))},${Math.sign(Math.floor(m.node.z) - Math.floor(at.z))}`),
-    );
-    // Gap jumps are escape edges: only where no ordinary move leaves that way.
-    for (const m of map.gapMoves(at)) {
-      const dir = `${Math.sign(Math.floor(m.node.x) - Math.floor(at.x))},${Math.sign(Math.floor(m.node.z) - Math.floor(at.z))}`;
-      if (!stepped.has(dir)) moves.push(m);
     }
     for (const { node, cost: step } of moves) {
       if (!safe(node) || blocked.has(`${id}>${key(node)}`)) continue;
@@ -102,7 +104,7 @@ export function findRoute(
 
 // The open list: lowest score first, in log time, so planning stays well inside its deadline
 // even on a machine the game's software renderer is starving.
-class Heap {
+export class Heap {
   items: { p: any; score: number }[] = [];
   get size() {
     return this.items.length;

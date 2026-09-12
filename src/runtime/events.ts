@@ -8,7 +8,7 @@ export class EventLog {
   session = randomUUID();
   events: any[] = [];
   sequence = 0;
-  capacity = 256;
+  capacity = 2048;
   listeners = new Set<(event: any) => void>();
   emit(type: string, data: Record<string, unknown> = {}) {
     const event = { id: ++this.sequence, at: Date.now(), type, ...data };

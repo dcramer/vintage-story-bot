@@ -1,3 +1,4 @@
+import { Heap } from './planner.ts';
 import { horizontal, normalize } from './terrain.ts';
 
 // Long-range landscape memory: one sight-verified surface sample per column,
@@ -30,13 +31,17 @@ export class SurfaceMemory {
     this.now = snapshot.clock ?? this.now;
     // Completed passes of the mod's eye over the current view.
     this.sweeps = snapshot.sweeps ?? this.sweeps;
-    for (const [x, z, y, kind, step, code, at] of snapshot.columns ?? [])
-      this.columns.set(columnKey(x, z), { x, z, y, kind, step, code, at: at ?? this.now, seenAt: wall });
-    if (this.columns.size > this.capacity || wall - (this.prunedAt ?? 0) > 60000) {
+    for (const [x, z, y, kind, step, code, at] of snapshot.columns ?? []) {
+      const id = columnKey(x, z);
+      // A re-seen column moves to the end, so eviction takes the least recently seen first.
+      this.columns.delete(id);
+      this.columns.set(id, { x, z, y, kind, step, code, at: at ?? this.now, seenAt: wall });
+    }
+    if (wall - (this.prunedAt ?? 0) > 60000) {
       this.prunedAt = wall;
       for (const [id, column] of this.columns) if (wall - column.seenAt > this.ttlMs) this.columns.delete(id);
-      while (this.columns.size > this.capacity) this.columns.delete(this.columns.keys().next().value);
     }
+    while (this.columns.size > this.capacity) this.columns.delete(this.columns.keys().next().value);
     return snapshot.columns?.length ?? 0;
   }
   // Persistence: columns with wall-clock stamps.
@@ -110,7 +115,8 @@ export function planRoughRoute(surface, start, goal, { budget = 4096, penalty = 
   const costs = new Map([[origin, 0]]),
     previous = new Map(),
     closed = new Set();
-  const open = [{ column: origin, score: remaining(origin) }];
+  const open = new Heap();
+  open.push({ p: origin, score: remaining(origin) });
   let best = null,
     bestScore = Infinity;
   const path = end => {
@@ -121,9 +127,8 @@ export function planRoughRoute(surface, start, goal, { budget = 4096, penalty = 
     }
     return list.reverse();
   };
-  while (open.length && closed.size < budget) {
-    open.sort((a, b) => b.score - a.score);
-    const { column } = open.pop();
+  while (open.size && closed.size < budget) {
+    const column = open.pop().p;
     if (closed.has(column)) continue;
     closed.add(column);
     if (goalReached(column) || (target && column === target))
@@ -143,7 +148,7 @@ export function planRoughRoute(surface, start, goal, { budget = 4096, penalty = 
       if ((costs.get(next) ?? Infinity) <= cost) continue;
       costs.set(next, cost);
       previous.set(next, column);
-      open.push({ column: next, score: cost + remaining(next) });
+      open.push({ p: next, score: cost + remaining(next) });
     }
   }
   if (!best) return { status: 'noPath', reason: closed.size >= budget ? 'budget' : 'no_progress', checkpoints: [], explored: closed.size };

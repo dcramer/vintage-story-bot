@@ -106,8 +106,10 @@ export class Navigation {
   }
   replan(_p, now, reason) {
     this.lastReplan = reason;
+    // The edge that failed is the one into the next checkpoint; after a merge edgeStart is the
+    // body's own cell, several cells short of it, which names no planner edge at all.
     if (['stalled', 'jump_failed'].includes(reason) && this.route[this.index])
-      this.blocked.add(`${key(this.edgeStart)}>${key(this.route[this.index])}`);
+      this.blocked.add(`${key(this.route[this.index - 1] ?? this.edgeStart)}>${key(this.route[this.index])}`);
     if (++this.replans > 12) return this.finish('blocked', reason);
     this.survey(now);
     this.bestNear = undefined;
@@ -257,10 +259,11 @@ export class Navigation {
       }
     const next = this.route[this.index];
     this.nextCheckpoint = next;
+    // A route that leads back toward a threat is replanned like any other failure, so the
+    // replan cap ends the walk instead of the same route being refused every tick.
     if (this.evading && !this.avoid.every(item => horizontal(next, item.point) >= item.minimumDistance)) {
       this.target = fleeTarget(p, threats);
-      this.survey(now);
-      return null;
+      return this.replan(p, now, 'route_toward_threat');
     }
     // The next cell must still be a place to stand.
     // A swim node sits half a block under the surface; a dry one is exact.
@@ -325,7 +328,7 @@ export class Navigation {
     // one is reached instead of pausing for a frame from here.
     const after = this.route[this.index + 1];
     const next2 =
-      after && ['walk', 'jump', 'step', undefined].includes(after.move) && horizontal(p, after) <= 7.5 && Math.abs(after.y - p.y) <= 3
+      after && ['walk', 'jump', 'step', undefined].includes(after.move) && horizontal(p, after) <= 7.4 && Math.abs(after.y - p.y) <= 3
         ? { x: after.x, y: after.y, z: after.z, hop: after.move === 'jump' || after.y - next.y > STEP_HEIGHT }
         : undefined;
     return {

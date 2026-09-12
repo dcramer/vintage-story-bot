@@ -22,4 +22,4 @@ async function load(dir) {
 export const actions = await load('actions');
 export const goals = await load('goals');
 export const tools = [...actions, ...goals];
-export const findTool = name => tools.find(tool => tool.name === name || tool.action === name);
+export const findTool = name => (typeof name === 'string' ? tools.find(tool => tool.name === name || tool.action === name) : undefined);

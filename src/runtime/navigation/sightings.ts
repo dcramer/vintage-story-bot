@@ -30,7 +30,8 @@ export class SightingsMemory {
     const fresh = [];
     for (const [key, kind, code, x, y, z, how, at, extra] of snapshot.sightings ?? []) {
       const record = { key, kind, code, point: { x, y, z }, how, at: at ?? this.now, seenAt: wall, extra: extra ?? null, visible: true };
-      if (!this.records.has(key)) fresh.push(record);
+      // A re-seen key moves to the end, so eviction takes the least recently seen first.
+      if (!this.records.delete(key)) fresh.push(record);
       this.records.set(key, record);
     }
     this.prune();
@@ -61,10 +62,15 @@ export class SightingsMemory {
     this.prune();
     return fresh;
   }
+  prunedAt = 0;
   prune() {
     const wall = this.wall || Date.now();
-    for (const [key, record] of this.records)
-      if (!record.visible && wall - (record.seenAt ?? wall) > (rememberMs[record.kind] ?? 60000)) this.records.delete(key);
+    // Forgetting by age is a once-a-second sweep, not one per sense.
+    if (wall - this.prunedAt >= 1000) {
+      this.prunedAt = wall;
+      for (const [key, record] of this.records)
+        if (!record.visible && wall - (record.seenAt ?? wall) > (rememberMs[record.kind] ?? 60000)) this.records.delete(key);
+    }
     while (this.records.size > this.capacity) this.records.delete(this.records.keys().next().value);
   }
   forget(key) {

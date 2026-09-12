@@ -43,6 +43,7 @@ const polling = new Set([
   'map_waypoints',
 ]);
 const looping = new Set(['control_frame', 'control_step', 'block_action_status', 'block_action_continue']);
+const cleanupActions = new Set(['stop', 'close_container', 'ui_close']);
 // Server chat: a goal announces itself once it has run this long, and never repeats the line it just said.
 const ANNOUNCE_GRACE_MS = 2000,
   ANNOUNCE_REPEAT_MS = 10 * 60 * 1000;
@@ -255,7 +256,8 @@ export class Controller {
         }
       }
       try {
-        this.knowledge.save();
+        // Writing the map is a synchronous stall of a few hundred milliseconds: never while walking.
+        if (!this.active?.nav?.active) this.knowledge.save();
       } catch (error) {
         this.telemetry?.publish('action', { action: 'knowledge_save', ok: false, error: error.message });
         this.log.info('controller', 'knowledge_save_failed', { error: error.message });
@@ -624,7 +626,7 @@ export class Controller {
             nav.finish('cancelled', 'control_lost: ' + message(error));
             break;
           }
-        } else if (input.toward && stepView?.state === 'walking') await sleep(60);
+        } else if (!stepView || stepView.state === 'walking') await sleep(60);
       }
     } finally {
       await control.release();
@@ -649,7 +651,8 @@ export class Controller {
     this.track(record);
     started.resolve({ ok: true, status: 'started', goal: { id: record.id, kind: record.kind } });
     const send = request => {
-      if (signal.aborted && request.action !== 'stop') return Promise.reject(new Error('Goal cancelled'));
+      // After cancellation only the acts that put things back go through: letting go and closing what was opened.
+      if (signal.aborted && !cleanupActions.has(request.action)) return Promise.reject(new Error('Goal cancelled'));
       return this.send(request);
     };
     const env = {
