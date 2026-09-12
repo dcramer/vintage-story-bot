@@ -192,9 +192,11 @@ export function tasks(s: Situation, tried: Set<Job> = new Set()): { id: Job; tit
 }
 export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   if (s.threat || s.hurt) return 'hide';
+  // Below the recovery threshold, food is no longer optional daywork. With
+  // nothing in the pack, sheltering through the night guarantees starvation;
+  // keep searching and let forage's own threat handling decide when to run.
+  if (s.hunger !== null && s.hunger < HUNGRY) return s.burrowed ? 'unburrow' : 'eat';
   if (s.storm) return s.home && !s.atHome ? 'go_home' : 'wait';
-  // Something from the pack is eaten anywhere, any time; looking for food is daywork.
-  if (s.hunger !== null && s.hunger < HUNGRY && s.reserve > 0) return 'eat';
   // A place that keeps producing scares is left behind, day or night, before anything else here.
   if (s.dangerHere && !s.burrowed) return 'relocate';
   if (s.night) {
@@ -204,7 +206,7 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
     return tried.has('burrow') ? 'wait' : 'burrow';
   }
   if (s.burrowed) return 'unburrow';
-  if (s.hunger !== null && (s.hunger < HUNGRY || (s.hunger < PECKISH && s.reserve <= 0))) return 'eat';
+  if (s.hunger !== null && s.hunger < PECKISH && s.reserve <= 0) return 'eat';
   // The first task on the list not done and not set aside around here; with none left, look around.
   return tasks(s, tried).find(task => task.state === 'next')?.id ?? 'explore';
 }
@@ -259,7 +261,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
       : { wait: 'dead, no respawn offered yet' };
   const threat = nearestThreat(state);
   // A hit with no attacker in sight is still danger.
-  const hurt = events.some(e => e.type === 'hurt');
+  // The event cursor advances when the running goal is stopped. Carry the
+  // stop reason into this decision so a one-tick hit actually starts a flight
+  // instead of cancelling work and immediately restarting the same job.
+  const hurt = events.some(e => e.type === 'hurt') || last?.reason === 'brain: hurt';
   // Copper seen in passing: a marker and a word to the others, once per nugget, unless one is already marked nearby.
   const copper = events.find(e => e.type === 'sighted' && e.kind === 'block' && COPPER.test(e.code ?? '') && !memory.marked.has(e.key));
   if (copper && !threat && !hurt) {
@@ -328,8 +333,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // Someone else's goal is otherwise left alone.
     if (active.by !== 'brain') return { wait: `letting ${active.kind} finish (${active.by})` };
     // A dig-in is finished whatever is about: two blocks down is safer than any flight at night.
-    const pressing =
-      URGENT.includes(job) && job !== memory.job && !['hide', 'dig_out'].includes(memory.job ?? '') && !(memory.job === 'burrow' && job === 'hide');
+    const pressing = URGENT.includes(job) && job !== memory.job && !['hide', 'dig_out', 'burrow'].includes(memory.job ?? '');
     // Peckish is not an interruption; hungry is, and only when the ladder would actually eat.
     if (pressing && (job !== 'eat' || (satiety !== null && satiety < HUNGRY))) return { stop: job };
     return { wait: `letting ${active.kind} finish` };

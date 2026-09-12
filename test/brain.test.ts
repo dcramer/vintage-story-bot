@@ -66,7 +66,8 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ threat: true, hunger: 0.1 })), 'hide');
   assert.equal(pickJob(situation({ storm: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true, reserve: 100 })), 'eat', 'the pack is eaten from at night');
-  assert.equal(pickJob(situation({ hunger: 0.1, night: true, atHome: false })), 'go_home', 'but foraging waits for day');
+  assert.equal(pickJob(situation({ hunger: 0.1, night: true, atHome: false })), 'eat', 'critical hunger cannot wait for day');
+  assert.equal(pickJob(situation({ hunger: 0.1, night: true, burrowed: true })), 'unburrow', 'a starving bot opens its burrow first');
   const starvingNight = fresh();
   starvingNight.job = 'burrow';
   const digging = decide(
@@ -184,6 +185,13 @@ test('brain: a hit from nowhere is danger, and copper seen in passing is marked 
   const flight = decide(reading({ events: hurt, state: state({ orientation: { yawDegrees: 0 } }) }), memory);
   assert.equal(flight.start, 'travel');
   assert.ok(flight.args.z > 20, 'runs straight ahead when there is no home to run to');
+  const interrupted = fresh();
+  interrupted.job = 'sticks';
+  const afterStop = decide(
+    reading({ last: { id: 'g1', kind: 'gather', ok: false, reason: 'brain: hurt' }, state: state({ orientation: { yawDegrees: 0 } }) }),
+    interrupted,
+  );
+  assert.equal(afterStop.start, 'travel', 'the stop reason survives the event cursor and produces a flight');
   const nugget = {
     id: 2,
     at: 1,
