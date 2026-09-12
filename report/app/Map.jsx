@@ -8,6 +8,9 @@ const worldOf = bot => stateOf(bot).world?.identifier ?? bot.nativeMap?.world;
 const playerName = bot => stateOf(bot).player?.name ?? bot.id;
 const goalOf = bot => bot.topics.goal?.data;
 const navOf = bot => bot.topics.navigation?.data;
+// The game stores a marker's color as an int; the mod reports it as it finds it.
+const markerColor = value => typeof value === 'number' ? `#${(value & 0xffffff).toString(16).padStart(6, '0')}` : typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : null;
+const markersOf = bot => bot.topics.waypoints?.data?.waypoints ?? [];
 const targetOf = bot => finitePoint(goalOf(bot)?.args) ? goalOf(bot).args : finitePoint(navOf(bot)?.target) ? navOf(bot).target : null;
 const query = bot => bot ? `?bot=${encodeURIComponent(bot)}` : '';
 const manifestCache = new Map(), regionCache = new Map(), maxCachedRegions = 192;
@@ -171,6 +174,12 @@ function GlobalMap({ bots, world, bot, detailed }) {
       trails: contiguousTrails(positionHistory(item).filter(point => (point.dimension ?? 0) === dimension), item.log)
         .map(trail => trail.map(point => screenPoint(point, camera, size)).filter(Boolean)) } : null;
   }).filter(Boolean), [bots, world, camera, size]);
+  const markers = useMemo(() => {
+    const rows = new Map();
+    for (const item of bots.filter(item => worldOf(item) === world))
+      for (const marker of markersOf(item)) if (finitePoint(marker.position)) rows.set(`${item.id}:${marker.guid}`, { ...marker, owner: item.id });
+    return [...rows.values()];
+  }, [bots, world]);
   const terrainMap = useMemo(() => map ? { ...map, chunks } : null, [map, chunks]);
   if (error) return <div class="map-empty"><span>Could not load the global map</span><small>{error}</small></div>;
   if (!map || !camera) return <div class="map-empty"><span>Loading explored terrain</span><small>Combining native map chunks from reporting Seraphs.</small></div>;
@@ -180,7 +189,10 @@ function GlobalMap({ bots, world, bot, detailed }) {
     onPointerMove={move} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}
     onWheel={event => { event.preventDefault(); const bounds = frame.current.getBoundingClientRect(); zoom(Math.exp(-event.deltaY * .0015), event.clientX - bounds.left, event.clientY - bounds.top); }}>
     <Terrain map={terrainMap} camera={camera} onSize={resize} size={size} />
-    <svg viewBox={`0 0 ${size.width} ${size.height}`} aria-label="Players, Seraphs, trails, and objectives">
+    <svg viewBox={`0 0 ${size.width} ${size.height}`} aria-label="Players, Seraphs, trails, markers and objectives">
+      {markers.map(marker => { const point = screenPoint(marker.position, camera, size), color = markerColor(marker.color); return shown(point, size) &&
+        <g key={`${marker.owner}:${marker.guid}`} class="map-marker" style={color ? { color } : null} transform={`translate(${point.x} ${point.y})`}>
+          <title>{`${marker.title || marker.icon} · ${marker.owner}`}</title><path d="M0 -7 L6 0 L0 7 L-6 0 Z" />{camera.zoom >= .5 && marker.title && <text x="9" y="4">{marker.title}</text>}</g>; })}
       {agents.map(({ bot: item, index, state, current, target, trails }) => <g key={item.id} class={`map-agent agent-${index % 6}`}>
         {trails.map((trail, trailIndex) => trail.length > 1 && <g key={trailIndex}><polyline points={trail.map(p => `${p.x},${p.y}`).join(' ')} class="map-trail map-trail-shadow" />
           <polyline points={trail.map(p => `${p.x},${p.y}`).join(' ')} class="map-trail" /></g>)}

@@ -5,6 +5,7 @@ import { type Log, noLog } from './log.ts';
 // Telemetry: latest value per topic plus a bounded log, trimmed to fleet-relevant fields, one POST per interval. Never awaited
 // by gameplay; a failed POST keeps the latest topics for the next interval and drops that batch's log lines. `frame` and the
 // far-view `map` columns stay local: the fleet page draws the game's own World Map chunks (operator native map sync) instead.
+// Which lines are log lines is the controller's call (its `coalesce` flag); the reporter only trims.
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 // Public base of this host's live view; the fleet page frames `<stream>/bot/`. Only web origins, no path, credentials or query.
 function streamOrigin(value) {
@@ -19,17 +20,6 @@ function streamOrigin(value) {
     throw new Error('VINTAGE_STORY_STREAM_URL must be an origin like https://diggy.stream.example.com');
   return url.origin;
 }
-const polling = new Set([
-  'observe',
-  'sense',
-  'inventory',
-  'inspect_target',
-  'block_action_status',
-  'block_action_continue',
-  'events',
-  'environment',
-  'recipes',
-]);
 const pick = (source, keys) => (source ? Object.fromEntries(keys.filter(k => source[k] !== undefined).map(k => [k, source[k]])) : source);
 const reduce = {
   frame: () => undefined,
@@ -72,6 +62,12 @@ const reduce = {
       },
     },
   navigation: n => pick(n, ['id', 'state', 'reason', 'target', 'remainingCheckpoints', 'replans', 'cachedCells', 'lastReplan', 'evading', 'threat']),
+  waypoints: w =>
+    w && {
+      observedAt: w.observedAt,
+      count: w.count,
+      waypoints: (w.waypoints ?? []).slice(0, 200).map(m => pick(m, ['guid', 'title', 'icon', 'color', 'pinned', 'position'])),
+    },
   goal: g =>
     g && {
       ...pick(g, ['id', 'kind', 'intent', 'state', 'active', 'startedAt', 'finishedAt', 'reason', 'cleanupError']),
@@ -155,7 +151,7 @@ export class Reporter {
     if (reduced === undefined) return;
     const entry = { at: Date.now(), data: bounded(reduced ?? null, this.topicBytes) };
     this.latest.set(topic, entry);
-    if (coalesce || (topic === 'action' && data?.ok !== false && polling.has(data?.action))) return;
+    if (coalesce) return;
     this.log.push({ topic, ...entry });
     while (this.log.length > this.maxLog) this.log.shift();
   }

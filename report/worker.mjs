@@ -3,12 +3,13 @@ import { markRespawnBreaks, trimTrail } from './trail.mjs';
 import { ingestRunMetrics, publicBot } from './runs.mjs';
 
 // Fleet state service. Bots POST /api/report batches `{bot:{id,...},topics:{[topic]:{at,data}},log:[{topic,at,data}]}`;
-// the single SeraphFleet object keeps the latest value per bot/topic plus a bounded log, evicts bots unseen for RETENTION_HOURS,
+// the single SeraphFleet object keeps the latest value per bot/topic plus a bounded log and the last 20 goals (latest state
+// per goal id, so missions outlive the shared log ring), evicts bots unseen for RETENTION_HOURS,
 // and pushes updates to browser WebSockets (`snapshot|bot|nativemap|gone`; a report sends the whole bot record, a native map sync
 // only its `nativeMap` summary). Reads (API and the static SPA in dist/, see app/) are open; writes require REPORT_TOKEN.
 const topicRe = /^[a-z][a-z0-9_]{0,63}$/, idRe = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const maxBody = 131072, maxMapImage = 92160, maxNativeBatch = 18, maxNativeChunks = 16384;
-const maxLog = 200;
+const maxLog = 200, maxGoals = 20;
 const maxMeta = 128, persistMs = 30000, sweepMs = 900000;
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -43,6 +44,19 @@ function appendTrail(bot, stateEntry, now) {
   trail.push(sample);
   trimTrail(trail, now);
   return true;
+}
+
+// The last goals a Seraph ran, newest last, one row per goal id holding its latest reported state.
+function rememberGoals(bot, log) {
+  const goals = bot.goals ??= [];
+  for (const entry of Array.isArray(log) ? log : []) {
+    if (entry?.topic !== 'goal' || typeof entry.data?.id !== 'string') continue;
+    const row = { at: number(entry.at, Date.now()), data: entry.data };
+    const index = goals.findIndex(goal => goal.data.id === entry.data.id);
+    if (index >= 0) { if (goals[index].at <= row.at) goals.splice(index, 1); else continue; }
+    goals.push(row);
+  }
+  while (goals.length > maxGoals) goals.shift();
 }
 
 const mapPoint = value => Array.isArray(value) && value.length === 2 && value.every(item => Number.isFinite(item) && item >= -8 && item <= 8)
@@ -271,6 +285,7 @@ export class SeraphFleet extends DurableObject {
       bot.log.push({ topic: entry.topic, at: number(entry.at, now), data: entry.data ?? null });
     }
     while (bot.log.length > maxLog) bot.log.shift();
+    rememberGoals(bot, body.log);
     const segmented = markRespawnBreaks(bot.trail ?? [], bot.log);
     this.bots.set(id, bot); this.dirty.add(id);
     this.broadcast({ type: 'bot', bot: publicBot(bot) });

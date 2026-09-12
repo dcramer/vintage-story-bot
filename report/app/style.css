@@ -255,6 +255,9 @@ section { display: block; padding: 20px; }
 .global-world-map { cursor: grab; touch-action: none; user-select: none; }
 .global-world-map:active { cursor: grabbing; }
 .global-map-terrain { image-rendering: pixelated; z-index: 0; }
+.map-marker { color: #f2c94c; }
+.map-marker path { fill: currentColor; stroke: #081216; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.map-marker text { fill: currentColor; font: 600 10px/1 ui-monospace, monospace; paint-order: stroke; stroke: #081216; stroke-width: 2.6px; stroke-linejoin: round; }
 .world-player { color: #fff; filter: drop-shadow(0 0 5px #000); }
 .world-player circle { fill: #171b1e; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .world-player path { fill: #fff; stroke: #171b1e; stroke-width: 1; }

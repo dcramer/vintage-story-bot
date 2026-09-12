@@ -168,7 +168,18 @@ export class Controller {
       if (action === 'control_step') perception();
       return;
     }
-    this.telemetry.publish('action', { action, args, ok: result.ok, error: result.error, code: result.code });
+    if (action === 'map_waypoints' && result.ok)
+      this.telemetry.publish(
+        'waypoints',
+        { observedAt: result.observedAt, count: result.count, waypoints: result.waypoints ?? [] },
+        { coalesce: true },
+      );
+    // A read that runs in a loop is latest-only for every sink; anything else, and any refusal, is a log line.
+    this.telemetry.publish(
+      'action',
+      { action, args, ok: result.ok, error: result.error, code: result.code },
+      { coalesce: result.ok && polling.has(action) },
+    );
   }
   // A goal's state for the operator and the session log: every state change at info,
   // every progress report at debug.

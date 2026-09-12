@@ -36,21 +36,25 @@ function Live({ stream, state }) {
   </section>;
 }
 
+// The Worker keeps the last goals per Seraph (latest state each) apart from the shared log ring.
 function MissionHistory({ bot }) {
-  const rows = [], seen = new Set();
-  for (const entry of logRows(bot).filter(event => event.topic === 'goal').reverse()) {
-    const key = entry.data?.id ?? `${entry.at}:${entry.seq}`;
-    if (seen.has(key)) continue;
-    seen.add(key); rows.push(entry);
-    if (rows.length === 4) break;
-  }
+  const rows = (bot.goals ?? []).slice(-4).reverse();
   return <div class="mission-list">{rows.length ? rows.map(entry => {
     const g = entry.data ?? {}, p = g.progress?.subgoal?.progress ?? g.progress ?? {};
-    return <div class="mission-row" key={`${entry.at}:${entry.seq}`}>
+    return <div class="mission-row" key={g.id}>
       <div><strong>{goalTitle(g) || words(g.kind)}</strong><small>{p.phase ? words(p.phase) : shortReason(g.reason) || 'Mission update'}{phaseDetail(p) ? ` · ${phaseDetail(p)}` : ''}</small></div>
       <span class={stateClass(g.state)}>{words(g.state)}</span><time>{time(entry.at)}</time>
     </div>;
   }) : <div class="panel-empty compact">No missions reported</div>}</div>;
+}
+
+// The player's own markers on the game's world map, as the map screen lists them.
+function MapMarkers({ bot }) {
+  const rows = (bot.topics.waypoints?.data?.waypoints ?? []).slice(0, 12);
+  return <div class="mission-list">{rows.length ? rows.map(marker => <div class="mission-row" key={marker.guid}>
+    <div><strong>{marker.title || marker.icon}</strong><small>{marker.icon}{marker.pinned ? ' · pinned' : ''}</small></div>
+    <span>{point(marker.position)}</span></div>)
+    : <div class="panel-empty compact">No map markers reported</div>}</div>;
 }
 
 function GoalScript({ g }) {
@@ -117,6 +121,7 @@ export function Bot({ id }) {
         <CurrentRun run={bot.runs?.current} />
         <section class="agent-map-panel"><div class="agent-map-heading"><span>Last position</span><b>{point(s.position) ?? 'Unknown'}</b></div><WorldMap bots={[bot]} detailed /></section>
         <section class="agent-events"><div class="context-heading"><span class="eyebrow">Recent missions</span><span class="panel-count">Latest</span></div><MissionHistory bot={bot} /></section>
+        <section class="agent-events"><div class="context-heading"><span class="eyebrow">Map markers</span><span class="panel-count">{bot.topics.waypoints?.data?.count ?? 0}</span></div><MapMarkers bot={bot} /></section>
       </aside>
     </div>
 
