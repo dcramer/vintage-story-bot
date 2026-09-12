@@ -70,7 +70,7 @@ const reduce = {
     },
   goal: g =>
     g && {
-      ...pick(g, ['id', 'kind', 'intent', 'state', 'active', 'startedAt', 'finishedAt', 'reason', 'cleanupError']),
+      ...pick(g, ['id', 'kind', 'title', 'intent', 'state', 'active', 'startedAt', 'finishedAt', 'reason', 'cleanupError']),
       args: bounded(g.args ?? null, g.kind === 'goal_script' ? 12288 : 4096),
       progress: bounded(g.progress ?? null, 4096),
       result: bounded(g.result ?? null, 4096),

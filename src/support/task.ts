@@ -18,10 +18,23 @@ export async function runField(env, options, features, work) {
   }
 }
 
-// Human-readable item name for server chat announcements.
+// Human-readable code for goal titles and server chat announcements.
 export const cleanName = code =>
   String(code ?? '')
     .split(':')
     .pop()
     .replace(/[-_]/g, ' ')
     .trim() || 'something';
+
+export const destinationName = args =>
+  args.waypoint ??
+  [args.x, args.y, args.z]
+    .filter(value => value !== undefined)
+    .map(value => Math.round(value))
+    .join(', ');
+
+export const itemListName = items =>
+  items
+    .slice(0, 2)
+    .map(item => `${item.count === undefined ? '' : `${item.count} × `}${cleanName(item.item)}`)
+    .join(', ') + (items.length > 2 ? ` and ${items.length - 2} more` : '');

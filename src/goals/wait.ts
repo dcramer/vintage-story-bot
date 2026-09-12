@@ -18,6 +18,12 @@ export default defineGoal({
     'Hold position and keep watching until a game hour or for a number of milliseconds. Ends early with reason threat when a ' +
     'hostile is seen or heard (the caller decides where to go); being hurt is reported, a life alert, death or control loss ' +
     'ends it. No eating, sheltering or fleeing of its own. Returns START; poll goal_status.',
+  title: args =>
+    args.untilHour !== undefined
+      ? `Wait until ${String(Math.floor(args.untilHour)).padStart(2, '0')}:${String(Math.floor((args.untilHour % 1) * 60)).padStart(2, '0')}`
+      : args.ms !== undefined
+        ? `Wait for ${Math.round(args.ms / 1000)} seconds`
+        : 'Wait here',
   announce: args => (args.untilHour !== undefined ? `Waiting here until about ${Math.round(args.untilHour)}:00.` : 'Waiting here a while.'),
   run: (env, { untilHour, ms, ...options }) =>
     runField(env, { manageFood: false, ...options }, [], async field => {

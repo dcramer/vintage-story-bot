@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { consume } from '../support/food.ts';
-import { runField } from '../support/task.ts';
+import { cleanName, runField } from '../support/task.ts';
 
 export const schema = z
   .object({
@@ -18,6 +18,7 @@ export default defineGoal({
     'altering the mind, soonest to spoil first, optionally filtered by item. Verifies both item ' +
     'consumption and increased satiety. No foraging or automatic retries. Backpack food needs ' +
     'an empty hotbar slot. Returns START and goal.id; poll goal_status for outcome.',
+  title: args => (args.item ? `Eat ${cleanName(args.item)}` : 'Eat carried food'),
   announce: () => 'Stopping for a bite.',
   run: (env, options) =>
     runField(env, options, ['food_freshness'], async field => ({ ok: true, goal: 'eat', ...(await consume(field, { match: options.item })) })),

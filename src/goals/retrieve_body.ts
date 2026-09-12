@@ -108,6 +108,7 @@ export default defineGoal({
     'in an empty slot (the rest are skipped and reported; death drops despawn after 10 minutes), then delete the ' +
     'marker like the map screen would. Requires the map_waypoints mod feature. Storm, damage, death and control ' +
     'loss interrupt as travel. Returns START; poll goal_status.',
+  title: () => 'Retrieve belongings from the last death',
   announce: () => 'Going back for my things.',
   run: (env, options) => runField(env, { manageFood: false, ...options }, ['inventory', 'map_waypoints'], retrieveBody),
 });

@@ -238,6 +238,7 @@ export default defineGoal({
     'with a block from the pack: a one-by-two pocket for the night. With no bank about, a hole where it stands: two ' +
     'blocks straight down, the cell above closed with the block. Ends with the mouth cell to dig out of in the ' +
     'morning (dig_area, then dig_out of the hole); the hole is dug even with nothing to seal it. Reasons: cannot_dig, cannot_enter, hole_too_shallow.',
+  title: () => 'Dig a shelter',
   announce: () => 'Digging in for the night.',
   run: (env, options) => runField(env, options, ['inventory', 'block_actions'], (field, survival) => burrow(field, survival)),
 });

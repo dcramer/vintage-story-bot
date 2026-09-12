@@ -31,6 +31,7 @@ export default defineGoal({
     'Dig each cell in turn: walk to a standing spot off its column, aim, dig with normal mining rules, verify. Known-air cells ' +
     'are skipped; drops are not collected (use harvest/collect_item). Reports failed cells with reasons instead of retrying. ' +
     'Never digs own footing. Returns START; poll goal_status.',
+  title: () => 'Dig out an area',
   announce: () => 'Clearing out an area.',
   run: (env, { cells, box: bounds, ...options }) =>
     runField(env, options, ['inventory', 'block_actions'], (field, survival, o) =>

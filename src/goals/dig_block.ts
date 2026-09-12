@@ -20,6 +20,7 @@ export default defineGoal({
     'Refuses own footing. No walking, tool crafting or automatic retry. Verifies target became air; ' +
     'drops/pickup are separate. Damage, movement, target/item change or deadline interrupt. ' +
     'Returns START and goal.id; poll goal_status for client-observed outcome, not server acknowledgement.',
+  title: () => 'Dig a block',
   announce: () => 'Digging a block.',
   run: (env, options) => runField(env, options, ['block_actions'], (field, _, o) => changeBlock(field, 'dig', o)),
 });

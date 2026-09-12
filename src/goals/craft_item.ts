@@ -141,6 +141,7 @@ export default defineGoal({
     'Craft from own inventory via the 3x3 grid: pick a known recipe whose ingredients are carried, transfer them, craft into an ' +
     'empty owned slot, verify the inventory gain, repeat until count. Clears the grid first and afterwards. No knapping/clay/' +
     'container access, no gathering. missing_ingredients lists candidate recipes. Returns START; poll goal_status.',
+  title: args => `Craft ${args.count} × ${cleanName(args.output)}`,
   announce: args => `Crafting ${cleanName(args.output)}.`,
   run: (env, options) => runField(env, options, ['inventory', 'grid_craft'], (field, _, o) => craftItem(field, o)),
 });

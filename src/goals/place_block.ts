@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { blockFace, blockPoint, blockTarget } from '../runtime/schemas.ts';
 import { changeBlock } from '../support/blocks.ts';
-import { runField } from '../support/task.ts';
+import { cleanName, runField } from '../support/task.ts';
 
 export default defineGoal({
   name: 'place_block',
@@ -22,6 +22,7 @@ export default defineGoal({
     'No replacement, walking, inventory transfer, specialized item-use or retry. Normal claims/collision ' +
     'validation applies. Verifies destination change and exactly one item consumed in survival. ' +
     'Returns START and goal.id; poll goal_status for client-observed outcome, not server acknowledgement.',
+  title: args => `Place ${cleanName(args.expectedItem)}`,
   announce: () => 'Placing a block.',
   run: (env, options) => runField(env, options, ['block_actions'], (field, _, o) => changeBlock(field, 'place', o)),
 });

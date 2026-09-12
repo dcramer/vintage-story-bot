@@ -4,7 +4,7 @@ import { distance, horizontal } from '../runtime/navigation/terrain.ts';
 import { blockTarget } from '../runtime/schemas.ts';
 import { parseBlockKey, selectCell } from '../support/blocks.ts';
 import { ownedSlots } from '../support/inventory.ts';
-import { cleanName, runField } from '../support/task.ts';
+import { cleanName, itemListName, runField } from '../support/task.ts';
 
 const includes = (code, part) => typeof code === 'string' && code.includes(part);
 const sum = slots => slots.reduce((n, s) => n + s.quantity, 0);
@@ -187,6 +187,7 @@ export default defineGoal({
     'Walk to an observed container block, open it by right-click, move own items in (merging first, then ' +
     'empty slots) and close it. Each move is verified by counts on both sides; stops at the first unverified ' +
     'or refused move (no_room, transfer_unverified). Returns START; poll goal_status.',
+  title: args => `Store ${itemListName(args.items)}`,
   announce: args => `Putting ${args.items.map(i => cleanName(i.item)).join(', ')} away.`,
   run: (env, options) =>
     runField(env, options, ['containers', 'inventory'], (field, survival, o) => exchange(field, survival, { ...o, direction: 'store' })),

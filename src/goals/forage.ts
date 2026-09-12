@@ -37,6 +37,7 @@ export default defineGoal({
     'direction across restarts; a stretch of steps that took, saw and covered nothing ends it with none_found. No default deadline. Damage/death/control loss cancels; never respawns or resumes automatically. ' +
     'Returns START and goal.id; poll goal_status. Needs an empty hotbar slot for harvesting. ' +
     'Optional sprint=true permits straight level sprinting only while food is at least 60%.',
+  title: args => (args.count ? `Forage for ${args.count} fresh food items` : 'Forage for food'),
   announce: () => 'Foraging for a bite to eat.',
   run: (env, options) =>
     runField(env, { ...options, manageFood: true }, [], async (field, survival) => {

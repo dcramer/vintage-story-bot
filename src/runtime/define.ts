@@ -15,6 +15,7 @@ export const defineAction = definition => definition;
 /**
  * @typedef {object} GoalDefinition One long-running goal; file `src/goals/<name>.ts`, default export.
  * @property {string} name Public RPC/MCP name; must equal the file basename.
+ * @property {(args: object) => string} title Stable operator-facing outcome from validated arguments; distinct from chat and progress.
  * @property {import('zod').ZodType} schema Input validation.
  * @property {string} description
  * @property {boolean} [destructive]
@@ -25,4 +26,10 @@ export const defineAction = definition => definition;
  * @property {(runtime: object, args: object, record: object, started: object) => import('effect').Effect.Effect<any>} [launch]
  *   Custom Effect launcher for goals that bypass runTask (move_to).
  */
-export const defineGoal = definition => definition;
+export const defineGoal = definition => {
+  if (typeof definition.title !== 'function') throw new Error(`Goal ${definition.name} requires a title`);
+  return {
+    ...definition,
+    title: args => definition.title(args).replace(/\s+/g, ' ').trim().slice(0, 240),
+  };
+};

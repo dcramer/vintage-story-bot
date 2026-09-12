@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { blockTarget } from '../runtime/schemas.ts';
-import { cleanName, runField } from '../support/task.ts';
+import { cleanName, itemListName, runField } from '../support/task.ts';
 import { exchange, wanted } from './store_items.ts';
 
 export default defineGoal({
@@ -20,6 +20,7 @@ export default defineGoal({
     'Walk to an observed container block, open it by right-click, move matching items into own hotbar/bag ' +
     'slots (merging first, then empty slots) and close it. Each move is verified by counts on both sides; ' +
     'stops at the first unverified or refused move (no_room, none_found). Returns START; poll goal_status.',
+  title: args => `Take ${itemListName(args.items)} from storage`,
   announce: args => `Grabbing ${args.items.map(i => cleanName(i.item)).join(', ')} from storage.`,
   run: (env, options) =>
     runField(env, options, ['containers', 'inventory'], (field, survival, o) => exchange(field, survival, { ...o, direction: 'take' })),

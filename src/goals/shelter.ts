@@ -23,6 +23,7 @@ export default defineGoal({
     'Build the tiny shelter (3x3, walls 2 high, flat roof, 25 blocks) two blocks from where the bot stands, walk in, seal the ' +
     'door from inside and place a torch if one is carried. Fails fast with not_enough_material; walls, cannot_enter and seal ' +
     'report which phase stopped. Result home is the spot to return to. Returns START; poll goal_status.',
+  title: args => `Build a ${cleanName(args.item)} shelter`,
   announce: args => `Putting up a little ${cleanName(args.item)} shelter.`,
   run: (env, { item, torch, ...options }) =>
     runField(env, options, ['inventory', 'block_actions'], async (field, survival) => {

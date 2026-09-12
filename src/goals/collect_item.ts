@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { carriedCount, itemCount } from '../support/inventory.ts';
-import { runField } from '../support/task.ts';
+import { cleanName, runField } from '../support/task.ts';
 
 export async function collectItem(field, { target, expectedItem, radius = 8 }) {
   await field.observe();
@@ -87,6 +87,7 @@ export default defineGoal({
     'swimming. Requires inventory gain covering its initially observed quantity; disappearance alone ' +
     'is not success. Delta does not prove entity causality. Partial pickup, lost targets and blocked ' +
     'routes report failure; damage/deadline/stop interrupt. Returns START; poll goal_status.',
+  title: args => `Pick up ${cleanName(args.expectedItem)}`,
   announce: () => 'Picking something up.',
   run: (env, options) => runField(env, options, ['inventory'], (field, _, o) => collectItem(field, o)),
 });

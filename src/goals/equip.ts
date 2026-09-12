@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { equip } from '../support/inventory.ts';
-import { runField } from '../support/task.ts';
+import { cleanName, runField } from '../support/task.ts';
 
 export default defineGoal({
   name: 'equip',
@@ -21,6 +21,7 @@ export default defineGoal({
     'Equip an owned item/tool or empty hand. Selects a matching hotbar stack or transfers one item into an ' +
     'empty hotbar slot. No swaps, drops, armor/offhand or crafting. Verifies transfer and selection; ' +
     'never retries mutations. Returns START and goal.id; poll goal_status. Damage/session loss interrupt.',
+  title: args => (args.item === null ? 'Select an empty hand' : `Equip ${cleanName(args.item ?? args.tool)}`),
   announce: () => 'Sorting out my gear.',
   run: (env, options) => runField(env, options, ['inventory'], (field, _, o) => equip(field, o)),
 });

@@ -19,6 +19,7 @@ export default defineGoal({
     'toward x/z (the foot-level block stays as the step; the three blocks above it are dug when a carried tool or ' +
     'bare hands can break them) and climb it. Ends ok once there is room to roam, else with reason ' +
     'no_wall_to_cut, cannot_cut, cannot_climb or still_enclosed. Returns START; poll goal_status.',
+  title: () => 'Dig a way out',
   announce: () => 'Digging my way out of this hole.',
   run: (env, options) =>
     runField(env, options, ['inventory', 'block_actions'], (field, _, o) => digOut(field, { x: o.x, z: o.z }, { steps: o.steps })),

@@ -133,6 +133,7 @@ export default defineGoal({
     'least-walked ground, and verify the carried gain. Sticks are also broken out of branchy leaves (the twiggy inner canopy, ' +
     'one stick each) when none lie close. No other digging or harvesting. manageFood=true pauses below 20% satiety to forage; ' +
     'sprint=true permits safe, well-fed straight travel. No default deadline. Returns START; poll goal_status.',
+  title: args => `Gather ${args.count} × ${cleanName(args.item ?? args.match)}`,
   announce: args => `Collecting some ${cleanName(args.item ?? args.match ?? 'stick')}s.`,
   run: gather,
 });

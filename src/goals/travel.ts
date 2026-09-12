@@ -3,7 +3,7 @@ import { defineGoal } from '../runtime/define.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { pitLimit, reachable } from '../support/digging.ts';
 import { clearLeafPath } from '../support/leaf-clearing.ts';
-import { runField } from '../support/task.ts';
+import { destinationName, runField } from '../support/task.ts';
 import { nearestThreat } from '../support/threats.ts';
 
 export const routeRegressed = (best, current, margin = 12) => current > best + margin;
@@ -159,6 +159,7 @@ export default defineGoal({
     'Walk any distance by chaining safe navigation legs with exploration detours through unknown terrain; wades shallow water. ' +
     'Ends with reason pit when the ground it can reach runs out (dig_out gets out), no_progress, a life alert, death or control loss; being hurt is reported, not a stop. ' +
     'Food management as gather. Returns START; poll goal_status.',
+  title: args => `Travel to ${destinationName(args)}`,
   announce: args => (args.waypoint ? `Traveling to ${args.waypoint}.` : 'Setting off on a journey.'),
   compose: (runtime, env, args) => task(env, resolve(runtime, args)),
   // Resolves a named point from controller memory before the task starts.

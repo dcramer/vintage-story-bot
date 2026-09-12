@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
+import { destinationName } from '../support/task.ts';
 
 export const schema = z
   .object({
@@ -28,6 +29,7 @@ export default defineGoal({
     'arrival: poll goal_status by id. stop cancels; other mutations refused during a goal. ' +
     'Unknown/stale ground never traversed; no digging, swimming, doors or gap jumps. ' +
     'Unreachable/unexplored destinations may fail within budget.',
+  title: args => `Move to ${destinationName(args)}`,
   announce: () => 'Heading over to take a look.',
   compose: async (_runtime, env, args) => {
     const navigation = await env.navigate(args);

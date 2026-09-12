@@ -224,7 +224,12 @@ export async function runGoalPlan(
   const results = [];
   for (let index = 0; index < plan.length; index++) {
     const step = plan[index],
-      base = { completed: index, step: index + 1, steps: plan.length, subgoal: { kind: step.goal.name, args: step.args } };
+      base = {
+        completed: index,
+        step: index + 1,
+        steps: plan.length,
+        subgoal: { kind: step.goal.name, title: step.goal.title?.(step.args), args: step.args },
+      };
     report({ phase: 'running_goal', ...base });
     try {
       const result = await invoke(step, progress => report({ phase: 'running_goal', ...base, subgoal: { ...base.subgoal, progress } }));

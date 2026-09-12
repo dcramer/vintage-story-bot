@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
-import { runField } from '../support/task.ts';
+import { destinationName, runField } from '../support/task.ts';
 import { travel } from './travel.ts';
 
 export default defineGoal({
@@ -21,6 +21,7 @@ export default defineGoal({
     'Forage until count additional fresh food items remain after anything eaten during the work, then travel to x/z at any ' +
     'surface elevation. match limits the block codes food is looked for on; default bush. Uses normal food, threat, storm, route and verification ' +
     'rules throughout. No default deadline. Returns START; poll goal_status.',
+  title: args => `Forage for ${args.count} fresh food items, then travel to ${destinationName(args)}`,
   announce: () => 'Gathering provisions, then heading home.',
   run: (env, { count, match, x, z, arrivalRadius, ...options }) =>
     runField(env, { ...options, manageFood: true }, [], async (field, survival) => {

@@ -17,6 +17,7 @@ export default defineGoal({
     'Clay-form one item: equip clay, sneak-place a clay form ahead (or reuse an unfinished own form), select the recipe, ' +
     'then aim at each missing voxel layer by layer and right-click natively (extra voxels are left-clicked away); clay is ' +
     'consumed as the game demands. Verifies inventory gain of output. Returns START; poll goal_status.',
+  title: args => `Form ${cleanName(args.output)}`,
   announce: args => `Forming ${cleanName(args.output)} out of clay.`,
   run: (env, options) => runField(env, options, ['inventory', 'sneak', 'forming'], (field, _, o) => form(field, { ...o, kind: 'clayforming' })),
 });

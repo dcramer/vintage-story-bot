@@ -4,7 +4,7 @@ import { distance, horizontal } from '../runtime/navigation/terrain.ts';
 import { changeBlock, selectCell } from '../support/blocks.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
 import { presets } from '../support/structures.ts';
-import { runField } from '../support/task.ts';
+import { cleanName, runField } from '../support/task.ts';
 
 const faces = { up: [0, 1, 0], north: [0, 0, -1], south: [0, 0, 1], east: [1, 0, 0], west: [-1, 0, 0], down: [0, -1, 0] };
 const center = c => ({ x: c.x + 0.5, y: c.y + 0.5, z: c.z + 0.5 });
@@ -200,6 +200,7 @@ export default defineGoal({
     'Place blocks cell by cell from own inventory: equip the item, stand within reach off the destination column, pick a known ' +
     'solid support face, place once and verify (one item consumed in survival). Occupied cells are skipped; failures are reported ' +
     'per cell; stops on out_of_material. No terrain clearing or scaffolding. Returns START; poll goal_status.',
+  title: args => (args.preset ? `Build ${cleanName(args.preset.kind)}` : `Build with ${args.cells.length} blocks`),
   announce: args => `Building a ${(args.preset?.kind ?? 'structure').replace(/[-_]/g, ' ')}.`,
   run: (env, { cells, preset, ...options }) =>
     runField(env, options, ['inventory', 'block_actions'], (field, survival) =>

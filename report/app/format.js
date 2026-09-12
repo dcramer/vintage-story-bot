@@ -26,30 +26,13 @@ export const blockCount = value => Number.isFinite(value) ? value.toLocaleString
 export const code = c => typeof c === 'string' ? c.replace(/^game:/, '') : c;
 export const itemName = value => String(code(value) ?? '').replace(/-/g, ' ');
 export const point = p => p && p.x != null ? [p.x, p.y, p.z].map(v => v == null ? '?' : Math.round(v)).join(', ') : null;
-const count = (n, what) => `${n}× ${what}`;
-// What the goal is trying to accomplish, from its request arguments (see controller/actions).
-const describe = {
-  harvest: a => `${count(a.count, code(a.item))} from ${a.match}${a.tool ? ' with ' + a.tool.toLowerCase() : ''}`,
-  fell_tree: a => `${count(a.count, 'logs')} with axe`,
-  knap: a => `${code(a.output)}${a.material ? ' from ' + code(a.material) : ''}`,
-  clayform: a => `${code(a.output)}${a.material ? ' from ' + code(a.material) : ''}`,
-  craft_item: a => count(a.count, code(a.output)),
-  build: a => a.preset ? `${a.preset.kind} of ${code(a.preset.item)} at ${point(a.preset.origin)}`
-    : `${a.cells?.length ?? 0} blocks: ${[...new Set((a.cells ?? []).map(c => code(c.item)))].join(', ')}`,
-  dig_area: a => a.box ? `box ${point(a.box.from)} → ${point(a.box.to)}${a.tool ? ' with ' + a.tool.toLowerCase() : ''}` : `${a.cells?.length ?? 0} cells`,
-  travel: a => a.waypoint ? `to waypoint "${a.waypoint}"` : `to ${point(a)}`,
-  explore: a => a.legs != null ? `${a.legs} legs${a.heading != null ? ' from heading ' + Math.round(a.heading) + '°' : ''}` : 'unmapped terrain',
-  use_on_block: a => `${a.item === null ? 'empty hand' : a.item ? code(a.item) : 'held item'} on ${a.target}${a.sneak ? ' (sneak)' : ''}`,
-  collect_item: a => `${code(a.expectedItem)} (${a.target})`,
-  equip: a => a.item === null ? 'empty hand' : a.item ? code(a.item) : `${a.tool}${a.minTier ? ' tier ≥ ' + a.minTier : ''}`,
-  dig_block: a => a.target, place_block: a => `${code(a.expectedItem)} on ${a.target}`,
-  gather_sticks: a => count(a.count ?? 10, 'sticks'), move_to: a => `to ${point(a)}`,
-  forage: a => a.count ? `${count(a.count, 'fresh food')} in reserve` : 'food for recovery',
-  forage_travel: a => `${count(a.count, 'fresh food')}, then ${point(a)}`,
-  eat: () => 'fresh food from inventory', collect_stick: () => 'one visible stick',
+// Titles belong to the goal definition. Older reports retain intent or a readable kind.
+export const goalTitle = g => {
+  const title = [g?.intent, g?.title].find(value => typeof value === 'string' && value.trim());
+  if (title) return title.trim();
+  const kind = typeof g?.kind === 'string' ? g.kind.replace(/[_-]/g, ' ').trim() : '';
+  return kind ? kind[0].toUpperCase() + kind.slice(1) : g ? 'Goal' : '';
 };
-export const goalTitle = g => typeof g?.intent === 'string' && g.intent.trim() ? g.intent.trim()
-  : g?.args && typeof g.args === 'object' && !g.args.truncated ? (describe[g.kind]?.(g.args) ?? fmt(g.args)) : '';
 const detailKeys = ['target', 'cell', 'ground', 'item', 'food', 'recipe', 'reason', 'from', 'slot', 'face', 'operation', 'leg', 'hunger', 'reserve'];
 export function phaseDetail(progress) {
   const p = progress ?? {};

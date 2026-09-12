@@ -95,6 +95,7 @@ export default defineGoal({
     'Aim at one observed block within reach and hold right-click with the held item, optionally sneaking. Verifies a target-cell ' +
     'code change or item consumption (till, plant, water, ignite, ground placement, kiln layers); no_observed_effect otherwise. ' +
     'No walking, GUI dialogs or retries. Returns START; poll goal_status for client-observed outcome.',
+  title: args => (args.item ? `Use ${cleanName(args.item)} on a block` : 'Use a block'),
   announce: args => `Working on a block${args.item ? ` with ${cleanName(args.item)}` : ''}.`,
   run: (env, options) => runField(env, options, ['inventory', 'sneak'], (field, _, o) => useOnBlock(field, o)),
 });

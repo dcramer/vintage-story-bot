@@ -15,7 +15,7 @@ const shortReason = value => {
 function Mission({ g }) {
   const p = g?.progress ?? {}, subgoal = p.subgoal, detail = subgoal?.progress ?? p;
   const title = goalTitle(g) || (g ? words(g.kind) : 'Standing by');
-  const step = subgoal ? `${words(subgoal.kind)}${goalTitle(subgoal) ? ` — ${goalTitle(subgoal)}` : ''}` : null;
+  const step = subgoal ? goalTitle(subgoal) : null;
   const phase = detail.phase ? `${words(detail.phase)}${phaseDetail(detail) ? ` — ${phaseDetail(detail)}` : ''}` : null;
   return <section class="mission-brief">
     <div class="mission-copy"><span class="mission-label">{g?.active ? 'Current mission' : g ? 'Last mission' : 'Mission'}</span><h1>{title}</h1>

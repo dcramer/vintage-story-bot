@@ -228,6 +228,7 @@ export class Controller {
     return {
       id: record.id,
       kind: record.kind,
+      title: record.title,
       args: record.args,
       state: record.kind === 'move_to' ? (record.nav?.state ?? record.state) : record.state,
       active: this.active === record,
@@ -456,6 +457,7 @@ export class Controller {
     const record: any = {
       id: randomUUID(),
       kind,
+      title: findTool(kind)?.title?.(args),
       args,
       by,
       state: 'starting',

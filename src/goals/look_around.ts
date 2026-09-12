@@ -20,6 +20,7 @@ export default defineGoal({
     'Turn the head through a full circle without moving, letting the eye take in every direction, then report what is in ' +
     'view: counts per code and the nearest objects (memory; revalidate keys before acting). match narrows what is ' +
     'reported. Damage, death and control loss interrupt. Returns START; poll goal_status.',
+  title: () => 'Look around',
   announce: () => 'Having a look around.',
   run: (env, { match, matches, kind, radius, limit, ...options }) =>
     runField(env, { manageFood: false, ...options }, [], async field => {

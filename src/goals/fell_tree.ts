@@ -17,6 +17,7 @@ export default defineGoal({
   description:
     'Chop grown logs with an owned axe, lowest reachable log first so whole trees fall, then collect dropped logs until count. ' +
     'Same search/food/interruption rules as harvest. No leaf stripping. Returns START; poll goal_status.',
+  title: args => `Fell trees for ${args.count} logs`,
   announce: () => 'Chopping down a tree for logs.',
   run: (env, { count = 8, ...options }) =>
     runField(env, { manageFood: false, ...options }, ['inventory', 'block_actions'], (field, survival, o) =>

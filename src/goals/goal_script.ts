@@ -35,6 +35,7 @@ export default defineGoal({
     'Only literal arguments and sequential calls through the allow-listed goals API are accepted; no variables, loops, imports, ' +
     'network, filesystem or arbitrary JavaScript. The controller stores the original intent/goalScript in its goal record and ' +
     'reports the current subgoal separately. Returns START; poll goal_status.',
+  title: args => args.intent,
   announce: args => `Goal: ${args.intent}`,
   launch: (runtime, args, record, started, signal) => runtime.runGoalScript(args, record, started, signal),
 });
