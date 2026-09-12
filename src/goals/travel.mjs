@@ -3,6 +3,7 @@ import { defineGoal } from '../runtime/define.mjs';
 import { horizontal } from '../runtime/navigation/terrain.mjs';
 import { temporalStormUnsafe } from '../support/fieldwork.mjs';
 import { clearLeafPath } from '../support/leaf-clearing.mjs';
+import { digOut } from '../support/digging.mjs';
 import { runField } from '../support/task.mjs';
 import { nearestThreat } from '../support/threats.mjs';
 
@@ -15,7 +16,7 @@ const guardStorm = state => {
 };
 
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
-export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
+export async function travel(field, survival, { x, y, z, arrivalRadius = 1, dig = true }) {
   let stuck = 0, legs = 0, routeResets = 0, continuation = null, localDetour = false;
   let bestRemaining = Infinity;
   // Liveness: give up if the bot gets no meaningfully closer for two minutes,
@@ -107,6 +108,13 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }) {
         field.report('route_cleared', { remaining: +horizontal(field.latest.position, goal).toFixed(1), legs });
         continue;
       }
+      // Nowhere to go at all: dig a staircase out toward the goal before
+      // resetting the search, the way a player climbs out of a hole.
+      if (dig && stuck >= 2 && await digOut(field, goal)) {
+        stuck = 0; continuation = null; localDetour = false;
+        field.report('dug_out', { remaining: +horizontal(field.latest.position, goal).toFixed(1), legs });
+        continue;
+      }
       if (stuck < 6) continue;
       // A long trip can exhaust every local alternative on a steep ridge even
       // though a fresh per-goal visit history immediately finds a route. Reset
@@ -137,12 +145,14 @@ export default defineGoal({
     arrivalRadius: z.number().min(.5).max(8).default(1),
     manageFood: z.boolean().default(false),
     sprint: z.boolean().default(false),
+    dig: z.boolean().default(true).describe('Dig a staircase out when stuck in a pit with nowhere to walk.'),
     timeoutMs: z.number().int().min(1000).max(3600000).optional(),
   }).strict().refine(a => a.waypoint !== undefined || a.x !== undefined && a.z !== undefined, 'Supply waypoint or x/z'),
   destructive: true,
   description:
-    'Walk any distance by chaining safe navigation legs with exploration detours through unknown terrain. Stops on ' +
-    'no_progress after six stuck legs, damage, death or control loss. Food management as gather_sticks. Returns START; poll goal_status.',
+    'Walk any distance by chaining safe navigation legs with exploration detours through unknown terrain; wades shallow water; ' +
+    'digs a staircase out of a pit. Stops on no_progress, a life alert, death or control loss; being hurt is reported, not a stop. ' +
+    'Food management as gather_sticks. Returns START; poll goal_status.',
   announce: args => args.waypoint ? `Traveling to ${args.waypoint}.` : 'Setting off on a journey.',
   compose: (runtime, env, args) => task(env, resolve(runtime, args)),
   // Resolves a named point from controller memory before the task starts.
