@@ -513,6 +513,48 @@ test('brain loop: a swimming bot with no goal swims for the nearest dry ground, 
   assert.deepEqual([move.jump, move.sneak, move.direction], [true, false, 'forward']);
 });
 
+test('brain loop: a wading bot with no goal moves toward dry ground before starting work', async () => {
+  const calls: any[] = [];
+  const dry = { x: 3.5, y: 100, z: 0.5 };
+  const controller = {
+    active: null,
+    last: null,
+    brain: null,
+    history: new Map(),
+    wants: [],
+    map: { nodeAt: (x, z) => (x === 3 && z === 0 ? dry : null) },
+    send: async request => {
+      calls.push(request);
+      return request.action === 'observe'
+        ? state({
+            position: { x: 0.5, y: 100, z: 0.5 },
+            motion: { onGround: true, swimming: false, feetInLiquid: true },
+            orientation: { yawDegrees: 180 },
+            vitals: { hunger: { current: 500, max: 1500 }, oxygen: { current: 40000, max: 40000 } },
+          })
+        : request.action === 'inventory'
+          ? inventory()
+          : { ok: true, ...night };
+    },
+    request: async request => {
+      calls.push(request);
+      if (!['look', 'move'].includes(request.action)) throw new Error('no goal should start with wet footing');
+      return { ok: true };
+    },
+    stop: async () => {},
+    goalView: () => null,
+  };
+  const loop = new BrainLoop(controller as any, brain, 5);
+  loop.start();
+  await new Promise(resolve => setTimeout(resolve, 25));
+  await loop.stop();
+  const look = calls.find(c => c.action === 'look'),
+    move = calls.find(c => c.action === 'move');
+  assert.equal(Math.round(look.yawDegrees), 90, 'faces the dry cell to the east');
+  assert.deepEqual([move.jump, move.sneak, move.direction], [true, false, 'forward']);
+  assert.match(loop.lastDecision, /wading toward 4,1/);
+});
+
 test('brain loop: an act decision runs its actions in order by hand', async () => {
   const calls: any[] = [];
   const controller = {

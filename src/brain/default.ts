@@ -240,17 +240,18 @@ export function escapePoint(position: Cell, yawDegrees: number, home: Cell | nul
 }
 export const environmentalHurt = (events: any[]) =>
   events.some(event => event.type === 'message' && /^Lost [\d.]+ hp through gravity$/i.test(event.text ?? ''));
-// In deep water: face the nearest dry ground and swim with the jump key held, one stroke per decision.
+// In water: face the nearest dry ground and move with the jump key held, one stroke per decision.
 export function surfacing(state: any, ground: Cell | null): Decision {
   const p = state.position;
   const yaw = ground ? ((Math.atan2(ground.x - p.x, ground.z - p.z) * 180) / Math.PI + 360) % 360 : (state.orientation?.yawDegrees ?? 0);
   const oxygen = Math.round(((state.vitals?.oxygen?.current ?? 0) / (state.vitals?.oxygen?.max || 1)) * 100);
+  const movement = state.motion?.swimming ? 'swimming' : 'wading';
   return {
     act: [
       { action: 'look', yawDegrees: yaw, pitchDegrees: 0 },
       { action: 'move', durationMs: 1500, direction: 'forward', jump: true, sprint: false, sneak: false },
     ],
-    why: `swimming ${ground ? `toward ${Math.round(ground.x)},${Math.round(ground.z)}` : 'ahead'}, oxygen ${oxygen}%`,
+    why: `${movement} ${ground ? `toward ${Math.round(ground.x)},${Math.round(ground.z)}` : 'ahead'}, oxygen ${oxygen}%`,
   };
 }
 
@@ -463,8 +464,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
     return { wait: `letting ${active.kind} finish` };
   }
   if (classifyingHurt) return { wait: 'identifying damage source' };
-  // Deep water with nothing running: swim for shore before anything else.
-  if (state.motion?.swimming) return surfacing(state, ground);
+  // Wet footing cannot gather, craft or dig. Swim or wade to dry ground before choosing work.
+  if (state.motion?.swimming || state.motion?.feetInLiquid) return surfacing(state, ground);
   // Stopping a flight can catch the body between a jump and its landing. Every
   // fieldwork goal requires grounded footing, so let physics settle instead of
   // immediately failing the resumed kit job and setting it aside for minutes.
