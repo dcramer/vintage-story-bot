@@ -319,7 +319,7 @@ test('brain: a hit from nowhere is danger, and copper seen in passing is marked 
 test('brain: death waits out a temporal storm before respawning', () => {
   const dead = state({
     alive: false,
-    life: { deathId: 'death-1' },
+    life: { deathId: 'death-1', canRespawn: true },
     condition: { temporalStorm: { phase: 'active' } },
   });
   assert.deepEqual(decide(reading({ state: dead }), fresh()), { wait: 'dead, waiting out temporal storm' });
@@ -329,12 +329,17 @@ test('brain: death waits out a temporal storm before respawning', () => {
   });
 });
 
+test('brain: death waits until the respawn dialog is ready', () => {
+  const dead = state({ alive: false, life: { deathId: 'death-1', canRespawn: false } });
+  assert.deepEqual(decide(reading({ state: dead }), fresh()), { wait: 'dead, waiting for respawn' });
+});
+
 test('brain: death forgets transient burrow and pit state before respawn', () => {
   const memory = fresh();
   memory.burrow = { x: 10, y: 100, z: 10 };
   memory.pit = { x: 18, y: 98, z: 10 };
   memory.startupChecked = true;
-  const dead = state({ alive: false, life: { deathId: 'death-1' } });
+  const dead = state({ alive: false, life: { deathId: 'death-1', canRespawn: true } });
   decide(reading({ state: dead }), memory);
   assert.equal(memory.burrow, null);
   assert.equal(memory.pit, null);
@@ -427,7 +432,7 @@ test('brain loop: respawns when dead, waits behind an operator goal, starts and 
     history: new Map(),
     send: async request => {
       calls.push(request);
-      if (request.action === 'observe') return dead ? { ok: true, alive: false, life: { deathId: 'd:1' } } : state();
+      if (request.action === 'observe') return dead ? { ok: true, alive: false, life: { deathId: 'd:1', canRespawn: true } } : state();
       if (request.action === 'respawn') {
         dead = false;
         return { ok: true };

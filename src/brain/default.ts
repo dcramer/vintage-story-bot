@@ -306,9 +306,9 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (!state.alive && active) return { stop: 'dead' };
   if (!state.alive && temporalStormUnsafe(state)) return { wait: 'dead, waiting out temporal storm' };
   if (!state.alive)
-    return state.life?.deathId
+    return state.life?.deathId && state.life?.canRespawn
       ? { act: [{ action: 'respawn', deathId: state.life.deathId }], why: 'dead' }
-      : { wait: 'dead, no respawn offered yet' };
+      : { wait: 'dead, waiting for respawn' };
   // Brain memory is deliberately fresh on each controller process, but a
   // completed burrow is durable world state. Recover its mouth from the
   // observed shaft before choosing work, and treat an already-open shaft as
