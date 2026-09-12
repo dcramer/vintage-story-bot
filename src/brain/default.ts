@@ -126,7 +126,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (last) {
     if (last.ok) memory.done[last.kind] = (memory.done[last.kind] ?? 0) + 1;
     if (memory.job === 'shelter') shelterAdvance(memory, last.ok, now);
-    else if (!last.ok && memory.job) memory.cool.set(memory.job, now + COOLDOWN_MS);
+    // Running away is tried again at once; every other failed job rests a while.
+    else if (!last.ok && memory.job && memory.job !== 'hide') memory.cool.set(memory.job, now + COOLDOWN_MS);
     memory.job = null;
   }
   if (memory.resting) return { wait: 'resting after too many scares' };

@@ -38,6 +38,10 @@ test('brain: a threat interrupts its own goal, a failed job cools down, a finish
   assert.deepEqual(decide(reading({ state: wolf, active: { id: 'g1', kind: 'gather_sticks', state: 'running', by: 'brain' } }), memory), { stop: 'threat' });
   const failed = decide(reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'g1', kind: 'gather_sticks', ok: false, reason: 'blocked' }, now: 2000 }), memory);
   assert.equal(failed.wait, 'sticks cooling down');
+  const fled = decide(reading({ state: wolf }), memory);
+  assert.equal(fled.start, 'travel');
+  const again = decide(reading({ state: wolf, last: { id: 'g2', kind: 'travel', ok: false, reason: 'interrupted' }, now: 3000 }), memory);
+  assert.equal(again.start, 'travel', 'a failed flight is tried again at once');
   const shelterMemory = fresh();
   const dirt = inventory(slot('game:soil-medium-none', SHELTER_DIRT));
   const walls = decide(reading({ inventory: dirt }), shelterMemory);
