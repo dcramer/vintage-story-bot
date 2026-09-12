@@ -123,8 +123,13 @@ export async function selectCell(field, cell, { point, face, clearPlants = false
   for (let attempt = 0; attempt < 2; attempt++) {
     const state = await field.observe();
     const eye = { ...state.position, y: state.position.y + state.body.eyeHeight };
-    const aimPoint = point ?? { x: cell.x + 0.5, y: cell.y + 0.5, z: cell.z + 0.5 };
-    await field.aim(lookAt(eye, aimPoint));
+    // The mod aims at the cell's real selection box (a loose stone is a thin box on the floor, not a cell
+    // centre); an explicit point, or a cell the mod cannot aim at, is aimed by angles.
+    const byBox = point ? null : await field.send({ action: 'aim_cell', x: cell.x, y: cell.y, z: cell.z, ...(face ? { face } : {}) });
+    if (!byBox?.ok) {
+      const aimPoint = point ?? { x: cell.x + 0.5, y: cell.y + 0.5, z: cell.z + 0.5 };
+      await field.aim(lookAt(eye, aimPoint));
+    } else await field.observe();
     const selected = await field.send({ action: 'inspect_target' });
     if (!selected.key?.startsWith('block:')) return null;
     const hit = parseBlockKey(selected.key);

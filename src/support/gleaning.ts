@@ -72,8 +72,8 @@ export class Gleaner {
   async pickup(object) {
     const field = this.field;
     if (horizontal(field.latest.position, object.point) > field.latest.pickingRange - 0.5) {
-      const destination = field.approach(object);
-      if (!destination) return false;
+      // A cell beside it when memory routes there, else anywhere within two blocks of it.
+      const destination = field.approach(object) ?? { x: object.point.x, y: object.point.y, z: object.point.z, arrivalRadius: 2 };
       const walked = await field.leg(destination);
       if (!['arrived', 'paused'].includes(walked.state)) return false;
     }

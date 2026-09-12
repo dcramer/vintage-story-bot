@@ -40,6 +40,8 @@ export const DANGER_SCARES = 3;
 export const DANGER_RADIUS = 48;
 export const DANGER_MS = 15 * 60 * 1000;
 export const RELOCATE_DISTANCE = 96;
+// The stones that knap, as the game names them.
+export const KNAPPABLE = ['chert', 'granite', 'andesite', 'basalt', 'obsidian', 'peridotite'];
 // Jobs that cut a lesser running job short when the ladder turns to them.
 // Waiting is never pressing: a wait never cuts a bite or a walk short.
 const URGENT: Job[] = ['hide', 'go_home', 'eat', 'relocate', 'burrow'];
@@ -436,7 +438,8 @@ export function wants(reading: Reading): string[] {
   // Berries on a bush are always worth a stop.
   list.push('fruitingbush');
   if (k.sticks < STICK_MIN) list.push('stick');
-  if ((!k.knife || !k.axe) && !k.stone) list.push('flint', 'loosestones');
+  // Loose flint, and the loose stones that knap; claystone and the like are not worth a stop.
+  if ((!k.knife || !k.axe || !k.shovel) && !k.stone) list.push('looseflints', ...KNAPPABLE.map(rock => `loosestones-${rock}`));
   return list;
 }
 
