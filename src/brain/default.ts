@@ -62,9 +62,10 @@ export type { Job, Memory, Notes, Situation };
 
 // The list follows getting-started day 1, minus pottery and hunting: knife and
 // axe knapped first (each needs only a stick and a flint, so it is made the
-// moment both are in hand), two hand baskets worn and the reed chest from
-// cattails put down at the site,
-// the shovel, then the body if one lies somewhere, dirt and the house before
+// moment both are in hand; but a body on the map comes before them, since it
+// holds the last life's tools and a walk beats knapping them all again), two
+// hand baskets worn and the reed chest from cattails put down at the site,
+// the shovel, dirt and the house before
 // dark beside the chest, torches for the night, a backup knife into the
 // chest; day 2 chops a tree. Each task is done when the kit or the notes
 // show it, and the first task not done is the one to work on; `after` names
@@ -73,12 +74,12 @@ export type { Job, Memory, Notes, Situation };
 // gathered; a full pack is emptied before the rest of the list.
 export const TASKS: Concern[] = [
   resupply,
+  recover,
   knife,
   axe,
   bags,
   storage,
   shovel,
-  recover,
   dirt,
   shelter,
   stash,

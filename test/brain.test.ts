@@ -183,8 +183,8 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ torches: 0, grass: 2 })), 'torches');
   assert.equal(pickJob(situation({ logs: 1 })), 'logs');
   assert.equal(pickJob(situation()), 'explore');
-  assert.equal(pickJob(situation({ body: true, sticks: 0 })), 'recover', 'the body comes before the rest of the kit');
-  assert.equal(pickJob(situation({ body: true, knife: false })), 'knife', 'but the knife comes before the body: two quick goals before a long walk');
+  assert.equal(pickJob(situation({ body: true, sticks: 0 })), 'recover', 'the body comes before the kit');
+  assert.equal(pickJob(situation({ body: true, knife: false })), 'recover', "even before the knife: the body holds the last life's tools");
   assert.equal(pickJob(situation({ body: true, night: true })), 'wait', 'but not at night');
   assert.equal(pickJob(situation({ body: true, sticks: 0 }), new Set(['recover'] as any)), 'sticks', 'a failed recovery is set aside');
   assert.equal(
