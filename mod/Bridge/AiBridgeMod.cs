@@ -37,6 +37,7 @@ public sealed partial class AiBridgeMod : ModSystem
     private readonly TerrainMap terrain = new(16384, 120000, 64);
     private TerrainSensor terrainSensor = null!;
     private MapWaypointSensor mapWaypoints = null!;
+    private ChatSensor chat = new();
 
     public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Client;
 
@@ -60,6 +61,7 @@ public sealed partial class AiBridgeMod : ModSystem
         tickListener = api.Event.RegisterGameTickListener(OnTick, 20);
         pausedDispatcher = new PausedDispatcher(this);
         api.Event.RegisterRenderer(pausedDispatcher, EnumRenderStage.Done, "aibridge-paused");
+        api.Event.ChatMessage += (group, message, type, _) => chat.Add(Environment.TickCount64, group, message, type.ToString());
         api.Event.LevelFinalize += OnLevelReady;
         api.Event.LeaveWorld += OnLeaveWorld;
     }
@@ -79,6 +81,7 @@ public sealed partial class AiBridgeMod : ModSystem
         terrainSensor.Reset();
         control.Release("world_changed");
         life = new LifeTracker();
+        chat = new ChatSensor();
         inventory = new InventoryAdapter(api);
         containers = new ContainerAdapter(api);
         blockActions.Reset();
@@ -287,6 +290,8 @@ public sealed partial class AiBridgeMod : ModSystem
             case "inspect_target": return CanControl() ? context.InspectTarget(life.Session) : new { ok = false, error = "Close menus and unpause before inspecting." };
             case "environment": return context.Environment(life.Session);
             case "events": return Events(request);
+            case "messages": return Messages(request);
+            case "can_see": return CanSee(request);
             case "respawn": return Respawn(request);
             case "ui_dialogs": return dialogs.Observe();
             case "ui_activate": return dialogs.Activate(request);
@@ -311,6 +316,7 @@ public sealed partial class AiBridgeMod : ModSystem
             case "chat": return Chat(request);
             case "map_waypoints": return mapWaypoints.Observe();
             case "map_waypoint_remove": return MapWaypointRemove(request);
+            case "map_waypoint_add": return MapWaypointAdd(request);
             case "map_view": return MapView();
             case "players": return Players();
             case "look": return Look(request);

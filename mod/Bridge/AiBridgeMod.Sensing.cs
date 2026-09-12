@@ -23,7 +23,7 @@ public sealed partial class AiBridgeMod
         return new
         {
             ok = true,
-            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "map_waypoints", "map_view", "drop", "containers", "look_at", "players", "catalog" },
+            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "map_waypoints", "map_waypoint_add", "map_view", "drop", "containers", "look_at", "players", "catalog", "chat_messages", "can_see" },
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
             world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString(),
@@ -242,20 +242,35 @@ public sealed partial class AiBridgeMod
         return sensor.Scan(radius, limit, kind, matches, scanCursor);
     }
 
-    private object Events(JsonElement request)
+    private object Events(JsonElement request) =>
+        ReadCursor(request, out long after, out string? session) is { } error ? new { ok = false, error } : life.Read(after, session);
+
+    private object Messages(JsonElement request) =>
+        ReadCursor(request, out long after, out string? session) is { } error ? new { ok = false, error } : chat.Read(after, session);
+
+    private object CanSee(JsonElement request)
     {
-        long after = 0;
+        int[] cell = new int[3];
+        string[] names = ["x", "y", "z"];
+        for (int i = 0; i < 3; i++)
+            if (!request.TryGetProperty(names[i], out var field) || field.ValueKind != JsonValueKind.Number || !field.TryGetInt32(out cell[i]))
+                return new { ok = false, error = "Supply integer x, y and z." };
+        return vision.CanSee(cell[0], cell[1], cell[2]);
+    }
+
+    // The bounded-ring cursor shared by events and messages: after (nonnegative) and session.
+    private static string? ReadCursor(JsonElement request, out long after, out string? session)
+    {
+        after = 0; session = null;
         if (request.TryGetProperty("after", out var afterField) &&
             (afterField.ValueKind != JsonValueKind.Number || !afterField.TryGetInt64(out after) || after < 0))
-            return new { ok = false, error = "after must be a nonnegative integer." };
-        string? session = null;
+            return "after must be a nonnegative integer.";
         if (request.TryGetProperty("session", out var sessionField))
         {
-            if (sessionField.ValueKind != JsonValueKind.String || sessionField.GetString()!.Length > 64)
-                return new { ok = false, error = "Invalid event session." };
+            if (sessionField.ValueKind != JsonValueKind.String || sessionField.GetString()!.Length > 64) return "Invalid event session.";
             session = sessionField.GetString();
         }
-        return life.Read(after, session);
+        return null;
     }
 
     private object Recipes(JsonElement request)

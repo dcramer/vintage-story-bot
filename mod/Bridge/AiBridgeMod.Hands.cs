@@ -172,6 +172,46 @@ public sealed partial class AiBridgeMod
         return new { ok = true, status = "requested", guid, index, verification = "map_waypoints" };
     }
 
+    private object MapWaypointAdd(JsonElement request)
+    {
+        if (!request.TryGetProperty("title", out var titleField) || titleField.ValueKind != JsonValueKind.String)
+            return new { ok = false, error = "Supply a title string." };
+        var title = titleField.GetString()!.Replace('\n', ' ').Replace('\r', ' ').Trim();
+        if (title.Length == 0 || title.Length > 64) return new { ok = false, error = "title must be 1–64 characters." };
+        double[] at = new double[3];
+        string[] names = ["x", "y", "z"];
+        for (int i = 0; i < 3; i++)
+            if (!request.TryGetProperty(names[i], out var field) || field.ValueKind != JsonValueKind.Number || !field.TryGetDouble(out at[i]) || !double.IsFinite(at[i]))
+                return new { ok = false, error = "Supply finite x, y and z." };
+        string icon = "circle", color = "#ff0000";
+        bool pinned = false;
+        if (request.TryGetProperty("icon", out var iconField))
+        {
+            if (iconField.ValueKind != JsonValueKind.String || !System.Text.RegularExpressions.Regex.IsMatch(iconField.GetString()!, "^[a-z0-9_-]{1,32}$"))
+                return new { ok = false, error = "icon must be a short lowercase word." };
+            icon = iconField.GetString()!;
+        }
+        if (request.TryGetProperty("color", out var colorField))
+        {
+            if (colorField.ValueKind != JsonValueKind.String || !System.Text.RegularExpressions.Regex.IsMatch(colorField.GetString()!, "^(#[0-9a-fA-F]{6}|[a-z]{1,24})$"))
+                return new { ok = false, error = "color must be #rrggbb or a color name." };
+            color = colorField.GetString()!;
+        }
+        if (request.TryGetProperty("pinned", out var pinnedField))
+        {
+            if (pinnedField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return new { ok = false, error = "pinned must be boolean." };
+            pinned = pinnedField.GetBoolean();
+        }
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        // The map screen's add dialog sends this command; = makes the coordinates absolute rather than
+        // relative to the map's origin. The server validates it and resends the list: verify by reading
+        // map_waypoints until a marker with this title appears.
+        api.SendChatMessage(
+            $"/waypoint addati {icon} ={at[0].ToString("0.##", culture)} ={at[1].ToString("0.##", culture)} ={at[2].ToString("0.##", culture)} {(pinned ? "true" : "false")} {color} {title}",
+            GlobalConstants.GeneralChatGroup, null);
+        return new { ok = true, status = "requested", title, icon, color, pinned, position = new { x = at[0], y = at[1], z = at[2] }, verification = "map_waypoints" };
+    }
+
     private void SetHandButtons()
     {
         // We simulate a real player, so interactions must go through the game's own input pipeline: setting these

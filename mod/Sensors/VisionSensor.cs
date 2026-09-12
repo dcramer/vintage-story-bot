@@ -85,6 +85,52 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
     }
     private bool Watched(string? code) => code != null && Watch.Any(match => code.Contains(match, StringComparison.OrdinalIgnoreCase));
 
+    // Whether a line of sight from the eye reaches one cell right now: within 8
+    // blocks in any direction, farther only inside the field of view and the
+    // light-limited radius, and never through an unloaded stretch (unknown).
+    public object CanSee(int x, int y, int z)
+    {
+        var player = api.World.Player.Entity;
+        if (player.Pos.Dimension != 0) return new { ok = true, known = false, visible = false, reason = "dimension" };
+        var pos = player.Pos;
+        var eye = pos.XYZ.Add(player.LocalEyePos);
+        var eyePoint = new Point3(eye.X, eye.Y, eye.Z);
+        var blocks = api.World.BlockAccessor;
+        var cell = new BlockPos(x, y, z, 0);
+        if (blocks.GetChunkAtBlockPos(cell) == null) return new { ok = true, known = false, visible = false, reason = "unloaded" };
+        var block = blocks.GetBlock(cell);
+        var box = block.Id == 0 ? null : (block.GetSelectionBoxes(blocks, cell) ?? []).FirstOrDefault();
+        var sample = box == null ? new Point3(x + .5, y + .5, z + .5)
+            : SceneGeometry.BoxSamples(new(x + box.X1, y + box.Y1, z + box.Z1), new(x + box.X2, y + box.Y2, z + box.Z2)).First();
+        double distance = SceneGeometry.Distance(eyePoint, sample);
+        var look = SceneGeometry.LookAt(eyePoint, sample);
+        double yaw = SceneGeometry.Normalize(pos.Yaw * 180 / Math.PI), pitch = (pos.Pitch - Math.PI) * 180 / Math.PI;
+        var (halfYaw, halfPitch) = HalfAngles();
+        int radius = Radius(new BlockPos((int)Math.Floor(eye.X), (int)Math.Floor(eye.Y), (int)Math.Floor(eye.Z), 0));
+        bool inView = distance <= 8 || (distance <= radius + 1 &&
+            Math.Abs(SceneGeometry.Normalize(look.Yaw - yaw + 180) - 180) <= halfYaw && Math.Abs(look.Pitch - pitch) <= halfPitch);
+        var summary = new { distance = Math.Round(distance, 2), code = block.Id == 0 ? null : block.Code?.ToString(), look = new { yawDegrees = look.Yaw, pitchDegrees = look.Pitch } };
+        if (!inView) return new { ok = true, known = false, visible = false, reason = "outside_view", summary.distance, summary.code, summary.look };
+        var origin = new Vec3d(eye.X, eye.Y, eye.Z);
+        var end = new Vec3d(sample.X, sample.Y, sample.Z);
+        for (int i = 0, n = (int)Math.Ceiling(distance * 2); i <= n; i++)
+        {
+            double t = n == 0 ? 0 : (double)i / n;
+            var along = new BlockPos((int)Math.Floor(origin.X + (end.X - origin.X) * t),
+                (int)Math.Floor(origin.Y + (end.Y - origin.Y) * t), (int)Math.Floor(origin.Z + (end.Z - origin.Z) * t), 0);
+            if (blocks.GetChunkAtBlockPos(along) == null) return new { ok = true, known = false, visible = false, reason = "unloaded", summary.distance, summary.code, summary.look };
+        }
+        BlockSelection? hit = null; EntitySelection? entityHit = null;
+        api.World.RayTraceForSelection(origin, end, ref hit, ref entityHit,
+            (at, b) => at.Equals(cell) || SceneSensor.Occludes(blocks, at, b), _ => false);
+        bool visible = hit == null || hit.Position.Equals(cell);
+        return new
+        {
+            ok = true, known = true, visible, summary.distance, summary.code, summary.look,
+            blockedBy = visible || hit == null ? null : new { x = hit.Position.X, y = hit.Position.Y, z = hit.Position.Z },
+        };
+    }
+
     // Absolute-aligned level of detail: every column within 16 blocks, even
     // coordinates to 32, multiples of four beyond, so views merge in Node.
     public static int Step(double distance) => distance <= 16 ? 1 : distance <= 32 ? 2 : 4;
