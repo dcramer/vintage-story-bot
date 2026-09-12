@@ -106,8 +106,9 @@ export class Navigation {
       (this.target.horizontalOnly || Math.abs(end.y - this.target.y) < 0.6)
     );
   }
-  // Take a route in hand from where the body stands, walking or not.
-  adopt(planned, p, now) {
+  // Take a route in hand from where the body stands: fresh from a survey, or in stride while walking
+  // (then the progress clock keeps running, so a body that is not getting anywhere still stalls).
+  adopt(planned, p, now, stride = false) {
     this.route = planned;
     this.index = 0;
     this.state = 'moving';
@@ -116,7 +117,8 @@ export class Navigation {
     this.edgeStart = p;
     this.bestNear = undefined;
     this.mergedFrom = null;
-    this.progressAt = now;
+    this.guardHolds = 0;
+    if (!stride) this.progressAt = now;
   }
   finish(state, reason) {
     this.state = state;
@@ -226,7 +228,7 @@ export class Navigation {
       const planned = findRoute(map, from, this.target, w, h, this);
       const end = planned?.at(-1),
         old = this.route.at(-1);
-      if (end && old && (this.reaches(end) || horizontal(end, this.target) + 1.5 < horizontal(old, this.target))) this.adopt(planned, p, now);
+      if (end && old && (this.reaches(end) || horizontal(end, this.target) + 1.5 < horizontal(old, this.target))) this.adopt(planned, p, now, true);
       else this.plannedCells = map.cells.size;
     }
     // Advance past checkpoints the body has reached: close by, or crossed
@@ -274,7 +276,7 @@ export class Navigation {
     if (grounded)
       for (let ahead = this.index + 1; ahead < this.route.length; ahead++) {
         const node = this.route[ahead];
-        if (node.move !== 'walk' || horizontal(p, node) > MERGE_RUN || !map.runWalkable(p, node)) break;
+        if (!['walk', 'step'].includes(node.move) || horizontal(p, node) > MERGE_RUN || !map.runWalkable(p, node)) break;
         // The merge is undone if the body drifts off the line it was made from (below).
         if (this.mergedFrom === null) this.mergedFrom = this.index;
         this.index = ahead;

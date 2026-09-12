@@ -136,7 +136,7 @@ test('grid: moves step, jump one, drop three, never cut a corner or drop beside 
   assert.equal(to(0, -1), undefined, 'four blocks down is never planned');
   assert.equal(to(1, 1), undefined, 'diagonal blocked when both corner columns are solid');
   assert.equal(to(-1, -1), undefined, 'no diagonal drops');
-  assert.equal(to(1, -1)?.node.move, 'walk', 'diagonal allowed when one corner side is open');
+  assert.equal(to(1, -1), undefined, 'the open corner side is a four-block hole: not rounded either');
   assert.equal(
     world(3)
       .moves(at(0, 0))
@@ -203,6 +203,23 @@ test('planner routes around a wall, jumps a hole only as a last resort, and ends
   assert.ok(Math.floor(partial.at(-1).x) >= 2, 'the partial route heads toward the goal');
   const deadline = findRoute(world(6), at(-5, -5), at(5, 5), 0.3, 1.85, { deadlineMs: 0 });
   assert.ok(deadline === null || Array.isArray(deadline), 'a spent deadline still returns cleanly');
+});
+
+test('a diagonal past a hole is not a move: the body rounding that corner would fall in', () => {
+  // A shaft at (1, 0) and a solid block at (0, 1): the diagonal from (0, 0) to (1, 1) has no side to round on.
+  const shaft = world(
+    4,
+    (x, y, z) => x === 0 && z === 1 && y === 0,
+    () => false,
+    (x, y, z) => x === 1 && z === 0 && y <= -1,
+  );
+  const diagonal = shaft.moves(at(0, 0)).find(m => Math.floor(m.node.x) === 1 && Math.floor(m.node.z) === 1);
+  assert.equal(diagonal, undefined);
+  const open = world(4, (x, y, z) => x === 0 && z === 1 && y === 0);
+  assert.ok(
+    open.moves(at(0, 0)).find(m => Math.floor(m.node.x) === 1 && Math.floor(m.node.z) === 1),
+    'with floor on the open side the corner is rounded',
+  );
 });
 
 test('a partial route never ends down a drop the body cannot climb back, unless the goal itself lies low', () => {

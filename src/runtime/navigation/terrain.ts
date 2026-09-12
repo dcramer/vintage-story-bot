@@ -293,13 +293,14 @@ export class TerrainMemory {
     }
     return result;
   }
-  // At least one of the two orthogonal columns beside a diagonal move is
-  // clear through the body at the landing height, so the body can round the
-  // corner on that side instead of clipping a solid block on both.
+  // At least one of the two orthogonal columns beside a diagonal move is clear through the body
+  // at the landing height and has footing within a step below it, so the body can round the
+  // corner on that side: not through a solid block, and not over a hole (the shaft it dug, a pit),
+  // which the walk's cliff guard would refuse forever while the planner kept proposing it.
   cornerOpen(x, z, dx, dz, top, missing?) {
-    return (
-      this.clearBetween(x + dx, z, top + 0.01, top + BODY_HEIGHT, missing) || this.clearBetween(x, z + dz, top + 0.01, top + BODY_HEIGHT, missing)
-    );
+    const side = (sx, sz) =>
+      this.clearBetween(sx, sz, top + 0.01, top + BODY_HEIGHT, missing) && this.levels(sx, sz, top, JUMP_HEIGHT, 1.05, missing).length > 0;
+    return side(x + dx, z) || side(x, z + dz);
   }
   // Escape edges over a one-cell hole: the far cell stands, the middle one
   // does not, and there is room for the arc. Costly, so only ever a last resort.
