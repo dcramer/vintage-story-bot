@@ -329,7 +329,12 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // stop reason into this decision so a one-tick hit actually starts a flight
   // instead of cancelling work and immediately restarting the same job.
   const gravity = environmentalHurt(events);
-  const rawHurt = events.some(e => e.type === 'hurt');
+  // Max-health nutrition drift can lower current and maximum health together.
+  // The bridge reports that as a hurt event even though the bar remains full;
+  // only a real deficit is evidence of damage from something unseen.
+  const health = state.vitals?.health,
+    fullHealth = Number.isFinite(health?.current) && Number.isFinite(health?.max) && health.current >= health.max - 0.01,
+    rawHurt = !fullHealth && events.some(e => e.type === 'hurt');
   if (gravity || danger) memory.pendingHurtAt = null;
   else if (rawHurt && memory.pendingHurtAt === null) memory.pendingHurtAt = now;
   const pendingHurt = memory.pendingHurtAt !== null && now - memory.pendingHurtAt >= HURT_CLASSIFY_MS;

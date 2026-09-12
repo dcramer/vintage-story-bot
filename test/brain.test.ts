@@ -365,6 +365,17 @@ test('brain: a fall is not mistaken for an unseen attacker', () => {
   );
 });
 
+test('brain: full-health drift is not mistaken for damage', () => {
+  const memory = fresh();
+  memory.job = 'sticks';
+  const running = { id: 'g1', kind: 'gather', state: 'running', by: 'brain' };
+  const full = state({ vitals: { health: { current: 20.57154, max: 20.57154 }, hunger: { current: 600, max: 1500 } } });
+  assert.deepEqual(decide(reading({ state: full, events: [{ id: 1, at: 1, type: 'hurt', health: 20.57154 }], active: running }), memory), {
+    wait: 'letting gather finish',
+  });
+  assert.equal(memory.pendingHurtAt, null);
+});
+
 test('brain: kit reads tools by class and dirt by code', () => {
   const k = kit(
     inventory(slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }), slot('game:soil-medium-none', 12), slot('game:flint', 3)),
