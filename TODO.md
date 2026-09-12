@@ -126,6 +126,14 @@ Blocks day 4 (storage vessel, crock) until firepit/vessel specifics land; the da
 - [~] terrain memory persistence — terrain, surface and remembered blocks per save identifier in `.runtime/knowledge`, week-long, invalidated by reported block changes. Not live-verified across a restart.
 - [ ] **P2 · climbable blocks** — VS `Climbable` (ladders, some vines) as a movement primitive; VS auto-steps sub-block heights via `stepHeight`, full blocks still need jump (`mod`, `nav`).
 
+### Known navigation problems (live, containers save, 2026-09-11)
+
+- Fixed: every drop beside water was refused, so a stream bank with a one-block step trapped the bot for twenty minutes (short partial route, frontier marked visited, then `no_observed_route` while probing hopped in place). Reproduced offline from `.runtime/knowledge/<save>.json` with `TerrainMemory` + `findRoute`; that is the way to work on the planner: capture, reproduce, fix, test, then walk it live.
+- Open: rough-route legs end in `deadline` and `exploration_exhausted` on hillsides with 2–3 block cliffs and dense bushes (the leg deadline is 3 s/block; recovery wanders instead of climbing). Legs toward water-side targets fail with `no_observed_route` because cattails stand in water (see wading/swimming).
+- Open: `harvest` walked 1343 blocks for 8 cattail tops; its search explores by heading with visit penalties and used to read only the current view. `lookAround` is a first step; a legible find loop is still to do (§2).
+- Open: a 0.05 hp step-down ends any goal (`Fieldwork.guard` on `lastDamageAt`); see the interrupt policy item.
+- Open: the terrain view reports `observed` columns whose seenAt is days old on a save created the same day (`age` in `terrain` output); check the stamp source before trusting age-based forgetting.
+
 ## 11. Survival and time
 
 - [x] Food priority inside tasks (`manageFood`), attrition classification, low-vital interrupts.
