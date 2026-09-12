@@ -11,7 +11,8 @@ resumes on its own.
 - Install at start: `pnpm bot --brain default` or `VINTAGE_STORY_BRAIN=default`.
 - Switch while running: the `brain` action reads status, installs by name, or removes (`null`).
 - A goal started by an adapter always wins: the brain waits until it is over and never cancels it. Its own goals it interrupts only for danger, storms and hunger.
-- Every brain gets respawn for free: dead with a respawn available means respawn, then carry on.
+- Every brain gets respawn for free: dead with a respawn available means respawn, then carry on. Deep water with no goal running means swim for the nearest remembered dry ground with the jump key held.
+- A brain may return `wants`: code substrings every walk picks up when they lie within six blocks (loose sticks, stones, flints, dropped items), whatever the current job. The default brain wants sticks until it has ten, flint and loose stones until it has tools.
 - Code: `src/brain/<name>.ts` default-exports `{ name, description, fresh(), decide(reading, memory), summary?(memory) }`; `src/runtime/brain.ts` owns the loop. `decide` is pure: one reading (`observe`, `inventory`, `environment`, the active goal, the brain's own goal that just finished) and the brain's memory in, one decision out (`{ start, args, why }`, `{ stop }`, `{ wait }`). `test/brain.test.ts` covers it without a game.
 
 Later brains (roles) differ only in `decide`. Behavior sources: [getting-started](getting-started.md), [architecture](architecture.md), [bot API](bot-api-reference.md).
