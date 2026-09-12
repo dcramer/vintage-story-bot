@@ -1076,6 +1076,21 @@ test('brain: knapping needs two flints, one for the surface and one in hand for 
   assert.deepEqual([two.start, two.args.output], ['knap', 'game:knifeblade-flint'], 'two flints: knap');
 });
 
+test('brain: a goal that ended in a pit without saying where has the body dug out from where it stands', () => {
+  const memory = fresh();
+  memory.job = 'recover';
+  const here = state({ position: { x: 40.5, y: 115, z: 20.5 } });
+  const out = decide(
+    reading({
+      state: here,
+      last: { id: 'r', kind: 'retrieve_body', ok: false, reason: 'pit', result: { ok: false, reason: 'pit', body: { x: 0, y: 111, z: 0 } } },
+    }),
+    memory,
+  );
+  assert.deepEqual([out.start, out.args.x, out.args.z], ['dig_out', 48.5, 20.5]);
+  assert.equal(memory.tried.recover, undefined, "a hole is not the job's fault");
+});
+
 test('brain: a hand basket is woven from ten tops and worn by hand', () => {
   const memory = fresh();
   memory.notes.home = { x: 3.5, y: 100, z: 0.5 };

@@ -158,10 +158,12 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (last) {
     if (last.ok) memory.done[last.kind] = (memory.done[last.kind] ?? 0) + 1;
     const mine = memory.job ? concern(memory.job) : null;
-    // A walk that ended in a hole is not a failed job: the hole is dealt with first.
-    if (last.reason === 'pit' && last.result?.position)
-      memory.pit = { x: last.result.position.x + 8, y: last.result.position.y, z: last.result.position.z };
-    else if (!last.ok && mine && (mine.setAside ?? failedOnItsOwn)(last, memory, reading))
+    // A walk that ended in a hole is not a failed job: the hole is dealt with first. The hole is
+    // where the body stands, whether or not the goal's result says so (travel does, others do not).
+    if (last.reason === 'pit') {
+      const where = last.result?.position ?? state.position;
+      memory.pit = { x: where.x + 8, y: where.y, z: where.z };
+    } else if (!last.ok && mine && (mine.setAside ?? failedOnItsOwn)(last, memory, reading))
       memory.tried[mine.id] = { x: state.position.x, z: state.position.z, at: now };
     mine?.ended?.(last, memory, reading);
     memory.job = null;
