@@ -1,9 +1,10 @@
-// A basket by the door to keep things in: cattail tops cut with the knife (by
+// The reed chest (getting-started, day 1): cattail tops cut with the knife (by
 // hand they drop too, but the knife keeps the roots so the reeds grow back),
-// woven into a stationary basket, put down beside the shelter. Its observed key
-// is the note every store and take uses; a basket found gone is forgotten and made again.
+// woven into the chest the game calls a stationary basket, put down where the
+// bot stands once it is made: near the cattails, and that spot is the site the
+// house goes up beside. Its observed key is the note every store and take uses;
+// a basket found gone is forgotten and made again.
 import type { Concern } from '../concern.ts';
-import { goTo, stashSpot } from '../concern.ts';
 
 // The recipe (the game calls it a reed chest): eight lots of three cattail tops.
 export const BASKET_TOPS = 24;
@@ -13,18 +14,16 @@ export const storage: Concern = {
   id: 'storage',
   title: 'a basket at home to keep things in',
   done: s => s.storage,
-  after: ['shelter'],
-  run: ctx => {
-    const { k, home } = ctx;
+  after: ['knife'],
+  run: ({ k, state }) => {
     if (k.basket) {
-      const spot = stashSpot(home!);
-      return (
-        goTo(ctx, spot, 'a basket to put down at home') ?? {
-          start: 'build',
-          args: { cells: [{ ...spot, item: k.basket }], timeoutMs: 600000 },
-          why: 'a basket by the door',
-        }
-      );
+      const p = state.position;
+      const spot = { x: Math.floor(p.x) + 2, y: Math.floor(p.y), z: Math.floor(p.z) };
+      return {
+        start: 'build',
+        args: { cells: [{ ...spot, item: k.basket }], timeoutMs: 600000 },
+        why: 'the basket goes down here: this is the site',
+      };
     }
     if (k.cattailtops >= BASKET_TOPS) return { start: 'craft_item', args: { output: BASKET, count: 1, timeoutMs: 300000 }, why: 'weaving a basket' };
     return {

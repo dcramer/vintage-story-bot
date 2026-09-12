@@ -179,17 +179,15 @@ export const stashNote = (n: any): Stash | null =>
       }
     : null;
 // A task with a place goes there first: a walk when the place is farther than the goal itself would go, else null.
-export function goTo(ctx: Context, place: Cell, why: string, radius = 12): Decision | null {
+export function goTo(ctx: Context, place: { x: number; z: number }, why: string, radius = 12, arrival = 3): Decision | null {
   const far = Math.hypot(place.x - ctx.state.position.x, place.z - ctx.state.position.z);
   if (far <= radius) return null;
   return {
     start: 'travel',
-    args: { x: place.x, z: place.z, arrivalRadius: 3, manageFood: true, timeoutMs: 900000 },
+    args: { x: place.x, z: place.z, arrivalRadius: arrival, manageFood: true, timeoutMs: 900000 },
     why: `${why}, ${Math.round(far)} blocks away`,
   };
 }
-// The basket's cell, beside the door outside the shelter (docs/brain.md).
-export const stashSpot = (home: Cell): Cell => ({ x: Math.floor(home.x) + 1, y: Math.floor(home.y), z: Math.floor(home.z) + 2 });
 // A container the goal could not open again is gone: its note is dropped, and a new one is made.
 export const containerGone = (last: Ended) => /changed or obstructed|No container dialog|container_unreachable/i.test(last.reason ?? '');
 // What the container held when the goal closed it, remembered until the next look.

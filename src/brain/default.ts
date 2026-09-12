@@ -58,16 +58,17 @@ export { SHELTER_DIRT } from './default/tasks/shelter.ts';
 export { STICK_MIN } from './default/tasks/sticks.ts';
 export type { Job, Memory, Notes, Situation };
 
-// The day-1 list, in dependency order: each task is done when the kit or the
-// notes show it, and the first task not done is the one to work on. The knife
-// comes first and needs only a stick and a flint, so it is made the moment
-// both are in hand; the axe and shovel follow the same way, and only then is
-// the body fetched: two quick goals before what may be a long walk. The order carries
-// the rest of the dependencies (dirt needs a shovel; a shelter needs dirt; a
-// basket needs a home to stand by; torches need a home to light), and `after`
-// names them. What the basket holds is fetched before anything is gathered;
-// a full pack is emptied before the rest of the list.
-export const TASKS: Concern[] = [resupply, knife, axe, shovel, recover, dirt, shelter, storage, stash, sticks, spareKnife, grass, torches, logs];
+// The list follows getting-started day 1, minus pottery and hunting: knife and
+// axe knapped first (each needs only a stick and a flint, so it is made the
+// moment both are in hand), the reed chest from cattails put down at the site,
+// the shovel, then the body if one lies somewhere, dirt and the house before
+// dark beside the basket, torches for the night, a backup knife into the
+// basket; day 2 chops a tree. Each task is done when the kit or the notes
+// show it, and the first task not done is the one to work on; `after` names
+// what a task waits on (dirt needs a shovel, a shelter needs dirt, torches
+// need a home to light). What the basket holds is fetched before anything is
+// gathered; a full pack is emptied before the rest of the list.
+export const TASKS: Concern[] = [resupply, knife, axe, storage, shovel, recover, dirt, shelter, stash, sticks, grass, torches, spareKnife, logs];
 const REFLEXES: Concern[] = [hide, eat, goHome, burrow, unburrow, wait, relocate, digOut, explore];
 // What runs beside any job, through tools that only talk.
 const ALONGSIDE: Aside[] = [copper, homeMarker];

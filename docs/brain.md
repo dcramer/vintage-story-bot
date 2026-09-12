@@ -53,15 +53,15 @@ fights; it runs or hides.
 Wants (what every walk stops for within six blocks): berries on a ripe bush, an edible mushroom and a wild hive always; loose sticks while short of ten; loose flint and stones while a tool head is wanted and nothing knappable is carried.
 | eat | `forage` to half with two bites kept; `eat` alone when dug in with food | Satiety below 20% (or 40% with nothing carried); eats what is carried when hungry (in the burrow too, off an earth wall), keeps the rest, searches ever farther in one direction for more, and when starving stomachs a bite that costs a point of health |
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
-| shelter | `shelter` | Enough dirt (by day, or at night with nowhere else) |
+| shelter | `travel` to six blocks west of the basket when one is noted, then `shelter` | Enough dirt (by day, or at night with nowhere else) |
 | knife | `gather` one stick or flint if short, `knap` a knife blade, `craft_item` the knife | No knife; first of the kit, the moment a stick and a flint are in hand |
 | axe, shovel | the same, one tool per task | No axe; no shovel |
-| sticks | `gather stick` (loose sticks, then branchy leaves in reach) | Fewer than 10 sticks, once there is a home |
+| sticks | `gather stick` (loose sticks, then branchy leaves in reach) | Fewer than 4 sticks, once there is a home |
 | spare_knife | a second knife made like the first, `store_items` into the basket | The basket was never seen holding a knife |
 | grass | `harvest tallgrass` | Wants torches, no dry grass or cattail tops |
 | torches | `craft_item torch` | Fewer than 2 torches |
 | logs | `fell_tree` | Fewer than 8 logs |
-| storage | `harvest coopersreed` with the knife, `craft_item` a stationary basket, `build` it beside the door | A home and no basket noted |
+| storage | `harvest coopersreed` with the knife, `craft_item` a reed chest (the game's stationary basket), `build` it where it stands | A knife and no basket noted; that spot is the site |
 | stash | `store_items` into the basket: everything the kit does not keep on hand, most first | A basket noted and the pack full (one free slot or none) with something to put away |
 | resupply | `take_items` from the basket | The basket was last seen holding something the kit is short of (sticks, flint, dirt, grass, torches, logs); before gathering it |
 | explore | `explore` | Fed, safe, daylight, kit done |
@@ -71,11 +71,11 @@ near, or a hit), a storm, food in hand when hungry, a place that keeps scaring,
 night (dig in, or go home), then the day-1 list, then exploring. A running job
 is cut short only when the ladder itself would rather do one of the pressing
 things above the list; a flight, a dig-out and a night dig-in are never cut
-short by a threat. The list (`TASKS` in the brain) is a task tracker: each task says
+short by a threat. The list (`TASKS` in the brain) follows [getting-started](getting-started.md) day 1 minus pottery and hunting, then day 2's tree. It is a task tracker: each task says
 when the kit shows it done, the order carries the dependencies (a tool needs a
 stick and a head, dirt needs a shovel, a shelter needs dirt, torches need a home
 to light; a tool needs one stick and one flint, so the knife comes first and
-ten sticks wait for a home), and the first task not done is the one worked on. `brain` status
+a few sticks on hand wait for a home), and the first task not done is the one worked on. `brain` status
 shows every task as done, next, open or set aside. A failed job is set aside while the bot stays within 24
 blocks of where it failed, for five minutes at most; the next job in the ladder
 runs meanwhile, so a failure never leaves it standing about. The basket is the

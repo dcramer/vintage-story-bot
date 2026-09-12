@@ -1,7 +1,8 @@
-// Ten sticks: loose ones, then branchy leaves in reach. Picked up in passing while short.
+// A few sticks on hand (getting-started: two torches, the shovel, a backup knife, one
+// spare): loose ones, then branchy leaves in reach. Picked up in passing while short.
 import type { Concern } from '../concern.ts';
 
-export const STICK_MIN = 10;
+export const STICK_MIN = 4;
 
 export const sticks: Concern = {
   id: 'sticks',
