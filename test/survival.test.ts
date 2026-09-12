@@ -209,6 +209,7 @@ test('food search prefers level meals and abandons a failed elevated patch toget
 
 test('an unseen remembered food lead expires after reaching its approach cell', () => {
   assert.equal(exhaustedFoodLead({ visible: false }, { state: 'arrived' }), true);
+  assert.equal(exhaustedFoodLead({ key: 'mushroom', visible: false }, { state: 'arrived' }, [{ key: 'mushroom' }]), false);
   assert.equal(exhaustedFoodLead({ visible: true }, { state: 'arrived' }), false);
   assert.equal(exhaustedFoodLead({ visible: false }, { state: 'paused' }), false);
 });

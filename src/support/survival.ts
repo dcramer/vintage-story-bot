@@ -44,7 +44,8 @@ export const unproductiveFoodApproach = (target, result, before, after) =>
   !['arrived', 'paused'].includes(result.state) && horizontal(after, target.point) + 2 >= horizontal(before, target.point);
 const threatenedFoodApproach = result => result.state === 'paused' && result.reason === 'threat_near_food';
 export const foodLeadGuarded = (target, threat) => !!threat && horizontal(target.point, threat.point) <= threatClearDistance(threat.code);
-export const exhaustedFoodLead = (target, result) => result.state === 'arrived' && target.visible === false;
+export const exhaustedFoodLead = (target, result, nearby = []) =>
+  result.state === 'arrived' && target.visible === false && !nearby.some(object => object.key === target.key);
 export const foodSearchBias = (stuckSearches, toward, habitat) => (stuckSearches >= 2 ? null : (toward ?? habitat));
 // Nearby food several blocks above or below the body often needs a long,
 // indirect climb. Prefer a slightly farther source at the current elevation
@@ -224,7 +225,12 @@ export class Survival {
         if (destination) {
           const before = { ...field.latest.position };
           const result = await field.walk(destination, this.pauseFoodWalk);
-          if (exhaustedFoodLead(target, result)) {
+          // The streamed eye is directional. After reaching an old lead, ask
+          // the 360-degree nearby sensor before deciding the block is gone;
+          // otherwise a mushroom just behind the camera is suppressed at the
+          // exact moment it comes within reach.
+          const nearby = result.state === 'arrived' && target.visible === false ? await this.study(8) : [];
+          if (exhaustedFoodLead(target, result, nearby)) {
             // Reaching a remembered block's harvest position without seeing it
             // again is the successful-route version of a stale lead. Do not
             // orbit alternate approach cells around an occluded or gone block.
