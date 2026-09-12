@@ -41,6 +41,9 @@ export class Navigation {
   lookingAt = null;
   // The route index a straight-run merge started from, while one is in effect.
   mergedFrom: number | null = null;
+  // The tick in which a merge was last undone: undone once per tick, or a
+  // merge made again by the re-entered tick recurses without end.
+  unmergedAt: number | null = null;
   routeReaches = false;
   guardHolds = 0;
   jumpAt = 0;
@@ -294,9 +297,10 @@ export class Navigation {
       const own = fx === Math.floor(p.x) && fz === Math.floor(p.z),
         checkpoint = fx === Math.floor(next.x) && fz === Math.floor(next.z);
       if (!own && !checkpoint && !map.levels(fx, fz, p.y, JUMP_HEIGHT, MAX_DROP).length) {
-        if (this.mergedFrom !== null && this.mergedFrom < this.index) {
+        if (this.mergedFrom !== null && this.mergedFrom < this.index && this.unmergedAt !== now) {
           // Back to the route's own cells; the progress clock keeps running, so a guard that
           // trips every tick still ends in a replan instead of a body standing for minutes.
+          this.unmergedAt = now;
           this.index = this.mergedFrom;
           this.mergedFrom = null;
           this.edgeStart = p;

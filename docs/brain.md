@@ -40,7 +40,7 @@ fights; it runs or hides.
 | wait | none | Storm at home, night at home, or dug in for the night |
 
 Wants (what every walk stops for within six blocks): berries on a ripe bush, an edible mushroom and a wild hive always; loose sticks while short of ten; loose flint and stones while a tool head is wanted and nothing knappable is carried.
-| eat | `forage` to half with two bites kept | Satiety below 20% (or 40% with nothing carried); eats what is carried when hungry, keeps the rest, searches ever farther in one direction for more, and when starving stomachs a bite that costs a point of health |
+| eat | `forage` to half with two bites kept; `eat` alone when dug in with food | Satiety below 20% (or 40% with nothing carried); eats what is carried when hungry (in the burrow too, off an earth wall), keeps the rest, searches ever farther in one direction for more, and when starving stomachs a bite that costs a point of health |
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
 | shelter | `shelter` | Enough dirt (by day, or at night with nowhere else) |
 | sticks | `gather stick` (loose sticks, then branchy leaves in reach) | Fewer than 10 sticks |

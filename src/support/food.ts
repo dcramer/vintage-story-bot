@@ -48,6 +48,9 @@ export function hunger(state) {
   return vital.current / vital.max;
 }
 
+// A block a right-click does nothing to: plain earth or stone, never a container or anything worked.
+export const inertTarget = target =>
+  !!target?.traits && (target.traits.includes('diggable') || target.traits.includes('mineable')) && !target.traits.includes('container');
 const eatingHeadings = [0, 45, 90, 135, 180, 225, 270, 315];
 const eatingPitches = [-60, -30, 0, 30, 60];
 export const eatingLooks = () => eatingPitches.flatMap(pitchDegrees => eatingHeadings.map(yawDegrees => ({ yawDegrees, pitchDegrees })));
@@ -87,14 +90,23 @@ export async function consume(field, { match, tolerance = 0 }: { match?: string;
     food = moved;
   }
   await field.send({ action: 'select', slot: food.slot });
-  // Look for clear air without placing food or accidentally activating nearby blocks.
+  // Look for clear air without placing food or accidentally activating nearby
+  // blocks. Sealed in a burrow there is none: a wall of earth or rock, which a
+  // right-click does nothing to, will do.
   let before;
+  let wall = null;
   for (const look of eatingLooks()) {
     await field.aim(look);
     before = await field.observe();
     if (!before.target) break;
+    if (!wall && inertTarget(before.target)) wall = look;
   }
-  if (before.target || before.activeSlot !== food.slot) throw Error('Eating needs clear air and the selected food slot');
+  if (before.target && wall) {
+    await field.aim(wall);
+    before = await field.observe();
+  }
+  if ((before.target && !inertTarget(before.target)) || before.activeSlot !== food.slot)
+    throw Error('Eating needs clear air and the selected food slot');
   inventory = await field.send({ action: 'inventory' });
   const selected = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === food.slot);
   if (!safeFood(selected ?? {}, tolerance) || selected.code !== food.code) throw Error('Selected food changed');

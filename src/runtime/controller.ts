@@ -412,6 +412,9 @@ export class Controller {
           record.nav?.finish('blocked', reason);
           record.state = 'blocked';
           record.reason = reason;
+          // A goal that died of a bug, not of the game: where it was, for the log.
+          if (!/interruption|cancelled|deadline|refused|Cannot reach/i.test(reason))
+            record.log?.info('goal', 'crashed', { error: reason, stack: (error as Error)?.stack?.split('\n').slice(1, 8) });
         }
         this.track(record);
         started.resolve({ ok: false, error: reason });

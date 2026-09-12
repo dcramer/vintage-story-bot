@@ -211,7 +211,8 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   // Below the recovery threshold, food is no longer optional daywork. With
   // nothing in the pack, sheltering through the night guarantees starvation;
   // keep searching and let forage's own threat handling decide when to run.
-  if (s.hunger !== null && s.hunger < HUNGRY) return s.burrowed ? 'unburrow' : 'eat';
+  // Dug in with food in the pack, it eats where it sits; with none, it must dig out to look.
+  if (s.hunger !== null && s.hunger < HUNGRY) return s.burrowed && s.reserve <= 0 ? 'unburrow' : 'eat';
   if (s.storm) {
     if (s.home) return s.atHome ? 'wait' : 'go_home';
     if (s.burrowed) return 'wait';
@@ -513,6 +514,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'go_home':
       return start('travel', { x: home!.x, z: home!.z, arrivalRadius: 3, timeoutMs: 600000 }, storm ? 'storm coming' : 'night falling');
     case 'eat':
+      // Sealed in for the night: one bite from the pack, no searching.
+      if (situation.burrowed && k.reserve > 0) return start('eat', {}, `satiety ${Math.round((satiety ?? 0) * 100)}%, dug in`);
       return start(
         'forage',
         // Fed to half with two bites' worth kept in the pack: the pack is
