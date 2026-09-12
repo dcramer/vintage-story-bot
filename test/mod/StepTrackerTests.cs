@@ -41,6 +41,10 @@ static class StepTrackerTests
         var swim = new StepTracker(new Point3(1.5, 99.5, 0.5), new Point3(0.5, 99.5, 0.5), 0.35, 1.5, false, 0);
         var stroke = swim.Update(new Point3(0.5, 98.6, 0.5), 90, false, true, 0);
         Check(stroke.Forward && stroke.Jump, "swimming holds jump");
-        Console.WriteLine("13 step checks passed.");
+        // A step still going after 2.5 s is stuck, even while the distance wobbles about.
+        var bounce = new StepTracker(toward, new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
+        for (long t = 0; t <= 2600; t += 100) bounce.Update(new Point3(1.0 + (t % 300) / 300.0, 100 + (t % 200) / 100.0, 0.5), 90, t % 200 == 0, false, t);
+        Check(bounce.State == "blocked", "an old step is stuck");
+        Console.WriteLine("14 step checks passed.");
     }
 }

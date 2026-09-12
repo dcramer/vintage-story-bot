@@ -81,7 +81,7 @@ public sealed partial class AiBridgeMod
         }
         if (!request.TryGetProperty("owner", out var frameOwner) || frameOwner.ValueKind != JsonValueKind.String ||
             !request.TryGetProperty("sequence", out var sequenceField) || !sequenceField.TryGetInt64(out long sequence) ||
-            !TryInteger(request, "durationMs", out int frameDuration) || frameDuration is < 1 or > 2000 ||
+            !TryInteger(request, "durationMs", out int frameDuration) || frameDuration is < 1 or > 500 ||
             !TryNumber(request, "yawDegrees", out double frameYaw) || Math.Abs(frameYaw) > 36000 ||
             !TryNumber(request, "pitchDegrees", out double framePitch) || Math.Abs(framePitch) > 89 ||
             !request.TryGetProperty("forward", out var forwardField) || forwardField.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
@@ -119,7 +119,6 @@ public sealed partial class AiBridgeMod
                 hop = hopField.GetBoolean();
             }
         }
-        else if (frameDuration > 500) return new { ok = false, error = "durationMs is at most 500 without a toward point." };
         if (request.TryGetProperty("focus", out var focusField) && focusField.ValueKind != JsonValueKind.Null)
         {
             if (!TryInteger(focusField, "x", out int fx) || !TryInteger(focusField, "y", out int fy) || !TryInteger(focusField, "z", out int fz) ||

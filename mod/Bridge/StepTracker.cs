@@ -10,6 +10,8 @@ public sealed class StepTracker
     public const double BlockedMs = 700;
     public const double HopDistance = 1.1;
     public const double PassedLateral = 0.6;
+    // A single step to an adjacent cell that is still going after this long is stuck, however the distance wobbles.
+    public const double MaxMs = 2500;
 
     public Point3 Toward { get; }
     public Point3 Start { get; }
@@ -21,10 +23,11 @@ public sealed class StepTracker
     public double Distance { get; private set; }
     private double bestDistance = double.PositiveInfinity;
     private long progressAt;
+    private readonly long startedAt;
 
     public StepTracker(Point3 toward, Point3 start, double reach, double reachY, bool hop, long now)
     {
-        Toward = toward; Start = start; Reach = reach; ReachY = reachY; Hop = hop; progressAt = now;
+        Toward = toward; Start = start; Reach = reach; ReachY = reachY; Hop = hop; progressAt = now; startedAt = now;
         Distance = Horizontal(toward, start);
     }
 
@@ -50,6 +53,7 @@ public sealed class StepTracker
         if (level && (onGround || wet) && (Distance <= Reach || passed)) { State = "arrived"; return (false, wet, wantYaw); }
         double error = Math.Abs(SceneGeometry.Normalize(wantYaw - yawDegrees + 180) - 180);
         bool aligned = error < AlignDegrees;
+        if (now - startedAt > MaxMs) { State = "blocked"; return (false, wet, wantYaw); }
         if (Distance < bestDistance - 0.03) { bestDistance = Distance; progressAt = now; }
         // Turning and falling are not being stuck; walking without getting closer is.
         else if (!aligned || (!onGround && !wet)) progressAt = now;
