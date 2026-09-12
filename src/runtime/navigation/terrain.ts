@@ -56,6 +56,8 @@ export class TerrainMemory {
   session = null;
   cursor = 0;
   now = 0;
+  // Geometry changes, including new cells replacing old ones in a full memory.
+  revision = 0;
   // Deep water is swum unless a route says otherwise; it costs enough that dry ground wins when there is any.
   swim = true;
   apply(batch, wall = Date.now()) {
@@ -93,6 +95,14 @@ export class TerrainMemory {
     const has = trait => cell.traits.includes(trait);
     cell.hazard = has('fire') || has('lava') ? 'fire' : has('water') && !cell.boxes.length ? 'water' : has('shape') ? 'shape' : null;
     const id = cellKey(cell.x, cell.y, cell.z);
+    const previous = this.cells.get(id);
+    if (
+      !previous ||
+      previous.hazard !== cell.hazard ||
+      previous.boxes.length !== cell.boxes.length ||
+      cell.boxes.some((box, i) => box.some((n, j) => n !== previous.boxes[i][j]))
+    )
+      this.revision++;
     this.cells.set(id, cell);
     if (cell.hazard) this.hazards.set(id, cell);
     else this.hazards.delete(id);
@@ -125,7 +135,7 @@ export class TerrainMemory {
       });
   }
   forget(id) {
-    this.cells.delete(id);
+    if (this.cells.delete(id)) this.revision++;
     this.hazards.delete(id);
   }
   get(x, y, z) {

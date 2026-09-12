@@ -47,16 +47,14 @@ export class Navigation {
   lookingAt = null;
   // The route index a straight-run merge started from, while one is in effect.
   mergedFrom: number | null = null;
-  // The tick in which a merge was last undone: undone once per tick, or a
-  // merge made again by the re-entered tick recurses without end.
-  unmergedAt: number | null = null;
+  // After a refused shortcut, follow the original checkpoint before trying another merge.
+  mergeRefused = false;
   routeReaches = false;
   guardHolds = 0;
   jumpAt = 0;
   airborne = false;
   nextPlanAt = 0;
-  // What the map held when the route in hand was planned; more cells since mean the far view filled in ahead.
-  plannedCells = 0;
+  plannedRevision = 0;
   steeringYaw = null;
   steeringAt = 0;
   evading = false;
@@ -113,10 +111,11 @@ export class Navigation {
     this.index = 0;
     this.state = 'moving';
     this.routeReaches = this.reaches(planned.at(-1));
-    this.plannedCells = this.map.cells.size;
+    this.plannedRevision = this.map.revision;
     this.edgeStart = p;
     this.bestNear = undefined;
     this.mergedFrom = null;
+    this.mergeRefused = false;
     this.guardHolds = 0;
     if (!stride) this.progressAt = now;
   }
@@ -223,13 +222,13 @@ export class Navigation {
     // and the far view keeps filling in as the body moves. When it has, plan again from where the body
     // is and take the new route in stride if it gets farther, so the walk changes course without a
     // stop at the old frontier and the survey there never happens.
-    if (grounded && !this.routeReaches && now >= this.nextPlanAt && map.cells.size !== this.plannedCells) {
+    if (grounded && !this.routeReaches && now >= this.nextPlanAt && map.revision !== this.plannedRevision) {
       this.nextPlanAt = now + REPLAN_AHEAD_MS;
       const planned = findRoute(map, from, this.target, w, h, this);
       const end = planned?.at(-1),
         old = this.route.at(-1);
       if (end && old && (this.reaches(end) || horizontal(end, this.target) + 1.5 < horizontal(old, this.target))) this.adopt(planned, p, now, true);
-      else this.plannedCells = map.cells.size;
+      else this.plannedRevision = map.revision;
     }
     // Advance past checkpoints the body has reached: close by, or crossed
     // along the segment between slow samples.
@@ -254,6 +253,7 @@ export class Navigation {
       this.progressAt = now;
       this.bestNear = undefined;
       this.mergedFrom = null;
+      this.mergeRefused = false;
     }
     if (this.index >= this.route.length) {
       // The last cell of a full route was reached: the body stands within a step's tolerance of the
@@ -273,7 +273,7 @@ export class Navigation {
     // Merge a run of checkpoints the body can walk without a turn into one, gentle slopes
     // included, so bends are only where the route really turns: a route on a grid zigzags a
     // cell at a time, and a turn at every cell is a stop at every cell.
-    if (grounded)
+    if (grounded && !this.mergeRefused)
       for (let ahead = this.index + 1; ahead < this.route.length; ahead++) {
         const node = this.route[ahead];
         if (!['walk', 'step'].includes(node.move) || horizontal(p, node) > MERGE_RUN || !map.runWalkable(p, node)) break;
@@ -326,10 +326,10 @@ export class Navigation {
       const own = fx === Math.floor(p.x) && fz === Math.floor(p.z),
         checkpoint = fx === Math.floor(next.x) && fz === Math.floor(next.z);
       if (!own && !checkpoint && !map.levels(fx, fz, p.y, JUMP_HEIGHT, MAX_DROP).length) {
-        if (this.mergedFrom !== null && this.mergedFrom < this.index && this.unmergedAt !== now) {
+        if (this.mergedFrom !== null && this.mergedFrom < this.index) {
           // Back to the route's own cells; the progress clock keeps running, so a guard that
           // trips every tick still ends in a replan instead of a body standing for minutes.
-          this.unmergedAt = now;
+          this.mergeRefused = true;
           this.index = this.mergedFrom;
           this.mergedFrom = null;
           this.edgeStart = p;
