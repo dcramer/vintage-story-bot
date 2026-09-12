@@ -22,12 +22,6 @@ export const SHELTER_DIRT = 28;
 export const HUNGRY = 0.2;
 // With nothing to eat in the pack, start looking while there is still strength to search.
 export const PECKISH = 0.4;
-export const KNIFE_BLADE = 'game:knifeblade-flint';
-export const AXE_BLADE = 'game:axehead-flint';
-export const KNIFE = 'game:knife-generic-flint';
-export const AXE = 'game:axe-flint';
-export const SHOVEL_BLADE = 'game:shovelhead-flint';
-export const SHOVEL = 'game:shovel-flint';
 export const TORCH = 'game:torch-basic-extinct-up';
 // A job that failed is left alone while the bot is still near where it failed, and for a few
 // minutes at most; the ladder goes on to the next job meanwhile, so nothing ever idles on it.
@@ -94,6 +88,12 @@ export type Memory = {
 
 export const isNight = (environment: any) => typeof environment?.calendar?.daylight === 'number' && environment.calendar.daylight < NIGHT_LIGHT;
 
+// The knappable material carried, as the game names tool heads after it: flint, or a rock type.
+export function knapMaterial(slots: any[]): string | null {
+  const stone = slots.find(s => s.code && kinds.knapping.materials(s));
+  if (!stone) return null;
+  return stone.code === 'game:flint' ? 'flint' : (stone.code.match(/^game:stone-([a-z]+)$/)?.[1] ?? null);
+}
 // What the bot carries, in plain counts.
 export function kit(inventory: any) {
   const slots = ownedSlots(inventory) as any[];
@@ -105,9 +105,12 @@ export function kit(inventory: any) {
     knife: tool('Knife'),
     axe: tool('Axe'),
     shovel: tool('Shovel'),
-    shovelBlade: exact(SHOVEL_BLADE),
-    knifeBlade: exact(KNIFE_BLADE),
-    axeBlade: exact(AXE_BLADE),
+    // Tool heads of any knappable material; the material carried names the head to knap and the tool to haft.
+    shovelBlade: part('game:shovelhead-'),
+    knifeBlade: part('game:knifeblade-'),
+    axeBlade: part('game:axehead-'),
+    material: knapMaterial(slots),
+    heads: slots.map(s => s.code).filter(code => /^game:(knifeblade|axehead|shovelhead)-/.test(code ?? '')) as string[],
     torches: part('torch-basic'),
     torch: slots.find(s => s.code?.includes('torch-basic'))?.code ?? null,
     dirt: part('soil-'),
@@ -387,19 +390,25 @@ export function decide(reading: Reading, memory: Memory): Decision {
         `${k.sticks}/${STICK_MIN} sticks`,
       );
     case 'stone':
-      return start('harvest', { match: 'loosestone', item: 'stone-', count: 2, timeoutMs: 600000 }, 'no stone to knap');
+      // Loose flint is the usual find; a knappable loose stone does as well. Both are right-clicks off the ground.
+      return start('gather', { match: 'looseflints', item: 'game:flint', count: 2, timeoutMs: 600000 }, 'flint to knap');
     case 'tools':
+      // Heads are knapped from what is carried and hafted into the tool of the same material.
       if (!k.knife)
         return k.knifeBlade < 1
-          ? start('knap', { output: KNIFE_BLADE, timeoutMs: 600000 }, 'no knife')
-          : start('craft_item', { output: KNIFE, count: 1, timeoutMs: 300000 }, 'haft the knife blade');
+          ? start('knap', { output: `game:knifeblade-${k.material ?? 'flint'}`, timeoutMs: 600000 }, 'no knife')
+          : start(
+              'craft_item',
+              { output: `game:knife-generic-${headMaterial(k, 'knifeblade')}`, count: 1, timeoutMs: 300000 },
+              'haft the knife blade',
+            );
       if (!k.axe)
         return k.axeBlade < 1
-          ? start('knap', { output: AXE_BLADE, timeoutMs: 600000 }, 'no axe')
-          : start('craft_item', { output: AXE, count: 1, timeoutMs: 300000 }, 'haft the axe head');
+          ? start('knap', { output: `game:axehead-${k.material ?? 'flint'}`, timeoutMs: 600000 }, 'no axe')
+          : start('craft_item', { output: `game:axe-${headMaterial(k, 'axehead')}`, count: 1, timeoutMs: 300000 }, 'haft the axe head');
       return k.shovelBlade < 1
-        ? start('knap', { output: SHOVEL_BLADE, timeoutMs: 600000 }, 'no shovel')
-        : start('craft_item', { output: SHOVEL, count: 1, timeoutMs: 300000 }, 'haft the shovel head');
+        ? start('knap', { output: `game:shovelhead-${k.material ?? 'flint'}`, timeoutMs: 600000 }, 'no shovel')
+        : start('craft_item', { output: `game:shovel-${headMaterial(k, 'shovelhead')}`, count: 1, timeoutMs: 300000 }, 'haft the shovel head');
     case 'grass':
       return start('harvest', { match: 'tallgrass', item: 'drygrass', count: 4, timeoutMs: 600000 }, 'grass for torches');
     case 'torches':
@@ -430,6 +439,10 @@ export function wants(reading: Reading): string[] {
   return list;
 }
 
+// The material of a carried tool head, from its code (game:knifeblade-flint -> flint).
+export function headMaterial(k: ReturnType<typeof kit>, head: string): string {
+  return k.heads.find(code => code.startsWith(`game:${head}-`))?.slice(`game:${head}-`.length) ?? k.material ?? 'flint';
+}
 export function fresh(): Memory {
   return {
     home: null,

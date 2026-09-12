@@ -4,6 +4,12 @@ Rough spec of the bot API surface, modeled on [Mineflayer](https://github.com/Pr
 
 Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-broken · `[ ]` missing. Layer: `mod` (C# sensing/input), `game` (RPC client), `ctl` (controller schema/action), `support` (`src/support` helper), `goal`, `nav` (`src/runtime/navigation`). Priority: **P0** blocks day 1–2 of [getting-started](docs/getting-started.md), **P1** blocks day 3–5, **P2** later/quality. Implemented contracts: [actions](src/actions/), [goals](src/goals/).
 
+## Live status 2026-09-12 (multiplayer, spawn area)
+
+- Verified live: the step follower (one `control_step` per checkpoint, arrivals reported by the mod; 27 walks arrived, none stalled in a four-minute sample, frame gaps under 1.1 s on a software renderer); flights end when the coast is clear; `retrieve_body` recovered the pack after a death; `gather` reached ten sticks by breaking branchy leaves and picking up drops; mushrooms harvested by breaking and eaten; the night dig-in digs the first block (the second still to be seen through on a full night).
+- Not yet seen live: a ripe fruiting bush harvest (none ripe around spawn this month), knapping and hafting from gathered flint, the shelter build, `store_items`/`take_items`.
+- Known limits: the software-rendered client turns and walks slowly (about 1.5 blocks a second); a wolf pack lives at spawn and kills the bot at night when it is caught in the open before digging in.
+
 ## 1. State (`bot.entity`, `health`, `food`, `time`, `players`)
 
 - [x] `observe` — identity, position, orientation, vitals, body condition, target, action timers.

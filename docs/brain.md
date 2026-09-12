@@ -44,8 +44,8 @@ Wants (what every walk stops for within six blocks): berries on a bush always; l
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
 | shelter | `shelter` | Enough dirt (by day, or at night with nowhere else) |
 | sticks | `gather stick` (loose sticks, then branchy leaves in reach) | Fewer than 10 sticks |
-| stone | `harvest loosestone` | No knife or axe and nothing knappable |
-| tools | `knap` a flint blade, `craft_item` the tool | Missing the knife or the axe |
+| stone | `gather looseflints` (loose flint, or a knappable loose stone picked up on the way) | A tool is missing and nothing knappable is carried |
+| tools | `knap` a head from the flint or knappable stone carried, `craft_item` the tool of that material | Missing the knife, the axe or the shovel |
 | grass | `harvest tallgrass` | Wants torches, no dry grass or cattail tops |
 | torches | `craft_item torch` | Fewer than 2 torches |
 | logs | `fell_tree` | Fewer than 8 logs |
