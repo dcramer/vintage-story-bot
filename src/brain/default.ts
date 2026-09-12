@@ -21,6 +21,8 @@ export const KNIFE_BLADE = 'game:knifeblade-flint';
 export const AXE_BLADE = 'game:axehead-flint';
 export const KNIFE = 'game:knife-generic-flint';
 export const AXE = 'game:axe-flint';
+export const SHOVEL_BLADE = 'game:shovelhead-flint';
+export const SHOVEL = 'game:shovel-flint';
 export const TORCH = 'game:torch-basic-extinct-up';
 export const COOLDOWN_MS = 10 * 60 * 1000;
 // Night when the sun is nearly gone; unknown light counts as day, since
@@ -43,20 +45,12 @@ export type Job =
   | 'explore'
   | 'dig_out'
   | 'burrow'
-  | 'unburrow';
+  | 'unburrow'
+  | 'seal';
 type Cell = { x: number; y: number; z: number };
-type Shelter = {
-  origin: Cell;
-  center: { x: number; z: number };
-  chunks: (Cell & { item: string })[][];
-  index: number;
-  phase: 'walls' | 'enter' | 'seal' | 'torch' | 'done';
-  torch: string | null;
-};
 export type Memory = {
   home: Cell | null;
   cool: Map<Job, number>;
-  shelter: Shelter | null;
   job: Job | null;
   // Where the last walk was heading when it ended in a pit; dig_out cuts stairs that way.
   pit: { x: number; z: number } | null;
@@ -79,6 +73,8 @@ export function kit(inventory: any) {
     sticks: exact('game:stick'),
     knife: tool('Knife'),
     axe: tool('Axe'),
+    shovel: tool('Shovel'),
+    shovelBlade: exact(SHOVEL_BLADE),
     knifeBlade: exact(KNIFE_BLADE),
     axeBlade: exact(AXE_BLADE),
     torches: part('torch-basic'),
@@ -92,24 +88,6 @@ export function kit(inventory: any) {
   };
 }
 
-// One-door box, 3 wide by 3 deep, walls 2 high, flat roof. origin is the
-// floor-level corner: blocks sit on the ground top at origin.y; the door gap
-// is 1 wide and 2 high in the middle of the +z wall.
-export function shelterCells(origin: Cell, item: string) {
-  const cells: (Cell & { item: string })[] = [];
-  for (let dy = 0; dy < 2; dy++)
-    for (let dx = 0; dx < 3; dx++)
-      for (let dz = 0; dz < 3; dz++) {
-        if (dx !== 0 && dx !== 2 && dz !== 0 && dz !== 2) continue;
-        if (dz === 2 && dx === 1) continue;
-        cells.push({ x: origin.x + dx, y: origin.y + dy, z: origin.z + dz, item });
-      }
-  for (let dx = 0; dx < 3; dx++) for (let dz = 0; dz < 3; dz++) cells.push({ x: origin.x + dx, y: origin.y + 2, z: origin.z + dz, item });
-  return cells;
-}
-export const doorCells = (origin: Cell, item: string) => [0, 1].map(dy => ({ x: origin.x + 1, y: origin.y + dy, z: origin.z + 2, item }));
-const chunked = <T>(cells: T[], size = 8) => Array.from({ length: Math.ceil(cells.length / size) }, (_, i) => cells.slice(i * size, i * size + size));
-
 export type Situation = {
   threat: boolean;
   storm: boolean;
@@ -121,69 +99,30 @@ export type Situation = {
   sticks: number;
   knife: boolean;
   axe: boolean;
+  shovel: boolean;
   stone: boolean;
   torches: number;
   grass: number;
   dirt: number;
   logs: number;
 };
-// The whole character in one choice: danger, then hunger, then night, then
-// the kit in day-1 order, then looking around.
+// The whole character in one choice: danger, then hunger, then night, then the
+// day-1 kit in the order its dependencies impose. A shelter needs dirt, dirt
+// needs a shovel, a shovel (like a knife and an axe) needs a knapped head and
+// a stick, a head needs flint or stone. Night without a home means a burrow,
+// which needs one block in hand: that block alone may be dug bare-handed.
 export function pickJob(s: Situation): Job {
   if (s.threat) return 'hide';
   if (s.storm) return s.home && !s.atHome ? 'go_home' : 'wait';
   if (s.hunger !== null && s.hunger < HUNGRY) return 'eat';
-  if (s.night) return s.home ? (s.atHome ? 'wait' : 'go_home') : s.burrowed ? 'wait' : 'burrow';
+  if (s.night) return s.home ? (s.atHome ? 'wait' : 'go_home') : s.burrowed ? 'wait' : s.dirt > 0 ? 'burrow' : 'seal';
   if (s.burrowed) return 'unburrow';
-  if (!s.home) return s.dirt >= SHELTER_DIRT ? 'shelter' : 'dirt';
   if (s.sticks < STICK_MIN) return 'sticks';
-  if (!s.knife || !s.axe) return s.stone ? 'tools' : 'stone';
+  if (!s.knife || !s.axe || !s.shovel) return s.stone ? 'tools' : 'stone';
+  if (!s.home) return s.dirt >= SHELTER_DIRT ? 'shelter' : 'dirt';
   if (s.torches < TORCH_MIN) return s.grass > 0 ? 'torches' : 'grass';
   if (s.logs < LOG_MIN) return 'logs';
   return 'explore';
-}
-
-function shelterStep(memory: Memory, position: Cell, dirt: string, torch: string | null): { start: string; args: Record<string, unknown> } {
-  if (!memory.shelter) {
-    const origin = { x: Math.floor(position.x) + 2, y: Math.floor(position.y), z: Math.floor(position.z) - 1 };
-    memory.shelter = {
-      origin,
-      center: { x: origin.x + 1.5, z: origin.z + 1.5 },
-      chunks: chunked(shelterCells(origin, dirt)),
-      index: 0,
-      phase: 'walls',
-      torch,
-    };
-  }
-  const shelter = memory.shelter;
-  shelter.torch ??= torch;
-  if (shelter.phase === 'walls') return { start: 'build', args: { cells: shelter.chunks[shelter.index], timeoutMs: 900000 } };
-  if (shelter.phase === 'enter')
-    return { start: 'travel', args: { x: shelter.center.x, z: shelter.center.z, arrivalRadius: 0.5, timeoutMs: 600000 } };
-  if (shelter.phase === 'seal') return { start: 'build', args: { cells: doorCells(shelter.origin, dirt), timeoutMs: 300000 } };
-  return {
-    start: 'build',
-    args: { cells: [{ x: shelter.origin.x + 1, y: shelter.origin.y, z: shelter.origin.z + 1, item: shelter.torch }], timeoutMs: 300000 },
-  };
-}
-// Move the shelter one phase forward after its goal finished well; a failed
-// phase abandons this attempt and cools the job.
-function shelterAdvance(memory: Memory, ok: boolean, now: number) {
-  const shelter = memory.shelter;
-  if (!shelter) return;
-  if (!ok) {
-    memory.cool.set('shelter', now + COOLDOWN_MS);
-    memory.shelter = null;
-    return;
-  }
-  if (shelter.phase === 'walls' && ++shelter.index >= shelter.chunks.length) shelter.phase = 'enter';
-  else if (shelter.phase === 'enter') shelter.phase = 'seal';
-  else if (shelter.phase === 'seal') shelter.phase = shelter.torch ? 'torch' : 'done';
-  else if (shelter.phase === 'torch') shelter.phase = 'done';
-  if (shelter.phase === 'done') {
-    memory.home = { x: shelter.center.x, y: shelter.origin.y, z: shelter.center.z };
-    memory.shelter = null;
-  }
 }
 
 export function decide(reading: Reading, memory: Memory): Decision {
@@ -193,12 +132,13 @@ export function decide(reading: Reading, memory: Memory): Decision {
     if (last.ok) memory.done[last.kind] = (memory.done[last.kind] ?? 0) + 1;
     // A walk that ended in a hole is not a failed job: the hole is dealt with first.
     if (last.reason === 'pit' && last.result?.position) memory.pit = { x: last.result.position.x + 8, z: last.result.position.z };
-    else if (memory.job === 'shelter') shelterAdvance(memory, last.ok, now);
     // Running away is tried again at once, and a job the surroundings refused before it began (water, lost
     // controls) is not the job's fault; every other failed job rests a while.
     else if (!last.ok && memory.job && !['hide', 'dig_out'].includes(memory.job) && !/interruption/.test(last.reason ?? ''))
       memory.cool.set(memory.job, now + COOLDOWN_MS);
     if (memory.job === 'dig_out') memory.pit = null;
+    // A finished shelter is home.
+    if (memory.job === 'shelter' && last.ok && last.result?.home) memory.home = last.result.home;
     if (memory.job === 'burrow' && last.ok && last.result?.mouth) memory.burrow = last.result.mouth;
     if (memory.job === 'unburrow' && last.ok) memory.burrow = null;
     memory.job = null;
@@ -238,6 +178,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     sticks: k.sticks,
     knife: k.knife,
     axe: k.axe,
+    shovel: k.shovel,
     stone: k.stone,
     torches: k.torches,
     grass: k.grass,
@@ -273,15 +214,19 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'dirt':
       return start(
         'harvest',
-        { match: 'soil-', item: 'soil-', count: Math.max(1, SHELTER_DIRT - k.dirt), timeoutMs: 900000 },
+        { match: 'soil-', item: 'soil-', count: Math.max(1, SHELTER_DIRT - k.dirt), tool: 'Shovel', timeoutMs: 900000 },
         `${k.dirt}/${SHELTER_DIRT} dirt for a shelter`,
       );
-    case 'shelter': {
-      const step = shelterStep(memory, state.position, k.dirtCode ?? 'game:soil-medium-none', k.torch);
-      return start(step.start, step.args, `shelter ${memory.shelter?.phase}`);
-    }
+    case 'seal':
+      return start('harvest', { match: 'soil-', item: 'soil-', count: 2, timeoutMs: 300000 }, 'a block to seal a burrow with');
+    case 'shelter':
+      return start('shelter', { item: k.dirtCode ?? 'soil-', timeoutMs: 1800000 }, `${k.dirt} dirt, putting up a shelter`);
     case 'sticks':
-      return start('gather_sticks', { count: STICK_MIN - k.sticks, timeoutMs: 600000 }, `${k.sticks}/${STICK_MIN} sticks`);
+      return start(
+        'gather',
+        { match: 'stick', item: 'game:stick', count: STICK_MIN - k.sticks, timeoutMs: 600000 },
+        `${k.sticks}/${STICK_MIN} sticks`,
+      );
     case 'stone':
       return start('harvest', { match: 'loosestone', item: 'stone-', count: 2, timeoutMs: 600000 }, 'no stone to knap');
     case 'tools':
@@ -289,9 +234,13 @@ export function decide(reading: Reading, memory: Memory): Decision {
         return k.knifeBlade < 1
           ? start('knap', { output: KNIFE_BLADE, timeoutMs: 600000 }, 'no knife')
           : start('craft_item', { output: KNIFE, count: 1, timeoutMs: 300000 }, 'haft the knife blade');
-      return k.axeBlade < 1
-        ? start('knap', { output: AXE_BLADE, timeoutMs: 600000 }, 'no axe')
-        : start('craft_item', { output: AXE, count: 1, timeoutMs: 300000 }, 'haft the axe head');
+      if (!k.axe)
+        return k.axeBlade < 1
+          ? start('knap', { output: AXE_BLADE, timeoutMs: 600000 }, 'no axe')
+          : start('craft_item', { output: AXE, count: 1, timeoutMs: 300000 }, 'haft the axe head');
+      return k.shovelBlade < 1
+        ? start('knap', { output: SHOVEL_BLADE, timeoutMs: 600000 }, 'no shovel')
+        : start('craft_item', { output: SHOVEL, count: 1, timeoutMs: 300000 }, 'haft the shovel head');
     case 'grass':
       return start('harvest', { match: 'tallgrass', item: 'drygrass', count: 4, timeoutMs: 600000 }, 'grass for torches');
     case 'torches':
@@ -319,7 +268,7 @@ export function wants(reading: Reading): string[] {
 }
 
 export function fresh(): Memory {
-  return { home: null, cool: new Map(), shelter: null, job: null, pit: null, burrow: null, done: {}, scares: 0, resting: false };
+  return { home: null, cool: new Map(), job: null, pit: null, burrow: null, done: {}, scares: 0, resting: false };
 }
 
 const brain: Brain<Memory> = {
@@ -334,7 +283,6 @@ const brain: Brain<Memory> = {
     home: memory.home,
     burrow: memory.burrow,
     job: memory.job,
-    shelter: memory.shelter?.phase ?? null,
     done: memory.done,
     cooling: [...memory.cool].filter(([, until]) => until > Date.now()).map(([job]) => job),
   }),

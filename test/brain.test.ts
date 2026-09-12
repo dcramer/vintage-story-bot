@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import brain, { decide as decision, fresh, kit, pickJob, SHELTER_DIRT, STICK_MIN, shelterCells } from '../src/brain/default.ts';
+import brain, { decide as decision, fresh, kit, pickJob, SHELTER_DIRT, STICK_MIN } from '../src/brain/default.ts';
+import { shelter as shelterCells } from '../src/support/structures.ts';
 
 const decide = (reading, memory): any => decision(reading, memory);
 
@@ -37,6 +38,7 @@ const situation = (extra = {}) => ({
   sticks: 10,
   knife: true,
   axe: true,
+  shovel: true,
   stone: false,
   torches: 2,
   grass: 0,
@@ -50,12 +52,14 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ storm: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true })), 'eat');
   assert.equal(pickJob(situation({ night: true, atHome: false })), 'go_home');
-  assert.equal(pickJob(situation({ night: true, home: false, dirt: 0 })), 'burrow');
+  assert.equal(pickJob(situation({ night: true, home: false, dirt: 0 })), 'seal');
+  assert.equal(pickJob(situation({ night: true, home: false, dirt: 3 })), 'burrow');
   assert.equal(pickJob(situation({ night: true, home: false, burrowed: true })), 'wait');
   assert.equal(pickJob(situation({ home: false, burrowed: true })), 'unburrow');
   assert.equal(pickJob(situation({ home: false, dirt: SHELTER_DIRT })), 'shelter');
   assert.equal(pickJob(situation({ home: false })), 'dirt');
-  assert.equal(pickJob(situation({ sticks: 3 })), 'sticks');
+  assert.equal(pickJob(situation({ home: false, sticks: 3 })), 'sticks', 'sticks before dirt: the shovel needs one');
+  assert.equal(pickJob(situation({ home: false, shovel: false, stone: true })), 'tools', 'a shovel before digging dirt');
   assert.equal(pickJob(situation({ knife: false })), 'stone');
   assert.equal(pickJob(situation({ knife: false, stone: true })), 'tools');
   assert.equal(pickJob(situation({ torches: 0 })), 'grass');
@@ -68,13 +72,13 @@ test('brain: a threat interrupts its own goal, a failed job cools down, a finish
   const memory = fresh();
   memory.home = { x: 0, y: 100, z: 0 };
   const first = decide(reading({ inventory: inventory(slot('game:stick', 2)) }), memory);
-  assert.deepEqual([first.start, first.args.count, memory.job], ['gather_sticks', STICK_MIN - 2, 'sticks']);
+  assert.deepEqual([first.start, first.args.count, memory.job], ['gather', STICK_MIN - 2, 'sticks']);
   const wolf = state({ nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }] });
-  assert.deepEqual(decide(reading({ state: wolf, active: { id: 'g1', kind: 'gather_sticks', state: 'running', by: 'brain' } }), memory), {
+  assert.deepEqual(decide(reading({ state: wolf, active: { id: 'g1', kind: 'gather', state: 'running', by: 'brain' } }), memory), {
     stop: 'threat',
   });
   const failed = decide(
-    reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'g1', kind: 'gather_sticks', ok: false, reason: 'blocked' }, now: 2000 }),
+    reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'g1', kind: 'gather', ok: false, reason: 'blocked' }, now: 2000 }),
     memory,
   );
   assert.equal(failed.wait, 'sticks cooling down');
@@ -83,14 +87,19 @@ test('brain: a threat interrupts its own goal, a failed job cools down, a finish
   const again = decide(reading({ state: wolf, last: { id: 'g2', kind: 'travel', ok: false, reason: 'interrupted' }, now: 3000 }), memory);
   assert.equal(again.start, 'travel', 'a failed flight is tried again at once');
   const shelterMemory = fresh();
-  const dirt = inventory(slot('game:soil-medium-none', SHELTER_DIRT));
+  const tools = [
+    slot('game:stick', 10),
+    slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }),
+    slot('game:axe-flint', 1, { tool: 'Axe', durability: 5 }),
+    slot('game:shovel-flint', 1, { tool: 'Shovel', durability: 5 }),
+  ];
+  const dirt = inventory(slot('game:soil-medium-none', SHELTER_DIRT), ...tools);
   const walls = decide(reading({ inventory: dirt }), shelterMemory);
-  assert.equal(walls.start, 'build');
-  assert.equal(shelterMemory.shelter.phase, 'walls');
+  assert.deepEqual([walls.start, walls.args.item, shelterMemory.job], ['shelter', 'game:soil-medium-none', 'shelter']);
   assert.equal(shelterCells({ x: 0, y: 0, z: 0 }, 'd').length, 23);
-  for (let phase = 0; phase < 8 && shelterMemory.shelter; phase++)
-    decide(reading({ inventory: dirt, last: { id: `s${phase}`, kind: 'build', ok: true } }), shelterMemory);
-  assert.ok(shelterMemory.home);
+  const home = { x: 3.5, y: 100, z: 0.5 };
+  decide(reading({ inventory: dirt, last: { id: 's1', kind: 'shelter', ok: true, result: { home } } }), shelterMemory);
+  assert.deepEqual(shelterMemory.home, home);
 });
 
 test('brain: kit reads tools by class and dirt by code', () => {
@@ -131,16 +140,19 @@ test('brain loop: respawns when dead, waits behind an operator goal, starts and 
   const loop = new BrainLoop(controller as any, brain, 5);
   loop.start();
   await new Promise(resolve => setTimeout(resolve, 30));
-  assert.ok(calls.some(c => c.action === 'respawn' && c.deathId === 'd:1'));
-  assert.ok(
-    calls.some(c => c.action === 'harvest' && c.by === 'brain'),
-    'starts the first kit job (dirt for a shelter)',
-  );
-  assert.deepEqual(loop.goal, { id: 'b1', kind: 'harvest' });
+  const goal = loop.goal;
   controller.active = { id: 'o1', kind: 'travel', state: 'running', by: 'operator' };
   await new Promise(resolve => setTimeout(resolve, 20));
-  assert.match(loop.lastDecision, /waiting for travel/);
+  const decision = loop.lastDecision;
+  // Stop before asserting so a failure never leaves the loop ticking.
   await loop.stop();
+  assert.ok(calls.some(c => c.action === 'respawn' && c.deathId === 'd:1'));
+  assert.ok(
+    calls.some(c => c.action === 'gather' && c.by === 'brain'),
+    'starts the first kit job (sticks, which every tool needs)',
+  );
+  assert.deepEqual(goal, { id: 'b1', kind: 'gather' });
+  assert.match(decision, /waiting for travel/);
   assert.equal(controller.active.by, 'operator', 'an operator goal is never cancelled by the brain');
 });
 

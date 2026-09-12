@@ -168,7 +168,7 @@ const describe = {
   collect_item: a => `${code(a.expectedItem)} (${a.target})`,
   equip: a => a.item === null ? 'empty hand' : a.item ? code(a.item) : `${a.tool}${a.minTier ? ' tier ≥ ' + a.minTier : ''}`,
   dig_block: a => a.target, place_block: a => `${code(a.expectedItem)} on ${a.target}`,
-  gather_sticks: a => count(a.count ?? 10, 'sticks'), move_to: a => `to ${point(a)}`,
+  gather: a => count(a.count ?? 10, `${code(a.item ?? a.match ?? 'stick')}s`), wait: a => a.untilHour != null ? `until ${a.untilHour}:00` : `${Math.round((a.ms ?? 0) / 1000)} s`, shelter: a => `of ${code(a.item ?? 'soil-')}`, look_around: a => a.match ?? (a.matches ?? []).join(', ') ?? '', move_to: a => `to ${point(a)}`,
   forage: a => `${(a.match ?? ['forage']).join(', ')} to 80% satiety`, eat: a => a.item ? `fresh ${a.item} from inventory` : 'fresh food from inventory',
 };
 const goalTitle = g => g?.args ? (describe[g.kind]?.(g.args) ?? fmt(g.args)) : '';

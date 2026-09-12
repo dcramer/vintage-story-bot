@@ -16,7 +16,7 @@ export default defineGoal({
   destructive: true,
   description:
     'Walk exploration legs and scan after each; returns final position/heading and counts of sighted object codes ' +
-    '(memory only, revalidate before acting). Food/interruption rules as gather_sticks. Returns START; poll goal_status.',
+    '(memory only, revalidate before acting). Food/interruption rules as gather. Returns START; poll goal_status.',
   announce: () => 'Exploring the area a bit.',
   run: (env, { legs = 4, heading, ...options }) =>
     runField(env, { manageFood: false, ...options }, [], async (field, survival) => {

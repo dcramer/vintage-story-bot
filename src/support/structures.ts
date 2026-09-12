@@ -24,7 +24,24 @@ export function pitKiln(origin, item) {
   ].map(([dx, dz]) => ({ x: origin.x + dx, y: origin.y + 1, z: origin.z + dz, item }));
 }
 
-export const presets = { house, pit_kiln: pitKiln };
+// The tiny shelter of docs/brain.md: a one-door box 3 wide by 3 deep, walls 2 high, flat roof.
+// origin is the floor-level corner; the door gap is 1 wide and 2 high in the middle of the +z wall.
+export function shelter(origin, item) {
+  const cells = [];
+  for (let dy = 0; dy < 2; dy++)
+    for (let dx = 0; dx < 3; dx++)
+      for (let dz = 0; dz < 3; dz++) {
+        if (dx !== 0 && dx !== 2 && dz !== 0 && dz !== 2) continue;
+        if (dz === 2 && dx === 1) continue;
+        cells.push({ x: origin.x + dx, y: origin.y + dy, z: origin.z + dz, item });
+      }
+  for (let dx = 0; dx < 3; dx++) for (let dz = 0; dz < 3; dz++) cells.push({ x: origin.x + dx, y: origin.y + 2, z: origin.z + dz, item });
+  return cells;
+}
+export const shelterDoor = (origin, item) => [0, 1].map(dy => ({ x: origin.x + 1, y: origin.y + dy, z: origin.z + 2, item }));
+export const shelterCenter = origin => ({ x: origin.x + 1.5, z: origin.z + 1.5 });
+
+export const presets = { house, pit_kiln: pitKiln, shelter };
 
 export function box(from, to) {
   const cells = [];

@@ -2,23 +2,37 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { area, Fieldwork, sightRange } from '../support/fieldwork.ts';
+import { pickupBlock } from '../support/gleaning.ts';
 import { Survival } from '../support/survival.ts';
-import { foodFeatures } from '../support/task.ts';
+import { cleanName, foodFeatures } from '../support/task.ts';
 
-const loose = o => o.kind === 'block' && /^game:loosestick-(free|snow)$/.test(o.code);
-const dropped = o => o.kind === 'item' && o.code === 'game:stick';
-export const stickCount = state =>
-  [...state.hotbar, ...state.backpack].filter(slot => slot.code === 'game:stick').reduce((n, slot) => n + slot.quantity, 0);
+// Things lying on the ground: loose sticks, stones and flints (a right-click
+// each) and dropped stacks (walked over). match is the code substring looked
+// for; item is the carried code substring that proves a pickup.
+export const carried = (state, item) =>
+  [...state.hotbar, ...state.backpack].filter(slot => slot.code?.includes(item)).reduce((n, slot) => n + slot.quantity, 0);
 
-export async function gather(env, { count = 10, manageFood = false, ...options }: any = {}) {
+export async function gather(env, { match = 'stick', item = match, count = 10, manageFood = false, ...options }: any = {}) {
   if (!Number.isInteger(count) || count < 1 || count > 64) throw Error('count must be 1–64');
+  const wanted = code => code?.toLowerCase().includes(match.toLowerCase());
+  const loose = o => o.kind === 'block' && pickupBlock(o.code) && wanted(o.code);
+  const dropped = o => o.kind === 'item' && wanted(o.code);
   const field = new Fieldwork(env, options);
   const survival = manageFood ? new Survival(field) : null;
   field.recoveringFood = manageFood;
-  const gained = () => (field.initial ? stickCount(field.latest) - stickCount(field.initial) : 0);
+  const gained = () => (field.initial ? carried(field.latest, item) - carried(field.initial, item) : 0);
   // Preserve parent-task progress when a composed food or movement skill reports.
   field.report = (phase, extra = {}) =>
-    env.report?.({ phase, count, gained: gained(), moved: +field.moved.toFixed(1), searched: field.searched, eaten: survival?.eaten ?? 0, ...extra });
+    env.report?.({
+      phase,
+      match,
+      count,
+      gained: gained(),
+      moved: +field.moved.toFixed(1),
+      searched: field.searched,
+      eaten: survival?.eaten ?? 0,
+      ...extra,
+    });
   try {
     await field.start(manageFood ? foodFeatures : []);
     await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
@@ -27,7 +41,9 @@ export async function gather(env, { count = 10, manageFood = false, ...options }
       if (gained() >= count)
         return {
           ok: true,
-          goal: 'gather_sticks',
+          goal: 'gather',
+          match,
+          item,
           count,
           gained: gained(),
           eaten: survival?.eaten ?? 0,
@@ -37,19 +53,19 @@ export async function gather(env, { count = 10, manageFood = false, ...options }
         };
       await survival?.tend();
       field.report('searching');
-      const objects = await field.scan(8, 'stick');
-      if (!objects.some(o => loose(o) && o.withinPickingRange)) await field.scan(sightRange, 'stick');
+      const objects = await field.scan(8, match);
+      if (!objects.some(o => loose(o) && o.withinPickingRange)) await field.scan(sightRange, match);
       const ready = objects.find(o => loose(o) && o.withinPickingRange && !field.skipped.has(o.key));
       if (ready) {
         field.report('pickup', { target: ready.key });
         await field.aim(ready.look);
         const aimed = await field.observe();
         if (aimed.target?.key === ready.key) {
-          const before = stickCount(aimed);
+          const before = carried(aimed, item);
           await field.send({ action: 'interact', expectedTarget: ready.key, durationMs: 150 });
           await field.wait(500);
           const after = await field.observe();
-          if (stickCount(after) > before) field.seen.delete(ready.key);
+          if (carried(after, item) > before) field.seen.delete(ready.key);
           else field.skip(ready);
           field.report('verified', { target: ready.key });
         } else field.skip(ready, 5000);
@@ -71,8 +87,9 @@ export async function gather(env, { count = 10, manageFood = false, ...options }
         }
         field.skip(target, 15000);
       }
-      const tree = o => o.code.startsWith('game:leaves-') && !field.visits.has(area(o.point));
-      if (!field.targets(tree).length) await field.scan(sightRange, 'leaves', 'blocks');
+      // Sticks lie under trees; anything else is looked for in the open.
+      const tree = o => wanted('stick') && o.code.startsWith('game:leaves-') && !field.visits.has(area(o.point));
+      if (wanted('stick') && !field.targets(tree).length) await field.scan(sightRange, 'leaves', 'blocks');
       const destination = field.explore(field.targets(tree)[0]?.point);
       await field.walk(destination, survival?.pauseWhen);
     }
@@ -82,10 +99,12 @@ export async function gather(env, { count = 10, manageFood = false, ...options }
 }
 
 export default defineGoal({
-  name: 'gather_sticks',
+  name: 'gather',
   schema: z
     .object({
-      count: z.number().int().min(1).max(64).optional(),
+      match: z.string().min(1).max(64).default('stick').describe('Code substring of what lies on the ground: stick, loosestones, flint.'),
+      item: z.string().min(1).max(64).optional().describe('Carried code substring that proves a pickup; defaults to match (stones: stone-).'),
+      count: z.number().int().min(1).max(64).default(10),
       manageFood: z.boolean().optional(),
       sprint: z.boolean().optional(),
       timeoutMs: z.number().int().min(1000).max(3600000).optional(),
@@ -93,14 +112,10 @@ export default defineGoal({
     .strict(),
   destructive: true,
   description:
-    'Collect additional ground sticks only (default 10): scan, navigate, pick up and verify ' +
-    'inventory gain. Food management defaults on: pauses below 20% satiety to forage/eat fresh ' +
-    'berries to 80% plus a reserve. Off by default: set manageFood=true to let the goal pause for food. ' +
-    'Optional sprint=true permits safe, well-fed straight travel. No leaf harvesting. ' +
-    'Runs until count is reached or gameplay/cancellation ' +
-    'interrupts; timeoutMs is optional, no default deadline. Failed routes trigger further ' +
-    'search, not goal completion. Returns START and goal.id; poll observe.goal.progress/result. ' +
-    'stop cancels globally.',
-  announce: () => 'Collecting some sticks.',
+    'Pick up count more of something lying on the ground: loose sticks, stones and flints by right-click, dropped stacks by ' +
+    'walking over them; look around, nearest seen first, walk, pick up, verify the carried gain, repeat. No digging, harvesting ' +
+    'or leaf stripping. manageFood=true pauses below 20% satiety to forage; sprint=true permits safe, well-fed straight travel. ' +
+    'No default deadline; failed routes lead to more searching. Returns START; poll goal_status.',
+  announce: args => `Collecting some ${cleanName(args.item ?? args.match ?? 'stick')}s.`,
   run: gather,
 });

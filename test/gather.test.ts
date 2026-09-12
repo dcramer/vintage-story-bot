@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { gather } from '../src/goals/gather_sticks.ts';
+import { gather } from '../src/goals/gather.ts';
 
 function fixture({ gain = true, interruptAfter = Infinity } = {}) {
   const calls = [],

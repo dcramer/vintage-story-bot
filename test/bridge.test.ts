@@ -51,9 +51,9 @@ test('validates bridge ports and bounded action inputs', () => {
   assert.equal(schema('move_to').safeParse({ ...destination, timeoutMs: 120000 }).success, true);
   for (const change of [{ x: Infinity }, { y: NaN }, { dimension: 1 }, { timeoutMs: 120001 }, { timeoutMs: 0 }])
     assert.equal(schema('move_to').safeParse({ ...destination, ...change }).success, false);
-  assert.equal(schema('gather_sticks').safeParse({ count: 10 }).success, true);
-  assert.equal(schema('gather_sticks').safeParse({ count: 65 }).success, false);
-  assert.equal(schema('gather_sticks').safeParse({ timeoutMs: 3600001 }).success, false);
+  assert.equal(schema('gather').safeParse({ count: 10 }).success, true);
+  assert.equal(schema('gather').safeParse({ count: 65 }).success, false);
+  assert.equal(schema('gather').safeParse({ timeoutMs: 3600001 }).success, false);
   for (const after of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1]) assert.equal(schema('events').safeParse({ after }).success, false);
   assert.equal(schema('respawn').safeParse({ deathId: '' }).success, false);
   assert.equal(schema('select_hotbar').safeParse({ slot: 10 }).success, false);
