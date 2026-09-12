@@ -334,7 +334,7 @@ export class Controller {
       !initial.controlReady ||
       !initial.alive ||
       (!initial.motion.onGround && !initial.motion.feetInLiquid) ||
-      (initial.motion.swimming && !goal.swim) ||
+      (initial.motion.swimming && goal.swim === false) ||
       initial.mounted ||
       initial.position.dimension !== 0 ||
       Math.abs(goal.x - initial.position.x) > 128 ||
@@ -351,7 +351,7 @@ export class Controller {
       { allowStarvingRecovery },
       signal,
     );
-    this.map.swim = !!goal.swim;
+    this.map.swim = goal.swim !== false;
     const nav = (record.nav = new Navigation(this.map, initial, goal));
     try {
       if (started) {
@@ -402,7 +402,7 @@ export class Controller {
           state.control.owner !== control.owner ||
           !state.controlReady ||
           !state.alive ||
-          (state.motion.swimming && !goal.swim) ||
+          (state.motion.swimming && goal.swim === false) ||
           state.mounted ||
           state.position.dimension !== 0
         ) {

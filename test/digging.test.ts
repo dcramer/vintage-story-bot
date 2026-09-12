@@ -54,11 +54,11 @@ test('water cells over solid ground are waded, deeper water only swum when allow
   const wade = bank.find(m => Math.floor(m.node.x) === 1 && Math.floor(m.node.z) === 0);
   assert.equal(wade?.node.move, 'wade');
   assert.equal(wade.node.y, -1);
+  assert.equal(pond.moves({ x: 1.5, y: -1, z: 0.5 }).find(m => Math.floor(m.node.x) === 2)?.node.move, 'swim', 'deeper water is swum');
+  pond.swim = false;
   assert.equal(
     pond.moves({ x: 1.5, y: -1, z: 0.5 }).some(m => Math.floor(m.node.x) === 2),
     false,
-    'two-deep water is not entered',
+    'unless a route forbids swimming',
   );
-  pond.swim = true;
-  assert.equal(pond.moves({ x: 1.5, y: -1, z: 0.5 }).find(m => Math.floor(m.node.x) === 2)?.node.move, 'swim');
 });

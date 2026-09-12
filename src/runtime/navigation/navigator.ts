@@ -182,7 +182,8 @@ export class Navigation {
     // Advance past checkpoints the body has reached: close by, or crossed
     // along the segment between slow samples.
     const reached = node => {
-      if (Math.abs(p.y - node.y) > 0.6) return false;
+      // A floating body sits below its swim node; on land the tolerance is a step.
+      if (Math.abs(p.y - node.y) > (node.swim || state.motion.swimming ? 1.5 : 0.6)) return false;
       // A cell reached by dropping counts only once the body has landed on it.
       if (node.y < this.edgeStart.y - STEP_HEIGHT) return grounded && horizontal(p, node) < 0.5;
       if (horizontal(p, node) < 0.4) return true;

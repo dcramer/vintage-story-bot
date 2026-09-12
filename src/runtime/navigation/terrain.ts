@@ -52,7 +52,8 @@ export class TerrainMemory {
   cursor = 0;
   now = 0;
   capacity = 262144;
-  swim = false;
+  // Deep water is swum unless a route says otherwise; it costs enough that dry ground wins when there is any.
+  swim = true;
   apply(batch, wall = Date.now()) {
     // A new mod session only restarts the delta stream; what the player
     // remembers of the world is not erased by the eye reopening.
@@ -214,7 +215,9 @@ export class TerrainMemory {
         // Into or through water: a wade or a swim, never a jump or a drop.
         if (to.wet || to.swim || node.wet || node.swim) {
           if (diagonal && !this.cornerOpen(x, z, dx, dz, Math.max(t, to.y), missing)) continue;
-          if (rise > JUMP_HEIGHT || -rise > 1.05) continue;
+          // Out of water a bank one block up is climbed with jump held; into deep water a fall of up to
+          // three blocks is fine (the water takes it); into shallow water only a one-block step.
+          if (rise > (node.swim ? 1.6 : JUMP_HEIGHT) || -rise > (to.swim ? MAX_DROP : 1.05)) continue;
           if (rise > STEP_HEIGHT && !this.clearBetween(x, z, t, t + JUMP_HEADROOM, missing)) continue;
           kind = to.swim ? 'swim' : to.wet ? 'wade' : rise > STEP_HEIGHT ? 'jump' : 'walk';
           cost = d + (to.swim ? SWIM_COST : to.wet ? WADE_COST : 1);

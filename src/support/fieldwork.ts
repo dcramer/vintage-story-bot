@@ -56,7 +56,7 @@ export class Fieldwork {
       signal,
       timeoutMs,
       sprint = false,
-      swim = false,
+      swim = true,
       stopWhenHurt = false,
       wants = env.wants,
       wait = ms => new Promise(r => setTimeout(r, ms)),
@@ -378,7 +378,7 @@ export class Fieldwork {
     let before = await this.observe();
     // A leg starts from the ground: after a step down or a jump the body can
     // be airborne for a moment when the previous leg ends.
-    for (let waits = 0; waits < 6 && !before.motion.onGround; waits++) {
+    for (let waits = 0; waits < 6 && !before.motion.onGround && !before.motion.swimming && !before.motion.feetInLiquid; waits++) {
       await this.wait(250);
       before = await this.observe(true);
     }
