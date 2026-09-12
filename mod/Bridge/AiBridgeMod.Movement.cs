@@ -383,7 +383,9 @@ public sealed partial class AiBridgeMod
         bool moving = movingControls != null && now < stopAt;
         bool sneakOwned = action is EnumEntityAction.Sneak or EnumEntityAction.ShiftKey &&
             (moveSneak && moving || handSneak && handAction != null && now < handStopAt);
-        bool owned = sneakOwned || moving && (action == EnumEntityAction.Jump && moveJump && api.World.Player.Entity.PrevFrameCanStandUp ||
+        var entity = api.World.Player.Entity;
+        bool owned = sneakOwned || moving && (action == EnumEntityAction.Jump && moveJump &&
+            (entity.PrevFrameCanStandUp || entity.FeetInLiquid || entity.Swimming) ||
             action == EnumEntityAction.Sprint && moveSprint);
         if (owned && !on && CanControl() && handling == EnumHandling.PassThrough) handling = EnumHandling.PreventDefault;
     }
