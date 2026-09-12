@@ -226,4 +226,10 @@ test('brain: hunger does not interrupt a flight; danger outranks it', () => {
   assert.equal(decide(reading({ state: wolf }), memory).start, 'travel');
   const during = decide(reading({ state: wolf, active: { id: 'f1', kind: 'travel', state: 'running', by: 'brain' } }), memory);
   assert.equal(during.wait, 'letting travel finish');
+  const stormy = state({ ...wolf, condition: { temporalStorm: { phase: 'active' } } });
+  assert.equal(
+    decide(reading({ state: stormy, active: { id: 'f1', kind: 'travel', state: 'running', by: 'brain' } }), memory).wait,
+    'letting travel finish',
+    'nor does a storm',
+  );
 });
