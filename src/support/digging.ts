@@ -124,6 +124,7 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       }
       const result = await changeBlock(field, 'dig', { target: selected.key, slot, acceptTransform: true, timeoutMs: 45000 });
       if (!result.ok) {
+        field.report('cut_failed', { cell, code: selected.code, reason: result.reason });
         cut = false;
         break;
       }
@@ -150,7 +151,8 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       break;
     }
     const up = await field.walk({ x: plan.step.x + 0.5, y: origin.y + 1, z: plan.step.z + 0.5, arrivalRadius: 0.3 });
-    if (!['arrived', 'paused'].includes(up.state) || horizontal(field.latest.position, plan.step) > 0.8) {
+    const stepCenter = { x: plan.step.x + 0.5, z: plan.step.z + 0.5 };
+    if (!['arrived', 'paused'].includes(up.state) || horizontal(field.latest.position, stepCenter) > 0.8) {
       reason = 'cannot_climb';
       break;
     }
