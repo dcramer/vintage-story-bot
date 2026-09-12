@@ -122,6 +122,7 @@ Tools are discovered by filename: the basename is the public name and the file m
 - Wire changes land mod and Node sides together; public schemas change with behavior. MCP/CLI need no edits.
 - Check the working tree before editing; preserve others' uncommitted changes, never revert or overwrite work you did not make, never stash or rebase over it.
 - Commit one verified slice at a time on `main`, push, then pull/rebase when the tree is clean. No branches or pull requests.
+- Worktrees: `pnpm worktree add <name>` creates `.worktrees/<name>` and runs `pnpm worktree setup`, which links `.runtime/*` and `.dotnet` to the main checkout, copies the gitignored files in `.worktreeinclude` and installs dependencies; `pnpm worktree remove <name>` cleans up. Claude Code (`.claude/settings.json` SessionStart hook) and Codex (`.codex/environments/environment.toml`) run the same setup on the worktrees they create. Every worktree shares the one game client and bot profile; run a second controller on its own `VINTAGE_STORY_CONTROLLER_PORT`. Work still lands on `main`.
 - Pushing `main` deploys the fleet report: Cloudflare Workers Builds rebuilds and redeploys `report/` on every push that touches it. Never run `pnpm report:deploy` by hand; verify a fleet fix by pushing and then loading the live dashboard.
 
 ## Running the game

@@ -1,0 +1,15 @@
+version = 1
+name = "seraph"
+
+[setup]
+script = "node scripts/worktree.mjs setup"
+
+[[actions]]
+name = "Controller"
+icon = "run"
+command = "pnpm controller"
+
+[[actions]]
+name = "Test"
+icon = "run"
+command = "pnpm test"

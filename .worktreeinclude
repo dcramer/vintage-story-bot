@@ -1,0 +1,5 @@
+# Gitignored local files copied into every new worktree by Claude Code, Codex and scripts/worktree.mjs (literal paths).
+.env
+.mcp.json
+.claude/settings.local.json
+report/.dev.vars
