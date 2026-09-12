@@ -824,6 +824,20 @@ test('brain: a fresh controller recovers a sealed burrow from observed terrain',
   assert.equal(openByDay.burrow, null);
   assert.equal(climbing.start, 'dig_out');
 
+  const shallowTerrain = {
+    get(x, y, z) {
+      if (y === 101 && (x !== 0 || z !== 0)) return full;
+      return { hazard: null, boxes: [] };
+    },
+  };
+  const shallowAtNight = fresh();
+  const shallowSheltered = decide(
+    reading({ environment: night, state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain: shallowTerrain }),
+    shallowAtNight,
+  );
+  assert.deepEqual(shallowAtNight.burrow, { x: 0, y: 102, z: 0 });
+  assert.equal(shallowSheltered.wait, 'night, dug in', 'a surface shaft with its rim one block above is not dug deeper after restart');
+
   memory.burrow = null;
   decide(reading({ state: state({ position: { x: 20.5, y: 100, z: 20.5 } }), terrain, now: 2000 }), memory);
   assert.equal(memory.burrow, null, 'similar terrain encountered later cannot invent a burrow');

@@ -23,9 +23,15 @@ const earth = (map, x, y, z) => {
 // does not forget that the player is already sheltered underground.
 export function dugInState(map, x, y, z): 'open' | 'sealed' | null {
   if (solid(map, x, y + 1, z)) return null;
-  const rim = cardinals.filter(([ax, az]) => solid(map, x + ax, y + 2, z + az)).length;
-  if (rim < 3) return null;
-  return solid(map, x, y + 2, z) ? 'sealed' : 'open';
+  const upperRim = cardinals.filter(([ax, az]) => solid(map, x + ax, y + 2, z + az)).length;
+  if (upperRim >= 3) return solid(map, x, y + 2, z) ? 'sealed' : 'open';
+  // A hole begun on the surface can end with the body two blocks below the
+  // neighbouring ground while the cell above that ground is open air. It is
+  // still the emergency shaft digIn deliberately accepts when no seal is
+  // available; recognize it after a controller restart instead of digging
+  // another two blocks down.
+  const lowerRim = cardinals.filter(([ax, az]) => solid(map, x + ax, y + 1, z + az)).length;
+  return lowerRim >= 3 && !solid(map, x, y + 2, z) ? 'open' : null;
 }
 // A blocking item the pack holds: dirt, sand, gravel, stone, logs, anything the game places as a block.
 export const sealStone = inventory =>

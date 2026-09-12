@@ -349,6 +349,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
       ![
         [bx, by + 1, bz],
         [bx, by + 2, bz],
+        [bx + 1, by + 1, bz],
+        [bx - 1, by + 1, bz],
+        [bx, by + 1, bz + 1],
+        [bx, by + 1, bz - 1],
         [bx + 1, by + 2, bz],
         [bx - 1, by + 2, bz],
         [bx, by + 2, bz + 1],
