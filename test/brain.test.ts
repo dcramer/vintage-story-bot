@@ -228,6 +228,14 @@ test('brain: a fall is not mistaken for an unseen attacker', () => {
   memory.job = 'sticks';
   const afterPrematureStop = decide(reading({ events: fall.slice(1), last: { id: 'g1', kind: 'gather', ok: false, reason: 'brain: hurt' } }), memory);
   assert.notEqual(afterPrematureStop.start, 'travel', 'a delayed gravity message also cancels the carried flight');
+  const mistakenFlight = fresh();
+  mistakenFlight.job = 'hide';
+  mistakenFlight.scares.push({ x: 0, z: 0, at: 1 });
+  assert.deepEqual(
+    decide(reading({ events: fall.slice(1), active: { id: 'f1', kind: 'travel', state: 'running', by: 'brain' } }), mistakenFlight),
+    { stop: 'fall' },
+    'a gravity message one tick late ends a flight already launched by the raw hurt event',
+  );
 });
 
 test('brain: kit reads tools by class and dirt by code', () => {

@@ -330,6 +330,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // A flight is never interrupted, and neither is digging out: there is no running from a hole.
     // Nor is digging in at night: two blocks down is the safest place from whatever is coming.
     if ((threat || hurt) && !['hide', 'dig_out', 'burrow'].includes(memory.job ?? '')) return { stop: threat ? 'threat' : 'hurt' };
+    // Damage chat can trail the life event by one brain tick. If gravity is
+    // identified only after the reflex already launched a flight, end that
+    // mistaken flight and return to the interrupted survival job.
+    if (memory.job === 'hide' && !threat && environmentalHurt(events)) return { stop: 'fall' };
     // A flight is over once nothing has been seen or heard for a while and the scare is well behind.
     const scare = memory.scares.at(-1);
     if (memory.job === 'hide' && !threat && !hurt && scare && now - scare.at > SAFE_MS && horizontal(state.position, scare) >= SAFE_DISTANCE)
