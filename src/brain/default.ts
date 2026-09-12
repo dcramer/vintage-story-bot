@@ -5,6 +5,7 @@
 // or trading. Pure: decide() reads one Reading and its own memory and returns
 // one Decision; the loop in src/runtime/brain.ts does the talking to the game.
 
+import { dugInState } from '../goals/burrow.ts';
 import { isDeathMarker } from '../goals/retrieve_body.ts';
 import type { Brain, Decision, Reading } from '../runtime/brain.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
@@ -289,6 +290,17 @@ export function decide(reading: Reading, memory: Memory): Decision {
     return state.life?.deathId
       ? { act: [{ action: 'respawn', deathId: state.life.deathId }], why: 'dead' }
       : { wait: 'dead, no respawn offered yet' };
+  // Brain memory is deliberately fresh on each controller process, but a
+  // completed burrow is durable world state. Recover its mouth from the
+  // observed shaft before choosing work, and treat an already-open shaft as
+  // a pit to climb out of in safe daylight.
+  const bx = Math.floor(state.position.x),
+    by = Math.floor(state.position.y),
+    bz = Math.floor(state.position.z),
+    observedShaft = !state.motion?.swimming && reading.terrain ? dugInState(reading.terrain, bx, by, bz) : null;
+  if (!memory.burrow && observedShaft === 'sealed') memory.burrow = { x: bx, y: by + 2, z: bz };
+  if (!memory.pit && observedShaft === 'open' && !isNight(environment) && !temporalStormUnsafe(state))
+    memory.pit = { x: state.position.x + 8, z: state.position.z };
   const threat = nearestThreat(state);
   if (threat) memory.lastThreat = { point: threat.point, code: threat.code, at: now };
   // A predator can leave the observation radius while its cancellation is

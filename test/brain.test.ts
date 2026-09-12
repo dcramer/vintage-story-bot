@@ -44,6 +44,7 @@ const reading = (extra = {}) => ({
   events: [],
   markers: [],
   ground: null,
+  terrain: null,
   now: 1000,
   ...extra,
 });
@@ -537,6 +538,22 @@ test('brain: opening a morning burrow is followed by digging steps to the surfac
   assert.equal(memory.burrow, null);
   assert.equal(outside.start, 'dig_out');
   assert.deepEqual([outside.args.x, outside.args.z], [8.5, 0.5]);
+});
+
+test('brain: a fresh controller recovers a sealed burrow from observed terrain', () => {
+  const full = { hazard: null, boxes: [[0, 0, 0, 1, 1, 1]] };
+  const terrain = {
+    get(x, y, z) {
+      if (y === 102 && (x !== 0 || z !== 0)) return full;
+      if (x === 0 && y === 102 && z === 0) return full;
+      return { hazard: null, boxes: [] };
+    },
+  };
+  const memory = fresh();
+  const next = decide(reading({ state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain }), memory);
+  assert.deepEqual(memory.burrow, { x: 0, y: 102, z: 0 });
+  assert.equal(next.start, 'dig_area');
+  assert.deepEqual(next.args.cells, [memory.burrow]);
 });
 
 test('brain: three scares around the same spot make it move on; a failed stick search is set aside around here', () => {
