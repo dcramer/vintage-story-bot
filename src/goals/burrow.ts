@@ -119,9 +119,20 @@ export async function burrow(field, survival) {
 // with the seal stone placed against a rim block's inner face. Drifters do not climb into holes.
 async function digIn(field, inventory) {
   const map = field.env.map;
-  const start = field.latest.position;
+  let start = field.latest.position;
   const x = Math.floor(start.x),
-    z = Math.floor(start.z);
+    z = Math.floor(start.z),
+    center = { x: x + 0.5, y: start.y, z: z + 0.5 };
+  // Near an edge, the body remains supported by the neighbouring blocks after
+  // the floor is removed. Stand over the middle so each cut actually drops the
+  // player into the shaft and keeps the next layer within native reach.
+  if (horizontal(start, center) > 0.1) {
+    field.report('centering_over_hole', { at: center });
+    const centered = await field.walk({ ...center, arrivalRadius: 0.1 });
+    if (!['arrived', 'paused'].includes(centered.state) || horizontal(field.latest.position, center) > 0.2)
+      return { ok: false, goal: 'burrow', reason: 'cannot_center', cell: { x, y: Math.floor(start.y), z } };
+    start = field.latest.position;
+  }
   let y = Math.floor(start.y);
   field.report('digging_in', { at: { x, y, z } });
   // Dig whatever the crosshair finds straight down, layer or plant or ground, until the feet are two
