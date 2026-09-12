@@ -956,7 +956,7 @@ test('brain: a basket by the door is made in three steps, a full pack is put awa
   };
   const cut = decide(reading({ inventory: inventory(slot('game:stick', 10), ...tools) }), settled());
   assert.deepEqual([cut.start, cut.args.match, cut.args.tool], ['harvest', 'coopersreed', 'Knife'], 'no basket: cut cattail tops first');
-  const weave = decide(reading({ inventory: inventory(slot('game:stick', 10), slot('game:cattailtops', 12), ...tools) }), settled());
+  const weave = decide(reading({ inventory: inventory(slot('game:stick', 10), slot('game:cattailtops', 24), ...tools) }), settled());
   assert.deepEqual([weave.start, weave.args.output], ['craft_item', 'game:stationarybasket-east']);
   const carrying = settled();
   const put = decide(reading({ inventory: inventory(slot('game:stick', 10), slot('game:stationarybasket-east', 1), ...tools) }), carrying);

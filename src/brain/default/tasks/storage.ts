@@ -1,11 +1,12 @@
-// A basket by the door to keep things in: cattail tops cut with the knife, woven
-// into a stationary basket, put down beside the shelter. Its observed key is the
-// note every store and take uses; a basket found gone is forgotten and made again.
+// A basket by the door to keep things in: cattail tops cut with the knife (by
+// hand they drop too, but the knife keeps the roots so the reeds grow back),
+// woven into a stationary basket, put down beside the shelter. Its observed key
+// is the note every store and take uses; a basket found gone is forgotten and made again.
 import type { Concern } from '../concern.ts';
 import { goTo, stashSpot } from '../concern.ts';
 
-// The recipe: four lots of three cattail tops.
-export const BASKET_TOPS = 12;
+// The recipe (the game calls it a reed chest): eight lots of three cattail tops.
+export const BASKET_TOPS = 24;
 export const BASKET = 'game:stationarybasket-east';
 
 export const storage: Concern = {
