@@ -241,8 +241,14 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // A walk that ended in a hole is not a failed job: the hole is dealt with first.
     if (last.reason === 'pit' && last.result?.position) memory.pit = { x: last.result.position.x + 8, z: last.result.position.z };
     // Running away is tried again at once, and a job the surroundings refused before it began (water, lost
-    // controls) is not the job's fault; every other failed job is set aside around here for a while.
-    else if (!last.ok && memory.job && !['hide', 'dig_out'].includes(memory.job) && !/interruption|^brain:/.test(last.reason ?? ''))
+    // controls) is not the job's fault. A body recovery interrupted by danger is different: immediately
+    // returning to the same grave makes the fresh life repeat the death, so leave it alone for a while.
+    else if (
+      !last.ok &&
+      memory.job &&
+      !['hide', 'dig_out'].includes(memory.job) &&
+      (!/interruption|^brain:/.test(last.reason ?? '') || (memory.job === 'recover' && /^brain: (threat|hurt)$/.test(last.reason ?? '')))
+    )
       memory.tried[memory.job] = { x: state.position.x, z: state.position.z, at: now };
     if (memory.job === 'dig_out') memory.pit = null;
     // A finished shelter is home.
@@ -296,7 +302,9 @@ export function decide(reading: Reading, memory: Memory): Decision {
   const home = memory.home;
   const tried = new Set<Job>(
     (Object.entries(memory.tried) as [Job, { x: number; z: number; at: number }][])
-      .filter(([, where]) => now - where.at < TRIED_MS && horizontal(state.position, where) <= TRIED_RADIUS)
+      // Recovery danger belongs to the grave, not the point from which the bot happened to notice it.
+      // Keep that cooldown across a flight instead of retrying as soon as it has run 24 blocks away.
+      .filter(([job, where]) => now - where.at < TRIED_MS && (job === 'recover' || horizontal(state.position, where) <= TRIED_RADIUS))
       .map(([job]) => job),
   );
   const situation: Situation = {

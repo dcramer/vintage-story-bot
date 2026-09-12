@@ -177,6 +177,31 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
   assert.deepEqual(shelterMemory.home, home);
 });
 
+test('brain: danger interrupts body recovery and backs it off across a flight', () => {
+  const memory = fresh();
+  memory.job = 'recover';
+  const grave = [{ guid: 'g', title: 'You died here', icon: 'gravestone', position: { x: 0, y: 100, z: 0 } }];
+  const afterDanger = decide(
+    reading({
+      markers: grave,
+      state: state({ position: { x: 40, y: 100, z: 0 } }),
+      last: { id: 'body', kind: 'retrieve_body', ok: false, reason: 'brain: threat' },
+      now: 2000,
+    }),
+    memory,
+  );
+  assert.equal(afterDanger.start, 'gather', 'works on the kit instead of walking straight back to danger');
+  assert.ok(memory.tried.recover, 'the recovery is set aside');
+
+  memory.job = null;
+  const afterFlight = decide(reading({ markers: grave, state: state({ position: { x: 100, y: 100, z: 0 } }), now: 3000 }), memory);
+  assert.equal(afterFlight.start, 'gather', 'the recovery cooldown follows the bot away from the grave');
+
+  memory.job = null;
+  const retry = decide(reading({ markers: grave, state: state({ position: { x: 100, y: 100, z: 0 } }), now: 2001 + 5 * 60 * 1000 }), memory);
+  assert.equal(retry.start, 'retrieve_body', 'the grave is tried again after the cooldown');
+});
+
 test('brain: a hit from nowhere is danger, and copper seen in passing is marked once and told', () => {
   const memory = fresh();
   const hurt = [{ id: 1, at: 1, type: 'hurt', health: 10 }];
