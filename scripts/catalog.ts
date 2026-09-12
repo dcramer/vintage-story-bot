@@ -11,9 +11,15 @@ import { requestBridge } from '../src/runtime/bridge.ts';
 const root = process.cwd();
 
 // recipes.json output patterns use * wildcards and {variable} single-segment substitutions.
-export const toRegExp = pattern => new RegExp('^' + pattern.split(/(\*|\{[^}]+\})/).map(part =>
-  part === '*' ? '.*' : /^\{[^}]+\}$/.test(part) ? '[^-]+' : part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
-).join('') + '$');
+export const toRegExp = pattern =>
+  new RegExp(
+    '^' +
+      pattern
+        .split(/(\*|\{[^}]+\})/)
+        .map(part => (part === '*' ? '.*' : /^\{[^}]+\}$/.test(part) ? '[^-]+' : part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+        .join('') +
+      '$',
+  );
 
 const recipes = JSON.parse(readFileSync(join(root, 'docs/recipes.json'), 'utf8')).recipes;
 const concrete = new Map();
@@ -35,7 +41,8 @@ const makes = code => {
 };
 
 const entries = [];
-let offset = 0, total = Infinity;
+let offset = 0,
+  total = Infinity;
 for (;;) {
   const page = await requestBridge({ action: 'catalog', offset, limit: 50 }, { timeoutMs: 15000 });
   if (!page.ok) throw new Error(`Catalog dump failed at offset ${offset}: ${page.error ?? 'unknown'}`);
@@ -53,8 +60,15 @@ const kinds: Record<string, number> = {};
 for (const entry of entries) kinds[entry.type] = (kinds[entry.type] ?? 0) + 1;
 const withRecipes = entries.filter(entry => entry.recipes.length > 0).length;
 const out = join(root, 'docs/catalog.json');
-writeFileSync(out, JSON.stringify({
-  generatedFrom: `game ${version} handbook (${entries.length} collectibles), recipes joined from docs/recipes.json`,
-  entries,
-}, null, 0) + '\n');
+writeFileSync(
+  out,
+  JSON.stringify(
+    {
+      generatedFrom: `game ${version} handbook (${entries.length} collectibles), recipes joined from docs/recipes.json`,
+      entries,
+    },
+    null,
+    0,
+  ) + '\n',
+);
 console.log(`${entries.length} entries (${kinds.item ?? 0} items, ${kinds.block ?? 0} blocks; ${withRecipes} with recipes) → docs/catalog.json`);

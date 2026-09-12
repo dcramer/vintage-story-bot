@@ -19,4 +19,9 @@ export async function runField(env, options, features, work) {
 }
 
 // Human-readable item name for server chat announcements.
-export const cleanName = code => String(code ?? '').split(':').pop().replace(/[-_]/g, ' ').trim() || 'something';
+export const cleanName = code =>
+  String(code ?? '')
+    .split(':')
+    .pop()
+    .replace(/[-_]/g, ' ')
+    .trim() || 'something';

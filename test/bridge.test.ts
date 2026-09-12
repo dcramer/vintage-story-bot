@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
-import net from 'node:net';
 import { once } from 'node:events';
+import net from 'node:net';
 import { test } from 'node:test';
-import { requestBridge, bridgePort } from '../src/runtime/bridge.ts';
-import { tools as actions } from '../src/runtime/registry.ts';
-import { uiTools, isBotCommand, validateClick } from '../src/operator/bot-window.ts';
-import { normalizeMapView } from '../src/operator/world-map.ts';
+import { isBotCommand, uiTools, validateClick } from '../src/operator/bot-window.ts';
 import { decodeChunkIndex, decodeMapPiece } from '../src/operator/native-map.ts';
+import { normalizeMapView } from '../src/operator/world-map.ts';
+import { bridgePort, requestBridge } from '../src/runtime/bridge.ts';
+import { tools as actions } from '../src/runtime/registry.ts';
 
 async function fakeBridge(t, handle) {
   const sockets = new Set<any>();
@@ -41,7 +41,8 @@ test('validates bridge ports and bounded action inputs', () => {
   assert.equal(move.safeParse({ durationMs: 250, direction: 'teleport' }).success, false);
   assert.equal(actions.find(tool => tool.name === 'look').schema.safeParse({ yawDegrees: 0, pitchDegrees: 90 }).success, false);
   const scan = actions.find(tool => tool.name === 'scan').schema;
-  for (const args of [{ radius: 65 }, { radius: 0 }, { limit: 33 }, { kind: 'hidden' }, { match: 'x'.repeat(65) }]) assert.equal(scan.safeParse(args).success, false);
+  for (const args of [{ radius: 65 }, { radius: 0 }, { limit: 33 }, { kind: 'hidden' }, { match: 'x'.repeat(65) }])
+    assert.equal(scan.safeParse(args).success, false);
   assert.equal(scan.safeParse({ match: 'stick' }).success, true);
   assert.equal(actions.find(tool => tool.name === 'interact').schema.safeParse({ durationMs: 250, expectedTarget: '' }).success, false);
   const schema = name => actions.find(tool => tool.name === name).schema;
@@ -56,7 +57,8 @@ test('validates bridge ports and bounded action inputs', () => {
   for (const after of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1]) assert.equal(schema('events').safeParse({ after }).success, false);
   assert.equal(schema('respawn').safeParse({ deathId: '' }).success, false);
   assert.equal(schema('select_hotbar').safeParse({ slot: 10 }).success, false);
-  for (const args of [{ match: '' }, { match: 'stick', limit: 9 }, { match: 'stick', offset: -1 }]) assert.equal(schema('recipes').safeParse(args).success, false);
+  for (const args of [{ match: '' }, { match: 'stick', limit: 9 }, { match: 'stick', offset: -1 }])
+    assert.equal(schema('recipes').safeParse(args).success, false);
   const transfer = { from: { inventory: 'hotbar', slot: 0 }, to: { inventory: 'craftinggrid', slot: 0 }, expectedState: 'a'.repeat(64), quantity: 1 };
   assert.equal(schema('inventory_move').safeParse(transfer).success, true);
   for (const change of [{ expectedState: '' }, { quantity: 0 }, { quantity: 65 }, { to: { inventory: 'creative', slot: 0 } }]) {
@@ -74,13 +76,13 @@ test('reads fragmented JSON and preserves game errors', async t => {
 });
 
 test('rejects malformed, incomplete, oversized and invalid replies', async t => {
-  for (const [reply, expected, options] of ([
+  for (const [reply, expected, options] of [
     ['not json\n', /Invalid bridge response/, {}],
     ['{"ok":true}', /without a complete response/, {}],
     ['{"ok":true}\n', /size limit/, { maxBytes: 5 }],
     ['null\n', /Invalid bridge response/, {}],
     ['{}\n', /Invalid bridge response/, {}],
-  ] as [string, RegExp, object][])) {
+  ] as [string, RegExp, object][]) {
     const port = await fakeBridge(t, socket => socket.end(reply));
     await assert.rejects(requestBridge({ action: 'observe' }, { port, ...options }), expected);
   }
@@ -88,13 +90,14 @@ test('rejects malformed, incomplete, oversized and invalid replies', async t => 
 
 test('times out without retrying and caps request size', async t => {
   let calls = 0;
-  const port = await fakeBridge(t, () => { calls++; });
+  const port = await fakeBridge(t, () => {
+    calls++;
+  });
   await assert.rejects(requestBridge({ action: 'move', durationMs: 250 }, { port, timeoutMs: 40 }), /timed out/);
   assert.equal(calls, 1);
   await assert.rejects(requestBridge({ action: 'x'.repeat(1024) }, { port }), /exceeds/);
   assert.equal(calls, 1);
 });
-
 
 test('UI restricts bot identity, keys and click bounds without touching a display', () => {
   const root = '/repo';
@@ -103,7 +106,12 @@ test('UI restricts bot identity, keys and click bounds without touching a displa
   assert.equal(isBotCommand(argv.slice(0, 2), root), false);
   assert.equal(isBotCommand([...argv.slice(0, 2), '--dataPath=/personal'], root), false);
   assert.doesNotThrow(() => validateClick({ x: 0, y: 719 }, { width: 1280, height: 720 }));
-  for (const point of [{ x: -1, y: 1 }, { x: 1280, y: 1 }, { x: 0, y: 720 }, { x: 0.5, y: 1 }]) {
+  for (const point of [
+    { x: -1, y: 1 },
+    { x: 1280, y: 1 },
+    { x: 0, y: 720 },
+    { x: 0.5, y: 1 },
+  ]) {
     assert.throws(() => validateClick(point, { width: 1280, height: 720 }));
   }
   const key = uiTools.find(tool => tool.name === 'ui_key').schema;
@@ -113,22 +121,33 @@ test('UI restricts bot identity, keys and click bounds without touching a displa
 });
 
 test('normalizes native World Map calibration to the captured game window', () => {
-  const view = normalizeMapView({ opened: true, world: { x: 512000, z: 512000, dimension: 0 },
-    view: { here: [640, 360], east100: [740, 360], south100: [640, 460] } }, 1280, 720);
-  assert.deepEqual(view, { world: { x: 512000, z: 512000, dimension: 0 }, here: [.5, .5], east100: [740 / 1280, .5], south100: [.5, 460 / 720] });
+  const view = normalizeMapView(
+    { opened: true, world: { x: 512000, z: 512000, dimension: 0 }, view: { here: [640, 360], east100: [740, 360], south100: [640, 460] } },
+    1280,
+    720,
+  );
+  assert.deepEqual(view, { world: { x: 512000, z: 512000, dimension: 0 }, here: [0.5, 0.5], east100: [740 / 1280, 0.5], south100: [0.5, 460 / 720] });
   assert.equal(normalizeMapView({ opened: false }, 1280, 720), null);
 });
 
 test('decodes Vintage Story native map chunk keys and protobuf RGBA pixels', () => {
-  const mask = (1n << 27n) - 1n, encoded = ((BigInt(-11) & mask) << 27n) | (BigInt(17) & mask);
+  const mask = (1n << 27n) - 1n,
+    encoded = ((BigInt(-11) & mask) << 27n) | (BigInt(17) & mask);
   assert.deepEqual(decodeChunkIndex(encoded), { x: 17, z: -11 });
-  const parts = [], expected = Buffer.alloc(4096);
+  const parts = [],
+    expected = Buffer.alloc(4096);
   for (let index = 0; index < 1024; index++) {
-    const color = (0xff000000 | index * 7919) >>> 0; expected.writeUInt32LE(color, index * 4);
-    let value = BigInt.asUintN(64, BigInt(color | 0)); parts.push(Buffer.from([8]));
+    const color = (0xff000000 | (index * 7919)) >>> 0;
+    expected.writeUInt32LE(color, index * 4);
+    let value = BigInt.asUintN(64, BigInt(color | 0));
+    parts.push(Buffer.from([8]));
     const bytes = [];
-    while (value >= 128n) { bytes.push(Number(value & 127n) | 128); value >>= 7n; }
-    bytes.push(Number(value)); parts.push(Buffer.from(bytes));
+    while (value >= 128n) {
+      bytes.push(Number(value & 127n) | 128);
+      value >>= 7n;
+    }
+    bytes.push(Number(value));
+    parts.push(Buffer.from(bytes));
   }
   assert.deepEqual(decodeMapPiece(Buffer.concat(parts)), expected);
 });

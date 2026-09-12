@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 
-export const schema = z.object({
-  after: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
-  session: z.string().max(64).optional(),
-}).strict();
+export const schema = z
+  .object({
+    after: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+    session: z.string().max(64).optional(),
+  })
+  .strict();
 
 export default defineAction({
   name: 'events',

@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 
-export const schema = z.object({
-  id: z.string().uuid().optional(),
-}).strict();
+export const schema = z
+  .object({
+    id: z.string().uuid().optional(),
+  })
+  .strict();
 
 export default defineAction({
   name: 'goal_status',

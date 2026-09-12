@@ -4,11 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 
-export const schema = z.object({
-  match: z.string().min(1).max(64),
-  type: z.enum(['block', 'item']).optional(),
-  limit: z.number().int().min(1).max(20).optional(),
-}).strict();
+export const schema = z
+  .object({
+    match: z.string().min(1).max(64),
+    type: z.enum(['block', 'item']).optional(),
+    limit: z.number().int().min(1).max(20).optional(),
+  })
+  .strict();
 
 let cached = null;
 function catalog() {
@@ -19,7 +21,8 @@ function catalog() {
 }
 
 function rank(entry, needle) {
-  const code = entry.code.toLowerCase(), name = (entry.name ?? '').toLowerCase();
+  const code = entry.code.toLowerCase(),
+    name = (entry.name ?? '').toLowerCase();
   if (code === needle) return 0;
   if (name.startsWith(needle)) return 1;
   if (name.includes(needle)) return 2;
@@ -38,16 +41,16 @@ export default defineAction({
     'matches via recipes.',
   local: async (_runtime, { match, type, limit = 8 }) => {
     let data;
-    try { data = catalog(); }
-    catch {
+    try {
+      data = catalog();
+    } catch {
       return { ok: false, error: 'Catalog missing; regenerate with node scripts/catalog.mjs against a loaded world.' };
     }
     const needle = match.toLowerCase();
-    const hits = data.entries.filter(entry =>
-      (!type || entry.type === type) &&
-      (entry.code.toLowerCase().includes(needle) || (entry.name ?? '').toLowerCase().includes(needle)));
+    const hits = data.entries.filter(
+      entry => (!type || entry.type === type) && (entry.code.toLowerCase().includes(needle) || (entry.name ?? '').toLowerCase().includes(needle)),
+    );
     hits.sort((a, b) => rank(a, needle) - rank(b, needle) || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
-    return { ok: true, generatedFrom: data.generatedFrom, total: hits.length, more: hits.length > limit,
-      items: hits.slice(0, limit) };
+    return { ok: true, generatedFrom: data.generatedFrom, total: hits.length, more: hits.length > limit, items: hits.slice(0, limit) };
   },
 });

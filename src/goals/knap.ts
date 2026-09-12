@@ -3,11 +3,13 @@ import { defineGoal } from '../runtime/define.ts';
 import { form } from '../support/forming.ts';
 import { cleanName, runField } from '../support/task.ts';
 
-export const schema = z.object({
-  output: z.string().min(1).max(160).describe('Exact knapping output code, e.g. game:knifeblade-flint.'),
-  material: z.string().min(1).max(160).optional().describe('Knappable stone code to use; defaults to owned flint, else any owned stone.'),
-  timeoutMs: z.number().int().min(1000).max(600000).default(180000),
-}).strict();
+export const schema = z
+  .object({
+    output: z.string().min(1).max(160).describe('Exact knapping output code, e.g. game:knifeblade-flint.'),
+    material: z.string().min(1).max(160).optional().describe('Knappable stone code to use; defaults to owned flint, else any owned stone.'),
+    timeoutMs: z.number().int().min(1000).max(600000).default(180000),
+  })
+  .strict();
 
 export default defineGoal({
   name: 'knap',

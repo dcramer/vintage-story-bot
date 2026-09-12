@@ -7,26 +7,34 @@ import { foodFeatures } from '../support/task.ts';
 
 const loose = o => o.kind === 'block' && /^game:loosestick-(free|snow)$/.test(o.code);
 const dropped = o => o.kind === 'item' && o.code === 'game:stick';
-export const stickCount = state => [...state.hotbar, ...state.backpack]
-  .filter(slot => slot.code === 'game:stick').reduce((n, slot) => n + slot.quantity, 0);
+export const stickCount = state =>
+  [...state.hotbar, ...state.backpack].filter(slot => slot.code === 'game:stick').reduce((n, slot) => n + slot.quantity, 0);
 
 export async function gather(env, { count = 10, manageFood = false, ...options }: any = {}) {
   if (!Number.isInteger(count) || count < 1 || count > 64) throw Error('count must be 1–64');
   const field = new Fieldwork(env, options);
   const survival = manageFood ? new Survival(field) : null;
   field.recoveringFood = manageFood;
-  const gained = () => field.initial ? stickCount(field.latest) - stickCount(field.initial) : 0;
+  const gained = () => (field.initial ? stickCount(field.latest) - stickCount(field.initial) : 0);
   // Preserve parent-task progress when a composed food or movement skill reports.
-  field.report = (phase, extra = {}) => env.report?.({ phase, count, gained: gained(),
-    moved: +field.moved.toFixed(1), searched: field.searched, eaten: survival?.eaten ?? 0, ...extra });
+  field.report = (phase, extra = {}) =>
+    env.report?.({ phase, count, gained: gained(), moved: +field.moved.toFixed(1), searched: field.searched, eaten: survival?.eaten ?? 0, ...extra });
   try {
     await field.start(manageFood ? foodFeatures : []);
     await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
     while (true) {
       await field.observe(true);
-      if (gained() >= count) return { ok: true, goal: 'gather_sticks', count, gained: gained(),
-        eaten: survival?.eaten ?? 0, harvested: survival?.harvested ?? 0,
-        moved: +field.moved.toFixed(1), searched: field.searched };
+      if (gained() >= count)
+        return {
+          ok: true,
+          goal: 'gather_sticks',
+          count,
+          gained: gained(),
+          eaten: survival?.eaten ?? 0,
+          harvested: survival?.harvested ?? 0,
+          moved: +field.moved.toFixed(1),
+          searched: field.searched,
+        };
       await survival?.tend();
       field.report('searching');
       const objects = await field.scan(8, 'stick');
@@ -75,12 +83,14 @@ export async function gather(env, { count = 10, manageFood = false, ...options }
 
 export default defineGoal({
   name: 'gather_sticks',
-  schema: z.object({
-    count: z.number().int().min(1).max(64).optional(),
-    manageFood: z.boolean().optional(),
-    sprint: z.boolean().optional(),
-    timeoutMs: z.number().int().min(1000).max(3600000).optional(),
-  }).strict(),
+  schema: z
+    .object({
+      count: z.number().int().min(1).max(64).optional(),
+      manageFood: z.boolean().optional(),
+      sprint: z.boolean().optional(),
+      timeoutMs: z.number().int().min(1000).max(3600000).optional(),
+    })
+    .strict(),
   destructive: true,
   description:
     'Collect additional ground sticks only (default 10): scan, navigate, pick up and verify ' +

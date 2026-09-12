@@ -4,11 +4,14 @@ import { blockTarget } from '../runtime/schemas.ts';
 
 export default defineAction({
   name: 'select_recipe',
-  schema: z.object({
-    target: blockTarget.describe('Knapping surface or clay form key.'),
-    recipe: z.number().int().min(0).optional().describe('Recipe id from inspect_target.forming.recipes.'),
-    output: z.string().min(1).max(160).optional().describe('Alternatively the exact output code.'),
-  }).strict().refine(a => (a.recipe !== undefined) !== (a.output !== undefined), 'Supply exactly one of recipe or output'),
+  schema: z
+    .object({
+      target: blockTarget.describe('Knapping surface or clay form key.'),
+      recipe: z.number().int().min(0).optional().describe('Recipe id from inspect_target.forming.recipes.'),
+      output: z.string().min(1).max(160).optional().describe('Alternatively the exact output code.'),
+    })
+    .strict()
+    .refine(a => (a.recipe !== undefined) !== (a.output !== undefined), 'Supply exactly one of recipe or output'),
   destructive: true,
   description:
     'Choose the recipe on an own knapping surface/clay form within reach while holding its base material, sending the ' +

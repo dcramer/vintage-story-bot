@@ -2,13 +2,15 @@ import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 import { durationMs } from '../runtime/schemas.ts';
 
-export const schema = z.object({
-  durationMs,
-  direction: z.enum(['forward', 'backward', 'left', 'right']).optional(),
-  jump: z.boolean().optional(),
-  sprint: z.boolean().optional(),
-  sneak: z.boolean().optional().describe('Sneak-walk; disables sprint.'),
-}).strict();
+export const schema = z
+  .object({
+    durationMs,
+    direction: z.enum(['forward', 'backward', 'left', 'right']).optional(),
+    jump: z.boolean().optional(),
+    sprint: z.boolean().optional(),
+    sneak: z.boolean().optional().describe('Sneak-walk; disables sprint.'),
+  })
+  .strict();
 
 export default defineAction({
   name: 'move',

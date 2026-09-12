@@ -28,15 +28,19 @@ function connect(display) {
       socket.destroy();
       reject(failure);
     };
-    socket.on('data', chunk => { buffer = Buffer.concat([buffer, chunk]); drain(); });
+    socket.on('data', chunk => {
+      buffer = Buffer.concat([buffer, chunk]);
+      drain();
+    });
     socket.on('error', fail);
     socket.on('close', () => fail(new Error('X server closed the connection.')));
     socket.setTimeout(5000, () => fail(new Error('X server timed out.')));
-    const read = length => new Promise((resolve, reject) => {
-      if (failure) return reject(failure);
-      waiters.push({ length, resolve, reject });
-      drain();
-    });
+    const read = length =>
+      new Promise((resolve, reject) => {
+        if (failure) return reject(failure);
+        waiters.push({ length, resolve, reject });
+        drain();
+      });
     socket.once('connect', () => resolve({ socket, read }));
   });
 }

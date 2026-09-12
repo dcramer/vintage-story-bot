@@ -16,7 +16,12 @@ export function house(origin, item) {
 
 // origin: the dug pit cell; plus of blocks on the ground surface around the pit (corners open).
 export function pitKiln(origin, item) {
-  return [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => ({ x: origin.x + dx, y: origin.y + 1, z: origin.z + dz, item }));
+  return [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ].map(([dx, dz]) => ({ x: origin.x + dx, y: origin.y + 1, z: origin.z + dz, item }));
 }
 
 export const presets = { house, pit_kiln: pitKiln };

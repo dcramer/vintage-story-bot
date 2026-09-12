@@ -6,7 +6,5 @@ export default defineAction({
   schema,
   readOnly: true,
   idempotent: true,
-  description:
-    'Discover controller RPC actions, JSON input schemas and execution kinds without contacting ' +
-    'the game.',
+  description: 'Discover controller RPC actions, JSON input schemas and execution kinds without contacting ' + 'the game.',
 });

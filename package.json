@@ -22,13 +22,25 @@
     "goal:gather": "node scripts/gather.ts",
     "report:dev": "pnpm --filter seraph-fleet run dev",
     "report:deploy": "pnpm --filter seraph-fleet run deploy",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "prepare": "simple-git-hooks"
   },
   "dependencies": {
     "zod": "4.6.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.13",
     "@types/node": "^24.13.4",
+    "lint-staged": "^17.5.1",
+    "simple-git-hooks": "^2.14.0",
     "typescript": "^5.9.3"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint-staged"
+  },
+  "lint-staged": {
+    "*.{ts,mts,js,mjs,json,jsonc}": "biome check --write --no-errors-on-unmatched"
   }
 }

@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 
-export const schema = z.object({
-  code: z.string().min(1).max(128).describe('Item or block code, e.g. game:fruit-blueberry, game:crop-carrot-7.'),
-}).strict();
+export const schema = z
+  .object({
+    code: z.string().min(1).max(128).describe('Item or block code, e.g. game:fruit-blueberry, game:crop-carrot-7.'),
+  })
+  .strict();
 
 export default defineAction({
   name: 'item_info',

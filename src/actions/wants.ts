@@ -6,9 +6,11 @@ import { defineAction } from '../runtime/define.ts';
 // it every tick; without a brain an adapter sets it here.
 export default defineAction({
   name: 'wants',
-  schema: z.object({
-    list: z.array(z.string().min(1).max(64)).max(16).optional().describe('Replace the list; omit to read it.'),
-  }).strict(),
+  schema: z
+    .object({
+      list: z.array(z.string().min(1).max(64)).max(16).optional().describe('Replace the list; omit to read it.'),
+    })
+    .strict(),
   readOnly: true,
   idempotent: true,
   description:

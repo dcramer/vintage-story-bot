@@ -2,14 +2,16 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { changeBlock } from '../support/blocks.ts';
-import { area, sightRange } from '../support/fieldwork.ts';
+import { area } from '../support/fieldwork.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
 import { cleanName, runField } from '../support/task.ts';
 import { collectItem } from './collect_item.ts';
 
 const includes = (code, part) => typeof code === 'string' && code.includes(part);
-export const matchingCount = (inventory, part) => ownedSlots(inventory)
-  .filter(s => includes(s.code, part)).reduce((n, s) => n + s.quantity, 0);
+export const matchingCount = (inventory, part) =>
+  ownedSlots(inventory)
+    .filter(s => includes(s.code, part))
+    .reduce((n, s) => n + s.quantity, 0);
 
 // Dig visible blocks matching `match` with an optional tool class until `count` drops containing `item` are carried.
 export async function harvest(field, survival, { match, item, count, tool, minTier = 0, lowest = false }) {
@@ -20,10 +22,22 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     throw Error(`Missing tool: no ${tool}${minTier ? ` of tier ${minTier}` : ''} carried`);
   const initial = matchingCount(inventory, item);
   const gained = () => matchingCount(inventory, item) - initial;
-  const refresh = async () => { await field.observe(); inventory = await field.send({ action: 'inventory' }); return gained(); };
+  const refresh = async () => {
+    await field.observe();
+    inventory = await field.send({ action: 'inventory' });
+    return gained();
+  };
   let dug = 0;
-  const summary = () => ({ match, item, count, gained: gained(), dug, moved: +field.moved.toFixed(1), searched: field.searched,
-    eaten: survival?.eaten ?? 0 });
+  const summary = () => ({
+    match,
+    item,
+    count,
+    gained: gained(),
+    dug,
+    moved: +field.moved.toFixed(1),
+    searched: field.searched,
+    eaten: survival?.eaten ?? 0,
+  });
   field.report = (phase, extra = {}) => field.env.report?.({ phase, ...summary(), ...extra });
   const held = async () => {
     if (tool === undefined) return undefined;
@@ -34,7 +48,7 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
   await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
   while (true) {
     await field.observe(true);
-    if (await refresh() >= count) return { ok: true, goal: 'harvest', ...summary(), verification: 'inventory_delta' };
+    if ((await refresh()) >= count) return { ok: true, goal: 'harvest', ...summary(), verification: 'inventory_delta' };
     await survival?.tend();
     field.report('searching');
     // Drops first: dug items lie nearby and vanish over time.
@@ -49,19 +63,21 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
         field.skip(drop, 20000);
       }
       field.seen.delete(drop.key);
-      if (await refresh() >= count) break;
+      if ((await refresh()) >= count) break;
     }
     if (gained() >= count) continue;
     const near = (await field.scan(8, match.slice(0, 64), 'blocks')).filter(o => blocks(o) && o.withinPickingRange && !field.skipped.has(o.key));
-    const ready = near.sort((a, b) => (lowest ? a.point.y - b.point.y : 0) ||
-      horizontal(a.point, field.latest.position) - horizontal(b.point, field.latest.position))[0];
+    const ready = near.sort(
+      (a, b) => (lowest ? a.point.y - b.point.y : 0) || horizontal(a.point, field.latest.position) - horizontal(b.point, field.latest.position),
+    )[0];
     if (ready) {
       const slot = await held();
       inventory = await field.send({ action: 'inventory' });
       field.report('digging', { target: ready.key });
       let result;
-      try { result = await changeBlock(field, 'dig', { target: ready.key, slot, acceptTransform: true }); }
-      catch (error) {
+      try {
+        result = await changeBlock(field, 'dig', { target: ready.key, slot, acceptTransform: true });
+      } catch (error) {
         if (/interruption|cancelled|deadline|Selected item changed/i.test(error.message)) throw error;
         result = { ok: false, reason: error.message };
       }
@@ -75,7 +91,10 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     if (!field.targets(blocks).length) await field.lookAround(match.slice(0, 64));
     const target = field.targets(blocks)[0];
     if (target) {
-      const destination = field.approach(target, q => Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z));
+      const destination = field.approach(
+        target,
+        q => Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z),
+      );
       if (destination) {
         const result = await field.walk(destination, survival?.pauseWhen);
         if (!['arrived', 'paused'].includes(result.state)) field.skip(target, 15000);
@@ -93,16 +112,18 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
   }
 }
 
-export const schema = z.object({
-  match: z.string().min(1).max(64).describe('Block code substring to dig, e.g. coopersreed, soil-, peat, tallgrass, mushroom.'),
-  item: z.string().min(1).max(64).describe('Drop code substring counted as progress, e.g. cattailtops, game:soil-, drygrass.'),
-  count: z.number().int().min(1).max(256).default(8),
-  tool: z.string().min(1).max(64).optional().describe('Required tool class, e.g. Knife, Axe, Shovel; equips the lowest adequate tier.'),
-  minTier: z.number().int().min(0).max(20).optional(),
-  manageFood: z.boolean().default(false),
-  sprint: z.boolean().default(false),
-  timeoutMs: z.number().int().min(1000).max(3600000).optional(),
-}).strict();
+export const schema = z
+  .object({
+    match: z.string().min(1).max(64).describe('Block code substring to dig, e.g. coopersreed, soil-, peat, tallgrass, mushroom.'),
+    item: z.string().min(1).max(64).describe('Drop code substring counted as progress, e.g. cattailtops, game:soil-, drygrass.'),
+    count: z.number().int().min(1).max(256).default(8),
+    tool: z.string().min(1).max(64).optional().describe('Required tool class, e.g. Knife, Axe, Shovel; equips the lowest adequate tier.'),
+    minTier: z.number().int().min(0).max(20).optional(),
+    manageFood: z.boolean().default(false),
+    sprint: z.boolean().default(false),
+    timeoutMs: z.number().int().min(1000).max(3600000).optional(),
+  })
+  .strict();
 
 export default defineGoal({
   name: 'harvest',

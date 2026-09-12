@@ -1,15 +1,15 @@
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
-import { loadLaunchConfig, updateCharacterName, gameArguments } from '../src/operator/launch-config.ts';
+import { gameArguments, loadLaunchConfig, updateCharacterName } from '../src/operator/launch-config.ts';
 
 // Run on the OS hosting the bot's game client, e.g. Windows Node for a Windows game.
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const wsl = args.includes('--wsl');
-const positional = args.filter((arg) => arg !== '--dry-run' && arg !== '--wsl');
+const positional = args.filter(arg => arg !== '--dry-run' && arg !== '--wsl');
 const target: Record<string, string> = {};
 if (positional.length === 3 && positional[1] === '--world' && positional[2]) target.world = positional[2];
 else if (positional.length === 2 && !positional[1].startsWith('-') && positional[1]) target.server = positional[1];
@@ -21,7 +21,7 @@ else if (positional.length !== 1 || positional[0].startsWith('--')) {
 const gameDirectory = path.resolve(positional[0]);
 const windows = process.platform === 'win32';
 const executable = path.join(gameDirectory, windows ? 'Vintagestory.exe' : 'Vintagestory.dll');
-const dataRoot = windows ? process.env.APPDATA : (process.env.XDG_CONFIG_HOME || path.join(homedir(), '.config'));
+const dataRoot = windows ? process.env.APPDATA : process.env.XDG_CONFIG_HOME || path.join(homedir(), '.config');
 if (!dataRoot) {
   console.error('APPDATA is missing; run this from a regular Windows terminal.');
   process.exit(1);
@@ -46,10 +46,7 @@ for (const required of [executable, path.join(modDirectory, 'VintageStoryAI.dll'
 }
 const dotnet = wsl ? path.join(repository, '.dotnet', 'dotnet') : 'dotnet';
 const command = windows ? executable : dotnet;
-const gameArgs = [
-  ...(windows ? [] : [executable]),
-  ...gameArguments(config, botData, { modRoot: wsl ? '' : modRoot, redact: dryRun }),
-];
+const gameArgs = [...(windows ? [] : [executable]), ...gameArguments(config, botData, { modRoot: wsl ? '' : modRoot, redact: dryRun })];
 console.log(`Bot profile: ${botData}`);
 console.log('Sign in with the bot account if needed; the bridge listens once a world is loaded.');
 if (dryRun) {
@@ -62,12 +59,16 @@ if (dryRun) {
     process.exit(1);
   }
   const child = spawn(command, gameArgs, {
-    cwd: gameDirectory, stdio: 'inherit', shell: false,
+    cwd: gameDirectory,
+    stdio: 'inherit',
+    shell: false,
     env: { ...process.env, VINTAGE_STORY_SERVER_PASSWORD: '' },
   });
-  child.on('error', (error) => {
+  child.on('error', error => {
     console.error(`Cannot launch bot client: ${error.message}`);
     process.exitCode = 1;
   });
-  child.on('exit', (code, signal) => { process.exitCode = code ?? (signal ? 1 : 0); });
+  child.on('exit', (code, signal) => {
+    process.exitCode = code ?? (signal ? 1 : 0);
+  });
 }

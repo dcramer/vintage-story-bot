@@ -3,7 +3,11 @@ import path from 'node:path';
 import { loadEnvFile } from 'node:process';
 
 // --playStyle matches the play style's lang code, not its code (ScreenManager.openWorldFromArgs).
-export const playStyles = { surviveandbuild: 'preset-surviveandbuild', wildernesssurvival: 'preset-wildernesssurvival', creativebuilding: 'creativebuilding' };
+export const playStyles = {
+  surviveandbuild: 'preset-surviveandbuild',
+  wildernesssurvival: 'preset-wildernesssurvival',
+  creativebuilding: 'creativebuilding',
+};
 
 function validWorldName(world) {
   return world && !world.startsWith('.') && !/[\\/]/.test(world);
@@ -17,7 +21,7 @@ export function loadLaunchConfig(repository, botData, target: any = {}) {
   if ([create, target.world, target.server].filter(Boolean).length > 1) throw new Error('Choose one of --new, --world or --server.');
   if (target.playStyle && !create) throw new Error('--play-style applies only with --new.');
   const world = create || target.world || (target.server ? '' : process.env.VINTAGE_STORY_WORLD || '');
-  const server = world ? '' : target.server ?? process.env.VINTAGE_STORY_SERVER ?? '';
+  const server = world ? '' : (target.server ?? process.env.VINTAGE_STORY_SERVER ?? '');
   if (create && (!validWorldName(create) || existsSync(path.join(botData, 'Saves', `${create}.vcdbs`)))) {
     throw new Error('--new must name a save that does not exist yet, without .vcdbs.');
   }
@@ -57,8 +61,7 @@ function readSettings(botData) {
   let settings;
   try {
     settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
-    if (!settings?.stringSettings || typeof settings.stringSettings !== 'object'
-      || Array.isArray(settings.stringSettings)) throw new Error();
+    if (!settings?.stringSettings || typeof settings.stringSettings !== 'object' || Array.isArray(settings.stringSettings)) throw new Error();
   } catch {
     throw new Error('Cannot parse the bot clientsettings.json.');
   }
@@ -81,7 +84,7 @@ export function updateCharacterName(botData, characterName) {
 export function updateWindowSettings(botData, { width, height }) {
   const file = readSettings(botData);
   if (!file) return false;
-  const ints = file.settings.intSettings ??= {};
+  const ints = (file.settings.intSettings ??= {});
   if (ints.screenWidth === width && ints.screenHeight === height && ints.gameWindowMode === 0) return false;
   Object.assign(ints, { screenWidth: width, screenHeight: height, gameWindowMode: 0 });
   writeSettings(file);

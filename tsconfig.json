@@ -7,7 +7,7 @@
     "types": ["node"],
     "strict": false,
     "noEmit": true,
-        "allowImportingTsExtensions": true,
+    "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true

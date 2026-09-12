@@ -6,14 +6,16 @@ import { runField } from '../support/task.ts';
 
 export default defineGoal({
   name: 'place_block',
-  schema: z.object({
-    target: blockTarget.describe('Observed support block key, not the destination.'),
-    face: blockFace,
-    point: blockPoint.optional(),
-    slot: z.number().int().min(0).max(9).describe('Hotbar block stack to place.'),
-    expectedItem: z.string().min(1).max(160).describe('Expected block item code in slot.'),
-    timeoutMs: z.number().int().min(1000).max(30000).default(10000),
-  }).strict(),
+  schema: z
+    .object({
+      target: blockTarget.describe('Observed support block key, not the destination.'),
+      face: blockFace,
+      point: blockPoint.optional(),
+      slot: z.number().int().min(0).max(9).describe('Hotbar block stack to place.'),
+      expectedItem: z.string().min(1).max(160).describe('Expected block item code in slot.'),
+      timeoutMs: z.number().int().min(1000).max(30000).default(10000),
+    })
+    .strict(),
   destructive: true,
   description:
     'Aim at a support face and make one native block placement into adjacent empty, dry space. ' +

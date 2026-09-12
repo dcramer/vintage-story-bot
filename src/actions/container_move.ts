@@ -2,17 +2,21 @@ import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 import { expectedState } from '../runtime/schemas.ts';
 
-const endpoint = z.object({
-  inventory: z.enum(['hotbar', 'backpack', 'craftinggrid', 'mouse', 'container']),
-  slot: z.number().int().min(0).max(255),
-}).strict();
+const endpoint = z
+  .object({
+    inventory: z.enum(['hotbar', 'backpack', 'craftinggrid', 'mouse', 'container']),
+    slot: z.number().int().min(0).max(255),
+  })
+  .strict();
 
-export const schema = z.object({
-  from: endpoint,
-  to: endpoint,
-  quantity: z.number().int().min(1).max(64),
-  expectedState,
-}).strict();
+export const schema = z
+  .object({
+    from: endpoint,
+    to: endpoint,
+    quantity: z.number().int().min(1).max(64),
+    expectedState,
+  })
+  .strict();
 
 export default defineAction({
   name: 'container_move',

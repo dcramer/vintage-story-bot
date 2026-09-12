@@ -13,14 +13,18 @@ const usage = `Usage: worktree.mjs <command>
   list`;
 
 const [command, ...rest] = process.argv.slice(2);
-const flags: Record<string, any> = {}, positional: string[] = [];
+const flags: Record<string, any> = {},
+  positional: string[] = [];
 for (let i = 0; i < rest.length; i++) {
   const arg = rest[i];
   if (arg.startsWith('--')) flags[arg.slice(2)] = rest[++i];
   else positional.push(arg);
 }
 
-function fail(message) { console.error(message); process.exit(1); }
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}
 const git = (args, cwd) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
 // The main checkout owns .git; a linked worktree's git dir lives under .git/worktrees/<name>.
@@ -31,7 +35,7 @@ function repository(cwd) {
   return { top, main: path.dirname(common), linked: common !== own };
 }
 
-const linkedWorktreeOf = (dir) => {
+const linkedWorktreeOf = dir => {
   const repo = repository(dir);
   if (!repo.linked) fail(`${repo.top} is the main checkout; nothing to link. Run from a linked worktree.`);
   return repo;
@@ -43,18 +47,28 @@ function link(target, at) {
   symlinkSync(target, at);
   return true;
 }
-const isLink = (file) => { try { return lstatSync(file).isSymbolicLink(); } catch { return false; } };
+const isLink = file => {
+  try {
+    return lstatSync(file).isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
 
 // Literal paths only; Claude Code and Codex read the same file with full gitignore syntax.
 function includedFiles(main) {
   const file = `${main}/.worktreeinclude`;
   if (!existsSync(file)) return [];
-  return readFileSync(file, 'utf8').split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+  return readFileSync(file, 'utf8')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('#'));
 }
 
 function setup(dir) {
   const { top, main } = linkedWorktreeOf(dir);
-  const linked = [], copied = [];
+  const linked = [],
+    copied = [];
   if (link(`${main}/.dotnet`, `${top}/.dotnet`)) linked.push('.dotnet');
   if (existsSync(`${main}/.runtime`)) {
     for (const entry of readdirSync(`${main}/.runtime`)) {
@@ -62,15 +76,25 @@ function setup(dir) {
     }
   }
   for (const relative of includedFiles(main)) {
-    const source = `${main}/${relative}`, target = `${top}/${relative}`;
+    const source = `${main}/${relative}`,
+      target = `${top}/${relative}`;
     if (!existsSync(source) || existsSync(target)) continue;
-    try { git(['check-ignore', '-q', relative], top); } catch { continue; }
+    try {
+      git(['check-ignore', '-q', relative], top);
+    } catch {
+      continue;
+    }
     mkdirSync(path.dirname(target), { recursive: true });
     copyFileSync(source, target);
     copied.push(relative);
   }
-  execFileSync('pnpm', ['install', '--frozen-lockfile', '--prefer-offline', '--reporter=silent'], { cwd: top, stdio: ['ignore', 'inherit', 'inherit'] });
-  console.log(`worktree ready: ${top} (main ${main}; linked ${linked.length ? linked.join(' ') : 'nothing new'}; copied ${copied.length ? copied.join(' ') : 'nothing new'}; dependencies installed)`);
+  execFileSync('pnpm', ['install', '--frozen-lockfile', '--prefer-offline', '--reporter=silent'], {
+    cwd: top,
+    stdio: ['ignore', 'inherit', 'inherit'],
+  });
+  console.log(
+    `worktree ready: ${top} (main ${main}; linked ${linked.length ? linked.join(' ') : 'nothing new'}; copied ${copied.length ? copied.join(' ') : 'nothing new'}; dependencies installed)`,
+  );
 }
 
 // Claude Code SessionStart hook: the session directory arrives as JSON on stdin ({ cwd }).
@@ -78,7 +102,11 @@ async function ensure(dir) {
   if (!dir && !process.stdin.isTTY) {
     let input = '';
     for await (const chunk of process.stdin) input += chunk;
-    try { dir = JSON.parse(input).cwd; } catch { /* no hook payload */ }
+    try {
+      dir = JSON.parse(input).cwd;
+    } catch {
+      /* no hook payload */
+    }
   }
   dir = path.resolve(dir ?? process.cwd());
   if (!repository(dir).linked) return;
@@ -107,25 +135,53 @@ function remove(target) {
   const branch = git(['rev-parse', '--abbrev-ref', 'HEAD'], top);
   git(['worktree', 'remove', top], main);
   let branchState = 'kept';
-  try { git(['branch', '-d', branch], main); branchState = 'deleted'; } catch { /* unmerged or detached: keep it */ }
+  try {
+    git(['branch', '-d', branch], main);
+    branchState = 'deleted';
+  } catch {
+    /* unmerged or detached: keep it */
+  }
   console.log(`removed ${top}; branch ${branch} ${branchState}`);
 }
 
 function list() {
   const lines = git(['worktree', 'list', '--porcelain'], process.cwd()).split('\n\n');
-  console.log(JSON.stringify(lines.filter(Boolean).map(block => Object.fromEntries(block.split('\n').map(line => {
-    const [key, ...value] = line.split(' ');
-    return [key, value.join(' ') || true];
-  }))), null, 2));
+  console.log(
+    JSON.stringify(
+      lines.filter(Boolean).map(block =>
+        Object.fromEntries(
+          block.split('\n').map(line => {
+            const [key, ...value] = line.split(' ');
+            return [key, value.join(' ') || true];
+          }),
+        ),
+      ),
+      null,
+      2,
+    ),
+  );
 }
 
 try {
   switch (command) {
-    case 'add': add(positional[0]); break;
-    case 'setup': setup(path.resolve(positional[0] ?? process.cwd())); break;
-    case 'ensure': await ensure(positional[0]); break;
-    case 'remove': remove(positional[0]); break;
-    case 'list': list(); break;
-    default: fail(usage);
+    case 'add':
+      add(positional[0]);
+      break;
+    case 'setup':
+      setup(path.resolve(positional[0] ?? process.cwd()));
+      break;
+    case 'ensure':
+      await ensure(positional[0]);
+      break;
+    case 'remove':
+      remove(positional[0]);
+      break;
+    case 'list':
+      list();
+      break;
+    default:
+      fail(usage);
   }
-} catch (error) { fail(error.stderr?.trim() || error.message); }
+} catch (error) {
+  fail(error.stderr?.trim() || error.message);
+}

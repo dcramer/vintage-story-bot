@@ -2,22 +2,35 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Controller } from '../src/runtime/controller.ts';
 import { Navigation } from '../src/runtime/navigation/navigator.ts';
-import { horizontal, TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 import { findRoute } from '../src/runtime/navigation/planner.ts';
+import { horizontal, TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 
 function terrain() {
   const cells = [];
-  for (let x = -3; x <= 4; x++) for (let z = -3; z <= 3; z++) for (let y = -2; y <= 4; y++)
-    cells.push([x, y, z, 0, false, y < 0 ? [[0, 0, 0, 1, 1, 1]] : []]);
+  for (let x = -3; x <= 4; x++)
+    for (let z = -3; z <= 3; z++) for (let y = -2; y <= 4; y++) cells.push([x, y, z, 0, false, y < 0 ? [[0, 0, 0, 1, 1, 1]] : []]);
   return { session: 'terrain', reset: false, cursor: 1, more: false, clock: 0, cells };
 }
-const target = { action: 'move_to', x: 2.5, y: 0, z: .5, dimension: 0 };
+const target = { action: 'move_to', x: 2.5, y: 0, z: 0.5, dimension: 0 };
 function fixture(failFrame = false) {
-  const calls = [], state = { ok: true, capabilities: [], player: { uid: 'bot' }, position: { x: .5, y: 0, z: .5, dimension: 0 },
-    controlReady: true, alive: true, motion: { onGround: true }, life: { session: 'life', alerts: [], lastDamageAt: null },
-    control: { epoch: 1, owner: null }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 }, orientation: { yawDegrees: 90, pitchDegrees: 20 } };
+  const calls = [],
+    state = {
+      ok: true,
+      capabilities: [],
+      player: { uid: 'bot' },
+      position: { x: 0.5, y: 0, z: 0.5, dimension: 0 },
+      controlReady: true,
+      alive: true,
+      motion: { onGround: true },
+      life: { session: 'life', alerts: [], lastDamageAt: null },
+      control: { epoch: 1, owner: null },
+      body: { halfWidth: 0.3, height: 1.85, eyeHeight: 1.7 },
+      orientation: { yawDegrees: 90, pitchDegrees: 20 },
+    };
   let resolveFrame;
-  const frame = new Promise(resolve => { resolveFrame = resolve; });
+  const frame = new Promise(resolve => {
+    resolveFrame = resolve;
+  });
   const send = async request => {
     calls.push(request);
     if (request.action === 'sense') return { ok: true, state: structuredClone(state), terrain: terrain() };
@@ -33,20 +46,22 @@ function fixture(failFrame = false) {
   return { controller: new Controller(send), calls, frame, state };
 }
 
-
 // A small block world: floor at y=-1 everywhere unless overridden, air above.
 type Rule = (x: number, y: number, z: number) => boolean;
 function world(width = 6, solid: Rule = () => false, hazard: Rule = () => false, unknown: Rule = () => false) {
-  const map = new TerrainMemory(), cells = [];
-  for (let x = -width; x <= width; x++) for (let z = -width; z <= width; z++) for (let y = -6; y <= 4; y++) {
-    if (unknown(x, y, z)) continue;
-    const floor = y === -1 || solid(x, y, z);
-    cells.push([x, y, z, 0, hazard(x, y, z), floor ? [[0, 0, 0, 1, 1, 1]] : []]);
-  }
+  const map = new TerrainMemory(),
+    cells = [];
+  for (let x = -width; x <= width; x++)
+    for (let z = -width; z <= width; z++)
+      for (let y = -6; y <= 4; y++) {
+        if (unknown(x, y, z)) continue;
+        const floor = y === -1 || solid(x, y, z);
+        cells.push([x, y, z, 0, hazard(x, y, z), floor ? [[0, 0, 0, 1, 1, 1]] : []]);
+      }
   map.apply({ session: 'world', reset: true, cursor: 1, more: false, clock: 0, cells });
   return map;
 }
-const at = (x, z, y = 0) => ({ x: x + .5, y, z: z + .5 });
+const at = (x, z, y = 0) => ({ x: x + 0.5, y, z: z + 0.5 });
 
 test('grid: a one-block step down beside water is a move; a deeper drop there is not', () => {
   const water = (x, y, z) => x === 1 && z === 1 && y === -1;
@@ -54,31 +69,65 @@ test('grid: a one-block step down beside water is a move; a deeper drop there is
   const down = ledge.moves(at(0, 0, 1)).find(m => Math.floor(m.node.z) === 1 && Math.floor(m.node.x) === 0);
   assert.equal(down?.node.move, 'drop');
   const cliff = world(3, (x, y, z) => x === 0 && z === 0 && (y === 0 || y === 1), water);
-  assert.equal(cliff.moves(at(0, 0, 2)).some(m => Math.floor(m.node.z) === 1 && Math.floor(m.node.x) === 0), false);
+  assert.equal(
+    cliff.moves(at(0, 0, 2)).some(m => Math.floor(m.node.z) === 1 && Math.floor(m.node.x) === 0),
+    false,
+  );
 });
 
 test('grid: a cell stands when it has a floor, headroom and is known', () => {
-  const map = world(3, (x, y, z) => x === 1 && z === 0 && y === 1, (x, y, z) => x === 2 && z === 0 && y === -1,
-    (x, y, z) => x === -2 && z === 0 && y === 1);
+  const map = world(
+    3,
+    (x, y, z) => x === 1 && z === 0 && y === 1,
+    (x, y, z) => x === 2 && z === 0 && y === -1,
+    (x, y, z) => x === -2 && z === 0 && y === 1,
+  );
   assert.deepEqual(map.standable(0, -1, 0), at(0, 0));
   assert.equal(map.standable(1, -1, 0), null, 'a block at head height leaves no room');
   assert.equal(map.standable(2, -1, 0), null, 'water is not a floor');
   assert.equal(map.standable(-2, -1, 0), null, 'an unknown cell above is a wall');
   assert.equal(map.standable(0, 0, 0), null, 'air has no floor');
-  assert.equal(map.standingOn({ x: .5, y: 0, z: .5 }), true);
-  assert.equal(map.standingOn({ x: .5, y: 1.5, z: .5 }), false);
+  assert.equal(map.standingOn({ x: 0.5, y: 0, z: 0.5 }), true);
+  assert.equal(map.standingOn({ x: 0.5, y: 1.5, z: 0.5 }), false);
 });
 
 test('grid: moves step, jump one, drop three, never cut a corner or drop beside water', () => {
-  const map = world(6,
-    (x, y, z) => x === 1 && z === 0 && y === 0 || x === 2 && z === 0 && y >= 0 && y <= 1 || x === 0 && z === 1 && y >= 0 && y <= 2,
+  const map = world(
+    6,
+    (x, y, z) => (x === 1 && z === 0 && y === 0) || (x === 2 && z === 0 && y >= 0 && y <= 1) || (x === 0 && z === 1 && y >= 0 && y <= 2),
     (x, y, z) => x === -3 && z === 2 && y === -1,
-    (x, y, z) => x === -3 && z === -3 && y === 0);
+    (x, y, z) => x === -3 && z === -3 && y === 0,
+  );
   // Deep side: west and south-west drop three blocks, south drops four.
-  for (const [x, z] of [[-1, 0], [-1, -1], [0, -1]]) map.apply({ session: 'world', reset: false, cursor: 2, more: false, clock: 0,
-    cells: [[x, -1, z, 0, false, []], [x, -2, z, 0, false, []], [x, -3, z, 0, false, []], [x, -4, z, 0, false, [[0, 0, 0, 1, 1, 1]]]] });
-  map.apply({ session: 'world', reset: false, cursor: 3, more: false, clock: 0,
-    cells: [[0, -4, -1, 0, false, []], [0, -5, -1, 0, false, [[0, 0, 0, 1, 1, 1]]]] });
+  for (const [x, z] of [
+    [-1, 0],
+    [-1, -1],
+    [0, -1],
+  ])
+    map.apply({
+      session: 'world',
+      reset: false,
+      cursor: 2,
+      more: false,
+      clock: 0,
+      cells: [
+        [x, -1, z, 0, false, []],
+        [x, -2, z, 0, false, []],
+        [x, -3, z, 0, false, []],
+        [x, -4, z, 0, false, [[0, 0, 0, 1, 1, 1]]],
+      ],
+    });
+  map.apply({
+    session: 'world',
+    reset: false,
+    cursor: 3,
+    more: false,
+    clock: 0,
+    cells: [
+      [0, -4, -1, 0, false, []],
+      [0, -5, -1, 0, false, [[0, 0, 0, 1, 1, 1]]],
+    ],
+  });
   const moves = map.moves(at(0, 0));
   const to = (x, z) => moves.find(m => Math.floor(m.node.x) === x && Math.floor(m.node.z) === z);
   assert.equal(to(1, 0)?.node.move, 'jump', 'one block up is a jump');
@@ -88,19 +137,31 @@ test('grid: moves step, jump one, drop three, never cut a corner or drop beside 
   assert.equal(to(1, 1), undefined, 'diagonal blocked when both corner columns are solid');
   assert.equal(to(-1, -1), undefined, 'no diagonal drops');
   assert.equal(to(1, -1)?.node.move, 'walk', 'diagonal allowed when one corner side is open');
-  assert.equal(world(3).moves(at(0, 0)).filter(m => m.node.move === 'walk').length, 8, 'open ground walks in all eight directions');
+  assert.equal(
+    world(3)
+      .moves(at(0, 0))
+      .filter(m => m.node.move === 'walk').length,
+    8,
+    'open ground walks in all eight directions',
+  );
   assert.equal(to(0, 1), undefined, 'the tall wall column is not standable');
   const shore = map.moves(at(-2, 2)).find(m => Math.floor(m.node.x) === -3 && Math.floor(m.node.z) === 1);
   assert.ok(shore && shore.cost > 2, 'walking beside water costs more');
-  assert.equal(map.moves(at(-2, 2)).find(m => Math.floor(m.node.x) === -3 && Math.floor(m.node.z) === 2), undefined, 'water is a wall');
+  assert.equal(
+    map.moves(at(-2, 2)).find(m => Math.floor(m.node.x) === -3 && Math.floor(m.node.z) === 2),
+    undefined,
+    'water is a wall',
+  );
 });
 
 test('grid: jumps diagonally out of a one-block pocket when a corner side is open', () => {
   // A pit at (0,0): walls one block high on the west and south, the northeast
   // is a block one up with the north cell open, so the way out is a diagonal jump.
-  const map = world(3, (x, y, z) =>
-    (x === -1 && z === 0 && y === 0) || (x === 0 && z === -1 && y === 0) ||
-    (x === 1 && z === 1 && y === 0) || (x === 1 && z === 0 && y === 0));
+  const map = world(
+    3,
+    (x, y, z) =>
+      (x === -1 && z === 0 && y === 0) || (x === 0 && z === -1 && y === 0) || (x === 1 && z === 1 && y === 0) || (x === 1 && z === 0 && y === 0),
+  );
   const out = map.moves(at(0, 0)).find(m => Math.floor(m.node.x) === 1 && Math.floor(m.node.z) === 1);
   assert.equal(out?.node.move, 'jump', 'the diagonal block one up is a jump out');
   assert.equal(Math.round(out.node.y), 1);
@@ -108,26 +169,48 @@ test('grid: jumps diagonally out of a one-block pocket when a corner side is ope
 
 test('planner routes around a wall, jumps a hole only as a last resort, and ends partial routes at the frontier', () => {
   const wall = world(6, (x, y, z) => z === 1 && x <= 3 && y >= 0 && y <= 1);
-  const route = findRoute(wall, at(0, 0), at(0, 4), .3, 1.85, { partial: false });
-  assert.ok(route && route.some(n => Math.floor(n.x) >= 4), 'goes around the wall end');
+  const route = findRoute(wall, at(0, 0), at(0, 4), 0.3, 1.85, { partial: false });
+  assert.ok(
+    route?.some(n => Math.floor(n.x) >= 4),
+    'goes around the wall end',
+  );
   assert.ok(route.every(n => n.move !== 'jump' && n.move !== 'gap'));
-  const hole = world(6, () => false, () => false, () => false);
-  hole.apply({ session: 'world', reset: false, cursor: 2, more: false, clock: 0,
-    cells: [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6].flatMap(z => [[1, -1, z, 0, false, []], [1, -2, z, 0, false, []], [1, -3, z, 0, false, []], [1, -4, z, 0, false, []], [1, -5, z, 0, false, []], [1, -6, z, 0, false, []]]) });
-  const over = findRoute(hole, at(0, 0), at(3, 0), .3, 1.85, { partial: false });
+  const hole = world(
+    6,
+    () => false,
+    () => false,
+    () => false,
+  );
+  hole.apply({
+    session: 'world',
+    reset: false,
+    cursor: 2,
+    more: false,
+    clock: 0,
+    cells: [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6].flatMap(z => [
+      [1, -1, z, 0, false, []],
+      [1, -2, z, 0, false, []],
+      [1, -3, z, 0, false, []],
+      [1, -4, z, 0, false, []],
+      [1, -5, z, 0, false, []],
+      [1, -6, z, 0, false, []],
+    ]),
+  });
+  const over = findRoute(hole, at(0, 0), at(3, 0), 0.3, 1.85, { partial: false });
   assert.equal(over?.[0].move, 'gap', 'a full-width trench is crossed by a gap jump');
-  const partial = findRoute(world(3), at(0, 0), at(20, 0), .3, 1.85);
-  assert.ok(partial && partial.length, 'a goal beyond what was seen yields a partial route');
+  const partial = findRoute(world(3), at(0, 0), at(20, 0), 0.3, 1.85);
+  assert.ok(partial?.length, 'a goal beyond what was seen yields a partial route');
   assert.ok(Math.floor(partial.at(-1).x) >= 2, 'the partial route heads toward the goal');
-  const deadline = findRoute(world(6), at(-5, -5), at(5, 5), .3, 1.85, { deadlineMs: 0 });
+  const deadline = findRoute(world(6), at(-5, -5), at(5, 5), 0.3, 1.85, { deadlineMs: 0 });
   assert.ok(deadline === null || Array.isArray(deadline), 'a spent deadline still returns cleanly');
 });
 
 test('navigation walks through bends without crouching, jumps a block up from close by', () => {
   const map = world(6, (x, y, z) => x === 3 && z === 0 && y === 0);
-  const body = { halfWidth: .3, height: 1.85, eyeHeight: 1.7 }, vitals = { hunger: { current: 1000, max: 1500 } };
+  const body = { halfWidth: 0.3, height: 1.85, eyeHeight: 1.7 },
+    vitals = { hunger: { current: 1000, max: 1500 } };
   const state = { position: at(0, 0), body, motion: { onGround: true }, orientation: { yawDegrees: 0 }, vitals, nearbyEntities: [] };
-  const nav = new Navigation(map, state, { x: 3.5, y: 1, z: .5, timeoutMs: 10000 }, 0);
+  const nav = new Navigation(map, state, { x: 3.5, y: 1, z: 0.5, timeoutMs: 10000 }, 0);
   const first = nav.tick(state, 0);
   assert.equal(nav.state, 'moving');
   assert.equal(first.sneak, false);
@@ -137,7 +220,7 @@ test('navigation walks through bends without crouching, jumps a block up from cl
   const jump = nav.tick(facing, 500);
   assert.equal(nav.route[nav.index].move, 'jump');
   assert.equal(jump.jump, true, 'jumps when the block up is close and lined up');
-  const airborne = { ...facing, position: { x: 2.9, y: .6, z: .5 }, motion: { onGround: false } };
+  const airborne = { ...facing, position: { x: 2.9, y: 0.6, z: 0.5 }, motion: { onGround: false } };
   assert.equal(nav.tick(airborne, 600).forward, true, 'keeps forward through the jump');
   const landed = { ...facing, position: at(3, 0, 1), orientation: { yawDegrees: 90 } };
   nav.tick(landed, 800);
@@ -146,13 +229,23 @@ test('navigation walks through bends without crouching, jumps a block up from cl
 
 test('navigation replans without stopping when the next cell stops being standable', () => {
   const map = world(6);
-  const body = { halfWidth: .3, height: 1.85, eyeHeight: 1.7 }, vitals = { hunger: { current: 1000, max: 1500 } };
+  const body = { halfWidth: 0.3, height: 1.85, eyeHeight: 1.7 },
+    vitals = { hunger: { current: 1000, max: 1500 } };
   const state = { position: at(0, 0), body, motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals, nearbyEntities: [] };
-  const nav = new Navigation(map, state, { x: 4.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
+  const nav = new Navigation(map, state, { x: 4.5, y: 0, z: 0.5, timeoutMs: 10000 }, 0);
   assert.ok(nav.tick(state, 0).forward);
   const next = nav.route[nav.index];
-  map.apply({ session: 'world', reset: false, cursor: 2, more: false, clock: 0,
-    cells: [[Math.floor(next.x), 0, Math.floor(next.z), 0, false, [[0, 0, 0, 1, 1, 1]]], [Math.floor(next.x), 1, Math.floor(next.z), 0, false, [[0, 0, 0, 1, 1, 1]]]] });
+  map.apply({
+    session: 'world',
+    reset: false,
+    cursor: 2,
+    more: false,
+    clock: 0,
+    cells: [
+      [Math.floor(next.x), 0, Math.floor(next.z), 0, false, [[0, 0, 0, 1, 1, 1]]],
+      [Math.floor(next.x), 1, Math.floor(next.z), 0, false, [[0, 0, 0, 1, 1, 1]]],
+    ],
+  });
   const frame = nav.tick(state, 500);
   assert.equal(nav.lastReplan, 'terrain_changed');
   assert.equal(nav.state, 'moving');
@@ -162,16 +255,29 @@ test('navigation replans without stopping when the next cell stops being standab
 
 test('navigation lets gravity finish a drop and stalls into a replan', () => {
   const map = world(6);
-  map.apply({ session: 'world', reset: false, cursor: 2, more: false, clock: 0,
-    cells: [[1, -1, 0, 0, false, []], [1, -2, 0, 0, false, []], [1, -3, 0, 0, false, [[0, 0, 0, 1, 1, 1]]],
-      [2, -1, 0, 0, false, []], [2, -2, 0, 0, false, []], [2, -3, 0, 0, false, [[0, 0, 0, 1, 1, 1]]]] });
-  const body = { halfWidth: .3, height: 1.85, eyeHeight: 1.7 }, vitals = { hunger: { current: 1000, max: 1500 } };
+  map.apply({
+    session: 'world',
+    reset: false,
+    cursor: 2,
+    more: false,
+    clock: 0,
+    cells: [
+      [1, -1, 0, 0, false, []],
+      [1, -2, 0, 0, false, []],
+      [1, -3, 0, 0, false, [[0, 0, 0, 1, 1, 1]]],
+      [2, -1, 0, 0, false, []],
+      [2, -2, 0, 0, false, []],
+      [2, -3, 0, 0, false, [[0, 0, 0, 1, 1, 1]]],
+    ],
+  });
+  const body = { halfWidth: 0.3, height: 1.85, eyeHeight: 1.7 },
+    vitals = { hunger: { current: 1000, max: 1500 } };
   const state = { position: at(0, 0), body, motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals, nearbyEntities: [] };
-  const nav = new Navigation(map, state, { x: 2.5, y: -2, z: .5, timeoutMs: 10000 }, 0);
+  const nav = new Navigation(map, state, { x: 2.5, y: -2, z: 0.5, timeoutMs: 10000 }, 0);
   const first = nav.tick(state, 0);
   assert.equal(nav.route[0].move, 'drop');
   assert.equal(first.forward, true);
-  const falling = { ...state, position: { x: 1.3, y: -.8, z: .5 }, motion: { onGround: false } };
+  const falling = { ...state, position: { x: 1.3, y: -0.8, z: 0.5 }, motion: { onGround: false } };
   assert.equal(nav.tick(falling, 300).forward, false, 'forward released while airborne');
   const stuck = { ...falling, motion: { onGround: true } };
   nav.tick(stuck, 3500);
@@ -179,12 +285,18 @@ test('navigation lets gravity finish a drop and stalls into a replan', () => {
 });
 
 test('navigation temporarily routes away from an explicit nearby hostile', () => {
-  const map = new TerrainMemory(); map.apply(terrain());
-  const state = { position: { x: .5, y: 0, z: .5 }, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
-    motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals: { hunger: { current: 1000, max: 1500 } },
-    nearbyEntities: [{ key: 'entity:1', code: 'game:wolf-male', point: { x: -.5, y: 0, z: .5 } }] };
-  const goal = { x: 5.5, y: 0, z: .5, timeoutMs: 10000 };
-  const distant = { ...state, nearbyEntities: [{ ...state.nearbyEntities[0], point: { x: -28.5, y: 0, z: .5 } }] };
+  const map = new TerrainMemory();
+  map.apply(terrain());
+  const state = {
+    position: { x: 0.5, y: 0, z: 0.5 },
+    body: { halfWidth: 0.3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true },
+    orientation: { yawDegrees: 90 },
+    vitals: { hunger: { current: 1000, max: 1500 } },
+    nearbyEntities: [{ key: 'entity:1', code: 'game:wolf-male', point: { x: -0.5, y: 0, z: 0.5 } }],
+  };
+  const goal = { x: 5.5, y: 0, z: 0.5, timeoutMs: 10000 };
+  const distant = { ...state, nearbyEntities: [{ ...state.nearbyEntities[0], point: { x: -28.5, y: 0, z: 0.5 } }] };
   const calm = new Navigation(map, distant, goal, 0);
   calm.tick(distant, 0);
   assert.equal(calm.evading, false);
@@ -194,20 +306,26 @@ test('navigation temporarily routes away from an explicit nearby hostile', () =>
   assert.ok(nav.target.x > goal.x && nav.target.emergency);
   nav.tick(distant, 1);
   assert.equal(nav.evading, true);
-  nav.tick({ ...state, nearbyEntities: [{ ...state.nearbyEntities[0], point: { x: -36.5, y: 0, z: .5 } }] }, 2);
+  nav.tick({ ...state, nearbyEntities: [{ ...state.nearbyEntities[0], point: { x: -36.5, y: 0, z: 0.5 } }] }, 2);
   assert.equal(nav.evading, false);
   assert.equal(nav.target, goal);
 });
 
 test('evasion route does not approach another visible hostile', () => {
-  const map = new TerrainMemory(); map.apply(terrain());
-  const start = { x: .5, y: 0, z: .5 };
-  const west = { key: 'entity:1', code: 'game:wolf-male', point: { x: -1.5, y: 0, z: .5 } };
-  const east = { key: 'entity:2', code: 'game:bowtorn-surface', point: { x: 2.5, y: 0, z: .5 } };
-  const state = { position: start, body: { halfWidth: .3, height: 1.85, eyeHeight: 1.7 },
-    motion: { onGround: true }, orientation: { yawDegrees: 0 }, vitals: { hunger: { current: 1000, max: 1500 } },
-    nearbyEntities: [west, east] };
-  const nav = new Navigation(map, state, { x: 4.5, y: 0, z: .5, timeoutMs: 10000 }, 0);
+  const map = new TerrainMemory();
+  map.apply(terrain());
+  const start = { x: 0.5, y: 0, z: 0.5 };
+  const west = { key: 'entity:1', code: 'game:wolf-male', point: { x: -1.5, y: 0, z: 0.5 } };
+  const east = { key: 'entity:2', code: 'game:bowtorn-surface', point: { x: 2.5, y: 0, z: 0.5 } };
+  const state = {
+    position: start,
+    body: { halfWidth: 0.3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true },
+    orientation: { yawDegrees: 0 },
+    vitals: { hunger: { current: 1000, max: 1500 } },
+    nearbyEntities: [west, east],
+  };
+  const nav = new Navigation(map, state, { x: 4.5, y: 0, z: 0.5, timeoutMs: 10000 }, 0);
   assert.ok(nav.tick(state, 0));
   assert.equal(nav.evading, true);
   assert.equal(nav.threats.length, 2);
@@ -219,7 +337,8 @@ test('evasion route does not approach another visible hostile', () => {
 test('shared controller excludes mutations/UI and Effect interruption releases its owner', async () => {
   const { controller, calls, frame } = fixture();
   const result = await controller.request(target);
-  assert.equal(result.ok, true); await frame;
+  assert.equal(result.ok, true);
+  await frame;
   assert.equal((await controller.request({ action: 'stop', expectedGoal: '00000000-0000-4000-8000-000000000000' })).ok, false);
   assert.ok(controller.active);
   await assert.rejects(controller.request({ action: 'move', durationMs: 250 }), /Goal active/);
@@ -233,7 +352,8 @@ test('shared controller excludes mutations/UI and Effect interruption releases i
 
 test('lost frame acknowledgement is not retried and releases ownership', async () => {
   const { controller, calls, frame } = fixture(true);
-  assert.equal((await controller.request(target)).ok, true); await frame;
+  assert.equal((await controller.request(target)).ok, true);
+  await frame;
   for (let i = 0; controller.active && i < 100; i++) await new Promise(r => setTimeout(r, 5));
   assert.equal(controller.active, null);
   // Ownership is uncertain after a lost acknowledgement: the walk is cancelled, not blocked terrain.
@@ -246,12 +366,20 @@ test('lost frame acknowledgement is not retried and releases ownership', async (
 
 test('cancelling an in-flight startup cannot acquire control afterward', async () => {
   let entered;
-  const waiting = new Promise(resolve => { entered = resolve; });
-  const controller = new Controller((request, { signal }) => new Promise((resolve, reject) => {
-    assert.equal(request.action, 'sense'); entered(); signal.addEventListener('abort', () => reject(Error('cancelled')), { once: true });
-  }));
+  const waiting = new Promise(resolve => {
+    entered = resolve;
+  });
+  const controller = new Controller(
+    (request, { signal }) =>
+      new Promise((_resolve, reject) => {
+        assert.equal(request.action, 'sense');
+        entered();
+        signal.addEventListener('abort', () => reject(Error('cancelled')), { once: true });
+      }),
+  );
   const starting = controller.request(target);
-  await waiting; await controller.close();
+  await waiting;
+  await controller.close();
   assert.equal((await starting).ok, false);
   assert.equal(controller.active, null);
 });
@@ -269,14 +397,23 @@ test('knowledge survives a round trip through disk and is keyed by world', async
   knowledge.enter('world-a');
   memories.map.apply(terrain(), 1000);
   memories.surface.apply({ clock: 5, sweeps: 1, columns: [[1, 2, 10, 'ground', 1, 'soil', 5]] }, 1000);
-  memories.sightings.apply({ clock: 5, sightings: [['block:1', 'block', 'game:bush', 1.5, 10.5, 2.5, 'seen', 5, { facts: { growth: 'ripe' } }], ['entity:9', 'entity', 'game:wolf', 3, 10, 3, 'seen', 5, null]] }, 1000);
+  memories.sightings.apply(
+    {
+      clock: 5,
+      sightings: [
+        ['block:1', 'block', 'game:bush', 1.5, 10.5, 2.5, 'seen', 5, { facts: { growth: 'ripe' } }],
+        ['entity:9', 'entity', 'game:wolf', 3, 10, 3, 'seen', 5, null],
+      ],
+    },
+    1000,
+  );
   knowledge.touch();
   assert.equal(knowledge.save(true), true);
   const fresh = { map: new TerrainMemory(), surface: new SurfaceMemory(), sightings: new SightingsMemory() };
   const again = new Knowledge(dir, fresh);
   again.enter('world-a');
   assert.equal(fresh.map.cells.size, memories.map.cells.size, 'terrain cells restored');
-  assert.deepEqual(fresh.map.standable(0, -1, 0), { x: .5, y: 0, z: .5 }, 'restored geometry is usable');
+  assert.deepEqual(fresh.map.standable(0, -1, 0), { x: 0.5, y: 0, z: 0.5 }, 'restored geometry is usable');
   assert.equal(fresh.surface.get(1, 2)?.kind, 'ground');
   assert.equal(fresh.sightings.remembered('block').length, 1, 'blocks persist');
   assert.equal(fresh.sightings.remembered('entity').length, 0, 'entities do not');

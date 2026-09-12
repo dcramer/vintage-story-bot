@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 
-export const schema = z.object({
-  yawDegrees: z.number().min(-36000).max(36000),
-  pitchDegrees: z.number().min(-89).max(89),
-}).strict();
+export const schema = z
+  .object({
+    yawDegrees: z.number().min(-36000).max(36000),
+    pitchDegrees: z.number().min(-89).max(89),
+  })
+  .strict();
 
 export default defineAction({
   name: 'look',

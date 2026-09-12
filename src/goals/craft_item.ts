@@ -4,8 +4,7 @@ import { itemCount, ownedSlots } from '../support/inventory.ts';
 import { cleanName, runField } from '../support/task.ts';
 
 const gridSlots = inventory => inventory.inventories.find(i => i.name === 'craftinggrid')?.slots.filter(s => s.slot < 9) ?? [];
-const emptyOwned = (inventory, exclude = new Set()) => ownedSlots(inventory)
-  .find(s => !s.code && !exclude.has(`${s.inventory}:${s.slot}`));
+const emptyOwned = (inventory, exclude = new Set()) => ownedSlots(inventory).find(s => !s.code && !exclude.has(`${s.inventory}:${s.slot}`));
 
 async function transfer(field, from, to, quantity) {
   await field.observe();
@@ -21,7 +20,12 @@ export async function clearGrid(field) {
   for (const slot of gridSlots(inventory).filter(s => s.code)) {
     const destination = emptyOwned(inventory);
     if (!destination) throw Error('Crafting grid holds items and no empty owned slot can receive them');
-    await transfer(field, { inventory: 'craftinggrid', slot: slot.slot }, { inventory: destination.inventory, slot: destination.slot }, slot.quantity);
+    await transfer(
+      field,
+      { inventory: 'craftinggrid', slot: slot.slot },
+      { inventory: destination.inventory, slot: destination.slot },
+      slot.quantity,
+    );
     inventory = await field.send({ action: 'inventory' });
   }
   return inventory;
@@ -70,9 +74,22 @@ export async function craftItem(field, { output, count = 1 }) {
       await field.observe();
       const recipes = await search();
       let recipe, plan;
-      for (const candidate of recipes) { plan = allocate(candidate); if (plan) { recipe = candidate; break; } }
-      if (!recipe) return { ok: false, reason: 'missing_ingredients', output, gained: gained(), crafts,
-        recipes: recipes.map(r => ({ id: r.id, ingredients: r.ingredients?.filter(Boolean).map(i => ({ code: i.code, quantity: i.quantity })) })) };
+      for (const candidate of recipes) {
+        plan = allocate(candidate);
+        if (plan) {
+          recipe = candidate;
+          break;
+        }
+      }
+      if (!recipe)
+        return {
+          ok: false,
+          reason: 'missing_ingredients',
+          output,
+          gained: gained(),
+          crafts,
+          recipes: recipes.map(r => ({ id: r.id, ingredients: r.ingredients?.filter(Boolean).map(i => ({ code: i.code, quantity: i.quantity })) })),
+        };
       field.report('placing_ingredients', { output, recipe: recipe.id, gained: gained(), crafts });
       for (const step of plan) await transfer(field, step.from, step.to, step.quantity);
       inventory = await field.send({ action: 'inventory' });
@@ -81,18 +98,32 @@ export async function craftItem(field, { output, count = 1 }) {
         return { ok: false, reason: 'grid_not_matching', output, recipe: recipe.id, gained: gained(), crafts };
       }
       const destination = emptyOwned(inventory);
-      if (!destination) { await clearGrid(field); return { ok: false, reason: 'no_empty_slot_for_output', output, gained: gained(), crafts }; }
+      if (!destination) {
+        await clearGrid(field);
+        return { ok: false, reason: 'no_empty_slot_for_output', output, gained: gained(), crafts };
+      }
       field.report('crafting', { output, recipe: recipe.id, gained: gained(), crafts });
-      await field.send({ action: 'craft', to: { inventory: destination.inventory, slot: destination.slot },
-        expectedState: inventory.state, expectedOutput: output });
+      await field.send({
+        action: 'craft',
+        to: { inventory: destination.inventory, slot: destination.slot },
+        expectedState: inventory.state,
+        expectedOutput: output,
+      });
       let verified = false;
       for (let i = 0; i < 10; i++) {
         await field.wait(200);
         await field.observe();
         const contents = await field.send({ action: 'inventory' });
-        if (itemCount(contents, output) >= itemCount(inventory, output) + recipe.output.quantity) { inventory = contents; verified = true; break; }
+        if (itemCount(contents, output) >= itemCount(inventory, output) + recipe.output.quantity) {
+          inventory = contents;
+          verified = true;
+          break;
+        }
       }
-      if (!verified) { await clearGrid(field); return { ok: false, reason: 'craft_unverified', output, gained: gained(), crafts }; }
+      if (!verified) {
+        await clearGrid(field);
+        return { ok: false, reason: 'craft_unverified', output, gained: gained(), crafts };
+      }
       crafts++;
     }
     return { ok: true, goal: 'craft_item', output, count, gained: gained(), crafts, verification: 'inventory_delta' };
@@ -103,11 +134,13 @@ export async function craftItem(field, { output, count = 1 }) {
 
 export default defineGoal({
   name: 'craft_item',
-  schema: z.object({
-    output: z.string().min(1).max(160).describe('Exact output item/block code, e.g. game:packeddirt.'),
-    count: z.number().int().min(1).max(64).default(1).describe('Output items wanted; crafts repeat until carried gain reaches it.'),
-    timeoutMs: z.number().int().min(1000).max(600000).default(120000),
-  }).strict(),
+  schema: z
+    .object({
+      output: z.string().min(1).max(160).describe('Exact output item/block code, e.g. game:packeddirt.'),
+      count: z.number().int().min(1).max(64).default(1).describe('Output items wanted; crafts repeat until carried gain reaches it.'),
+      timeoutMs: z.number().int().min(1000).max(600000).default(120000),
+    })
+    .strict(),
   destructive: true,
   description:
     'Craft from own inventory via the 3x3 grid: pick a known recipe whose ingredients are carried, transfer them, craft into an ' +

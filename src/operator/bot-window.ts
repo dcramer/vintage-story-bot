@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { access } from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
+import { access } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import { z } from 'zod';
 import { currentDisplay, processArgv, readJson, root, tool, toolEnv, x11Root } from './display.ts';
 
@@ -12,27 +12,41 @@ const localImport = existsSync(`${x11Root}/usr/bin/import`) && existsSync(`${loc
 // Display the client was started on (managed or adopted) wins; WSLg defaults to :0 when MCP strips the environment.
 export async function uiEnv() {
   const headless = await currentDisplay();
-  const display = headless?.display ?? readJson(`${root}/.runtime/game/state.json`)?.display ?? process.env.DISPLAY ?? (existsSync('/mnt/wslg') ? ':0' : undefined);
+  const display =
+    headless?.display ?? readJson(`${root}/.runtime/game/state.json`)?.display ?? process.env.DISPLAY ?? (existsSync('/mnt/wslg') ? ':0' : undefined);
   return {
     headless: Boolean(headless),
     env: {
       ...toolEnv(display),
-      ...(localImport ? {
-        PATH: `${x11Root}/usr/bin${process.env.PATH ? ':' + process.env.PATH : ''}`,
-        MAGICK_CONFIGURE_PATH: `${localMagick}/config-Q16`,
-        MAGICK_CODER_MODULE_PATH: `${localMagick}/modules-Q16/coders`,
-      } : {}),
+      ...(localImport
+        ? {
+            PATH: `${x11Root}/usr/bin${process.env.PATH ? ':' + process.env.PATH : ''}`,
+            MAGICK_CONFIGURE_PATH: `${localMagick}/config-Q16`,
+            MAGICK_CODER_MODULE_PATH: `${localMagick}/modules-Q16/coders`,
+          }
+        : {}),
     },
   };
 }
 
 export const uiTools = [
-  { name: 'ui_screenshot', schema: z.object({}).strict(), readOnly: true,
-    description: 'Capture only the WSL bot window. Works in menus without the bridge. Use before menu input; never capture login secrets.' },
-  { name: 'ui_click', schema: z.object({ x: z.number().int().min(0), y: z.number().int().min(0) }).strict(),
-    description: 'Left-click bot menu at screenshot pixel coordinates; one targeted click, no retries. Inspect screenshot first. Not for world interaction.' },
-  { name: 'ui_key', schema: z.object({ key: z.enum(['Escape', 'Return', 'Tab', 'Up', 'Down', 'Left', 'Right', 'm']) }).strict(),
-    description: 'Send a key directly to the bot. Escape opens/closes the pause menu; m opens/closes the World Map. No retries.' },
+  {
+    name: 'ui_screenshot',
+    schema: z.object({}).strict(),
+    readOnly: true,
+    description: 'Capture only the WSL bot window. Works in menus without the bridge. Use before menu input; never capture login secrets.',
+  },
+  {
+    name: 'ui_click',
+    schema: z.object({ x: z.number().int().min(0), y: z.number().int().min(0) }).strict(),
+    description:
+      'Left-click bot menu at screenshot pixel coordinates; one targeted click, no retries. Inspect screenshot first. Not for world interaction.',
+  },
+  {
+    name: 'ui_key',
+    schema: z.object({ key: z.enum(['Escape', 'Return', 'Tab', 'Up', 'Down', 'Left', 'Right', 'm']) }).strict(),
+    description: 'Send a key directly to the bot. Escape opens/closes the pause menu; m opens/closes the World Map. No retries.',
+  },
 ];
 
 async function xdo(args, env) {
@@ -43,18 +57,24 @@ async function xdo(args, env) {
 }
 
 export function isBotCommand(argv, repository = root) {
-  return argv.includes(`${repository}/.runtime/linux-client/Vintagestory.dll`) &&
-    argv.includes(`--dataPath=${repository}/.runtime/bot-data`);
+  return argv.includes(`${repository}/.runtime/linux-client/Vintagestory.dll`) && argv.includes(`--dataPath=${repository}/.runtime/bot-data`);
 }
 
 function realpath(file) {
-  try { return realpathSync(file); } catch { return file; }
+  try {
+    return realpathSync(file);
+  } catch {
+    return file;
+  }
 }
 
 // Any client on this profile, whichever checkout launched it (paths may reach the profile through symlinks).
 export function isBotProcess(argv, repository = root) {
-  return isBotCommand(argv, repository) || (argv.some(arg => /(^|\/)Vintagestory\.dll$/.test(arg)) &&
-    argv.some(arg => arg.startsWith('--dataPath=') && realpath(arg.slice('--dataPath='.length)) === realpath(`${repository}/.runtime/bot-data`)));
+  return (
+    isBotCommand(argv, repository) ||
+    (argv.some(arg => /(^|\/)Vintagestory\.dll$/.test(arg)) &&
+      argv.some(arg => arg.startsWith('--dataPath=') && realpath(arg.slice('--dataPath='.length)) === realpath(`${repository}/.runtime/bot-data`)))
+  );
 }
 
 export function validateClick({ x, y }, { width, height }) {
@@ -66,8 +86,11 @@ export function validateClick({ x, y }, { width, height }) {
 // The one window whose process is the bot client; rejects zero or several matches.
 export async function botWindow(env) {
   let ids;
-  try { ids = (await xdo(['search', '--onlyvisible', '--name', '^Vintage Story$'], env)).split(/\s+/); }
-  catch { throw new Error('No bot window or xdotool unavailable. Launch with scripts/game.mjs start; see docs/runtime.md.'); }
+  try {
+    ids = (await xdo(['search', '--onlyvisible', '--name', '^Vintage Story$'], env)).split(/\s+/);
+  } catch {
+    throw new Error('No bot window or xdotool unavailable. Launch with scripts/game.mjs start; see docs/runtime.md.');
+  }
   const matches = [];
   for (const id of ids) {
     if (!/^\d+$/.test(id)) continue;
@@ -75,12 +98,15 @@ export async function botWindow(env) {
       const pid = await xdo(['getwindowpid', id], env);
       const argv = /^\d+$/.test(pid) ? processArgv(pid) : null;
       if (argv && isBotProcess(argv)) matches.push(id);
-    } catch { /* Window exited during discovery. */ }
+    } catch {
+      /* Window exited during discovery. */
+    }
   }
   if (matches.length !== 1) throw new Error(`Expected one matching bot window; found ${matches.length}. No input sent.`);
   const id = matches[0];
   const geometry = Object.fromEntries((await xdo(['getwindowgeometry', '--shell', id], env)).split('\n').map(line => line.split('=')));
-  const width = Number(geometry.WIDTH), height = Number(geometry.HEIGHT);
+  const width = Number(geometry.WIDTH),
+    height = Number(geometry.HEIGHT);
   if (!(width > 0 && height > 0)) throw new Error('Invalid bot window geometry.');
   return { id, width, height };
 }
@@ -89,15 +115,25 @@ export async function botWindow(env) {
 async function focusBot(window, { env, headless }) {
   const powershell = '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe';
   let wsl = false;
-  if (!headless) { try { await access(powershell); wsl = true; } catch { /* Native Linux. */ } }
+  if (!headless) {
+    try {
+      await access(powershell);
+      wsl = true;
+    } catch {
+      /* Native Linux. */
+    }
+  }
   if (wsl) {
     const { stdout } = await exec('wslpath', ['-w', `${root}/scripts/focus-bot.ps1`], { timeout: 3000 });
     await exec(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', stdout.trim()], { timeout: 5000, maxBuffer: 65536 });
   } else {
-    try { await xdo(['windowactivate', '--sync', window.id], env); }
-    catch { await xdo(['windowfocus', '--sync', window.id], env); }
+    try {
+      await xdo(['windowactivate', '--sync', window.id], env);
+    } catch {
+      await xdo(['windowfocus', '--sync', window.id], env);
+    }
   }
-  if (await xdo(['getwindowfocus'], env) !== window.id) throw new Error('Bot did not retain focus. No click sent.');
+  if ((await xdo(['getwindowfocus'], env)) !== window.id) throw new Error('Bot did not retain focus. No click sent.');
 }
 
 export async function callUi(name, input) {
@@ -107,11 +143,18 @@ export async function callUi(name, input) {
   const ui = await uiEnv();
   const window = await botWindow(ui.env);
   if (name === 'ui_screenshot') {
-    const { stdout } = await exec('import', ['-window', window.id, 'png:-'], { env: ui.env, encoding: 'buffer', timeout: 5000, maxBuffer: 8 * 1024 * 1024 });
-    return { content: [
-      { type: 'text', text: JSON.stringify({ width: window.width, height: window.height }) },
-      { type: 'image', mimeType: 'image/png', data: stdout.toString('base64') },
-    ] };
+    const { stdout } = await exec('import', ['-window', window.id, 'png:-'], {
+      env: ui.env,
+      encoding: 'buffer',
+      timeout: 5000,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    return {
+      content: [
+        { type: 'text', text: JSON.stringify({ width: window.width, height: window.height }) },
+        { type: 'image', mimeType: 'image/png', data: stdout.toString('base64') },
+      ],
+    };
   }
   if (name === 'ui_click') {
     validateClick(args, window);
@@ -125,14 +168,19 @@ export async function callUi(name, input) {
 
 // Operator sign-in only: the text reaches xdotool on stdin, never as an argument, and failures never echo it.
 export async function typeText(text) {
-  if (typeof text !== 'string' || !text.length || text.length > 256 || /[\r\n]/.test(text)) throw new Error('Text must be one line of at most 256 characters.');
+  if (typeof text !== 'string' || !text.length || text.length > 256 || /[\r\n]/.test(text))
+    throw new Error('Text must be one line of at most 256 characters.');
   const ui = await uiEnv();
   const window = await botWindow(ui.env);
   await focusBot(window, ui);
   const command = tool('xdotool');
   await new Promise((resolve, reject) => {
-    const child = execFile(command, ['type', '--window', window.id, '--delay', '30', '--file', '-'], { env: ui.env, timeout: 5000 + 40 * text.length },
-      error => (error ? reject(new Error(`xdotool type failed (${error.code ?? error.signal ?? 'error'}).`)) : resolve(undefined)));
+    const child = execFile(
+      command,
+      ['type', '--window', window.id, '--delay', '30', '--file', '-'],
+      { env: ui.env, timeout: 5000 + 40 * text.length },
+      error => (error ? reject(new Error(`xdotool type failed (${error.code ?? error.signal ?? 'error'}).`)) : resolve(undefined)),
+    );
     child.stdin.on('error', () => {});
     child.stdin.end(text);
   });

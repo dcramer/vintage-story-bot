@@ -5,11 +5,13 @@ import { cleanName, runField } from '../support/task.ts';
 
 export default defineGoal({
   name: 'clayform',
-  schema: z.object({
-    output: z.string().min(1).max(160).describe('Exact clay-forming output code, e.g. game:bowl-raw.'),
-    material: z.string().min(1).max(160).optional().describe('Clay code, e.g. game:clay-blue; defaults to any owned clay.'),
-    timeoutMs: z.number().int().min(1000).max(1200000).default(600000),
-  }).strict(),
+  schema: z
+    .object({
+      output: z.string().min(1).max(160).describe('Exact clay-forming output code, e.g. game:bowl-raw.'),
+      material: z.string().min(1).max(160).optional().describe('Clay code, e.g. game:clay-blue; defaults to any owned clay.'),
+      timeoutMs: z.number().int().min(1000).max(1200000).default(600000),
+    })
+    .strict(),
   destructive: true,
   description:
     'Clay-form one item: equip clay, sneak-place a clay form ahead (or reuse an unfinished own form), select the recipe, ' +

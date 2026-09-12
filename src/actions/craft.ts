@@ -2,11 +2,13 @@ import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 import { address, expectedState } from '../runtime/schemas.ts';
 
-export const schema = z.object({
-  to: address,
-  expectedState,
-  expectedOutput: z.string().min(1).max(160),
-}).strict();
+export const schema = z
+  .object({
+    to: address,
+    expectedState,
+    expectedOutput: z.string().min(1).max(160),
+  })
+  .strict();
 
 export default defineAction({
   name: 'craft',

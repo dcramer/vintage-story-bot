@@ -27,29 +27,41 @@ export async function retrieveBody(field, survival, { guid, radius = 12, arrival
   const body = marker.position;
   field.report('travelling_to_body', { marker: marker.guid, body });
   const trip = await travel(field, survival, { x: body.x, z: body.z, arrivalRadius });
-  const collected = [], skipped = [];
+  const collected = [],
+    skipped = [];
   const done = new Set();
   while (true) {
     await field.observe(true);
-    const drops = (await field.scan(radius, undefined, 'items'))
-      .filter(d => !done.has(d.key) && horizontal(d.point, body) <= radius);
+    const drops = (await field.scan(radius, undefined, 'items')).filter(d => !done.has(d.key) && horizontal(d.point, body) <= radius);
     const drop = drops[0];
     if (!drop) break;
     done.add(drop.key);
-    const skip = reason => { skipped.push({ key: drop.key, item: drop.code, quantity: drop.quantity, reason }); };
-    let inventory = await field.send({ action: 'inventory' });
-    if (!hasEmptySlot(inventory)) { skip('bag_full'); continue; }
+    const skip = reason => {
+      skipped.push({ key: drop.key, item: drop.code, quantity: drop.quantity, reason });
+    };
+    const inventory = await field.send({ action: 'inventory' });
+    if (!hasEmptySlot(inventory)) {
+      skip('bag_full');
+      continue;
+    }
     const before = itemCount(inventory, drop.code);
     field.report('collecting', { item: drop.code, quantity: drop.quantity, collected: collected.length, skipped: skipped.length });
     const destination = field.approach(drop);
-    if (!destination) { skip('no_safe_pickup_position'); continue; }
+    if (!destination) {
+      skip('no_safe_pickup_position');
+      continue;
+    }
     const gainedNow = async () => itemCount(await field.send({ action: 'inventory' }), drop.code) - before;
-    const result = await field.walk(destination, state => null);
+    const result = await field.walk(destination, _state => null);
     let gained = await gainedNow();
     // Native proximity pickup and the server's inventory update trail arrival.
-    for (let i = 0; i < 8 && gained <= 0; i++) { await field.wait(200); await field.observe(); gained = await gainedNow(); }
+    for (let i = 0; i < 8 && gained <= 0; i++) {
+      await field.wait(200);
+      await field.observe();
+      gained = await gainedNow();
+    }
     if (gained > 0) collected.push({ item: drop.code, quantity: gained });
-    else skip(['arrived', 'paused'].includes(result.state) ? 'pickup_failed' : result.reason ?? 'route_blocked');
+    else skip(['arrived', 'paused'].includes(result.state) ? 'pickup_failed' : (result.reason ?? 'route_blocked'));
   }
   field.report('clearing_marker', { marker: marker.guid });
   const removal = await field.send({ action: 'map_waypoint_remove', guid: marker.guid });
@@ -58,20 +70,32 @@ export async function retrieveBody(field, survival, { guid, radius = 12, arrival
     await field.wait(200);
     markerRemoved = !(await readMarkers(field)).some(w => w.guid === marker.guid);
   }
-  return { ok: true, goal: 'retrieve_body', marker: marker.guid, body, moved: +field.moved.toFixed(1),
-    legs: trip.legs, collected, skipped, markerRemoved, verification: 'inventory_delta,map_waypoints' };
+  return {
+    ok: true,
+    goal: 'retrieve_body',
+    marker: marker.guid,
+    body,
+    moved: +field.moved.toFixed(1),
+    legs: trip.legs,
+    collected,
+    skipped,
+    markerRemoved,
+    verification: 'inventory_delta,map_waypoints',
+  };
 }
 
 export default defineGoal({
   name: 'retrieve_body',
-  schema: z.object({
-    guid: z.string().min(1).max(80).optional().describe('Death marker guid from map_waypoints; default the latest gravestone.'),
-    radius: z.number().int().min(2).max(16).default(12).describe('How far around the marker to look for dropped items.'),
-    arrivalRadius: z.number().min(1).max(8).default(3),
-    manageFood: z.boolean().default(false),
-    sprint: z.boolean().default(false),
-    timeoutMs: z.number().int().min(1000).max(3600000).optional(),
-  }).strict(),
+  schema: z
+    .object({
+      guid: z.string().min(1).max(80).optional().describe('Death marker guid from map_waypoints; default the latest gravestone.'),
+      radius: z.number().int().min(2).max(16).default(12).describe('How far around the marker to look for dropped items.'),
+      arrivalRadius: z.number().min(1).max(8).default(3),
+      manageFood: z.boolean().default(false),
+      sprint: z.boolean().default(false),
+      timeoutMs: z.number().int().min(1000).max(3600000).optional(),
+    })
+    .strict(),
   destructive: true,
   description:
     'Travel to the latest "You died here" marker on the game map, pick up the dropped items around it that fit ' +

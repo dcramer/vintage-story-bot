@@ -2,9 +2,9 @@
 import { spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { botWindow, isBotProcess } from './bot-window.ts';
 import { currentDisplay, ensureDisplay, listProcesses, readJson, root, toolEnv } from './display.ts';
 import { gameArguments, loadLaunchConfig, updateCharacterName, updateWindowSettings } from './launch-config.ts';
-import { botWindow, isBotProcess } from './bot-window.ts';
 import { requestWindowClose } from './x11.ts';
 
 export const paths = {
@@ -46,7 +46,11 @@ function logLinesSince(file, since) {
 function phaseFrom(lines) {
   let phase = 'starting';
   for (const line of lines) {
-    for (const [marker, name] of phaseMarkers) if (line.includes(marker)) { phase = name; break; }
+    for (const [marker, name] of phaseMarkers)
+      if (line.includes(marker)) {
+        phase = name;
+        break;
+      }
   }
   return phase;
 }
@@ -54,7 +58,11 @@ function phaseFrom(lines) {
 // Pid-verified bot window on the display, or null while none is mapped.
 async function windowId(display) {
   if (!display) return null;
-  try { return (await botWindow(toolEnv(display))).id; } catch { return null; }
+  try {
+    return (await botWindow(toolEnv(display))).id;
+  } catch {
+    return null;
+  }
 }
 
 function currentPhase(state, processes) {
@@ -67,9 +75,12 @@ export async function gameStatus() {
   const processes = botProcesses();
   const display = (await currentDisplay())?.display ?? state?.display ?? null;
   return {
-    phase: currentPhase(state, processes), pids: processes.map(({ pid }) => pid), display,
+    phase: currentPhase(state, processes),
+    pids: processes.map(({ pid }) => pid),
+    display,
     window: processes.length ? await windowId(display) : null,
-    target: state?.target ?? null, startedAt: state?.startedAt ?? null,
+    target: state?.target ?? null,
+    startedAt: state?.startedAt ?? null,
   };
 }
 
@@ -97,8 +108,11 @@ export async function startGame({ world, create, playStyle, server, display, wid
   updateWindowSettings(paths.botData, screen);
   const env: Record<string, string | undefined> = {
     ...process.env,
-    DOTNET_ROOT: `${root}/.dotnet`, DOTNET_CLI_TELEMETRY_OPTOUT: '1', FONTCONFIG_FILE: `${paths.game}/fonts.conf`,
-    DISPLAY: screen.display, XDG_SESSION_TYPE: 'x11',
+    DOTNET_ROOT: `${root}/.dotnet`,
+    DOTNET_CLI_TELEMETRY_OPTOUT: '1',
+    FONTCONFIG_FILE: `${paths.game}/fonts.conf`,
+    DISPLAY: screen.display,
+    XDG_SESSION_TYPE: 'x11',
     // Xvfb has no sound device; keep OpenAL process-local and silent.
     ALSOFT_DRIVERS: process.env.ALSOFT_DRIVERS ?? 'null',
     VINTAGE_STORY_SERVER_PASSWORD: '',
@@ -112,11 +126,16 @@ export async function startGame({ world, create, playStyle, server, display, wid
   mkdirSync(path.dirname(paths.state), { recursive: true });
   const out = openSync(paths.stdout, 'a');
   const child = spawn(paths.dotnet, [`${paths.game}/Vintagestory.dll`, ...gameArguments(config, paths.botData)], {
-    cwd: paths.game, detached: true, stdio: ['ignore', out, out], env,
+    cwd: paths.game,
+    detached: true,
+    stdio: ['ignore', out, out],
+    env,
   });
   child.unref();
   const state = {
-    pid: child.pid, display: screen.display, startedAt: new Date().toISOString(),
+    pid: child.pid,
+    display: screen.display,
+    startedAt: new Date().toISOString(),
     target: config.server ? { server: config.server } : { world: config.world, created: Boolean(create) },
   };
   writeFileSync(paths.state, JSON.stringify(state, null, 2));
@@ -130,14 +149,20 @@ export async function startGame({ world, create, playStyle, server, display, wid
 // SIGTERM only when no window exists yet: the game's signal handler runs off-thread and crashes mid-save.
 export async function stopGame({ timeoutMs = 90_000, force = false } = {}) {
   const processes = botProcesses();
-  if (!processes.length) { rmSync(paths.state, { force: true }); return { stopped: false, reason: 'not running' }; }
+  if (!processes.length) {
+    rmSync(paths.state, { force: true });
+    return { stopped: false, reason: 'not running' };
+  }
   const since = Date.now();
   const display = (await currentDisplay())?.display ?? readState()?.display;
   const window = await windowId(display);
   let method = 'sigterm';
   if (window) {
-    try { await requestWindowClose(display, window); }
-    catch (error) { return { stopped: false, method: 'close_request', error: error.message, pids: processes.map(({ pid }) => pid) }; }
+    try {
+      await requestWindowClose(display, window);
+    } catch (error) {
+      return { stopped: false, method: 'close_request', error: error.message, pids: processes.map(({ pid }) => pid) };
+    }
     method = 'close_request';
   } else {
     for (const { pid } of processes) process.kill(pid, 'SIGTERM');
@@ -156,10 +181,12 @@ export async function stopGame({ timeoutMs = 90_000, force = false } = {}) {
 export function listWorlds() {
   const saves = `${paths.botData}/Saves`;
   if (!existsSync(saves)) return [];
-  return readdirSync(saves).filter(name => name.endsWith('.vcdbs')).map(name => {
-    const stat = statSync(`${saves}/${name}`);
-    return { name: name.slice(0, -'.vcdbs'.length), bytes: stat.size, modified: stat.mtime.toISOString() };
-  });
+  return readdirSync(saves)
+    .filter(name => name.endsWith('.vcdbs'))
+    .map(name => {
+      const stat = statSync(`${saves}/${name}`);
+      return { name: name.slice(0, -'.vcdbs'.length), bytes: stat.size, modified: stat.mtime.toISOString() };
+    });
 }
 
 export function importWorld(source, name = path.basename(source, '.vcdbs')) {

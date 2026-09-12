@@ -1,14 +1,20 @@
 import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 
-export const schema = z.object({
-  radius: z.number().int().min(1).max(64).optional(),
-  limit: z.number().int().min(1).max(32).optional(),
-  kind: z.enum(['all', 'blocks', 'items', 'entities']).optional(),
-  match: z.string().max(64).optional(),
-  matches: z.array(z.string().min(1).max(64)).min(1).max(4).optional(),
-  cursor: z.string().regex(/^[a-f0-9]{32}$/).optional(),
-}).strict().refine(value => !(value.match && value.matches), { message: 'Use match or matches, not both' });
+export const schema = z
+  .object({
+    radius: z.number().int().min(1).max(64).optional(),
+    limit: z.number().int().min(1).max(32).optional(),
+    kind: z.enum(['all', 'blocks', 'items', 'entities']).optional(),
+    match: z.string().max(64).optional(),
+    matches: z.array(z.string().min(1).max(64)).min(1).max(4).optional(),
+    cursor: z
+      .string()
+      .regex(/^[a-f0-9]{32}$/)
+      .optional(),
+  })
+  .strict()
+  .refine(value => !(value.match && value.matches), { message: 'Use match or matches, not both' });
 
 export default defineAction({
   name: 'scan',

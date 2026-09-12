@@ -5,7 +5,10 @@
 const pages = new Map();
 
 export const known = code => pages.get(code) ?? null;
-export const remember = (code, page) => { pages.set(code, page); return page; };
+export const remember = (code, page) => {
+  pages.set(code, page);
+  return page;
+};
 
 export async function learn(field, code) {
   if (!code) return null;

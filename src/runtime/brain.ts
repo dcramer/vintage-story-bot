@@ -5,7 +5,11 @@
 // Goals started by someone else are never touched: the brain waits for them.
 // The slice of the controller a brain loop uses; the class itself is plain JS.
 export interface ControllerLike {
-  active: any; last: any; brain: any; history: Map<string, any>; wants: string[];
+  active: any;
+  last: any;
+  brain: any;
+  history: Map<string, any>;
+  wants: string[];
   send(request: object): Promise<any>;
   request(request: object, options?: { by?: string }): Promise<any>;
   stop(reason?: string): Promise<void>;
@@ -22,10 +26,7 @@ export type Reading = {
   last: { id: string; kind: string; ok: boolean; reason?: string; result?: any } | null;
   now: number;
 };
-export type Decision =
-  | { start: string; args: Record<string, unknown>; why: string }
-  | { stop: string }
-  | { wait: string };
+export type Decision = { start: string; args: Record<string, unknown>; why: string } | { stop: string } | { wait: string };
 export interface Brain<Memory = unknown> {
   name: string;
   description: string;
@@ -36,16 +37,24 @@ export interface Brain<Memory = unknown> {
   wants?(reading: Reading, memory: Memory): string[];
 }
 
-const sleep = (ms: number, signal: AbortSignal) => new Promise<void>(resolve => {
-  const timer = setTimeout(done, ms);
-  function done() { clearTimeout(timer); signal.removeEventListener('abort', done); resolve(); }
-  signal.addEventListener('abort', done, { once: true });
-});
+const sleep = (ms: number, signal: AbortSignal) =>
+  new Promise<void>(resolve => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', done);
+      resolve();
+    }
+    signal.addEventListener('abort', done, { once: true });
+  });
 const say = (text: string) => console.error(`${new Date().toISOString().slice(11, 19)} brain ${text}`);
 
 export class BrainLoop<Memory> {
   memory: Memory;
-  ticks = 0; faults = 0; lastDecision: string | null = null; startedAt = Date.now();
+  ticks = 0;
+  faults = 0;
+  lastDecision: string | null = null;
+  startedAt = Date.now();
   goal: { id: string; kind: string } | null = null;
   private stopping = new AbortController();
   private running: Promise<void> | null = null;
@@ -53,12 +62,22 @@ export class BrainLoop<Memory> {
   brain: Brain<Memory>;
   private tickMs: number;
   constructor(controller: ControllerLike, brain: Brain<Memory>, tickMs = 2000) {
-    this.controller = controller; this.brain = brain; this.tickMs = tickMs;
+    this.controller = controller;
+    this.brain = brain;
+    this.tickMs = tickMs;
     this.memory = brain.fresh();
   }
   status() {
-    return { name: this.brain.name, description: this.brain.description, startedAt: this.startedAt, ticks: this.ticks, faults: this.faults,
-      lastDecision: this.lastDecision, goal: this.goal, ...(this.brain.summary?.(this.memory) ?? {}) };
+    return {
+      name: this.brain.name,
+      description: this.brain.description,
+      startedAt: this.startedAt,
+      ticks: this.ticks,
+      faults: this.faults,
+      lastDecision: this.lastDecision,
+      goal: this.goal,
+      ...(this.brain.summary?.(this.memory) ?? {}),
+    };
   }
   start() {
     if (this.running) return;
@@ -102,18 +121,30 @@ export class BrainLoop<Memory> {
     let last: Reading['last'] = null;
     if (this.goal && (!active || active.id !== this.goal.id)) {
       const view = controller.history.get(this.goal.id) ?? (controller.last?.id === this.goal.id ? controller.goalView() : null);
-      last = { id: this.goal.id, kind: this.goal.kind, ok: view?.state === 'arrived', reason: view?.reason ?? view?.result?.reason, result: view?.result };
+      last = {
+        id: this.goal.id,
+        kind: this.goal.kind,
+        ok: view?.state === 'arrived',
+        reason: view?.reason ?? view?.result?.reason,
+        result: view?.result,
+      };
       this.goal = null;
     }
     // Someone else's goal: the brain keeps its hands off until it is over.
-    if (active && active.by !== 'brain') { this.lastDecision = `waiting for ${active.kind} (${active.by})`; return; }
+    if (active && active.by !== 'brain') {
+      this.lastDecision = `waiting for ${active.kind} (${active.by})`;
+      return;
+    }
     const [inventory, environment] = await Promise.all([controller.send({ action: 'inventory' }), controller.send({ action: 'environment' })]);
     if (!inventory.ok) throw new Error(inventory.error ?? 'inventory refused');
     if (!environment.ok) throw new Error(environment.error ?? 'environment refused');
     const reading: Reading = { state, inventory, environment, active, last, now: Date.now() };
     if (this.brain.wants) controller.wants = this.brain.wants(reading, this.memory);
     const decision = this.brain.decide(reading, this.memory);
-    if ('wait' in decision) { this.note(`wait: ${decision.wait}`); return; }
+    if ('wait' in decision) {
+      this.note(`wait: ${decision.wait}`);
+      return;
+    }
     if ('stop' in decision) {
       this.note(`stop: ${decision.stop}`);
       if (active) await controller.stop(`brain: ${decision.stop}`);
@@ -136,7 +167,10 @@ const valid = /^[a-z][a-z0-9_-]{0,31}$/;
 // Install a brain by name (a file in src/brain), or none. Replacing a brain
 // stops the old loop first; the bot never runs two.
 export async function installBrain(controller: ControllerLike, name: string | null) {
-  if (controller.brain) { await (controller.brain as BrainLoop<unknown>).stop(); controller.brain = null; }
+  if (controller.brain) {
+    await (controller.brain as BrainLoop<unknown>).stop();
+    controller.brain = null;
+  }
   if (!name) return null;
   if (!valid.test(name)) throw new Error('Brain names are lowercase file names, e.g. default');
   const brain = (await import(`../brain/${name}.ts`)).default as Brain<unknown>;

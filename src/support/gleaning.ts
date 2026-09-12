@@ -10,21 +10,29 @@ export const gleanRadius = 6;
 const carried = inventory => ownedSlots(inventory).reduce((n, s) => n + s.quantity, 0);
 
 export class Gleaner {
-  field: any; wants: any;
-  pending = false; picked = 0;
-  constructor(field, wants = []) { this.field = field; this.wants = wants; }
+  field: any;
+  wants: any;
+  pending = false;
+  picked = 0;
+  constructor(field, wants = []) {
+    this.field = field;
+    this.wants = wants;
+  }
   wanted(object) {
-    return this.wants.some(w => object.code?.includes(w)) && (object.kind === 'item' || pickupBlock(object.code)) &&
-      !this.field.skipped.has(object.key);
+    return (
+      this.wants.some(w => object.code?.includes(w)) && (object.kind === 'item' || pickupBlock(object.code)) && !this.field.skipped.has(object.key)
+    );
   }
   // What is wanted and close, nearest first.
   near(position) {
     const sightings = this.field.env.sightings;
     if (!sightings || !this.wants.length) return [];
-    return sightings.visible(null).filter(o => this.wanted(o) && horizontal(o.point, position) <= gleanRadius)
+    return sightings
+      .visible(null)
+      .filter(o => this.wanted(o) && horizontal(o.point, position) <= gleanRadius)
       .sort((a, b) => horizontal(a.point, position) - horizontal(b.point, position));
   }
-  pauseWhen = state => !this.pending && this.near(state.position).length ? 'want_in_reach' : null;
+  pauseWhen = state => (!this.pending && this.near(state.position).length ? 'want_in_reach' : null);
   // Pick up what is near, a few things at most, then hand the walk back.
   async tend(limit = 3) {
     const field = this.field;
@@ -38,21 +46,29 @@ export class Gleaner {
         let ok = false;
         try {
           // Loaded here: the collector composes fieldwork, which composes this.
-          if (object.kind === 'item') ok = (await (await import('../goals/collect_item.ts')).collectItem(field, { target: object.key, expectedItem: object.code, radius: gleanRadius })).ok;
+          if (object.kind === 'item')
+            ok = (
+              await (
+                await import('../goals/collect_item.ts')
+              ).collectItem(field, { target: object.key, expectedItem: object.code, radius: gleanRadius })
+            ).ok;
           else ok = await this.pickup(object);
         } catch (error) {
           if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
         }
-        if (ok) this.picked++; else field.skip(object, 60000);
+        if (ok) this.picked++;
+        else field.skip(object, 60000);
         field.env.sightings?.forget?.(object.key);
       }
-    } finally { this.pending = false; }
+    } finally {
+      this.pending = false;
+    }
   }
   // Walk within reach of a loose block, aim at it and right-click; verified by more items carried.
   async pickup(object) {
     const field = this.field;
     const eye = () => ({ ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight });
-    if (horizontal(field.latest.position, object.point) > field.latest.pickingRange - .5) {
+    if (horizontal(field.latest.position, object.point) > field.latest.pickingRange - 0.5) {
       const destination = field.approach(object);
       if (!destination) return false;
       const walked = await field.leg(destination);

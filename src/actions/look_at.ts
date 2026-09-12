@@ -2,12 +2,18 @@ import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 import { blockTarget } from '../runtime/schemas.ts';
 
-const entityTarget = z.string().regex(/^entity:\d+$/)
+const entityTarget = z
+  .string()
+  .regex(/^entity:\d+$/)
   .describe('Sighted entity key from scan or nearbyEntities.');
 
-const point = z.object({
-  x: z.number().finite(), y: z.number().finite(), z: z.number().finite(),
-}).strict();
+const point = z
+  .object({
+    x: z.number().finite(),
+    y: z.number().finite(),
+    z: z.number().finite(),
+  })
+  .strict();
 
 export const schema = z.union([
   z.object({ target: blockTarget }).strict(),

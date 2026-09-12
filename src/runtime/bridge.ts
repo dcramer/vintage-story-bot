@@ -9,7 +9,10 @@ export function bridgePort(value = process.env.VINTAGE_STORY_BRIDGE_PORT ?? '421
 
 // A lost acknowledgement can still mean the game acted. Never auto-retry.
 export type BridgeOptions = { port?: number; timeoutMs?: number; requestMaxBytes?: number; maxBytes?: number; signal?: AbortSignal };
-export function requestBridge(request: object, { port = bridgePort(), timeoutMs = 4000, requestMaxBytes = 1024, maxBytes = 262144, signal }: BridgeOptions = {}): Promise<any> {
+export function requestBridge(
+  request: object,
+  { port = bridgePort(), timeoutMs = 4000, requestMaxBytes = 1024, maxBytes = 262144, signal }: BridgeOptions = {},
+): Promise<any> {
   return new Promise<any>((resolve, reject) => {
     if (signal?.aborted) return reject(new Error('Bridge request cancelled; inspect before retrying.'));
     const line = JSON.stringify(request) + '\n';
@@ -48,9 +51,13 @@ export function requestBridge(request: object, { port = bridgePort(), timeoutMs 
         finish(new Error(`Invalid bridge response: ${error.message}`));
       }
     });
-    socket.on('error', (error: NodeJS.ErrnoException) => finish(new Error(
-      `Cannot reach Vintage Story bridge (${error.code ?? error.message}). Launch the bot and load a world (pnpm game start); the mod listens once the world is ready. Run MCP on the same OS as the bot.`,
-    )));
+    socket.on('error', (error: NodeJS.ErrnoException) =>
+      finish(
+        new Error(
+          `Cannot reach Vintage Story bridge (${error.code ?? error.message}). Launch the bot and load a world (pnpm game start); the mod listens once the world is ready. Run MCP on the same OS as the bot.`,
+        ),
+      ),
+    );
     socket.on('close', () => finish(new Error('Bridge closed without a complete response. The world may be paused or unloaded.')));
   });
 }

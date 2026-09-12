@@ -2,13 +2,14 @@
 // the player sees, and an installed brain that plays on its own. With no
 // brain the bot does nothing until an adapter (CLI, script, agent) tells it to.
 //   pnpm bot [--brain default]      VINTAGE_STORY_BRAIN=default
-import net from 'node:net';
+
 import { once } from 'node:events';
+import net from 'node:net';
+import { installBrain } from './runtime/brain.ts';
 import { Controller } from './runtime/controller.ts';
+import { Reporter } from './runtime/reporter.ts';
 import { controllerPort } from './runtime/rpc.ts';
 import { Telemetry } from './runtime/telemetry.ts';
-import { Reporter } from './runtime/reporter.ts';
-import { installBrain } from './runtime/brain.ts';
 
 const argument = (name: string): string | undefined => {
   const index = process.argv.indexOf(name);
@@ -18,29 +19,41 @@ const brainName = argument('--brain') ?? process.env.VINTAGE_STORY_BRAIN ?? null
 
 const sinks: any[] = [new Telemetry(), Reporter.fromEnv()].filter(Boolean);
 const telemetry = {
-  publish: (...args: unknown[]) => sinks.forEach(sink => sink.publish(...args)),
-  close: () => sinks.forEach(sink => sink.close()),
+  publish: (...args: unknown[]) => {
+    for (const sink of sinks) sink.publish(...args);
+  },
+  close: () => {
+    for (const sink of sinks) sink.close();
+  },
 };
 const controller = new Controller(undefined, telemetry as any);
 const sockets = new Set<net.Socket>();
 const maxRequestBytes = 16384;
 
 const server = net.createServer(socket => {
-  sockets.add(socket); socket.on('close', () => sockets.delete(socket)); socket.on('error', () => {});
+  sockets.add(socket);
+  socket.on('close', () => sockets.delete(socket));
+  socket.on('error', () => {});
   socket.setTimeout(15000, () => socket.destroy());
-  let line = '', handled = false;
+  let line = '',
+    handled = false;
   socket.setEncoding('utf8');
   socket.on('data', (chunk: string) => {
     if (handled) return;
     line += chunk;
     if (Buffer.byteLength(line) > maxRequestBytes) {
-      handled = true; socket.end(JSON.stringify({ ok: false, error: `Controller request exceeds ${maxRequestBytes - 1} bytes.` }) + '\n'); return;
+      handled = true;
+      socket.end(JSON.stringify({ ok: false, error: `Controller request exceeds ${maxRequestBytes - 1} bytes.` }) + '\n');
+      return;
     }
     if (!line.includes('\n')) return;
     handled = true;
-    Promise.resolve().then(() => controller.request(JSON.parse(line.trim())))
+    Promise.resolve()
+      .then(() => controller.request(JSON.parse(line.trim())))
       .catch(error => ({ ok: false, error: error.message }))
-      .then(result => { if (!socket.destroyed) socket.end(JSON.stringify(result) + '\n'); });
+      .then(result => {
+        if (!socket.destroyed) socket.end(JSON.stringify(result) + '\n');
+      });
   });
 });
 

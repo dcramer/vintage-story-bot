@@ -33,11 +33,19 @@ export function toolEnv(display?) {
 }
 
 export function readJson(file) {
-  try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; }
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 export function processArgv(pid) {
-  try { return readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter(Boolean); } catch { return null; }
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter(Boolean);
+  } catch {
+    return null;
+  }
 }
 
 export function listProcesses() {
@@ -54,7 +62,10 @@ export function probeDisplay(display, timeoutMs = 1000) {
   const path = socketPath(display);
   return new Promise(resolve => {
     const socket = net.connect({ path });
-    const done = up => { socket.destroy(); resolve(up); };
+    const done = up => {
+      socket.destroy();
+      resolve(up);
+    };
     socket.setTimeout(timeoutMs, () => done(false));
     socket.once('connect', () => done(true));
     socket.once('error', () => done(false));
@@ -83,7 +94,11 @@ export async function currentDisplay() {
 function sandboxReasons() {
   const reasons = [];
   if (existsSync('/tmp/.X11-unix')) {
-    try { accessSync('/tmp/.X11-unix', constants.W_OK); } catch { reasons.push('/tmp/.X11-unix is read-only'); }
+    try {
+      accessSync('/tmp/.X11-unix', constants.W_OK);
+    } catch {
+      reasons.push('/tmp/.X11-unix is read-only');
+    }
   }
   if (!existsSync('/usr/bin/xkbcomp')) reasons.push('/usr/bin/xkbcomp is missing');
   return reasons;
@@ -114,20 +129,47 @@ export async function ensureDisplay({ display = defaultDisplay, width = defaultS
   const running = await currentDisplay();
   if (running?.display === display) return { ...running, started: false };
   if (await probeDisplay(display)) {
-    return { ...writeState({ display, width, height, pid: null, external: true, sandboxed: false, startedAt: new Date().toISOString() }), started: false };
+    return {
+      ...writeState({ display, width, height, pid: null, external: true, sandboxed: false, startedAt: new Date().toISOString() }),
+      started: false,
+    };
   }
   const xvfb = tool('Xvfb');
   if (!xvfb) throw new Error('Xvfb is missing; run scripts/setup-linux.sh.');
   const reasons = sandboxReasons();
   const xkbdir = existsSync('/usr/share/X11/xkb') ? [] : ['-xkbdir', `${x11Root}/usr/share/X11/xkb`];
   const xvfbArgs = [display, '-screen', '0', `${width}x${height}x24`, '+extension', 'GLX', '+render', '-noreset', '-nolisten', 'tcp', ...xkbdir];
-  let command = xvfb, args = xvfbArgs;
+  let command = xvfb,
+    args = xvfbArgs;
   if (reasons.length) {
     const bwrap = tool('bwrap');
     if (!bwrap) throw new Error(`bubblewrap is required (${reasons.join('; ')}); install bwrap.`);
     command = bwrap;
-    args = ['--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc', '--bind', '/tmp', '/tmp', '--tmpfs', '/tmp/.X11-unix',
-      '--tmpfs', '/opt', '--ro-bind', '/usr/bin', '/opt/hostbin', '--ro-bind', buildHostBinOverlay(xvfb), '/usr/bin', '--', xvfb, ...xvfbArgs];
+    args = [
+      '--ro-bind',
+      '/',
+      '/',
+      '--dev',
+      '/dev',
+      '--proc',
+      '/proc',
+      '--bind',
+      '/tmp',
+      '/tmp',
+      '--tmpfs',
+      '/tmp/.X11-unix',
+      '--tmpfs',
+      '/opt',
+      '--ro-bind',
+      '/usr/bin',
+      '/opt/hostbin',
+      '--ro-bind',
+      buildHostBinOverlay(xvfb),
+      '/usr/bin',
+      '--',
+      xvfb,
+      ...xvfbArgs,
+    ];
   }
   mkdirSync(x11Root, { recursive: true });
   const log = openSync(`${x11Root}/Xvfb.log`, 'a');
@@ -140,7 +182,15 @@ export async function ensureDisplay({ display = defaultDisplay, width = defaultS
     }
     await sleep(100);
   }
-  const state = writeState({ display, width, height, pid: serverProcess(display)?.pid ?? child.pid, external: false, sandboxed: reasons.length > 0, startedAt: new Date().toISOString() });
+  const state = writeState({
+    display,
+    width,
+    height,
+    pid: serverProcess(display)?.pid ?? child.pid,
+    external: false,
+    sandboxed: reasons.length > 0,
+    startedAt: new Date().toISOString(),
+  });
   return { ...state, started: true };
 }
 

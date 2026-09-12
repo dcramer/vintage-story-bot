@@ -27,10 +27,30 @@ export const COOLDOWN_MS = 10 * 60 * 1000;
 // without a reading the brain cannot call itself home.
 export const NIGHT_LIGHT = 0.25;
 
-export type Job = 'hide' | 'go_home' | 'wait' | 'eat' | 'dirt' | 'shelter' | 'sticks' | 'stone' | 'tools' | 'grass' | 'torches' | 'logs' | 'explore' | 'dig_out';
+export type Job =
+  | 'hide'
+  | 'go_home'
+  | 'wait'
+  | 'eat'
+  | 'dirt'
+  | 'shelter'
+  | 'sticks'
+  | 'stone'
+  | 'tools'
+  | 'grass'
+  | 'torches'
+  | 'logs'
+  | 'explore'
+  | 'dig_out';
 type Cell = { x: number; y: number; z: number };
-type Shelter = { origin: Cell; center: { x: number; z: number }; chunks: (Cell & { item: string })[][]; index: number;
-  phase: 'walls' | 'enter' | 'seal' | 'torch' | 'done'; torch: string | null };
+type Shelter = {
+  origin: Cell;
+  center: { x: number; z: number };
+  chunks: (Cell & { item: string })[][];
+  index: number;
+  phase: 'walls' | 'enter' | 'seal' | 'torch' | 'done';
+  torch: string | null;
+};
 export type Memory = {
   home: Cell | null;
   cool: Map<Job, number>;
@@ -52,12 +72,18 @@ export function kit(inventory: any) {
   const part = (piece: string) => slots.filter(s => s.code?.includes(piece)).reduce((n, s) => n + s.quantity, 0);
   const tool = (name: string) => slots.some(s => s.tool === name && (s.durability ?? 1) > 0);
   return {
-    sticks: exact('game:stick'), knife: tool('Knife'), axe: tool('Axe'),
-    knifeBlade: exact(KNIFE_BLADE), axeBlade: exact(AXE_BLADE),
-    torches: part('torch-basic'), torch: slots.find(s => s.code?.includes('torch-basic'))?.code ?? null,
-    dirt: part('soil-'), dirtCode: slots.find(s => s.code?.includes('soil-'))?.code ?? null,
+    sticks: exact('game:stick'),
+    knife: tool('Knife'),
+    axe: tool('Axe'),
+    knifeBlade: exact(KNIFE_BLADE),
+    axeBlade: exact(AXE_BLADE),
+    torches: part('torch-basic'),
+    torch: slots.find(s => s.code?.includes('torch-basic'))?.code ?? null,
+    dirt: part('soil-'),
+    dirtCode: slots.find(s => s.code?.includes('soil-'))?.code ?? null,
     stone: slots.some(s => s.code && kinds.knapping.materials(s)),
-    grass: part('drygrass') + part('cattailtops'), logs: part('log-'),
+    grass: part('drygrass') + part('cattailtops'),
+    logs: part('log-'),
     reserve: foodReserve(inventory) as number,
   };
 }
@@ -67,11 +93,13 @@ export function kit(inventory: any) {
 // is 1 wide and 2 high in the middle of the +z wall.
 export function shelterCells(origin: Cell, item: string) {
   const cells: (Cell & { item: string })[] = [];
-  for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 3; dx++) for (let dz = 0; dz < 3; dz++) {
-    if (dx !== 0 && dx !== 2 && dz !== 0 && dz !== 2) continue;
-    if (dz === 2 && dx === 1) continue;
-    cells.push({ x: origin.x + dx, y: origin.y + dy, z: origin.z + dz, item });
-  }
+  for (let dy = 0; dy < 2; dy++)
+    for (let dx = 0; dx < 3; dx++)
+      for (let dz = 0; dz < 3; dz++) {
+        if (dx !== 0 && dx !== 2 && dz !== 0 && dz !== 2) continue;
+        if (dz === 2 && dx === 1) continue;
+        cells.push({ x: origin.x + dx, y: origin.y + dy, z: origin.z + dz, item });
+      }
   for (let dx = 0; dx < 3; dx++) for (let dz = 0; dz < 3; dz++) cells.push({ x: origin.x + dx, y: origin.y + 2, z: origin.z + dz, item });
   return cells;
 }
@@ -79,8 +107,20 @@ export const doorCells = (origin: Cell, item: string) => [0, 1].map(dy => ({ x: 
 const chunked = <T>(cells: T[], size = 8) => Array.from({ length: Math.ceil(cells.length / size) }, (_, i) => cells.slice(i * size, i * size + size));
 
 export type Situation = {
-  threat: boolean; storm: boolean; hunger: number | null; night: boolean; home: boolean; atHome: boolean;
-  sticks: number; knife: boolean; axe: boolean; stone: boolean; torches: number; grass: number; dirt: number; logs: number;
+  threat: boolean;
+  storm: boolean;
+  hunger: number | null;
+  night: boolean;
+  home: boolean;
+  atHome: boolean;
+  sticks: number;
+  knife: boolean;
+  axe: boolean;
+  stone: boolean;
+  torches: number;
+  grass: number;
+  dirt: number;
+  logs: number;
 };
 // The whole character in one choice: danger, then hunger, then night, then
 // the kit in day-1 order, then looking around.
@@ -100,26 +140,44 @@ export function pickJob(s: Situation): Job {
 function shelterStep(memory: Memory, position: Cell, dirt: string, torch: string | null): { start: string; args: Record<string, unknown> } {
   if (!memory.shelter) {
     const origin = { x: Math.floor(position.x) + 2, y: Math.floor(position.y), z: Math.floor(position.z) - 1 };
-    memory.shelter = { origin, center: { x: origin.x + 1.5, z: origin.z + 1.5 }, chunks: chunked(shelterCells(origin, dirt)), index: 0, phase: 'walls', torch };
+    memory.shelter = {
+      origin,
+      center: { x: origin.x + 1.5, z: origin.z + 1.5 },
+      chunks: chunked(shelterCells(origin, dirt)),
+      index: 0,
+      phase: 'walls',
+      torch,
+    };
   }
   const shelter = memory.shelter;
   shelter.torch ??= torch;
   if (shelter.phase === 'walls') return { start: 'build', args: { cells: shelter.chunks[shelter.index], timeoutMs: 900000 } };
-  if (shelter.phase === 'enter') return { start: 'travel', args: { x: shelter.center.x, z: shelter.center.z, arrivalRadius: 0.5, timeoutMs: 600000 } };
+  if (shelter.phase === 'enter')
+    return { start: 'travel', args: { x: shelter.center.x, z: shelter.center.z, arrivalRadius: 0.5, timeoutMs: 600000 } };
   if (shelter.phase === 'seal') return { start: 'build', args: { cells: doorCells(shelter.origin, dirt), timeoutMs: 300000 } };
-  return { start: 'build', args: { cells: [{ x: shelter.origin.x + 1, y: shelter.origin.y, z: shelter.origin.z + 1, item: shelter.torch }], timeoutMs: 300000 } };
+  return {
+    start: 'build',
+    args: { cells: [{ x: shelter.origin.x + 1, y: shelter.origin.y, z: shelter.origin.z + 1, item: shelter.torch }], timeoutMs: 300000 },
+  };
 }
 // Move the shelter one phase forward after its goal finished well; a failed
 // phase abandons this attempt and cools the job.
 function shelterAdvance(memory: Memory, ok: boolean, now: number) {
   const shelter = memory.shelter;
   if (!shelter) return;
-  if (!ok) { memory.cool.set('shelter', now + COOLDOWN_MS); memory.shelter = null; return; }
+  if (!ok) {
+    memory.cool.set('shelter', now + COOLDOWN_MS);
+    memory.shelter = null;
+    return;
+  }
   if (shelter.phase === 'walls' && ++shelter.index >= shelter.chunks.length) shelter.phase = 'enter';
   else if (shelter.phase === 'enter') shelter.phase = 'seal';
   else if (shelter.phase === 'seal') shelter.phase = shelter.torch ? 'torch' : 'done';
   else if (shelter.phase === 'torch') shelter.phase = 'done';
-  if (shelter.phase === 'done') { memory.home = { x: shelter.center.x, y: shelter.origin.y, z: shelter.center.z }; memory.shelter = null; }
+  if (shelter.phase === 'done') {
+    memory.home = { x: shelter.center.x, y: shelter.origin.y, z: shelter.center.z };
+    memory.shelter = null;
+  }
 }
 
 export function decide(reading: Reading, memory: Memory): Decision {
@@ -138,7 +196,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (memory.resting) return { wait: 'resting after too many scares' };
   const threat = nearestThreat(state);
   let satiety: number | null = null;
-  try { satiety = hunger(state); } catch { satiety = null; }
+  try {
+    satiety = hunger(state);
+  } catch {
+    satiety = null;
+  }
   const storm = temporalStormUnsafe(state);
   // A goal of its own is running: only danger, storms and hunger cut it short.
   if (active) {
@@ -147,45 +209,86 @@ export function decide(reading: Reading, memory: Memory): Decision {
     if (satiety !== null && satiety < HUNGRY && memory.job !== 'eat') return { stop: 'hungry' };
     return { wait: `letting ${active.kind} finish` };
   }
-  if (memory.pit) { memory.job = 'dig_out'; return { start: 'dig_out', args: { x: memory.pit.x, z: memory.pit.z }, why: 'in a hole' }; }
+  if (memory.pit) {
+    memory.job = 'dig_out';
+    return { start: 'dig_out', args: { x: memory.pit.x, z: memory.pit.z }, why: 'in a hole' };
+  }
   const k = kit(inventory);
   const home = memory.home;
   const job = pickJob({
-    threat: !!threat, storm, hunger: satiety, night: isNight(environment),
-    home: !!home, atHome: !!home && horizontal(state.position, home) < 8,
-    sticks: k.sticks, knife: k.knife, axe: k.axe, stone: k.stone, torches: k.torches, grass: k.grass, dirt: k.dirt, logs: k.logs,
+    threat: !!threat,
+    storm,
+    hunger: satiety,
+    night: isNight(environment),
+    home: !!home,
+    atHome: !!home && horizontal(state.position, home) < 8,
+    sticks: k.sticks,
+    knife: k.knife,
+    axe: k.axe,
+    stone: k.stone,
+    torches: k.torches,
+    grass: k.grass,
+    dirt: k.dirt,
+    logs: k.logs,
   });
   if ((memory.cool.get(job) ?? 0) > now) return { wait: `${job} cooling down` };
-  const start = (goal: string, args: Record<string, unknown>, why: string): Decision => { memory.job = job; return { start: goal, args, why }; };
+  const start = (goal: string, args: Record<string, unknown>, why: string): Decision => {
+    memory.job = job;
+    return { start: goal, args, why };
+  };
   switch (job) {
-    case 'wait': return { wait: storm ? 'storm' : 'night, nowhere to go' };
+    case 'wait':
+      return { wait: storm ? 'storm' : 'night, nowhere to go' };
     case 'hide': {
       const away = fleeTarget(state.position, threat);
-      return start('travel', { x: away.x, z: away.z, arrivalRadius: 3, timeoutMs: 600000 }, `${threat.code} at ${Math.round(horizontal(state.position, threat.point))} blocks`);
+      return start(
+        'travel',
+        { x: away.x, z: away.z, arrivalRadius: 3, timeoutMs: 600000 },
+        `${threat.code} at ${Math.round(horizontal(state.position, threat.point))} blocks`,
+      );
     }
-    case 'go_home': return start('travel', { x: home!.x, z: home!.z, arrivalRadius: 3, timeoutMs: 600000 }, storm ? 'storm coming' : 'night falling');
-    case 'eat': return k.reserve > 0
-      ? start('eat', {}, `satiety ${Math.round((satiety ?? 0) * 100)}%`)
-      : start('forage', { timeoutMs: 1800000 }, `satiety ${Math.round((satiety ?? 0) * 100)}%, nothing carried`);
-    case 'dirt': return start('harvest', { match: 'soil-', item: 'soil-', count: Math.max(1, SHELTER_DIRT - k.dirt), timeoutMs: 900000 }, `${k.dirt}/${SHELTER_DIRT} dirt for a shelter`);
+    case 'go_home':
+      return start('travel', { x: home!.x, z: home!.z, arrivalRadius: 3, timeoutMs: 600000 }, storm ? 'storm coming' : 'night falling');
+    case 'eat':
+      return k.reserve > 0
+        ? start('eat', {}, `satiety ${Math.round((satiety ?? 0) * 100)}%`)
+        : start('forage', { timeoutMs: 1800000 }, `satiety ${Math.round((satiety ?? 0) * 100)}%, nothing carried`);
+    case 'dirt':
+      return start(
+        'harvest',
+        { match: 'soil-', item: 'soil-', count: Math.max(1, SHELTER_DIRT - k.dirt), timeoutMs: 900000 },
+        `${k.dirt}/${SHELTER_DIRT} dirt for a shelter`,
+      );
     case 'shelter': {
       const step = shelterStep(memory, state.position, k.dirtCode ?? 'game:soil-medium-none', k.torch);
       return start(step.start, step.args, `shelter ${memory.shelter?.phase}`);
     }
-    case 'sticks': return start('gather_sticks', { count: STICK_MIN - k.sticks, timeoutMs: 600000 }, `${k.sticks}/${STICK_MIN} sticks`);
-    case 'stone': return start('harvest', { match: 'loosestone', item: 'stone-', count: 2, timeoutMs: 600000 }, 'no stone to knap');
+    case 'sticks':
+      return start('gather_sticks', { count: STICK_MIN - k.sticks, timeoutMs: 600000 }, `${k.sticks}/${STICK_MIN} sticks`);
+    case 'stone':
+      return start('harvest', { match: 'loosestone', item: 'stone-', count: 2, timeoutMs: 600000 }, 'no stone to knap');
     case 'tools':
-      if (!k.knife) return k.knifeBlade < 1
-        ? start('knap', { output: KNIFE_BLADE, timeoutMs: 600000 }, 'no knife')
-        : start('craft_item', { output: KNIFE, count: 1, timeoutMs: 300000 }, 'haft the knife blade');
+      if (!k.knife)
+        return k.knifeBlade < 1
+          ? start('knap', { output: KNIFE_BLADE, timeoutMs: 600000 }, 'no knife')
+          : start('craft_item', { output: KNIFE, count: 1, timeoutMs: 300000 }, 'haft the knife blade');
       return k.axeBlade < 1
         ? start('knap', { output: AXE_BLADE, timeoutMs: 600000 }, 'no axe')
         : start('craft_item', { output: AXE, count: 1, timeoutMs: 300000 }, 'haft the axe head');
-    case 'grass': return start('harvest', { match: 'tallgrass', item: 'drygrass', count: 4, timeoutMs: 600000 }, 'grass for torches');
-    case 'torches': return start('craft_item', { output: TORCH, count: Math.max(1, TORCH_MIN - k.torches), timeoutMs: 300000 }, `${k.torches}/${TORCH_MIN} torches`);
-    case 'logs': return start('fell_tree', { count: Math.max(1, LOG_MIN - k.logs), timeoutMs: 1200000 }, `${k.logs}/${LOG_MIN} logs`);
-    case 'explore': return start('explore', { legs: 2, timeoutMs: 600000 }, 'kit done, looking around');
-    default: return { wait: 'nothing to do' };
+    case 'grass':
+      return start('harvest', { match: 'tallgrass', item: 'drygrass', count: 4, timeoutMs: 600000 }, 'grass for torches');
+    case 'torches':
+      return start(
+        'craft_item',
+        { output: TORCH, count: Math.max(1, TORCH_MIN - k.torches), timeoutMs: 300000 },
+        `${k.torches}/${TORCH_MIN} torches`,
+      );
+    case 'logs':
+      return start('fell_tree', { count: Math.max(1, LOG_MIN - k.logs), timeoutMs: 1200000 }, `${k.logs}/${LOG_MIN} logs`);
+    case 'explore':
+      return start('explore', { legs: 2, timeoutMs: 600000 }, 'kit done, looking around');
+    default:
+      return { wait: 'nothing to do' };
   }
 }
 
@@ -210,7 +313,12 @@ const brain: Brain<Memory> = {
   fresh,
   decide,
   wants,
-  summary: memory => ({ home: memory.home, job: memory.job, shelter: memory.shelter?.phase ?? null, done: memory.done,
-    cooling: [...memory.cool].filter(([, until]) => until > Date.now()).map(([job]) => job) }),
+  summary: memory => ({
+    home: memory.home,
+    job: memory.job,
+    shelter: memory.shelter?.phase ?? null,
+    done: memory.done,
+    cooling: [...memory.cool].filter(([, until]) => until > Date.now()).map(([job]) => job),
+  }),
 };
 export default brain;

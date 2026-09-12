@@ -2,11 +2,13 @@ import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 import { address, expectedState } from '../runtime/schemas.ts';
 
-export const schema = z.object({
-  from: address,
-  quantity: z.number().int().min(1).max(64),
-  expectedState,
-}).strict();
+export const schema = z
+  .object({
+    from: address,
+    quantity: z.number().int().min(1).max(64),
+    expectedState,
+  })
+  .strict();
 
 export default defineAction({
   name: 'drop',

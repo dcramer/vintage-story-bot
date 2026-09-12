@@ -1,16 +1,18 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 
-export const schema = z.object({
-  x: z.number().finite(),
-  y: z.number().finite(),
-  z: z.number().finite(),
-  dimension: z.literal(0),
-  horizontalOnly: z.boolean().optional(),
-  sprint: z.boolean().optional(),
-  arrivalRadius: z.number().min(.3).max(8).optional(),
-  timeoutMs: z.number().int().min(1000).max(120000).optional(),
-}).strict();
+export const schema = z
+  .object({
+    x: z.number().finite(),
+    y: z.number().finite(),
+    z: z.number().finite(),
+    dimension: z.literal(0),
+    horizontalOnly: z.boolean().optional(),
+    sprint: z.boolean().optional(),
+    arrivalRadius: z.number().min(0.3).max(8).optional(),
+    timeoutMs: z.number().int().min(1000).max(120000).optional(),
+  })
+  .strict();
 
 export default defineGoal({
   name: 'move_to',

@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { requestBridge } from './bridge.ts';
-import { TerrainMemory } from './navigation/terrain.ts';
-import { SurfaceMemory } from './navigation/surface.ts';
 import { SightingsMemory } from './navigation/sightings.ts';
+import { SurfaceMemory } from './navigation/surface.ts';
+import { TerrainMemory } from './navigation/terrain.ts';
 
 // Blocks a player notices without looking for them; goals add to this, never replace it.
 export const salient = ['ore', 'berry', 'stick', 'flint', 'loose', 'mushroom', 'cattail', 'chest', 'basket', 'vessel', 'fire', 'torch'];
@@ -30,7 +30,9 @@ export class GameClient {
       return result;
     };
   }
-  attend(list = []) { this.watch = [...new Set([...salient, ...list])].slice(0, 16); }
+  attend(list = []) {
+    this.watch = [...new Set([...salient, ...list])].slice(0, 16);
+  }
   // A request whose refusal is an error; a cancelled signal rejects before it is sent.
   async io(request: object, signal?: AbortSignal): Promise<any> {
     const result = await this.send(request, { signal });
@@ -39,7 +41,9 @@ export class GameClient {
   }
   // One request carries the surroundings geometry deltas plus snapshots of what
   // the eye sees right now (surface, sightings) and the current attention.
-  cursors() { return { session: this.map.session, after: this.map.cursor, watch: this.watch }; }
+  cursors() {
+    return { session: this.map.session, after: this.map.cursor, watch: this.watch };
+  }
   remember(batch) {
     // Memory is per world: the save identifier selects which one is loaded.
     this.knowledge?.enter(batch.state?.world?.identifier);
@@ -67,12 +71,16 @@ export class GameClient {
   // acquired ownership, and never through a cancelled signal.
   async control(initial, onCleanupError, { allowStarvingRecovery = false } = {}, signal?: AbortSignal) {
     const owner = randomUUID().replaceAll('-', '');
-    let sequence = 0, released = false;
+    let sequence = 0,
+      released = false;
     const release = async () => {
       if (released) return;
       released = true;
-      try { await this.io({ action: 'control_end', owner }); }
-      catch (error) { onCleanupError?.(error); }
+      try {
+        await this.io({ action: 'control_end', owner });
+      } catch (error) {
+        onCleanupError?.(error);
+      }
     };
     try {
       await this.io({ action: 'control_begin', owner, session: initial.life.session, epoch: initial.control.epoch, allowStarvingRecovery }, signal);
@@ -81,11 +89,14 @@ export class GameClient {
       throw error;
     }
     return {
-      owner, release,
+      owner,
+      release,
       frame: frame => this.io({ ...frame, action: 'control_frame', owner, sequence: ++sequence, durationMs: frame.durationMs ?? 500 }, signal),
       step: async frame => {
-        const batch = await this.io({ ...frame, action: 'control_step', owner, sequence: ++sequence, durationMs: frame.durationMs ?? 500,
-          ...this.cursors() }, signal);
+        const batch = await this.io(
+          { ...frame, action: 'control_step', owner, sequence: ++sequence, durationMs: frame.durationMs ?? 500, ...this.cursors() },
+          signal,
+        );
         this.remember(batch);
         return batch;
       },

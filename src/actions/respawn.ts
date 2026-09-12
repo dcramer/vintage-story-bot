@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 
-export const schema = z.object({
-  deathId: z.string().min(1).max(80),
-}).strict();
+export const schema = z
+  .object({
+    deathId: z.string().min(1).max(80),
+  })
+  .strict();
 
 export default defineAction({
   name: 'respawn',

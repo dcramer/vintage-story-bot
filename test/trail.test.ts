@@ -1,5 +1,5 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 import { contiguousTrails, markRespawnBreaks } from '../report/trail.mjs';
 
 test('map trails break at respawn without splitting ordinary mission changes', () => {
@@ -10,8 +10,14 @@ test('map trails break at respawn without splitting ordinary mission changes', (
     { at: 500, x: 64, z: 70, dimension: 0 },
   ];
   const log = [{ at: 300, topic: 'action', data: { action: 'respawn', ok: true } }];
-  assert.deepEqual(contiguousTrails(points, log).map(trail => trail.length), [2, 2]);
+  assert.deepEqual(
+    contiguousTrails(points, log).map(trail => trail.length),
+    [2, 2],
+  );
   assert.equal(markRespawnBreaks(points, log), true);
   assert.equal((points[2] as any).discontinuity, 'respawn');
-  assert.deepEqual(contiguousTrails(points).map(trail => trail.length), [2, 2]);
+  assert.deepEqual(
+    contiguousTrails(points).map(trail => trail.length),
+    [2, 2],
+  );
 });

@@ -6,7 +6,10 @@
 export const rememberMs = { entity: 20000, item: 60000, block: 7 * 24 * 60 * 60 * 1000 };
 
 export class SightingsMemory {
-  records = new Map(); now = 0; wall = 0; capacity = 32768;
+  records = new Map();
+  now = 0;
+  wall = 0;
+  capacity = 32768;
   apply(snapshot, wall = Date.now()) {
     if (!snapshot) return 0;
     this.now = snapshot.clock ?? this.now;
@@ -25,7 +28,17 @@ export class SightingsMemory {
     for (const entity of entities) {
       const at = entity.seenAt ?? this.now;
       this.now = Math.max(this.now, at);
-      this.records.set(entity.key, { key: entity.key, kind: 'entity', code: entity.code, point: entity.point, how: entity.how ?? 'seen', at, seenAt: wall, extra: null, visible: true });
+      this.records.set(entity.key, {
+        key: entity.key,
+        kind: 'entity',
+        code: entity.code,
+        point: entity.point,
+        how: entity.how ?? 'seen',
+        at,
+        seenAt: wall,
+        extra: null,
+        visible: true,
+      });
     }
     this.prune();
   }
@@ -44,13 +57,25 @@ export class SightingsMemory {
   // What threat logic sees: entities visible now or seen within the memory window, at their last known point.
   entities(position = null) {
     const wall = this.wall || Date.now();
-    return this.remembered('entity').map(record => ({ key: record.key, code: record.code, point: record.point, how: record.how,
-      seenAt: record.at, visible: record.visible, ageMs: Math.max(0, wall - (record.seenAt ?? wall)),
-      distance: position ? +Math.hypot(record.point.x - position.x, record.point.y - position.y, record.point.z - position.z).toFixed(2) : undefined }))
+    return this.remembered('entity')
+      .map(record => ({
+        key: record.key,
+        code: record.code,
+        point: record.point,
+        how: record.how,
+        seenAt: record.at,
+        visible: record.visible,
+        ageMs: Math.max(0, wall - (record.seenAt ?? wall)),
+        distance: position
+          ? +Math.hypot(record.point.x - position.x, record.point.y - position.y, record.point.z - position.z).toFixed(2)
+          : undefined,
+      }))
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
   }
   // Persistence: remembered blocks only.
-  export() { return this.remembered('block').map(r => [r.key, r.code, r.point.x, r.point.y, r.point.z, r.extra, r.seenAt]); }
+  export() {
+    return this.remembered('block').map(r => [r.key, r.code, r.point.x, r.point.y, r.point.z, r.extra, r.seenAt]);
+  }
   restore(rows) {
     this.records.clear();
     for (const [key, code, x, y, z, extra, seenAt] of rows)

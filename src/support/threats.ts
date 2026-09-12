@@ -28,8 +28,7 @@ export const threatClearDistance = code => {
   return threatClearRadius;
 };
 
-export const hostileEntity = entity => typeof entity?.code === 'string' &&
-  hostileMarkers.some(marker => entity.code.toLowerCase().includes(marker));
+export const hostileEntity = entity => typeof entity?.code === 'string' && hostileMarkers.some(marker => entity.code.toLowerCase().includes(marker));
 
 export const threatVerticalRange = code => {
   const lower = code.toLowerCase();
@@ -38,17 +37,25 @@ export const threatVerticalRange = code => {
   return 8;
 };
 
-export const nearbyThreats = (state, radius?) => (state.nearbyEntities ?? [])
-  .filter(entity => hostileEntity(entity) &&
-    Math.abs(state.position.y - entity.point.y) <= threatVerticalRange(entity.code) &&
-    horizontal(state.position, entity.point) <= (radius ?? threatStartDistance(entity.code)))
-  .sort((a, b) => horizontal(state.position, a.point) - horizontal(state.position, b.point));
+export const nearbyThreats = (state, radius?) =>
+  (state.nearbyEntities ?? [])
+    .filter(
+      entity =>
+        hostileEntity(entity) &&
+        Math.abs(state.position.y - entity.point.y) <= threatVerticalRange(entity.code) &&
+        horizontal(state.position, entity.point) <= (radius ?? threatStartDistance(entity.code)),
+    )
+    .sort((a, b) => horizontal(state.position, a.point) - horizontal(state.position, b.point));
 
-export const nearbyUnclearedThreats = state => (state.nearbyEntities ?? [])
-  .filter(entity => hostileEntity(entity) &&
-    Math.abs(state.position.y - entity.point.y) <= threatVerticalRange(entity.code) &&
-    horizontal(state.position, entity.point) <= threatClearDistance(entity.code))
-  .sort((a, b) => horizontal(state.position, a.point) - horizontal(state.position, b.point));
+export const nearbyUnclearedThreats = state =>
+  (state.nearbyEntities ?? [])
+    .filter(
+      entity =>
+        hostileEntity(entity) &&
+        Math.abs(state.position.y - entity.point.y) <= threatVerticalRange(entity.code) &&
+        horizontal(state.position, entity.point) <= threatClearDistance(entity.code),
+    )
+    .sort((a, b) => horizontal(state.position, a.point) - horizontal(state.position, b.point));
 
 export const nearestThreat = (state, radius?) => nearbyThreats(state, radius)[0] ?? null;
 export const nearestUnclearedThreat = state => nearbyUnclearedThreats(state)[0] ?? null;
@@ -59,15 +66,20 @@ export const fleeTarget = (position, threat, distance = 32) => {
   // entire visible hostile perimeter. Fleeing only the nearest hostile can
   // route directly into another one, especially at night.
   const candidates = Array.from({ length: 16 }, (_, index) => {
-    const radians = index * Math.PI / 8;
-    const point = { x: position.x + Math.cos(radians) * distance,
-      z: position.z + Math.sin(radians) * distance };
+    const radians = (index * Math.PI) / 8;
+    const point = { x: position.x + Math.cos(radians) * distance, z: position.z + Math.sin(radians) * distance };
     const clearances = threats.map(entity => horizontal(point, entity.point));
     return { point, minimum: Math.min(...clearances), total: clearances.reduce((sum, value) => sum + value, 0), index };
   });
   candidates.sort((a, b) => b.minimum - a.minimum || b.total - a.total || a.index - b.index);
   const point = candidates[0].point;
-  return { x: Math.floor(point.x) + .5, y: position.y,
-    z: Math.floor(point.z) + .5, horizontalOnly: true,
-    arrivalRadius: 3, sprint: true, emergency: true };
+  return {
+    x: Math.floor(point.x) + 0.5,
+    y: position.y,
+    z: Math.floor(point.z) + 0.5,
+    horizontalOnly: true,
+    arrivalRadius: 3,
+    sprint: true,
+    emergency: true,
+  };
 };

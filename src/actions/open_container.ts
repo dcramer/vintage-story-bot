@@ -2,9 +2,11 @@ import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 import { blockTarget } from '../runtime/schemas.ts';
 
-export const schema = z.object({
-  target: blockTarget,
-}).strict();
+export const schema = z
+  .object({
+    target: blockTarget,
+  })
+  .strict();
 
 export default defineAction({
   name: 'open_container',

@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import { defineAction } from '../runtime/define.ts';
 
-export const schema = z.object({
-  match: z.string().min(1).max(64),
-  offset: z.number().int().min(0).max(100000).optional(),
-  limit: z.number().int().min(1).max(8).optional(),
-}).strict();
+export const schema = z
+  .object({
+    match: z.string().min(1).max(64),
+    offset: z.number().int().min(0).max(100000).optional(),
+    limit: z.number().int().min(1).max(8).optional(),
+  })
+  .strict();
 
 export default defineAction({
   name: 'recipes',
