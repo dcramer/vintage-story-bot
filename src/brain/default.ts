@@ -87,6 +87,8 @@ export type Memory = {
   done: Record<string, number>;
   // Where and when the bot had to run; a cluster of these around it means this is a bad place to be.
   scares: { x: number; z: number; at: number }[];
+  // The predator that caused the current goal to be cancelled, retained for the handoff into flight.
+  lastThreat: { point: Cell; code: string; at: number } | null;
   resting: boolean;
   // A raw hit waiting briefly for the server's cause notification.
   pendingHurtAt: number | null;
@@ -273,6 +275,15 @@ export function decide(reading: Reading, memory: Memory): Decision {
       ? { act: [{ action: 'respawn', deathId: state.life.deathId }], why: 'dead' }
       : { wait: 'dead, no respawn offered yet' };
   const threat = nearestThreat(state);
+  if (threat) memory.lastThreat = { point: threat.point, code: threat.code, at: now };
+  // A predator can leave the observation radius while its cancellation is
+  // completing. Carry that exact threat through the next decision so the
+  // cancelled job becomes a flight instead of immediately restarting work.
+  const rememberedThreat =
+    last?.reason === 'brain: threat' && memory.lastThreat && now - memory.lastThreat.at < SAFE_MS
+      ? { point: memory.lastThreat.point, code: memory.lastThreat.code }
+      : null;
+  const danger = threat ?? rememberedThreat;
   // A hit with no attacker in sight is still danger. The server also advances
   // lastDamageAt for fall damage, but its notification identifies gravity; a
   // stumble is not an attacker and must not cancel food recovery for a flight.
@@ -281,15 +292,15 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // instead of cancelling work and immediately restarting the same job.
   const gravity = environmentalHurt(events);
   const rawHurt = events.some(e => e.type === 'hurt');
-  if (gravity || threat) memory.pendingHurtAt = null;
+  if (gravity || danger) memory.pendingHurtAt = null;
   else if (rawHurt && memory.pendingHurtAt === null) memory.pendingHurtAt = now;
   const pendingHurt = memory.pendingHurtAt !== null && now - memory.pendingHurtAt >= HURT_CLASSIFY_MS;
   const hurt = !gravity && (last?.reason === 'brain: hurt' || pendingHurt);
-  const classifyingHurt = !gravity && !threat && memory.pendingHurtAt !== null && !pendingHurt;
+  const classifyingHurt = !gravity && !danger && memory.pendingHurtAt !== null && !pendingHurt;
   if (pendingHurt) memory.pendingHurtAt = null;
   // Copper seen in passing: a marker and a word to the others, once per nugget, unless one is already marked nearby.
   const copper = events.find(e => e.type === 'sighted' && e.kind === 'block' && COPPER.test(e.code ?? '') && !memory.marked.has(e.key));
-  if (copper && !threat && !hurt && !classifyingHurt) {
+  if (copper && !danger && !hurt && !classifyingHurt) {
     memory.marked.add(copper.key);
     const x = Math.floor(copper.point.x),
       y = Math.floor(copper.point.y),
@@ -320,7 +331,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       .map(([job]) => job),
   );
   const situation: Situation = {
-    threat: !!threat,
+    threat: !!danger,
     hurt,
     storm,
     hunger: satiety,
@@ -351,18 +362,18 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // same sighting throws away its food leads and starts a second flight on
     // top of navigation's evasion, which is especially costly near starvation.
     // Actual damage still interrupts below, as it may be from an unseen source.
-    if (threat && !hurt && memory.job === 'eat' && active.kind === 'forage') return { wait: 'letting forage evade threat' };
+    if (danger && !hurt && memory.job === 'eat' && active.kind === 'forage') return { wait: 'letting forage evade threat' };
     // A flight is never interrupted, and neither is digging out: there is no running from a hole.
     // Nor is digging in at night: two blocks down is the safest place from whatever is coming.
-    if ((threat || hurt) && !['hide', 'dig_out', 'burrow'].includes(memory.job ?? '')) return { stop: threat ? 'threat' : 'hurt' };
+    if ((danger || hurt) && !['hide', 'dig_out', 'burrow'].includes(memory.job ?? '')) return { stop: danger ? 'threat' : 'hurt' };
     if (classifyingHurt) return { wait: 'identifying damage source' };
     // Damage chat can trail the life event by one brain tick. If gravity is
     // identified only after the reflex already launched a flight, end that
     // mistaken flight and return to the interrupted survival job.
-    if (memory.job === 'hide' && !threat && environmentalHurt(events)) return { stop: 'fall' };
+    if (memory.job === 'hide' && !danger && environmentalHurt(events)) return { stop: 'fall' };
     // A flight is over once nothing has been seen or heard for a while and the scare is well behind.
     const scare = memory.scares.at(-1);
-    if (memory.job === 'hide' && !threat && !hurt && scare && now - scare.at > SAFE_MS && horizontal(state.position, scare) >= SAFE_DISTANCE)
+    if (memory.job === 'hide' && !danger && !hurt && scare && now - scare.at > SAFE_MS && horizontal(state.position, scare) >= SAFE_DISTANCE)
       return { stop: 'safe' };
     // Someone else's goal is otherwise left alone.
     if (active.by !== 'brain') return { wait: `letting ${active.kind} finish (${active.by})` };
@@ -392,11 +403,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
       return start('dig_area', { cells: [memory.burrow], timeoutMs: 120000 }, 'morning, opening the burrow');
     case 'hide': {
       memory.scares.push({ x: state.position.x, z: state.position.z, at: now });
-      const away = threat ? fleeTarget(state.position, threat) : escapePoint(state.position, state.orientation?.yawDegrees ?? 0, home);
+      const away = danger ? fleeTarget(state.position, danger) : escapePoint(state.position, state.orientation?.yawDegrees ?? 0, home);
       return start(
         'travel',
         { x: away.x, z: away.z, arrivalRadius: 8, sprint: true, timeoutMs: 600000 },
-        threat ? `${threat.code} at ${Math.round(horizontal(state.position, threat.point))} blocks` : 'hurt by something unseen',
+        danger ? `${danger.code} at ${Math.round(horizontal(state.position, danger.point))} blocks` : 'hurt by something unseen',
       );
     }
     case 'relocate': {
@@ -498,6 +509,7 @@ export function fresh(): Memory {
     burrow: null,
     done: {},
     scares: [],
+    lastThreat: null,
     resting: false,
     pendingHurtAt: null,
   };

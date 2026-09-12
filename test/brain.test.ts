@@ -144,6 +144,13 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
   assert.deepEqual(decide(reading({ state: wolf, active: { id: 'g1', kind: 'gather', state: 'running', by: 'brain' } }), memory), {
     stop: 'threat',
   });
+  const handoff = decide(
+    reading({ last: { id: 'g1', kind: 'gather', ok: false, reason: 'brain: threat' }, state: state({ orientation: { yawDegrees: 0 } }), now: 1001 }),
+    memory,
+  );
+  assert.equal(handoff.start, 'travel', 'a predator cancellation becomes a flight even when the predator leaves the next observation');
+  assert.ok(handoff.args.x < 0, 'the flight keeps the predator position and runs away from it');
+  memory.job = 'sticks';
   decide(
     reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'g1', kind: 'gather', ok: false, reason: 'blocked' }, now: 2000 }),
     memory,
@@ -190,6 +197,16 @@ test('brain: danger interrupts body recovery and backs it off across a flight', 
   const grave = [{ guid: 'g', title: 'You died here', icon: 'gravestone', position: { x: 0, y: 100, z: 0 } }];
   const memory = fresh();
   memory.job = 'recover';
+  const wolf = state({
+    position: { x: 40, y: 100, z: 0 },
+    nearbyEntities: [{ code: 'game:wolf-male', point: { x: 45, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }],
+  });
+  assert.deepEqual(
+    decide(reading({ markers: grave, state: wolf, active: { id: 'body', kind: 'retrieve_body', state: 'running', by: 'brain' } }), memory),
+    {
+      stop: 'threat',
+    },
+  );
   const afterDanger = decide(
     reading({
       markers: grave,
@@ -199,7 +216,8 @@ test('brain: danger interrupts body recovery and backs it off across a flight', 
     }),
     memory,
   );
-  assert.equal(afterDanger.start, 'gather', 'works on the kit instead of walking straight back to danger');
+  assert.equal(afterDanger.start, 'travel', 'finishes escaping before returning to ordinary work');
+  assert.ok(afterDanger.args.x < 40, 'continues away from the predator that interrupted recovery');
   assert.ok(memory.tried.recover, 'the recovery is set aside');
 
   memory.job = null;
