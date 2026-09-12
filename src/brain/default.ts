@@ -292,6 +292,15 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (memory.resting) return { wait: 'resting after too many scares' };
   memory.scares = memory.scares.filter(scare => now - scare.at < DANGER_MS);
   // Dead: respawn when the server offers it; nothing else matters until then.
+  // A respawn moves the character independently of the place it died. Forget
+  // transient terrain state so the next live reading inspects the new spawn
+  // instead of treating it as the old burrow or pit.
+  if (!state.alive) {
+    memory.burrow = null;
+    memory.pit = null;
+    memory.startupChecked = false;
+    memory.pendingHurtAt = null;
+  }
   if (!state.alive && active) return { stop: 'dead' };
   if (!state.alive && temporalStormUnsafe(state)) return { wait: 'dead, waiting out temporal storm' };
   if (!state.alive)
@@ -338,7 +347,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (gravity || danger) memory.pendingHurtAt = null;
   else if (rawHurt && memory.pendingHurtAt === null) memory.pendingHurtAt = now;
   const pendingHurt = memory.pendingHurtAt !== null && now - memory.pendingHurtAt >= HURT_CLASSIFY_MS;
-  const hurt = !gravity && (last?.reason === 'brain: hurt' || pendingHurt);
+  // A known nearby threat removes the need to wait for a cause notification.
+  // This matters inside a burrow: merely hearing a creature outside is safe,
+  // but losing health while it is nearby proves the pocket is compromised.
+  const hurt = !gravity && (last?.reason === 'brain: hurt' || pendingHurt || (rawHurt && !!danger));
   const classifyingHurt = !gravity && !danger && memory.pendingHurtAt !== null && !pendingHurt;
   if (pendingHurt) memory.pendingHurtAt = null;
   // Copper seen in passing: a marker and a word to the others, once per nugget, unless one is already marked nearby.

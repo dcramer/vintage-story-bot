@@ -329,6 +329,18 @@ test('brain: death waits out a temporal storm before respawning', () => {
   });
 });
 
+test('brain: death forgets transient burrow and pit state before respawn', () => {
+  const memory = fresh();
+  memory.burrow = { x: 10, y: 100, z: 10 };
+  memory.pit = { x: 18, y: 98, z: 10 };
+  memory.startupChecked = true;
+  const dead = state({ alive: false, life: { deathId: 'death-1' } });
+  decide(reading({ state: dead }), memory);
+  assert.equal(memory.burrow, null);
+  assert.equal(memory.pit, null);
+  assert.equal(memory.startupChecked, false, 'the new spawn is inspected for its own terrain state');
+});
+
 test('brain: a fall is not mistaken for an unseen attacker', () => {
   const fall = [
     { id: 1, at: 1, type: 'hurt', health: 10 },
@@ -374,6 +386,18 @@ test('brain: full-health drift is not mistaken for damage', () => {
     wait: 'letting gather finish',
   });
   assert.equal(memory.pendingHurtAt, null);
+});
+
+test('brain: damage from a nearby threat proves a burrow is unsafe', () => {
+  const memory = fresh();
+  memory.burrow = { x: 0, y: 102, z: 0 };
+  const attacked = state({
+    nearbyEntities: [{ code: 'game:drifter-normal', point: { x: 1, y: 100, z: 0 }, distance: 1, how: 'near', at: 1 }],
+    vitals: { health: { current: 17.5, max: 20 }, hunger: { current: 750, max: 1500 } },
+  });
+  const next = decide(reading({ environment: night, state: attacked, events: [{ id: 1, at: 1, type: 'hurt', health: 17.5 }] }), memory);
+  assert.equal(next.start, 'travel', 'actual damage overrides waiting in the completed burrow');
+  assert.match(next.why, /drifter-normal/);
 });
 
 test('brain: kit reads tools by class and dirt by code', () => {
