@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { Places } from '../support/places.ts';
 import { EventLog } from './events.ts';
 import { GameClient } from './game.ts';
 import { compileGoalScript, runGoalPlan } from './goal-script.ts';
@@ -58,6 +59,8 @@ export class Controller {
   closing = false;
   brain = null;
   wants = [];
+  // Walked and failed 16x16 areas, shared by every goal of the session.
+  places = new Places();
   session = randomUUID();
   history = new Map();
   waypoints = new Map();
@@ -624,6 +627,7 @@ export class Controller {
       sightings: this.sightings,
       watch: list => this.game.attend(list),
       wants: this.wants,
+      places: this.places,
       sync: () => this.snapshot(signal),
       aim: (angles, safety) => this.aim(angles, record, safety, signal),
       navigate: (goal, pauseWhen, safety) => this.navigate(goal, record, undefined, pauseWhen, safety, signal),

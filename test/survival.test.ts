@@ -131,7 +131,7 @@ test('survival pickup recovery selects only exact verified food drops', () => {
 });
 
 test('food exploration uses observed local steps and does not rescan an unchanged distant cone', () => {
-  assert.equal(foodSearchDistance, 12);
+  assert.equal(foodSearchDistance, 24);
   assert.equal(foodSightRange, 32);
   assert.equal(desperateFoodSightRange, 48);
   const view = { position: { x: 10, z: 10 }, yawDegrees: 30 };
@@ -305,16 +305,16 @@ test('a blocked exploration leg penalizes its destination for the next determini
   field.latest = field.initial = state;
   const target = { x: 20.5, y: 1, z: 0.5 };
   await field.walk(target);
-  assert.equal(field.visits.get('1,0'), 1);
+  assert.equal(field.places.failed(target), 1);
 });
 
-test('route recovery clears soft visit penalties and rotates deterministically', () => {
+test('route recovery turns the heading and keeps what it knows of the places', () => {
   const field = new Fieldwork({});
   field.latest = { position: { x: 32.5, z: -16.5 } };
   field.heading = 350;
-  field.visits.set('old', 4);
+  field.places.fail({ x: 100, z: 100 });
   field.resetExploration();
-  assert.deepEqual([...field.visits], [['2,-2', 1]]);
+  assert.equal(field.places.failed({ x: 100, z: 100 }), 1, 'what is known of the places stays known');
   assert.equal(field.heading, 35);
 });
 

@@ -4,9 +4,10 @@ import { nextLeg, planRoughRoute } from '../runtime/navigation/surface.ts';
 import { horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
 import { Gleaner } from './gleaning.ts';
 import { type Habitat, habitatTarget } from './habitat.ts';
+import { area, Places } from './places.ts';
 import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.ts';
 
-export const area = p => `${Math.floor(p.x / 16)},${Math.floor(p.z / 16)}`;
+export { area } from './places.ts';
 export const sightRange = 64;
 // Beyond this the fine navigator's observed disk cannot see the destination;
 // walk looks at the landscape first. Native move_to accepts up to 128 blocks.
@@ -48,7 +49,8 @@ export class Fieldwork {
   heading = 0;
   attempts = 0;
   foodRecoveryAuthorized = false;
-  visits = new Map();
+  // Walked and failed areas, shared by every goal of the session (the controller's), else this goal's own.
+  places: Places;
   seen = new Map();
   skipped = new Map();
   events: any[] = [];
@@ -73,6 +75,7 @@ export class Fieldwork {
     this.log = env.log ?? noLog;
     // Things to pick up on the way, whatever the goal: set by the brain or the wants action.
     this.gleaner = Array.isArray(wants) && wants.length ? new Gleaner(this, wants) : null;
+    this.places = env.places ?? new Places();
     this.signal = signal;
     this.timeoutMs = timeoutMs;
     this.sprint = sprint;
@@ -155,7 +158,7 @@ export class Fieldwork {
     for (const feature of ['nearby_awareness', ...features])
       if (!this.initial.capabilities.includes(feature)) throw Error(`Update mod: ${feature} required`);
     this.heading = this.initial.orientation.yawDegrees;
-    this.visits.set(area(this.initial.position), 1);
+    this.places.walk(this.initial.position);
   }
   report(phase, extra: any = {}) {
     this.env.report?.({
@@ -203,7 +206,7 @@ export class Fieldwork {
     const p = this.latest.position;
     // An area a leg already failed in costs as much as a thirty-block detour
     // per failure: the coarse map cannot see the cliff that stopped the leg.
-    const plan = planRoughRoute(this.env.surface, p, goal, { penalty: column => (this.visits.get(area(column)) ?? 0) * 30 });
+    const plan = planRoughRoute(this.env.surface, p, goal, { penalty: column => this.places.failed(column) * 30 });
     const point = plan.checkpoints.length ? nextLeg(plan.checkpoints, p, { maxDistance }) : null;
     this.roughRouteStatus = {
       status: plan.status,
@@ -290,11 +293,10 @@ export class Fieldwork {
     this.env.sightings?.skip?.(object.key, ms);
   }
   penalize(target, amount = 1) {
-    this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + amount);
+    this.places.fail(target, amount);
   }
+  // A fresh heading; what is known of the places stays known.
   resetExploration(turn = 45) {
-    this.visits.clear();
-    this.visits.set(area(this.latest.position), 1);
     this.heading = normalize(this.heading + turn);
   }
   targets(predicate) {
@@ -334,7 +336,7 @@ export class Fieldwork {
       const roughRoute = await this.lookAhead(target);
       if (!roughRoute) {
         if (remaining <= navigationReach) return this.leg(target, pauseWhen);
-        this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + 1);
+        this.places.fail(target);
         this.report('rerouting', { reason: 'no_visible_route', roughRoute: this.roughRouteStatus });
         return { state: 'blocked', reason: 'no_visible_route', roughRoute: this.roughRouteStatus };
       }
@@ -409,15 +411,11 @@ export class Fieldwork {
     );
     const after = await this.observe(true);
     this.moved += horizontal(before.position, after.position);
-    this.visits.set(area(after.position), (this.visits.get(area(after.position)) ?? 0) + 1);
+    this.places.walk(after.position);
+    // A leg that did not arrive is evidence about that destination, even if the body never left
+    // its own 16x16 area: the next choice, by this goal or the next, goes somewhere else.
     if (result.state === 'arrived' && area(target) !== area(after.position)) this.penalize(target);
-    else if (!['arrived', 'paused'].includes(result.state))
-      // A failed exploration leg is evidence about that destination, even if
-      // the player never left the current 16x16 area. Penalize it so the next
-      // deterministic attempt tries a different heading instead of replaying
-      // the same blocked leg six times.
-      this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + 1);
-    while (this.visits.size > 4096) this.visits.delete(this.visits.keys().next().value);
+    else if (!['arrived', 'paused'].includes(result.state)) this.places.fail(target);
     // A walk the mod released or the eye cancelled without a hard reason is a
     // pause: the goal observes again and carries on from where it stands.
     if (result.state === 'cancelled') {
@@ -464,7 +462,7 @@ export class Fieldwork {
   // Where to look for something not in sight: the nearest unwalked place of
   // the kind it is found in, from far-view memory; null when none is known.
   habitat(habitats: Habitat[]) {
-    return habitatTarget(this.env.surface, this.latest.position, habitats, this.visits);
+    return habitatTarget(this.env.surface, this.latest.position, habitats, c => this.places.known(c));
   }
   explore(toward?, maxDistance = sightRange * 0.75, minDistance = 0) {
     const p = this.latest.position;
@@ -483,10 +481,17 @@ export class Fieldwork {
         horizontalOnly: true,
         arrivalRadius: Math.min(4, Math.max(0.75, legDistance / 12)),
       };
-      return { q, score: explorationScore(offset, this.visits.get(area(q)) ?? 0) };
+      return { q, legDistance, score: explorationScore(offset, this.places.walked(q) + this.places.failed(q) * 2) };
     });
-    for (const { q } of candidates.sort((a, b) => a.score - b.score))
-      if (findRoute(this.env.map, p, q, this.latest.body.halfWidth, this.latest.body.height)) return q;
+    // A candidate is worth walking when memory routes at least some way toward it on ground
+    // that is not water, and the far view does not say the spot itself is water.
+    const surface = this.env.surface;
+    for (const { q, legDistance } of candidates.sort((a, b) => a.score - b.score)) {
+      const column = surface?.get?.(Math.floor(q.x), Math.floor(q.z));
+      if (column && (column.kind === 'water' || column.kind === 'hazard')) continue;
+      const route = findRoute(this.env.map, p, q, this.latest.body.halfWidth, this.latest.body.height);
+      if (route && horizontal(p, route.at(-1)) >= Math.min(4, legDistance / 2)) return q;
+    }
     return candidates[this.attempts++ % candidates.length].q;
   }
 }

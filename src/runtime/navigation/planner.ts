@@ -63,7 +63,8 @@ export function findRoute(
     if (closed.has(id)) continue;
     closed.add(id);
     if (reached(at)) return path(at);
-    if (partial && horizontal(start, at) >= 1 && !visits.has(id) && map.frontier(at).size) {
+    // A frontier in deep water is not progress: the far bank is what counts, and only a full route reaches it.
+    if (partial && horizontal(start, at) >= 1 && !at.swim && !visits.has(id) && map.frontier(at).size) {
       // A frontier down a hole is not worth walking into: what looks closer
       // to the goal from below may have no way back up. Prefer frontiers at
       // the start's level or above.

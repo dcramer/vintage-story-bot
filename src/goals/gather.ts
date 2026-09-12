@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { changeBlock } from '../support/blocks.ts';
-import { area, Fieldwork, sightRange } from '../support/fieldwork.ts';
+import { Fieldwork, sightRange } from '../support/fieldwork.ts';
 import { pickupBlock } from '../support/gleaning.ts';
 import { habitatsFor } from '../support/habitat.ts';
 import { Survival } from '../support/survival.ts';
@@ -111,7 +111,7 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
         field.skip(target, 15000);
       }
       // Sticks lie under trees; anything else is looked for in the open.
-      const tree = o => sticks && o.code.startsWith('game:leaves') && !field.visits.has(area(o.point));
+      const tree = o => sticks && o.code.startsWith('game:leaves') && !field.places.known(o.point);
       if (sticks && !field.targets(tree).length) await field.scan(sightRange, ['leaves', TWIGS], 'blocks');
       // Nothing seen: toward the nearest unwalked place such things are found.
       const destination = field.explore(field.targets(tree)[0]?.point ?? field.habitat(habitatsFor(match)));

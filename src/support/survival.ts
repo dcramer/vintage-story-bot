@@ -12,7 +12,7 @@ export const desperateFoodSightRange = Math.min(48, sightRange);
 export const wideFoodSurveyNeeded = ratio => ratio < 0.2;
 // Twelve-block steps overlap a 16-block sight cone while covering useful new
 // ground before starvation. Navigation still validates every traversed cell.
-export const foodSearchDistance = Math.min(12, foodSightRange * 0.75);
+export const foodSearchDistance = Math.min(24, foodSightRange * 0.75);
 export const foodElevationDetourDistance = verticalRemaining =>
   verticalRemaining < 1.5 ? 0 : Math.min(foodSearchDistance, Math.max(6, verticalRemaining * 2));
 // Done when fed to `until` with `keep` satiety in the pack, or once something was eaten and the bar is near `until`.

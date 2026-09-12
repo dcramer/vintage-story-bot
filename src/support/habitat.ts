@@ -1,7 +1,5 @@
 import { horizontal } from '../runtime/navigation/terrain.ts';
 
-const area = (x: number, z: number) => `${Math.floor(x / 16)},${Math.floor(z / 16)}`;
-
 // Where things are found, as a player knows from the handbook and from
 // looking: sticks under trees and in the twiggy canopy, loose flint and stones
 // on open ground, cattails and reeds at the water's edge, berries and
@@ -22,7 +20,13 @@ export function habitatsFor(match: string): Habitat[] {
 
 // The nearest far-view column of the habitat, beyond minDistance and in a
 // 16x16 area not yet walked, or null when none is remembered.
-export function habitatTarget(surface, position, habitats: Habitat[], visits: Map<string, number>, { radius = 96, minDistance = 12 } = {}) {
+export function habitatTarget(
+  surface,
+  position,
+  habitats: Habitat[],
+  known: (c: { x: number; z: number }) => boolean,
+  { radius = 96, minDistance = 12 } = {},
+) {
   if (!surface?.columns?.size) return null;
   const columns = [...surface.columns.values()];
   const kinds = new Map<string, Set<string>>();
@@ -50,7 +54,7 @@ export function habitatTarget(surface, position, habitats: Habitat[], visits: Ma
       bestFar = Infinity;
     for (const c of columns) {
       const far = horizontal(position, { x: c.x + 0.5, z: c.z + 0.5 });
-      if (far < minDistance || far > radius || far >= bestFar || visits.has(area(c.x, c.z)) || !fits(c, habitat)) continue;
+      if (far < minDistance || far > radius || far >= bestFar || known(c) || !fits(c, habitat)) continue;
       best = c;
       bestFar = far;
     }

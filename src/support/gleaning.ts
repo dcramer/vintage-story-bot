@@ -6,7 +6,8 @@ import { nearestThreat } from './threats.ts';
 // on the ground (a right-click), and dropped items (walked over). Wants are
 // code substrings the brain or an adapter sets; a walk pauses for one within
 // a few blocks, the pickup happens, the walk goes on. Never a search of its own.
-export const pickupBlock = code => /^game:(loosestick|loosestones|looseflints)-/.test(code ?? '');
+// Loose sticks, stones and flints, and a ripe berry bush: each is one right-click.
+export const pickupBlock = code => /^game:(loosestick|loosestones|looseflints)-|^game:(big|small)berrybush-.*-ripe$/.test(code ?? '');
 export const gleanRadius = 6;
 const carried = inventory => ownedSlots(inventory).reduce((n, s) => n + s.quantity, 0);
 
