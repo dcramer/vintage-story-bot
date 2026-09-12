@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { learned, remember } from '../support/facts.ts';
 import { decorate, traitsOf } from '../support/traits.ts';
 import { requestBridge } from './bridge.ts';
 import { SightingsMemory } from './navigation/sightings.ts';
@@ -27,6 +28,8 @@ export class GameClient {
     this.send = async (request, options) => {
       // Whatever names a thing carries its traits, for agents and goals alike.
       const result: any = decorate(request, await send(request, options));
+      if (request.action === 'inventory' && result?.ok)
+        for (const inventory of result.inventories ?? []) for (const slot of inventory.slots ?? []) this.learn(slot.code);
       // observe carries only this instant's entities; memory adds what left the view.
       if (request.action === 'observe' && result?.ok && Array.isArray(result.nearbyEntities)) {
         this.knowledge?.enter(result.world?.identifier);
@@ -61,8 +64,20 @@ export class GameClient {
     if (batch.sightings && batch.state) batch.state.nearbyEntities = this.sightings.entities(batch.state.position);
     if (batch.state) this.notice(batch.state);
   }
+  // A kind seen or carried for the first time is looked up in the handbook once,
+  // facts only: one small read per code, ever, never a page of text.
+  learning = new Set<string>();
+  learn(code) {
+    if (typeof code !== 'string' || !code || this.learning.has(code) || learned(code)) return;
+    this.learning.add(code);
+    this.send({ action: 'item_info', code, text: false }).then(
+      page => remember(code, page?.ok ? page : null),
+      () => this.learning.delete(code),
+    );
+  }
   // Something confirmed by a line of sight for the first time.
   sighted(fresh = []) {
+    for (const s of fresh) this.learn(s.code);
     for (const s of fresh)
       this.events?.emit('sighted', {
         kind: s.kind ?? 'entity',

@@ -2,8 +2,8 @@ import { known } from './facts.ts';
 import { edible, foodYield } from './food.ts';
 import { hostileEntity, youngEntity } from './threats.ts';
 
-// What a thing affords, read from facts: the handbook page (the catalog, or a
-// page read in play), the block facts the eye reported (growth), and the prior
+// What a thing affords, read from facts: the handbook page read on first
+// sight (facts.ts), the block facts the eye reported (growth), and the prior
 // knowledge a player brings (which creatures hunt, which loose things are
 // picked up, which stones knap). Never a hidden-world read and never a label
 // the mod chose: the mod reports the game's own typing, Node reads it. Every
@@ -68,8 +68,8 @@ const toolWorks = { Axe: 'choppable', Shovel: 'diggable', Pickaxe: 'mineable', K
 const REPLACEABLE = 6000;
 // Vegetation burns for ten seconds and warms nothing; fuel burns longer.
 const FUEL_SECONDS = 20;
-// Prior knowledge by code, used only where the page lacks the fact (an older
-// catalog, a page never read): what a player knows before reading anything.
+// Prior knowledge by code, used only where no page says otherwise (a page
+// not read yet, or an older mod): what a player knows before reading anything.
 const priors: [RegExp, string[]][] = [
   [/^game:(loosestick|loosestones|looseflints)-/, ['pickup']],
   [/^game:log-/, ['choppable']],
@@ -149,7 +149,7 @@ export function traitsOf(object: { kind?: string; code?: string; facts?: any } |
 
 export const has = (object, trait: string) => (object?.traits ?? traitsOf(object)).includes(trait);
 
-// The traits a page's kind has, for the catalog: a block as it stands, with no growth seen.
+// The traits a page's kind has, for the handbook search: a block as it stands, with no growth seen.
 export const traitsOfPage = page => traitsOf({ kind: page.type === 'entity' ? 'entity' : page.type === 'block' ? 'block' : 'item', code: page.code });
 
 // Everything the mod returns that names a thing carries its traits. Sightings

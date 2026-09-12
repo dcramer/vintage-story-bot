@@ -19,34 +19,42 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
 {
     private static readonly FieldInfo? StackSlot = typeof(ItemstackTextComponent).GetField("slot", BindingFlags.NonPublic | BindingFlags.Instance);
 
-    public object ItemInfo(string code)
+    // text:false leaves out the page body: the facts of one code, cheap enough to read on first sight.
+    public object ItemInfo(string code, bool text = true)
     {
         var location = new AssetLocation(code);
         CollectibleObject? collectible = api.World.GetItem(location) ?? (CollectibleObject?)api.World.GetBlock(location);
         var page = new Dictionary<string, object?> { ["ok"] = true, ["observedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
         if (collectible?.Code != null && collectible.Id != 0)
-            foreach (var (key, value) in Entry(collectible, -1)) page[key] = value;
+            foreach (var (key, value) in Entry(collectible, text ? -1 : 0)) page[key] = value;
         else if (api.World.GetEntityType(location) is { Code: not null } creature)
             foreach (var (key, value) in Entry(creature)) page[key] = value;
         else return new { ok = false, error = "No handbook page for that code." };
         return page;
     }
 
-    // Every loaded block and item, stable-sorted by code, then every creature
-    // type. One read of the public registries per page; entries carry the
-    // item_info facts with the page body trimmed to a short description.
+    // The handbook's search box: every loaded block, item and creature whose
+    // code or name contains match, stable-sorted by code, a page at a time.
+    // Facts only unless text:true asks for a short description, which renders
+    // each page on the game thread and is slow.
     public object CatalogPage(JsonElement request)
     {
         int offset = 0, limit = 50;
         if (request.TryGetProperty("offset", out var offsetField) && (!offsetField.TryGetInt32(out offset) || offset < 0 || offset > 100000) ||
             request.TryGetProperty("limit", out var limitField) && (!limitField.TryGetInt32(out limit) || limit < 1 || limit > 100))
             return new { ok = false, error = "offset: 0–100000; limit: 1–100." };
-        // text:false skips the page body: the facts alone, read in a fraction of the time.
-        bool text = !(request.TryGetProperty("text", out var textField) && textField.ValueKind == JsonValueKind.False);
-        var all = api.World.Collectibles.Where(collectible => collectible != null && collectible.Code != null && collectible.Id != 0)
+        bool text = request.TryGetProperty("text", out var textField) && textField.ValueKind == JsonValueKind.True;
+        string match = request.TryGetProperty("match", out var matchField) && matchField.ValueKind == JsonValueKind.String ? matchField.GetString()!.ToLowerInvariant() : "";
+        if (match.Length > 64) return new { ok = false, error = "match: at most 64 characters." };
+        string? type = request.TryGetProperty("type", out var typeField) && typeField.ValueKind == JsonValueKind.String ? typeField.GetString() : null;
+        bool Matches(string code, string? name) => match.Length == 0 || code.ToLowerInvariant().Contains(match) || (name?.ToLowerInvariant().Contains(match) ?? false);
+        var all = type == "entity" ? [] : api.World.Collectibles
+            .Where(collectible => collectible != null && collectible.Code != null && collectible.Id != 0 && (type == null || (collectible is Block ? "block" : "item") == type))
+            .Where(collectible => Matches(collectible.Code.ToString(), collectible.GetHeldItemName(new ItemStack(collectible))))
             .OrderBy(collectible => collectible.Code.ToString(), StringComparer.Ordinal).ToArray();
-        var creatures = api.World.EntityTypes.Where(type => type?.Code != null)
-            .OrderBy(type => type.Code.ToString(), StringComparer.Ordinal).ToArray();
+        var creatures = type != null && type != "entity" ? [] : api.World.EntityTypes.Where(t => t?.Code != null)
+            .Where(t => Matches(t.Code.ToString(), CreatureName(t)))
+            .OrderBy(t => t.Code.ToString(), StringComparer.Ordinal).ToArray();
         int total = all.Length + creatures.Length;
         var entries = all.Skip(offset).Take(limit).Select(collectible => Entry(collectible, text ? 3 : 0))
             .Concat(creatures.Skip(Math.Max(0, offset - all.Length)).Take(Math.Max(0, limit - Math.Max(0, all.Length - offset))).Select(Entry))
@@ -119,10 +127,12 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
     {
         ["code"] = type.Code.ToString(),
         ["type"] = "entity",
-        ["name"] = ContextSensor.Clip(Lang.GetIfExists("item-creature-" + type.Code.Path) ?? type.Code.Path, 96),
+        ["name"] = ContextSensor.Clip(CreatureName(type), 96),
         ["class"] = type.Class,
         ["drops"] = Drops(type.Drops),
     };
+
+    private static string CreatureName(EntityProperties type) => Lang.GetIfExists("item-creature-" + type.Code.Path) ?? type.Code.Path;
 
     private static object[]? Drops(BlockDropItemStack[]? drops) => drops?
         .Where(drop => drop?.ResolvedItemstack?.Collectible?.Code != null).Take(16)

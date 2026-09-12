@@ -34,7 +34,7 @@ test('traits are read from the page and the facts, not from the code', () => {
   assert.deepEqual(traitsOf({ kind: 'item', code: 'game:axe-flint' }), ['tool:Axe']);
 });
 
-// Codes the catalog does not carry, so only the prior applies.
+// Codes with no page read, so only the prior applies.
 test('prior knowledge fills in only what no page says', () => {
   assert.deepEqual(traitsOf({ kind: 'block', code: 'game:loosestick-imagined' }), ['pickup']);
   assert.deepEqual(traitsOf({ kind: 'block', code: 'game:log-grown-nowhere-ud' }), ['choppable']);

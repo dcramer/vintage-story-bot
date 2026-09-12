@@ -296,7 +296,8 @@ public sealed partial class AiBridgeMod
     {
         if (!request.TryGetProperty("code", out var code) || code.ValueKind != JsonValueKind.String || code.GetString()!.Length is < 1 or > 128)
             return new { ok = false, error = "code must be 1–128 characters of item or block code." };
-        return handbook.ItemInfo(code.GetString()!);
+        bool text = !(request.TryGetProperty("text", out var textField) && textField.ValueKind == JsonValueKind.False);
+        return handbook.ItemInfo(code.GetString()!, text);
     }
 
     private object Respawn(JsonElement request)

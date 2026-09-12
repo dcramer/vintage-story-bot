@@ -7,7 +7,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 ## Live status 2026-09-12 (multiplayer, spawn area)
 
 - Verified live: the step follower (one `control_step` per checkpoint, arrivals reported by the mod; 27 walks arrived, none stalled in a four-minute sample, frame gaps under 1.1 s on a software renderer); flights end when the coast is clear; `retrieve_body` recovered the pack after a death; `gather` reached ten sticks by breaking branchy leaves and picking up drops; mushrooms harvested by breaking and eaten; the night dig-in digs the first block (the second still to be seen through on a full night).
-- Verified live 06:31 UTC: forage harvested five ripe blueberries by right-click and ate two (bushes are harvestable at growth `ripe`; the catalog must be regenerated after handbook changes). Not yet seen live: the full night dig-in (two blocks down and sealed), knapping and hafting from gathered flint, the shelter build, `store_items`/`take_items`.
+- Verified live 06:31 UTC: forage harvested five ripe blueberries by right-click and ate two (bushes are harvestable at growth `ripe`; handbook facts are read live per code, nothing to regenerate). Not yet seen live: the full night dig-in (two blocks down and sealed), knapping and hafting from gathered flint, the shelter build, `store_items`/`take_items`.
 - Known limits: the software-rendered client turns and walks slowly (about 1.5 blocks a second); a wolf pack lives at spawn and kills the bot at night when it is caught in the open before digging in.
 
 ## 1. State (`bot.entity`, `health`, `food`, `time`, `players`)
@@ -90,7 +90,7 @@ No attack/throw/butcher yet; `look_at` already locks and tracks entities, `playe
 - [ ] **P1 · freshness-aware eating** — prefer soonest-to-spoil; refuse rotten; `inventory.freshness` already exists (`support`).
 - [x] `drop` — toss one owned slot (1 item or the whole stack) onto the ground; split partial stacks with `move_item` first.
 - [ ] **P1 · `equip` clothing/armor/offhand** — character slots: warmth clothing for winter (body temperature), straw hat, improvised armor, offhand torch (`mod`, `ctl`).
-- [ ] **P1 · `recipes` for knapping/clay/smithing** — list forming recipes and required material (`mod` FormingAdapter, `ctl`). Today grid only at runtime; static coverage via `search_items` (recipes baked per catalog entry). Live surface-aware listing still missing.
+- [ ] **P1 · `recipes` for knapping/clay/smithing** — list forming recipes and required material (`mod` FormingAdapter, `ctl`). Today grid only at runtime; `search_items` joins grid recipes from `docs/recipes.json`. Live surface-aware listing still missing.
 - [ ] **P2 · reverse recipe lookup (`usedIn`)** — recipes consuming a code, for "how do I get more of X / what is X for" planning; `search_items` bakes only `makes` today (`ctl`, static join over `docs/recipes.json`).
 - [~] `item_info {code}` — handbook facts: nutrition, tool class/tier, durability, bag slots, fuel, drops, harvest yield and page text; `forage` reads it for every seen code ([facts](src/support/facts.ts)). Not live-verified.
 - [ ] **P2 · handbook guide chapters** — the H-menu's tutorial/guide pages as data, completing the help-menu replication; guides are code/lang-driven, not file assets, so the source is still TBD (`mod` or static).
