@@ -26,7 +26,7 @@ test('run metrics measure one life from observed movement without counting telep
   assert.equal(ended.transition, true);
   assert.deepEqual(ended.data, {
     version: 1,
-    segmentId: 'controller-1',
+    segmentId: 'controller-1:1',
     lifeId: 'life-1',
     segmentStartedAt: 1000,
     observedAt: 5000,
@@ -87,6 +87,7 @@ test('run metrics start a fresh segment when the game life id changes', () => {
   metrics.observeInventory(inventory([['game:stick', 2]]), 'gather');
   const next = metrics.observeState(state('life-2', 3000, 20, 20));
   assert.equal(next.transition, true);
+  assert.equal(next.data.segmentId, 'controller-1:2');
   assert.equal(next.data.lifeId, 'life-2');
   assert.equal(next.data.distance, 0);
   assert.equal(next.data.items.gained, 0);
@@ -102,6 +103,7 @@ test('run metrics start a fresh run when the same game session respawns', () => 
 
   const revived = metrics.observeState(state('game-session', 4000, 20, 20, true));
   assert.equal(revived.transition, true);
+  assert.equal(revived.data.segmentId, 'controller-1:2');
   assert.equal(revived.data.lifeId, 'game-session');
   assert.equal(revived.data.segmentStartedAt, 4000);
   assert.equal(revived.data.endedAt, null);

@@ -33,13 +33,17 @@ function acquisitionKind(goal) {
 // inventory are inputs the controller already receives; metrics never poll or
 // delay the game. The fleet service joins segments with the same life id.
 export class RunMetrics {
+  baseSegmentId: string;
   segmentId: string;
+  segmentNumber = 0;
   life: any = null;
   inventory: Map<string, number> | null = null;
   constructor(segmentId: string) {
+    this.baseSegmentId = segmentId;
     this.segmentId = segmentId;
   }
   start(lifeId, point, at, alive) {
+    this.segmentId = `${this.baseSegmentId}:${++this.segmentNumber}`;
     this.life = {
       id: lifeId,
       startedAt: at,
