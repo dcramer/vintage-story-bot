@@ -10,6 +10,7 @@ import {
   desperateFoodSightRange,
   exhaustedFoodLead,
   foodElevationDetourDistance,
+  foodLeadGuarded,
   foodRecoverySatisfied,
   foodSearchBias,
   foodSearchDistance,
@@ -176,6 +177,14 @@ test('a predator pauses a food route before navigation can carry it into danger'
   assert.equal(survival.pauseFoodWalk(state), 'threat_near_food');
   survival.reserve = 80;
   assert.equal(survival.pauseFoodWalk(state), 'food_available');
+});
+
+test('only food inside a predator perimeter is abandoned', () => {
+  const target = distance => ({ point: { x: distance, y: 0, z: 0 } });
+  const wolf = { code: 'game:wolf-eurasian-adult-male', point: { x: 0, y: 0, z: 0 } };
+  assert.equal(foodLeadGuarded(target(threatClearDistance(wolf.code)), wolf), true);
+  assert.equal(foodLeadGuarded(target(threatClearDistance(wolf.code) + 0.1), wolf), false);
+  assert.equal(foodLeadGuarded(target(1), null), false);
 });
 
 test('food search drops an unreachable habitat bias after two stationary legs', () => {

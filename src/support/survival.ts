@@ -6,7 +6,7 @@ import { sightRange } from './fieldwork.ts';
 import { consume, emptyHand, foodCount, foodReserve, foodYield, forageWatch, hunger } from './food.ts';
 import { ownedSlots } from './inventory.ts';
 import { clearLeafPath } from './leaf-clearing.ts';
-import { nearestThreat } from './threats.ts';
+import { nearestThreat, threatClearDistance } from './threats.ts';
 
 export const foodSightRange = Math.min(32, sightRange);
 export const desperateFoodSightRange = Math.min(48, sightRange);
@@ -43,6 +43,7 @@ export const stuckFoodRoute = (result, before, after) => !['arrived', 'paused'].
 export const unproductiveFoodApproach = (target, result, before, after) =>
   !['arrived', 'paused'].includes(result.state) && horizontal(after, target.point) + 2 >= horizontal(before, target.point);
 const threatenedFoodApproach = result => result.state === 'paused' && result.reason === 'threat_near_food';
+export const foodLeadGuarded = (target, threat) => !!threat && horizontal(target.point, threat.point) <= threatClearDistance(threat.code);
 export const exhaustedFoodLead = (target, result) => result.state === 'arrived' && target.visible === false;
 export const foodSearchBias = (stuckSearches, toward, habitat) => (stuckSearches >= 2 ? null : (toward ?? habitat));
 export const matchingFoodDrops = (objects, foodCode, point) =>
@@ -88,6 +89,18 @@ export class Survival {
     // lead is set aside below instead of pulling us back into the same danger.
     return nearestThreat(state) ? 'threat_near_food' : null;
   };
+  avoidThreatenedFood(target) {
+    const field = this.field;
+    const threat = nearestThreat(field.latest);
+    const guarded = threat ? field.targets(forage).filter(object => foodLeadGuarded(object, threat)) : [];
+    if (foodLeadGuarded(target, threat) && !guarded.some(object => object.key === target.key)) guarded.push(target);
+    for (const object of guarded) field.skip(object, 120000);
+    field.report(guarded.length ? 'food_lead_threatened' : 'food_route_threatened', {
+      target: target.key,
+      threat: threat?.code,
+      skipped: guarded.map(object => object.key),
+    });
+  }
   until = 0.8;
   keep = 320;
   async tend({
@@ -210,8 +223,7 @@ export class Survival {
             field.skip(target, 120000);
             field.report('food_lead_unseen', { target: target.key });
           } else if (threatenedFoodApproach(result)) {
-            field.skip(target, 120000);
-            field.report('food_lead_threatened', { target: target.key });
+            this.avoidThreatenedFood(target);
           } else if (
             stuckFoodRoute(result, before, field.latest.position) ||
             unproductiveFoodApproach(target, result, before, field.latest.position)
@@ -226,8 +238,7 @@ export class Survival {
           const before = { ...field.latest.position };
           const result = await field.walk(field.explore(target.point, foodSearchDistance, elevationDetour), this.pauseFoodWalk);
           if (threatenedFoodApproach(result)) {
-            field.skip(target, 120000);
-            field.report('food_lead_threatened', { target: target.key });
+            this.avoidThreatenedFood(target);
           } else if (stuckFoodRoute(result, before, field.latest.position)) {
             field.skip(target, 120000);
             await clearLeafPath(field, target.point);
