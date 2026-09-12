@@ -515,6 +515,29 @@ test('brain: forage keeps its own threat evasion instead of being cancelled', ()
   );
 });
 
+test('brain: night waits for forage to finish food already in hand', () => {
+  const memory = fresh();
+  memory.job = 'eat';
+  const berries = inventory(
+    slot('game:fruit-blackberry', 3, {
+      nutrition: { saturation: 80, health: 0 },
+      freshness: { state: 'fresh', freshHoursLeft: 100 },
+    }),
+  );
+  assert.deepEqual(
+    decide(
+      reading({
+        environment: night,
+        inventory: berries,
+        state: state({ vitals: { hunger: { current: 330, max: 1500 } } }),
+        active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' },
+      }),
+      memory,
+    ),
+    { wait: 'letting forage finish eating' },
+  );
+});
+
 test('brain: digging out of a hole is never interrupted by a threat', () => {
   const digging = fresh();
   digging.job = 'dig_out';
