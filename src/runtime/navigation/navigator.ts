@@ -310,7 +310,14 @@ export class Navigation {
     // checkpoint is only a takeoff point; verify the earlier arc's headroom too.
     const takeoff = this.route[this.index],
       landing = this.route[this.index + 1];
-    if (grounded && landing?.move === 'jump' && Math.abs(takeoff.y - p.y) < 0.1 && horizontal(p, landing) <= 1.8 && map.runWalkable(p, takeoff)) {
+    if (
+      grounded &&
+      landing?.move === 'jump' &&
+      Math.abs(takeoff.y - p.y) < 0.1 &&
+      // Hand over before the native 2.8-block sprint takeoff, allowing for the sense/frame delay.
+      horizontal(p, landing) <= (state.motion.sprinting ? 3.8 : 1.8) &&
+      map.runWalkable(p, takeoff)
+    ) {
       const ax = takeoff.x - p.x,
         az = takeoff.z - p.z;
       const bx = landing.x - takeoff.x,
@@ -403,15 +410,29 @@ export class Navigation {
     const food = state.vitals?.hunger;
     const emergency = this.evading || this.target.emergency;
     // A queued straight continuation is still a run, even near its intermediate point.
+    let runEnd = after;
+    if (after && ['walk', 'step'].includes(after.move))
+      for (let i = this.index + 2; i < this.route.length; i++) {
+        const candidate = this.route[i];
+        if (
+          !['walk', 'step'].includes(candidate.move) ||
+          horizontal(next, candidate) > 4 ||
+          Math.abs(angle(lookAt(next, candidate).yawDegrees, desiredYaw)) >= 20 ||
+          !map.runWalkable(next, candidate)
+        )
+          break;
+        runEnd = candidate;
+      }
     const continuesRun =
       !!next2 &&
       ['walk', 'step'].includes(after.move) &&
-      horizontal(p, after) > 2 &&
+      horizontal(p, runEnd) > 2 &&
       Math.abs(after.y - next.y) <= STEP_HEIGHT &&
       Math.abs(angle(lookAt(next, after).yawDegrees, desiredYaw)) < 20;
     const sprint =
       this.target.sprint !== false &&
-      ['walk', 'step'].includes(next.move) &&
+      (['walk', 'step'].includes(next.move) ||
+        (continuesRun && (next.move === 'jump' || (next.move === 'drop' && this.edgeStart.y - next.y <= 1.05)))) &&
       (near > 2 || continuesRun) &&
       (emergency || (food?.max > 0 && food.current / food.max >= SPRINT_FOOD));
     return {

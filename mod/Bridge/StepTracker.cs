@@ -13,6 +13,7 @@ public sealed class StepTracker
     public const double WideAlignDistance = 1.0;
     public const double BlockedMs = 700;
     public const double HopDistance = 1.8;
+    public const double SprintHopDistance = 2.8;
     public const double PassedLateral = 0.6;
     // A single step to an adjacent cell that is still going after this long is stuck, however the distance wobbles.
     public const double MaxMs = 2500;
@@ -53,7 +54,7 @@ public sealed class StepTracker
     // What to hold this tick, and where to look. Forward only while facing the point and
     // supported or continuing a hop/shallow descent along queued points; jump held
     // in water to keep the head up, or to hop once close.
-    public (bool Forward, bool Jump, double Yaw) Update(Point3 position, double yawDegrees, bool onGround, bool wet, long now, bool swimming = false)
+    public (bool Forward, bool Jump, double Yaw) Update(Point3 position, double yawDegrees, bool onGround, bool wet, long now, bool swimming = false, bool sprinting = false)
     {
         bool buoyant = wet && swimming;
         double dx = Toward.X - position.X, dz = Toward.Z - position.Z;
@@ -105,7 +106,7 @@ public sealed class StepTracker
         // run on through the arc. A hop fires only while the point is still above the feet: a body that
         // stepped up onto its level already must not be launched over it.
         bool forward = aligned && (onGround || wet || Hop || carry || airborneCarry) && !(passed && !level && !carry);
-        bool jump = buoyant || (Hop && aligned && Distance < HopDistance && dy > Math.Min(ReachY, 0.6));
+        bool jump = buoyant || (Hop && aligned && Distance < (sprinting ? SprintHopDistance : HopDistance) && dy > Math.Min(ReachY, 0.6));
         return (forward, jump, wantYaw);
     }
 

@@ -98,12 +98,17 @@ test('a merged run keeps input reach margin and falls back when the body drifts 
 });
 
 test('an uphill takeoff starts before the riser only with a clear earlier jump arc', () => {
-  for (const ceiling of [false, true]) {
+  for (const [ceiling, sprinting] of [
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ]) {
     const map = new TerrainMemory();
-    for (let x = 0; x <= 3; x++) column(map, x, 0);
+    for (let x = -1; x <= 3; x++) column(map, x, 0);
     map.put({ x: 2, y: 0, z: 0, seenAt: Date.now(), traits: [], boxes: [[2, 0, 0, 3, 1, 1]] });
     if (ceiling) map.put({ x: 0, y: 2, z: 0, seenAt: Date.now(), traits: [], boxes: [[0, 2, 0, 1, 3, 1]] });
-    const state = stateAt({ x: 0.8, y: 0, z: 0.5 });
+    const state = { ...stateAt({ x: sprinting ? -0.8 : 0.8, y: 0, z: 0.5 }), motion: { onGround: true, sprinting } };
     const landing = { x: 2.5, y: 1, z: 0.5, move: 'jump' };
     const nav = new Navigation(map, state, landing, 0);
     nav.adopt([{ x: 1.5, y: 0, z: 0.5, move: 'walk' }, landing], state.position, 0);

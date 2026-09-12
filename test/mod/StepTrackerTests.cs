@@ -37,6 +37,8 @@ static class StepTrackerTests
         var up = new StepTracker(new Point3(1.5, 101, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
         var far = up.Update(new Point3(-0.4, 100, 0.5), 90, true, false, 0);
         Check(far.Forward && !far.Jump, "no jump from afar");
+        var sprintUp = new StepTracker(new Point3(1.5, 101, .5), new Point3(-1, 100, .5), .35, .6, true, 0);
+        Check(sprintUp.Update(new Point3(-1, 100, .5), 90, true, false, 0, sprinting: true).Jump, "sprinting takes off before momentum hits the riser");
         // Already up at the point's level (a thin layer auto-stepped): no hop over it.
         var level = new StepTracker(new Point3(1.5, 101, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
         Check(!level.Update(new Point3(0.9, 100.9, 0.5), 90, true, false, 0).Jump, "no hop when already at the point's height");
