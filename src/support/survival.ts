@@ -150,6 +150,9 @@ export async function harvestFood(
 // handbook says yields food, harvest it, eat, and keep a reserve. A forced
 // tend is the forage goal itself. Navigation checks pauseWhen every sensing
 // tick; food work owns no parallel inputs.
+// Unproductive search steps in a row before the food search reports none_found.
+export const FORAGE_PATIENCE = 12;
+
 export class Survival {
   field: any;
   tending = false;
@@ -249,6 +252,12 @@ export class Survival {
         const result = await consume(field, { tolerance });
         this.eaten += result.consumed;
         continue;
+      }
+      // Nothing taken, seen or covered for a while: say so, rather than run to the deadline.
+      if (search.unproductive >= FORAGE_PATIENCE) {
+        this.tending = false;
+        field.recoveringFood = false;
+        return { reason: 'none_found', unproductive: search.unproductive };
       }
       await search.step({ toward });
     }

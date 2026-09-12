@@ -21,7 +21,7 @@ import {
   unproductiveApproach,
   viewChanged,
 } from '../src/support/search.ts';
-import { accessibleForage, harvestFood, harvestReady, matchingFoodDrops, Survival } from '../src/support/survival.ts';
+import { accessibleForage, FORAGE_PATIENCE, harvestFood, harvestReady, matchingFoodDrops, Survival } from '../src/support/survival.ts';
 import {
   fleeTarget,
   hostileEntity,
@@ -260,9 +260,34 @@ test('a patch of leads with no seen way to them is left behind after a few stall
     await search.approach(field.seen.get(`bush${i}`), null);
   }
   assert.equal(search.stalls, STALLED_APPROACHES);
+  assert.equal(search.attempts.get('bush0'), 1, 'each failed approach is held against its lead');
   assert.equal(search.rangeIfStalled(), true, 'three approaches that went nowhere: leave this patch');
   assert.equal(search.targets().length, 0, 'everything known here is set aside');
   assert.equal(places.frontier('food'), null, 'and the frontier is chosen afresh, away from here');
+});
+
+test('a search counts steps that took, saw and covered nothing, and forage gives up after enough of them', async () => {
+  const places = new Places(() => 1000);
+  const field = new Fieldwork({ places }, { now: () => 1000 });
+  field.latest = { position: { x: 0.5, y: 100, z: 0.5 }, orientation: { yawDegrees: 0 }, nearbyEntities: [], body: { halfWidth: 0.3, height: 1.8 } };
+  field.report = () => {};
+  field.observe = async () => field.latest;
+  const search = new Search(field, { kind: 'food', match: [], wanted: () => true, take: async () => false });
+  let steps = 0;
+  (search as any).act = async () => (++steps % 3 === 0 ? 'taken' : 'ranged');
+  await search.step();
+  await search.step();
+  assert.equal(search.unproductive, 2, 'two steps that went nowhere');
+  await search.step();
+  assert.equal(search.unproductive, 0, 'something taken resets the count');
+  await search.step();
+  (search as any).act = async () => {
+    field.latest = { ...field.latest, position: { x: 20.5, y: 100, z: 0.5 } };
+    return 'ranged';
+  };
+  await search.step();
+  assert.equal(search.unproductive, 0, 'ground covered counts as progress');
+  assert.ok(FORAGE_PATIENCE >= 8, 'forage gives the search a fair stretch before none_found');
 });
 
 test('the frontier is shared across goals and forgotten near a predator', async () => {

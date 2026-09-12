@@ -112,6 +112,10 @@ export type SearchOptions = {
 // block by block until dark.
 export const STALLED_APPROACHES = 3;
 export const STALL_SKIP_MS = 5 * 60 * 1000;
+// Each approach that failed makes a lead this much farther in the ordering.
+export const ATTEMPT_PENALTY = 32;
+// A step that moved less than this without taking or seeing anything new was unproductive.
+export const PRODUCTIVE_DISTANCE = 6;
 
 export class Search {
   field: any;
@@ -119,6 +123,9 @@ export class Search {
   lastView: any = null;
   stuck = 0;
   stalls = 0;
+  // Failed approaches per lead, and steps in a row that took, saw or covered nothing.
+  attempts = new Map<string, number>();
+  unproductive = 0;
   lastSeenCheck = 0;
   constructor(field, options: SearchOptions) {
     this.field = field;
@@ -133,7 +140,8 @@ export class Search {
   // Wanted things known to this goal, best first.
   targets() {
     const p = this.field.latest.position;
-    return this.field.targets(o => this.options.wanted(o)).sort((a, b) => approachScore(p, a) - approachScore(p, b));
+    const score = o => approachScore(p, o) + (this.attempts.get(o.key) ?? 0) * ATTEMPT_PENALTY;
+    return this.field.targets(o => this.options.wanted(o)).sort((a, b) => score(a) - score(b));
   }
   ready(object) {
     return this.options.ready ? this.options.ready(object, this.field.latest) : object.withinPickingRange;
@@ -187,6 +195,15 @@ export class Search {
   // One step of looking: something taken, a target approached, or ground
   // covered toward the frontier. Returns what it did.
   async step({ toward = null }: { toward?: any } = {}): Promise<'taken' | 'approached' | 'ranged'> {
+    const before = { ...this.field.latest.position },
+      known = new Set(this.targets().map(o => o.key));
+    const did = await this.act({ toward });
+    const fresh = this.targets().some(o => !known.has(o.key));
+    if (did === 'taken' || fresh || horizontal(before, this.field.latest.position) > PRODUCTIVE_DISTANCE) this.unproductive = 0;
+    else this.unproductive++;
+    return did;
+  }
+  private async act({ toward = null }: { toward?: any } = {}): Promise<'taken' | 'approached' | 'ranged'> {
     const field = this.field,
       { kind, approachExclude, memoryRange = 64, habitats = ['edge', 'open'] } = this.options;
     // In reach: the surroundings pass sees all around, including behind.
@@ -252,6 +269,7 @@ export class Search {
     if (destination) {
       const result = await field.walk(destination, this.pause);
       this.stalls = result.state === 'arrived' ? 0 : this.stalls + 1;
+      if (result.state !== 'arrived') this.attempts.set(target.key, (this.attempts.get(target.key) ?? 0) + 1);
       // The far eye is directional: reaching an old lead, read the surroundings
       // all around before calling the thing gone.
       const nearby = result.state === 'arrived' && target.visible === false ? await this.look(8) : [];
@@ -277,7 +295,9 @@ export class Search {
     const detour = elevationDetour(Math.abs(field.latest.position.y - target.point.y));
     if (horizontal(field.latest.position, target.point) > 6 || detour) {
       const result = await field.walk(field.explore(target.point, APPROACH_LEG, detour), this.pause);
-      this.stalls = result.state === 'arrived' || horizontal(field.latest.position, before) > 2 ? 0 : this.stalls + 1;
+      const nearer = horizontal(field.latest.position, target.point) + 2 < horizontal(before, target.point);
+      this.stalls = result.state === 'arrived' || nearer ? 0 : this.stalls + 1;
+      if (!nearer) this.attempts.set(target.key, (this.attempts.get(target.key) ?? 0) + 1);
       if (result.state === 'paused' && result.reason === 'route_threatened') this.avoidThreat(target);
       else if (stuckLeg(result, before, field.latest.position)) {
         const elevated = Math.abs((target.point.y ?? before.y) - before.y) > 2;

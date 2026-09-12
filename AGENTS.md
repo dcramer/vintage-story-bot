@@ -171,6 +171,7 @@ Linux, headless, one bot client per profile; flags, phases and constraints in [R
 - [Bot API reference](docs/bot-api-reference.md) — read when designing bot APIs, support helpers, or goals; Mineflayer analogues and design criteria.
 - [Runtime](docs/runtime.md) — read before launching, deploying, or controlling the bot.
 - [Navigation](docs/navigation.md) — read when changing sensing, terrain memory, route planning or steering; perception layers, planners, walk loop, statuses.
+- [Search](docs/search.md) — read when changing how a goal looks for things or how forage behaves; the loop, leads and evidence, the frontier, patience.
 - [Getting started](docs/getting-started.md) — read when defining or prioritizing goals; survival rules, house/kiln specs, day 1–5 checklists.
 - [Brain](docs/brain.md) — read when changing what the bot does on its own; the brain contract and the default brain's jobs.
 - [Game API reference](docs/capabilities.md) — read when changing game integration or sensing; entry points, source material, perception constraints.

@@ -34,16 +34,17 @@ export default defineGoal({
     'than is kept, and finish at `until` satiety with `keep` satiety worth in the pack. Starving, it stomachs food that costs ' +
     'a point of health. count instead stockpiles that many additional fresh items after replacing anything eaten. ' +
     'Nothing in sight: it takes what was seen before, else ranges toward the least-walked ground, carrying on in the same ' +
-    'direction across restarts. No default deadline. Damage/death/control loss cancels; never respawns or resumes automatically. ' +
+    'direction across restarts; a stretch of steps that took, saw and covered nothing ends it with none_found. No default deadline. Damage/death/control loss cancels; never respawns or resumes automatically. ' +
     'Returns START and goal.id; poll goal_status. Needs an empty hotbar slot for harvesting. ' +
     'Optional sprint=true permits straight level sprinting only while food is at least 60%.',
   announce: () => 'Foraging for a bite to eat.',
   run: (env, options) =>
     runField(env, { ...options, manageFood: true }, [], async (field, survival) => {
-      await survival.tend({ force: true, match: options.match, count: options.count, until: options.until, keep: options.keep });
+      const ended = await survival.tend({ force: true, match: options.match, count: options.count, until: options.until, keep: options.keep });
       return {
-        ok: true,
+        ok: !ended?.reason,
         goal: 'forage',
+        ...(ended?.reason ? { reason: ended.reason } : {}),
         eaten: survival.eaten,
         harvested: survival.harvested,
         retained: survival.retained,

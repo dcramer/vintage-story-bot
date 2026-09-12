@@ -111,7 +111,7 @@ export const LADDER: Rung[] = [
   { job: 'wait', when: (s, tried) => s.night && ((s.home && s.atHome) || s.burrowed || tried.has('burrow')) },
   { job: 'burrow', when: s => s.night },
   { job: 'unburrow', when: (s, tried) => s.burrowed && !tried.has('unburrow') },
-  { job: 'eat', when: s => peckish(s) && s.reserve <= 0 },
+  { job: 'eat', when: (s, tried) => peckish(s) && s.reserve <= 0 && !tried.has('eat') },
 ];
 const CONCERNS = new Map<Job, Concern>([...REFLEXES, ...TASKS].map(concern => [concern.id, concern]));
 const concern = (job: Job) => CONCERNS.get(job)!;

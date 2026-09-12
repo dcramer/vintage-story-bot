@@ -357,10 +357,10 @@ export class Fieldwork {
           const requested = pauseWhen?.(state);
           if (requested) return requested;
           const food = state.vitals?.hunger;
-          // A stick beside the route is not worth a detour while starvation
-          // is already the job. Resume ordinary opportunistic pickup once the
-          // emergency threshold has been recovered.
-          if (this.recoveringFood && food?.max > 0 && food.current / food.max < 0.2) return null;
+          // A stick beside the route is not worth a detour while food is short
+          // and the job is finding some. Ordinary opportunistic pickup resumes
+          // once satiety is back over the peckish line.
+          if (this.recoveringFood && food?.max > 0 && food.current / food.max < 0.4) return null;
           return gleaner.pauseWhen(state);
         }
       : pauseWhen;

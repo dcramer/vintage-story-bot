@@ -168,6 +168,13 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
     'storage',
     'the reed chest comes right after the knife and axe: it fixes the site',
   );
+  assert.equal(pickJob(situation({ hunger: 0.3 })), 'eat', 'peckish with nothing carried: look for food');
+  assert.equal(
+    pickJob(situation({ hunger: 0.3 }), new Set(['eat'] as any)),
+    'explore',
+    'a peckish search that found nothing is set aside like any task',
+  );
+  assert.equal(pickJob(situation({ hunger: 0.1 }), new Set(['eat'] as any)), 'eat', 'a hungry one keeps looking');
   assert.equal(pickJob(situation({ torches: 0 })), 'grass');
   assert.equal(pickJob(situation({ torches: 0, grass: 2 })), 'torches');
   assert.equal(pickJob(situation({ logs: 1 })), 'logs');
