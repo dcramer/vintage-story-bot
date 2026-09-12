@@ -8,7 +8,13 @@ export const unburrow: Concern = {
   run: ({ memory, hurt, s }) => ({
     start: 'dig_area',
     args: { cells: [memory.burrow], timeoutMs: 120000 },
-    why: hurt ? 'burrow breached, opening escape' : s.night ? 'hungry, opening the burrow' : 'morning, opening the burrow',
+    why: hurt
+      ? 'burrow breached, opening escape'
+      : s.besieged
+        ? 'tunnel stopped by rock; opening the mouth to run'
+        : s.night
+          ? 'hungry, opening the burrow'
+          : 'morning, opening the burrow',
   }),
   ended: (last, memory, { state }) => {
     // Removing the seal opens the shaft but does not put the body back on

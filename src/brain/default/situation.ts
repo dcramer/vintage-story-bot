@@ -93,6 +93,8 @@ export type Situation = {
   home: boolean;
   atHome: boolean;
   burrowed: boolean;
+  // Dug in with a threat outside for longer than a day's patience: time to tunnel out the far side.
+  besieged: boolean;
   dangerHere: boolean;
   // A death marker is on the map: the body's things lie there.
   body: boolean;

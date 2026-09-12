@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { SIEGE_MS } from '../src/brain/default/reflexes/tunnel.ts';
 import brain, {
   decide as decision,
   environmentalHurt,
@@ -71,6 +72,7 @@ const reading = (extra = {}) => ({
 });
 const situation = (extra = {}) => ({
   burrowed: false,
+  besieged: false,
   dangerHere: false,
   body: false,
   threat: false,
@@ -1007,6 +1009,36 @@ test('brain: a dialog left open by a failed goal is closed the way a player woul
     'character creation is not Escaped',
   );
   assert.ok('wait' in decide(reading({ state: blocked, dialogs: null }), fresh()), 'unknown dialogs: wait');
+});
+
+test('brain: a threat outside the burrow is waited out, then by day tunnelled away from', () => {
+  const memory = fresh();
+  memory.burrow = { x: 0, y: 102, z: 0 };
+  const prowler = state({ nearbyEntities: [{ code: 'game:drifter-normal', point: { x: 3, y: 102, z: 0 }, distance: 3, how: 'near', at: 1 }] });
+  assert.deepEqual(decide(reading({ state: prowler, now: 1000 }), memory), { wait: 'dug in, something prowling outside' });
+  assert.equal(memory.besiegedAt, 1000, 'the siege is timed from the first wait');
+  assert.ok('wait' in decide(reading({ state: prowler, now: 1000 + SIEGE_MS - 1 }), memory), 'patience first');
+  const out = decide(reading({ state: prowler, now: 1000 + SIEGE_MS }), memory);
+  assert.equal(out.start, 'dig_out', 'then stairs out the far side');
+  assert.ok(out.args.x < 0, 'away from the drifter');
+  assert.ok(memory.burrow, 'the burrow is kept until the stairs reach daylight');
+  memory.job = 'tunnel';
+  const rock = decide(
+    reading({ state: prowler, now: 1000 + SIEGE_MS + 2000, last: { id: 't', kind: 'dig_out', ok: false, reason: 'cannot_climb' } }),
+    memory,
+  );
+  assert.ok(memory.tried.tunnel, 'rock: the tunnel is set aside');
+  assert.deepEqual([rock.start, rock.why], ['dig_area', 'tunnel stopped by rock; opening the mouth to run'], 'dig, and run');
+  memory.job = 'tunnel';
+  const done = fresh();
+  done.burrow = { x: 0, y: 102, z: 0 };
+  done.job = 'tunnel';
+  decide(reading({ state: state(), last: { id: 't', kind: 'dig_out', ok: true } }), done);
+  assert.equal(done.burrow, null, 'stairs reached daylight: the burrow is left behind');
+  const night = fresh();
+  night.burrow = { x: 0, y: 102, z: 0 };
+  night.besiegedAt = 0;
+  assert.ok('wait' in decide(reading({ state: prowler, environment: { calendar: { daylight: 0.1 } }, now: SIEGE_MS * 2 }), night), 'never at night');
 });
 
 test('brain: knapping needs two flints, one for the surface and one in hand for the recipe', () => {

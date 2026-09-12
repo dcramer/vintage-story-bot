@@ -28,6 +28,7 @@ export type Job =
   | 'dig_out'
   | 'burrow'
   | 'unburrow'
+  | 'tunnel'
   | 'relocate'
   | 'recover'
   | 'storage'
@@ -78,6 +79,8 @@ export type Memory = {
   dialogCloses: number[];
   // Until when a hit is explained by the job just done (poison after a bite).
   explainedUntil: number;
+  // Since when something has prowled outside the sealed burrow.
+  besiegedAt: number | null;
   // Times in a row the chest could not be aimed at where its note says.
   stashMisses: number;
   // Sighting keys already marked on the map, so one nugget is announced once.

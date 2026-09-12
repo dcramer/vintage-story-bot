@@ -49,7 +49,8 @@ fights; it runs or hides.
 | go_home | `travel` home | Storm or night, away from home |
 | burrow | `burrow` | Night with no home: a pocket in a bank of earth when a block to seal it is carried, else a hole two blocks straight down where it stands, sealed with what it digs; never cut short by a threat |
 | unburrow | `dig_area` on the mouth | Morning, dug in |
-| wait | none | Storm at home, night at home, or dug in for the night |
+| wait | none | Storm at home, night at home, dug in for the night, or dug in with something prowling outside |
+| tunnel | `dig_out` away from the threat, else `dig_area` on the mouth | Dug in with a threat outside for three minutes of daylight: stairs out the far side; rock stops them (no pickaxe), so a failed tunnel is set aside and the mouth is opened to run |
 
 Wants (what every walk stops for within six blocks): berries on a ripe bush, an edible mushroom and a wild hive always; loose sticks while short of a few; loose flint and stones while a tool head is wanted and nothing knappable is carried.
 | eat | `forage` to half with two bites kept; `eat` alone when dug in with food | Satiety below 20% (or 40% with nothing carried); eats what is carried when hungry (in the burrow too, off an earth wall), keeps the rest, searches ever farther in one direction for more, and when starving stomachs a bite that costs a point of health |

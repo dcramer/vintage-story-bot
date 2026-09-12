@@ -3,5 +3,12 @@ import type { Concern } from '../concern.ts';
 
 export const wait: Concern = {
   id: 'wait',
-  run: ({ storm, memory }) => ({ wait: storm ? 'storm' : memory.burrow ? 'night, dug in' : 'night, nowhere to go' }),
+  run: ({ storm, memory, s, now }) => {
+    if (s.burrowed && s.threat) {
+      memory.besiegedAt ??= now;
+      return { wait: 'dug in, something prowling outside' };
+    }
+    memory.besiegedAt = null;
+    return { wait: storm ? 'storm' : memory.burrow ? 'night, dug in' : 'night, nowhere to go' };
+  },
 };

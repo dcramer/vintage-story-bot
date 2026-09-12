@@ -37,6 +37,7 @@ import { goHome } from './default/reflexes/go_home.ts';
 import { hide } from './default/reflexes/hide.ts';
 import { dangerHere, forgetOldScares, relocate } from './default/reflexes/relocate.ts';
 import { surfacing } from './default/reflexes/swim.ts';
+import { SIEGE_MS, tunnel } from './default/reflexes/tunnel.ts';
 import { unburrow } from './default/reflexes/unburrow.ts';
 import { wait } from './default/reflexes/wait.ts';
 import { isNight, kit, type Situation, senseDanger } from './default/situation.ts';
@@ -87,7 +88,7 @@ export const TASKS: Concern[] = [
   spareKnife,
   logs,
 ];
-const REFLEXES: Concern[] = [hide, eat, goHome, burrow, unburrow, wait, relocate, digOut, explore];
+const REFLEXES: Concern[] = [hide, eat, goHome, burrow, unburrow, tunnel, wait, relocate, digOut, explore];
 // What runs beside any job, through tools that only talk.
 const ALONGSIDE: Alongside[] = [copper, homeMarker];
 // The ladder: danger, then hunger, then a storm, a bad place, night, then the
@@ -99,6 +100,9 @@ const ALONGSIDE: Alongside[] = [copper, homeMarker];
 // tried again at once either, nor is opening a burrow that would not open.
 export const LADDER: Rung[] = [
   { job: 'unburrow', when: s => s.burrowed && s.hurt },
+  { job: 'tunnel', when: (s, tried) => s.burrowed && s.threat && !s.hurt && s.besieged && !tried.has('tunnel') },
+  // Rock stopped the tunnel: open the mouth and run (the hide rung takes over once outside).
+  { job: 'unburrow', when: (s, tried) => s.burrowed && s.threat && !s.hurt && s.besieged && tried.has('tunnel') },
   { job: 'wait', when: s => s.burrowed && s.threat && !s.hurt },
   { job: 'hide', when: (s, tried) => s.hurt || (s.threat && !tried.has('hide')) },
   { job: 'unburrow', when: s => hungry(s) && s.burrowed && s.reserve <= 0 },
@@ -207,6 +211,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     home: !!home,
     atHome: !!home && horizontal(state.position, home) < 8,
     burrowed: !!memory.burrow && horizontal(state.position, memory.burrow) <= 8,
+    besieged: !isNight(environment) && memory.besiegedAt !== null && now - memory.besiegedAt >= SIEGE_MS,
     dangerHere: dangerHere(memory, state.position),
     body: markers.some(isDeathMarker),
     sticks: k.sticks,
@@ -314,6 +319,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
     pendingHurtAt: null,
     dialogCloses: [],
     explainedUntil: 0,
+    besiegedAt: null,
     stashMisses: 0,
   };
 }
