@@ -52,6 +52,8 @@ export function kit(inventory: any) {
     dirt: part('soil-'),
     dirtCode: slots.find(s => s.code?.includes('soil-'))?.code ?? null,
     stone: slots.some(s => s.code && kinds.knapping.materials(s)),
+    // Pieces that knap, counted: placing the surface takes one and the recipe is chosen with one still in hand.
+    knappables: slots.filter(s => s.code && kinds.knapping.materials(s)).reduce((n, s) => n + s.quantity, 0),
     grass: part('drygrass') + part('cattailtops'),
     logs: part('log-'),
     reserve: foodReserve(inventory) as number,

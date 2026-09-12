@@ -64,6 +64,7 @@ const reading = (extra = {}) => ({
   events: [],
   markers: [],
   ground: null,
+  dialogs: null,
   terrain: null,
   now: 1000,
   ...extra,
@@ -984,6 +985,42 @@ test('brain: home is a note that outlives the process and is mirrored once on th
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('brain: a dialog left open by a failed goal is closed the way a player would, a few times at most', () => {
+  const memory = fresh();
+  const blocked = state({ controlReady: false });
+  const recipe = [
+    { name: 'GuiDialogBlockEntityRecipeSelector', blocksControl: true },
+    { name: 'HudHotbar', blocksControl: false },
+  ];
+  assert.deepEqual(decide(reading({ state: blocked, dialogs: recipe }), memory), {
+    act: [{ action: 'close_dialog' }],
+    why: 'GuiDialogBlockEntityRecipeSelector blocks the controls',
+  });
+  decide(reading({ state: blocked, dialogs: recipe, now: 2000 }), memory);
+  decide(reading({ state: blocked, dialogs: recipe, now: 3000 }), memory);
+  assert.ok('wait' in decide(reading({ state: blocked, dialogs: recipe, now: 4000 }), memory), 'three presses in ten seconds, then it waits');
+  assert.ok('act' in decide(reading({ state: blocked, dialogs: recipe, now: 20000 }), memory), 'and tries again later');
+  assert.ok(
+    'wait' in decide(reading({ state: blocked, dialogs: [{ name: 'GuiDialogCreateCharacter', blocksControl: true }] }), fresh()),
+    'character creation is not Escaped',
+  );
+  assert.ok('wait' in decide(reading({ state: blocked, dialogs: null }), fresh()), 'unknown dialogs: wait');
+});
+
+test('brain: knapping needs two flints, one for the surface and one in hand for the recipe', () => {
+  const memory = fresh();
+  memory.notes.home = { x: 0, y: 100, z: 0 };
+  memory.notes.stash = basketNote();
+  const one = decide(reading({ inventory: inventory(slot('game:stick', 3), slot('game:flint', 1)) }), memory);
+  assert.deepEqual(
+    [one.start, one.args.match, one.args.count, memory.job],
+    ['gather', 'looseflints', 3, 'knife'],
+    'one flint: three more for three heads plus the one in hand',
+  );
+  const two = decide(reading({ inventory: inventory(slot('game:stick', 3), slot('game:flint', 2)) }), fresh());
+  assert.deepEqual([two.start, two.args.output], ['knap', 'game:knifeblade-flint'], 'two flints: knap');
 });
 
 test('brain: a hand basket is woven from ten tops and worn by hand', () => {

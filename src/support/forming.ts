@@ -97,21 +97,33 @@ export async function form(field, { kind, output, material }) {
     cell = { x: ground.x, y: ground.y + 1, z: ground.z };
   }
   const key = `block:0:${cell.x}:${cell.y}:${cell.z}:${surfaceCode}`;
-  // Surface creation opens the native recipe dialog; select before inspecting so controls come back.
-  const state = await field.send({ action: 'observe' });
-  if (!state.controlReady || kind === 'clayforming') {
-    await field.send({ action: 'select_recipe', target: key, output });
-    await field.wait(300);
-  }
-  let detail = await inspectSurface(field, cell);
-  if (!detail?.forming) return { ok: false, reason: 'surface_missing', ...summary() };
-  if (!detail.forming.recipe) {
-    if (!detail.forming.recipes?.some(r => r.output === output))
-      return { ok: false, reason: 'recipe_unavailable', ...summary(), recipes: detail.forming.recipes?.map(r => r.output) };
-    await field.send({ action: 'select_recipe', target: key, output });
-    detail = (await field.until((_, seen) => !!seen?.forming?.recipe, { timeoutMs: 3000, everyMs: 200, read: () => inspectSurface(field, cell) }))
-      .read;
-    if (detail?.forming?.recipe?.output !== output) return { ok: false, reason: 'recipe_not_selected', ...summary() };
+  // The native recipe dialog blocks every control; a selection that fails must not leave it open.
+  // Escape cancels it the way a player would (the game then removes the surface).
+  const bail = async result => {
+    await field.send({ action: 'close_dialog' }).catch(() => {});
+    return result;
+  };
+  let detail;
+  try {
+    // Surface creation opens the native recipe dialog; select before inspecting so controls come back.
+    const state = await field.send({ action: 'observe' });
+    if (!state.controlReady || kind === 'clayforming') {
+      await field.send({ action: 'select_recipe', target: key, output });
+      await field.wait(300);
+    }
+    detail = await inspectSurface(field, cell);
+    if (!detail?.forming) return bail({ ok: false, reason: 'surface_missing', ...summary() });
+    if (!detail.forming.recipe) {
+      if (!detail.forming.recipes?.some(r => r.output === output))
+        return bail({ ok: false, reason: 'recipe_unavailable', ...summary(), recipes: detail.forming.recipes?.map(r => r.output) });
+      await field.send({ action: 'select_recipe', target: key, output });
+      detail = (await field.until((_, seen) => !!seen?.forming?.recipe, { timeoutMs: 3000, everyMs: 200, read: () => inspectSurface(field, cell) }))
+        .read;
+      if (detail?.forming?.recipe?.output !== output) return bail({ ok: false, reason: 'recipe_not_selected', ...summary() });
+    }
+  } catch (error) {
+    await bail(null);
+    throw error;
   }
   let stuck = 0,
     lastRemaining = detail.forming.remaining;

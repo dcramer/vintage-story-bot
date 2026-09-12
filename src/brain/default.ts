@@ -117,6 +117,13 @@ const CONCERNS = new Map<Job, Concern>([...REFLEXES, ...TASKS].map(concern => [c
 const concern = (job: Job) => CONCERNS.get(job)!;
 
 export const tasks = (s: Situation, tried: Set<Job> = new Set()) => taskList(TASKS, s, tried);
+// A dialog left open by a goal that failed (a recipe selector, the handbook, a container) blocks every control;
+// a player presses Escape. Character creation, death and disconnection are not closed this way.
+// Escape is pressed at most a few times in a short while, then the wait says what is open.
+export const DIALOG_CLOSES = 3;
+export const DIALOG_CLOSE_MS = 10000;
+export const closableDialog = (dialogs: Reading['dialogs']) =>
+  dialogs?.find(d => d.blocksControl && /^GuiDialog(?!CreateCharacter|Dead|Death|Disconnect|Confirm|Login)/.test(d.name))?.name ?? null;
 export const pickJob = (s: Situation, tried: Set<Job> = new Set()) => pick(LADDER, TASKS, 'explore', s, tried);
 
 // The jobs set aside around here: failed within a few minutes and, unless the job says
@@ -162,7 +169,15 @@ export function decide(reading: Reading, memory: Memory): Decision {
   }
   // A world still loading, a menu or a dialog: no goal can begin, and one refused
   // before it began would only be started again at once. Wait for the controls.
-  if (state.controlReady === false) return { wait: 'controls not ready (loading, menu or dialog)' };
+  if (state.controlReady === false) {
+    const closable = closableDialog(reading.dialogs);
+    memory.dialogCloses = memory.dialogCloses.filter(at => now - at < DIALOG_CLOSE_MS);
+    if (closable && memory.dialogCloses.length < DIALOG_CLOSES) {
+      memory.dialogCloses.push(now);
+      return { act: [{ action: 'close_dialog' }], why: `${closable} blocks the controls` };
+    }
+    return { wait: 'controls not ready (loading, menu or dialog)' };
+  }
   const startup = recoverBurrow(reading, memory);
   if (startup) return startup;
   const { danger, hurt, classifyingHurt } = senseDanger(reading, memory, !!(memory.job && concern(memory.job).explains?.(events)));
@@ -289,6 +304,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
     lastThreat: null,
     resting: false,
     pendingHurtAt: null,
+    dialogCloses: [],
   };
 }
 

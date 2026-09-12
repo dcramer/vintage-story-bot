@@ -38,6 +38,8 @@ export type Reading = {
   markers: { guid: string; title: string; icon: string; position: { x: number; y: number; z: number } }[];
   // The nearest remembered dry standing cell within 16 blocks while swimming, else null.
   ground: { x: number; y: number; z: number } | null;
+  // The native dialogs open while the controls are blocked (alive, controlReady false), else null.
+  dialogs: { name: string; blocksControl: boolean }[] | null;
   // The terrain cells currently known to the controller. Brains may inspect
   // them but never mutate them.
   terrain: any;
@@ -183,10 +185,11 @@ export class BrainLoop<Memory> {
       };
       this.goal = null;
     }
-    const [inventory, environment, markers] = await Promise.all([
+    const [inventory, environment, markers, dialogs] = await Promise.all([
       controller.send({ action: 'inventory' }),
       controller.send({ action: 'environment' }),
       this.markers(state),
+      this.dialogs(state),
     ]);
     if (!inventory.ok) throw new Error(inventory.error ?? 'inventory refused');
     if (!environment.ok) throw new Error(environment.error ?? 'environment refused');
@@ -201,6 +204,7 @@ export class BrainLoop<Memory> {
       events: batch.events,
       markers,
       ground: state.motion?.swimming || state.motion?.feetInLiquid ? this.dryGround(state) : null,
+      dialogs,
       terrain: controller.map ?? null,
       now: Date.now(),
     };
@@ -246,6 +250,12 @@ export class BrainLoop<Memory> {
     const started = await controller.request({ action: decision.start, ...decision.args }, { by: 'brain' });
     if (!started.ok) throw new Error(`${decision.start} refused: ${started.error}`);
     this.goal = { id: started.goal.id, kind: decision.start };
+  }
+  // The dialogs open while the controls are blocked, when the mod reports them; a refusal reads as unknown.
+  private async dialogs(state: any) {
+    if (state.controlReady !== false || !state.alive || !state.capabilities?.includes?.('ui_dialogs')) return null;
+    const read = await this.controller.send({ action: 'dialogs' }).catch(() => null);
+    return read?.ok ? (read.dialogs ?? []).map(d => ({ name: d.name, blocksControl: !!d.blocksControl })) : null;
   }
   // The player's own map markers, when the mod reports them; a refusal reads as none.
   private async markers(state: any) {

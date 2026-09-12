@@ -72,6 +72,8 @@ export type Memory = {
   resting: boolean;
   // A raw hit waiting briefly for the server's cause notification.
   pendingHurtAt: number | null;
+  // When the brain last pressed Escape on a dialog that blocked the controls.
+  dialogCloses: number[];
   // Sighting keys already marked on the map, so one nugget is announced once.
   marked: Set<string>;
 };
