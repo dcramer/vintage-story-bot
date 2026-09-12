@@ -61,12 +61,13 @@ export type { Job, Memory, Notes, Situation };
 // The day-1 list, in dependency order: each task is done when the kit or the
 // notes show it, and the first task not done is the one to work on. The knife
 // comes first and needs only a stick and a flint, so it is made the moment
-// both are in hand; the axe and shovel follow the same way. The order carries
+// both are in hand; the axe and shovel follow the same way, and only then is
+// the body fetched: two quick goals before what may be a long walk. The order carries
 // the rest of the dependencies (dirt needs a shovel; a shelter needs dirt; a
 // basket needs a home to stand by; torches need a home to light), and `after`
 // names them. What the basket holds is fetched before anything is gathered;
 // a full pack is emptied before the rest of the list.
-export const TASKS: Concern[] = [recover, resupply, knife, axe, shovel, dirt, shelter, storage, stash, sticks, spareKnife, grass, torches, logs];
+export const TASKS: Concern[] = [resupply, knife, axe, shovel, recover, dirt, shelter, storage, stash, sticks, spareKnife, grass, torches, logs];
 const REFLEXES: Concern[] = [hide, eat, goHome, burrow, unburrow, wait, relocate, digOut, explore];
 // What runs beside any job, through tools that only talk.
 const ALONGSIDE: Aside[] = [copper, homeMarker];

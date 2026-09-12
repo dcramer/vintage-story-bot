@@ -38,6 +38,13 @@ const state = (extra = {}) => ({
 });
 const day = { calendar: { daylight: 1 } },
   night = { calendar: { daylight: 0.1 } };
+// A pack with the three tools: the kit's first three tasks done.
+const kitted = () =>
+  inventory(
+    slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }),
+    slot('game:axe-flint', 1, { tool: 'Axe', durability: 5 }),
+    slot('game:shovel-flint', 1, { tool: 'Shovel', durability: 5 }),
+  );
 const reading = (extra = {}) => ({
   state: state(),
   inventory: inventory(),
@@ -149,7 +156,8 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ torches: 0, grass: 2 })), 'torches');
   assert.equal(pickJob(situation({ logs: 1 })), 'logs');
   assert.equal(pickJob(situation()), 'explore');
-  assert.equal(pickJob(situation({ body: true, sticks: 0 })), 'recover', 'the body comes before the kit');
+  assert.equal(pickJob(situation({ body: true, sticks: 0 })), 'recover', 'the body comes before the rest of the kit');
+  assert.equal(pickJob(situation({ body: true, knife: false })), 'knife', 'but the knife comes before the body: two quick goals before a long walk');
   assert.equal(pickJob(situation({ body: true, night: true })), 'wait', 'but not at night');
   assert.equal(pickJob(situation({ body: true, sticks: 0 }), new Set(['recover'] as any)), 'sticks', 'a failed recovery is set aside');
   assert.equal(
@@ -181,7 +189,11 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
   );
   assert.notEqual(memory.job, 'sticks', 'a failed stick search is set aside around here');
   const grave = [{ guid: 'g', title: 'You died here', icon: 'gravestone', position: { x: 30, y: 100, z: 0 } }];
-  assert.equal(decide(reading({ markers: grave, now: 2500 }), memory).start, 'retrieve_body', 'a death marker sends it back for its things');
+  assert.equal(
+    decide(reading({ markers: grave, inventory: kitted(), now: 2500 }), memory).start,
+    'retrieve_body',
+    'a death marker sends it back for its things',
+  );
   memory.job = null;
   const fled = decide(reading({ state: wolf }), memory);
   assert.equal(fled.start, 'travel');
@@ -281,7 +293,10 @@ test('brain: danger interrupts body recovery and backs it off across a flight', 
   assert.equal(afterFlight.start, 'gather', 'the recovery cooldown follows the bot away from the grave');
 
   memory.job = null;
-  const retry = decide(reading({ markers: grave, state: state({ position: { x: 100, y: 100, z: 0 } }), now: 2001 + 5 * 60 * 1000 }), memory);
+  const retry = decide(
+    reading({ markers: grave, inventory: kitted(), state: state({ position: { x: 100, y: 100, z: 0 } }), now: 2001 + 5 * 60 * 1000 }),
+    memory,
+  );
   assert.equal(retry.start, 'retrieve_body', 'the grave is tried again after the cooldown');
 
   const clusteredDanger = fresh();

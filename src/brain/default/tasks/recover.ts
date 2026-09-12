@@ -1,4 +1,5 @@
-// A death marker on the map: the body's things lie there. Before any of the kit, by day.
+// A death marker on the map: the body's things lie there. Fetched by day once the
+// three tools are in hand: they are two quick goals each, the body may be a long walk.
 // A recovery interrupted by danger is left alone for a while wherever the bot is:
 // returning to the same grave at once makes the fresh life repeat the death.
 import type { Concern } from '../concern.ts';
