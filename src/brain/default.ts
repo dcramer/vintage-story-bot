@@ -269,7 +269,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
         (memory.job === 'recover' && /^brain: (threat|hurt|relocate)$/.test(last.reason ?? '')))
     )
       memory.tried[memory.job] = { x: state.position.x, z: state.position.z, at: now };
-    if (memory.job === 'dig_out') memory.pit = null;
+    // A partial staircase is useful progress, not proof the pit is gone. Keep
+    // the same escape heading so the next bounded dig-out resumes one level
+    // higher; abandon only a motionless attempt or a verified success.
+    if (memory.job === 'dig_out' && (last.ok || !(last.result?.climbed > 0))) memory.pit = null;
     // A finished shelter is home.
     if (memory.job === 'shelter' && last.ok && last.result?.home) memory.home = last.result.home;
     if (memory.job === 'burrow' && last.ok && last.result?.mouth) memory.burrow = last.result.mouth;

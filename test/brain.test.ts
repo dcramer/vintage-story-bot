@@ -615,6 +615,25 @@ test('brain: digging out of a hole is never interrupted by a threat', () => {
   assert.equal(during.wait, 'letting dig_out finish');
 });
 
+test('brain: a partial pit escape resumes instead of starting work underground', () => {
+  const memory = fresh();
+  memory.pit = { x: 8.5, z: 0.5 };
+  memory.job = 'dig_out';
+  const next = decide(
+    reading({
+      last: { id: 'd1', kind: 'dig_out', ok: false, reason: 'no_footing', result: { ok: false, climbed: 1, reason: 'no_footing' } },
+    }),
+    memory,
+  );
+  assert.equal(next.start, 'dig_out');
+  assert.deepEqual([next.args.x, next.args.z], [8.5, 0.5]);
+
+  memory.job = 'dig_out';
+  const escaped = decide(reading({ last: { id: 'd2', kind: 'dig_out', ok: true, result: { ok: true, climbed: 1 } } }), memory);
+  assert.notEqual(escaped.start, 'dig_out');
+  assert.equal(memory.pit, null);
+});
+
 test('brain: opening a morning burrow is followed by digging steps to the surface', () => {
   const memory = fresh();
   memory.burrow = { x: 0, y: 2, z: 0 };
