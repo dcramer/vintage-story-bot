@@ -312,7 +312,7 @@ const brain: Brain<Memory, Notes> = {
   name: 'default',
   description:
     'A cautious beginner: respawns, swims for shore, runs from monsters and from whatever hurts it, hides at night and in storms, eats when hungry, marks copper it passes, gathers sticks and stone, ' +
-    'knaps a knife and axe, crafts torches, chops logs, builds a small dirt shelter with a basket by the door, puts the surplus away when its pack is full, and looks around when there is nothing else to do.',
+    'crafts torches, chops logs, weaves hand baskets and a reed chest at its site, builds a small dirt shelter beside it, puts the surplus away when its pack is full, and looks around when there is nothing else to do.',
   fresh,
   decide,
   wants,
