@@ -198,6 +198,10 @@ export function tasks(s: Situation, tried: Set<Job> = new Set()): { id: Job; tit
   });
 }
 export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
+  // A sealed burrow is already the safest response to something prowling
+  // outside. Opening it to flee turns cover into a trap; only actual damage
+  // proves the shelter is unsafe.
+  if (s.threat && s.burrowed && !s.hurt) return 'wait';
   if (s.threat || s.hurt) return 'hide';
   // Below the recovery threshold, food is no longer optional daywork. With
   // nothing in the pack, sheltering through the night guarantees starvation;
