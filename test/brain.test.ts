@@ -569,7 +569,19 @@ test('brain: night waits for forage to finish food already in hand', () => {
       }),
       memory,
     ),
-    { wait: 'letting forage finish eating' },
+    { wait: 'letting forage finish' },
+  );
+  assert.deepEqual(
+    decide(
+      reading({
+        environment: night,
+        state: state({ vitals: { hunger: { current: 430, max: 1500 } } }),
+        active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' },
+      }),
+      memory,
+    ),
+    { wait: 'letting forage finish' },
+    'crossing the urgent threshold on the last carried bite does not cancel the recovery run',
   );
 });
 

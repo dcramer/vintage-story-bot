@@ -410,10 +410,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
       return { stop: 'safe' };
     // Someone else's goal is otherwise left alone.
     if (active.by !== 'brain') return { wait: `letting ${active.kind} finish (${active.by})` };
-    // Once forage has food in hand, let it finish the few safe bites before
-    // night shelter takes over. Cancelling after the first berry strands the
-    // rest outside and repeats the burrow cycle at the next hunger tick.
-    if (memory.job === 'eat' && active.kind === 'forage' && k.reserve > 0) return { wait: 'letting forage finish eating' };
+    // A recovery run owns food until it reaches its target, even when the last
+    // carried bite briefly clears the urgent hunger alert. Cancelling it at
+    // that boundary for night shelter leaves the bot peckish and restarts the
+    // same forage/burrow cycle a few ticks later.
+    if (memory.job === 'eat' && active.kind === 'forage') return { wait: 'letting forage finish' };
     // A dig-in is finished whatever is about: two blocks down is safer than any flight at night.
     const pressing = URGENT.includes(job) && job !== memory.job && !['hide', 'dig_out', 'burrow'].includes(memory.job ?? '');
     // Peckish is not an interruption; hungry is, and only when the ladder would actually eat.
