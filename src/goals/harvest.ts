@@ -67,9 +67,16 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     }
     if (gained() >= count) continue;
     const near = (await field.scan(8, match.slice(0, 64), 'blocks')).filter(o => blocks(o) && o.withinPickingRange && !field.skipped.has(o.key));
-    const ready = near.sort(
-      (a, b) => (lowest ? a.point.y - b.point.y : 0) || horizontal(a.point, field.latest.position) - horizontal(b.point, field.latest.position),
-    )[0];
+    // A player digs into a bank or the surface around, never a shaft under their own feet: blocks
+    // below the ground the bot stands on are left alone, higher ones (a slope face) come first.
+    const feet = Math.floor(field.latest.position.y);
+    const ready = near
+      .filter(o => lowest || o.point.y >= feet - 1)
+      .sort(
+        (a, b) =>
+          (lowest ? a.point.y - b.point.y : Math.floor(b.point.y) - Math.floor(a.point.y)) ||
+          horizontal(a.point, field.latest.position) - horizontal(b.point, field.latest.position),
+      )[0];
     if (ready) {
       const slot = await held();
       inventory = await field.send({ action: 'inventory' });

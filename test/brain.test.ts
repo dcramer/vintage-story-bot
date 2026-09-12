@@ -233,3 +233,13 @@ test('brain: hunger does not interrupt a flight; danger outranks it', () => {
     'nor does a storm',
   );
 });
+
+test('brain: digging out of a hole is never interrupted by a threat', () => {
+  const digging = fresh();
+  digging.job = 'dig_out';
+  const wolf = state({
+    nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }],
+  });
+  const during = decide(reading({ state: wolf, active: { id: 'd1', kind: 'dig_out', state: 'running', by: 'brain' } }), digging);
+  assert.equal(during.wait, 'letting dig_out finish');
+});

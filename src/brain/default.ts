@@ -206,7 +206,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
   const storm = temporalStormUnsafe(state);
   // A goal of its own is running: only danger, storms and hunger cut it short.
   if (active) {
-    if (threat && memory.job !== 'hide') return { stop: 'threat' };
+    // A flight is never interrupted, and neither is digging out: there is no running from a hole.
+    if (threat && !['hide', 'dig_out'].includes(memory.job ?? '')) return { stop: 'threat' };
     if (storm && !['hide', 'go_home', 'wait'].includes(memory.job ?? '')) return { stop: 'storm' };
     // Hunger never interrupts a flight: danger outranks it, as in pickJob.
     if (satiety !== null && satiety < HUNGRY && !['eat', 'hide'].includes(memory.job ?? '')) return { stop: 'hungry' };

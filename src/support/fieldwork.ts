@@ -180,7 +180,7 @@ export class Fieldwork {
   }
   // Wait for the eye to finish one pass over the current view: a few hundred
   // milliseconds at normal frame rates, a few seconds on a software renderer.
-  async settle(timeoutMs = 4000) {
+  async settle(timeoutMs = 2500) {
     const start = this.env.surface?.sweeps ?? 0,
       until = this.now() + timeoutMs;
     for (let reads = 0; reads < 40; reads++) {
@@ -372,7 +372,8 @@ export class Fieldwork {
       this.lastLook = { position: p, at: this.now(), sweep: false };
     }
     let roughRoute = this.roughRoute(target);
-    if ((!roughRoute || this.roughRouteStatus.status !== 'success') && !this.lastLook.sweep) {
+    // Glancing left and right costs a sweep each; within fine-planner reach the grid handles it.
+    if ((!roughRoute || this.roughRouteStatus.status !== 'success') && !this.lastLook.sweep && horizontal(p, target) > navigationReach) {
       this.lastLook.sweep = true;
       const direction = lookAt(p, target).yawDegrees;
       for (const offset of [-50, 50]) {
