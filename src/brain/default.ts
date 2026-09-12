@@ -27,7 +27,7 @@ export const COOLDOWN_MS = 10 * 60 * 1000;
 // without a reading the brain cannot call itself home.
 export const NIGHT_LIGHT = 0.25;
 
-export type Job = 'hide' | 'go_home' | 'wait' | 'eat' | 'dirt' | 'shelter' | 'sticks' | 'stone' | 'tools' | 'grass' | 'torches' | 'logs' | 'explore';
+export type Job = 'hide' | 'go_home' | 'wait' | 'eat' | 'dirt' | 'shelter' | 'sticks' | 'stone' | 'tools' | 'grass' | 'torches' | 'logs' | 'explore' | 'dig_out';
 type Cell = { x: number; y: number; z: number };
 type Shelter = { origin: Cell; center: { x: number; z: number }; chunks: (Cell & { item: string })[][]; index: number;
   phase: 'walls' | 'enter' | 'seal' | 'torch' | 'done'; torch: string | null };
@@ -36,6 +36,8 @@ export type Memory = {
   cool: Map<Job, number>;
   shelter: Shelter | null;
   job: Job | null;
+  // Where the last walk was heading when it ended in a pit; dig_out cuts stairs that way.
+  pit: { x: number; z: number } | null;
   done: Record<string, number>;
   scares: number;
   resting: boolean;
@@ -125,9 +127,12 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // Bookkeeping for the brain's own goal that just ended.
   if (last) {
     if (last.ok) memory.done[last.kind] = (memory.done[last.kind] ?? 0) + 1;
-    if (memory.job === 'shelter') shelterAdvance(memory, last.ok, now);
+    // A walk that ended in a hole is not a failed job: the hole is dealt with first.
+    if (last.reason === 'pit' && last.result?.position) memory.pit = { x: last.result.position.x + 8, z: last.result.position.z };
+    else if (memory.job === 'shelter') shelterAdvance(memory, last.ok, now);
     // Running away is tried again at once; every other failed job rests a while.
-    else if (!last.ok && memory.job && memory.job !== 'hide') memory.cool.set(memory.job, now + COOLDOWN_MS);
+    else if (!last.ok && memory.job && !['hide', 'dig_out'].includes(memory.job)) memory.cool.set(memory.job, now + COOLDOWN_MS);
+    if (memory.job === 'dig_out') memory.pit = null;
     memory.job = null;
   }
   if (memory.resting) return { wait: 'resting after too many scares' };
@@ -142,6 +147,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     if (satiety !== null && satiety < HUNGRY && memory.job !== 'eat') return { stop: 'hungry' };
     return { wait: `letting ${active.kind} finish` };
   }
+  if (memory.pit) { memory.job = 'dig_out'; return { start: 'dig_out', args: { x: memory.pit.x, z: memory.pit.z }, why: 'in a hole' }; }
   const k = kit(inventory);
   const home = memory.home;
   const job = pickJob({
@@ -179,6 +185,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'torches': return start('craft_item', { output: TORCH, count: Math.max(1, TORCH_MIN - k.torches), timeoutMs: 300000 }, `${k.torches}/${TORCH_MIN} torches`);
     case 'logs': return start('fell_tree', { count: Math.max(1, LOG_MIN - k.logs), timeoutMs: 1200000 }, `${k.logs}/${LOG_MIN} logs`);
     case 'explore': return start('explore', { legs: 2, timeoutMs: 600000 }, 'kit done, looking around');
+    default: return { wait: 'nothing to do' };
   }
 }
 
@@ -192,7 +199,7 @@ export function wants(reading: Reading): string[] {
 }
 
 export function fresh(): Memory {
-  return { home: null, cool: new Map(), shelter: null, job: null, done: {}, scares: 0, resting: false };
+  return { home: null, cool: new Map(), shelter: null, job: null, pit: null, done: {}, scares: 0, resting: false };
 }
 
 const brain: Brain<Memory> = {

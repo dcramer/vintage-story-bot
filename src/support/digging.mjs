@@ -55,17 +55,17 @@ export async function diggingSlot(field, selected, inventory) {
   return (await equip(field, { tool: 'Pickaxe', minTier: tier })).slot;
 }
 
-// Dig stairs toward the goal until there is room to roam again. Returns true
-// when at least one step was climbed.
-export async function digOut(field, goal, { steps = 8 } = {}) {
+// Dig stairs toward a point until there is room to roam again.
+export async function digOut(field, toward, { steps = 8 } = {}) {
   const map = field.env.map;
-  let climbed = 0;
+  let climbed = 0, reason = null;
   for (let step = 0; step < steps; step++) {
     const state = await field.observe(true);
     const origin = map.nodeAt(Math.floor(state.position.x), Math.floor(state.position.z), state.position.y, .6, .6);
-    if (!origin || reachable(map, origin) >= pitLimit) break;
-    const plan = stairStep(map, origin, goal);
-    if (!plan) break;
+    if (!origin) { reason = 'no_footing'; break; }
+    if (reachable(map, origin) >= pitLimit) { reason = null; break; }
+    const plan = stairStep(map, origin, toward);
+    if (!plan) { reason = 'no_wall_to_cut'; break; }
     field.report('digging_out', { step: climbed + 1, cell: plan.step, cells: plan.dig.length });
     const inventory = await field.send({ action: 'inventory' });
     let cut = true;
@@ -77,10 +77,13 @@ export async function digOut(field, goal, { steps = 8 } = {}) {
       const result = await changeBlock(field, 'dig', { target: selected.key, slot, acceptTransform: true, timeoutMs: 45000 });
       if (!result.ok) { cut = false; break; }
     }
-    if (!cut) break;
+    if (!cut) { reason = 'cannot_cut'; break; }
     const up = await field.walk({ x: plan.step.x + .5, y: origin.y + 1, z: plan.step.z + .5, arrivalRadius: .3 });
-    if (!['arrived', 'paused'].includes(up.state) || horizontal(field.latest.position, plan.step) > .8) break;
+    if (!['arrived', 'paused'].includes(up.state) || horizontal(field.latest.position, plan.step) > .8) { reason = 'cannot_climb'; break; }
     climbed++;
+    reason = 'still_enclosed';
   }
-  return climbed > 0;
+  const here = map.nodeAt(Math.floor(field.latest.position.x), Math.floor(field.latest.position.z), field.latest.position.y, .6, .6);
+  const free = !!here && reachable(map, here) >= pitLimit;
+  return { ok: free, goal: 'dig_out', climbed, ...(free ? {} : { reason: reason ?? 'still_enclosed' }), position: field.latest.position, verification: 'client_observed' };
 }
