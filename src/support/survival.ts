@@ -1,6 +1,6 @@
 import { collectItem } from '../goals/collect_item.ts';
 import { horizontal, normalize } from '../runtime/navigation/terrain.ts';
-import { changeBlock } from './blocks.ts';
+import { aimAtObject, changeBlock } from './blocks.ts';
 import { learnYields } from './facts.ts';
 import { sightRange } from './fieldwork.ts';
 import { consume, emptyHand, foodCount, foodReserve, foodYield, forageWatch, hunger } from './food.ts';
@@ -235,7 +235,8 @@ export class Survival {
     await field.observe();
     if (await field.evadeThreat(target => clearLeafPath(field, target))) return;
     const slot = await emptyHand(field);
-    await field.aim(target.look);
+    // Aimed by the block's own selection box from where the body stands now; the remembered angles are stale.
+    await aimAtObject(field, target);
     const aimed = await field.observe();
     if (aimed.target?.key !== target.key) {
       field.skip(target, 5000);

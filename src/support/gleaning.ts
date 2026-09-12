@@ -1,4 +1,5 @@
-import { horizontal, lookAt } from '../runtime/navigation/terrain.ts';
+import { horizontal } from '../runtime/navigation/terrain.ts';
+import { aimAtObject } from './blocks.ts';
 import { ownedSlots } from './inventory.ts';
 import { nearestThreat } from './threats.ts';
 import { has } from './traits.ts';
@@ -70,16 +71,15 @@ export class Gleaner {
   // Walk within reach of a loose block, aim at it and right-click; verified by more items carried.
   async pickup(object) {
     const field = this.field;
-    const eye = () => ({ ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight });
     if (horizontal(field.latest.position, object.point) > field.latest.pickingRange - 0.5) {
       const destination = field.approach(object);
       if (!destination) return false;
       const walked = await field.leg(destination);
       if (!['arrived', 'paused'].includes(walked.state)) return false;
     }
-    await field.aim(object.look ?? lookAt(eye(), object.point));
-    const aimed = await field.observe();
-    if (aimed.target?.key !== object.key) return false;
+    // Aimed by the block's own selection box from where the body stands now; remembered angles are stale after a walk.
+    const selected = await aimAtObject(field, object);
+    if (!selected || selected.key !== object.key) return false;
     const before = carried(await field.send({ action: 'inventory' }));
     await field.send({ action: 'interact', expectedTarget: object.key, durationMs: 150 });
     await field.wait(500);

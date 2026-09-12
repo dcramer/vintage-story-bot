@@ -103,6 +103,22 @@ export const parseBlockKey = key => {
 
 // Aim at a cell and return the native selection when it lands in that cell, else null.
 // clearPlants digs replaceable vegetation that intercepts the ray (one block per call) and re-aims.
+// Aim at a seen thing from where the body stands now: by its cell's real selection box when its key names
+// a cell, else at its point. Remembered angles are stale after a walk. Returns the selection, or null.
+export async function aimAtObject(field, object) {
+  let cell = null;
+  try {
+    cell = parseBlockKey(object.key);
+  } catch {
+    cell = null;
+  }
+  if (cell) return selectCell(field, cell);
+  const p = field.latest.position;
+  await field.aim(lookAt({ ...p, y: p.y + (field.latest.body?.eyeHeight ?? 1.6) }, object.point));
+  const aimed = await field.observe();
+  return aimed.target?.key === object.key ? aimed.target : null;
+}
+
 export async function selectCell(field, cell, { point, face, clearPlants = false }: { point?: any; face?: string; clearPlants?: boolean } = {}) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const state = await field.observe();

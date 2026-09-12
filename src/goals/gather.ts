@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
-import { changeBlock } from '../support/blocks.ts';
+import { aimAtObject, changeBlock } from '../support/blocks.ts';
 import { Fieldwork, sightRange } from '../support/fieldwork.ts';
 import { pickupBlock } from '../support/gleaning.ts';
 import { habitatsFor } from '../support/habitat.ts';
@@ -67,9 +67,9 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
       const twigs = ready ? null : objects.find(o => twiggy(o) && o.withinPickingRange && !field.skipped.has(o.key));
       if (ready) {
         field.report('pickup', { target: ready.key });
-        await field.aim(ready.look);
+        const selected = await aimAtObject(field, ready);
         const aimed = await field.observe();
-        if (aimed.target?.key === ready.key) {
+        if (selected && aimed.target?.key === ready.key) {
           const before = carried(aimed, item);
           await field.send({ action: 'interact', expectedTarget: ready.key, durationMs: 150 });
           await field.wait(500);

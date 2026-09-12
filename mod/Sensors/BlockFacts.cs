@@ -14,7 +14,14 @@ internal static class BlockFacts
     {
         string? growth = null;
         if (block.HasBehavior<BlockBehaviorFruitingBush>(true))
-            growth = world.BlockAccessor.GetBlockEntity(pos)?.GetBehavior<BEBehaviorFruitingBush>()?.BState.Growthstate.ToString().ToLowerInvariant();
+        {
+            var entity = world.BlockAccessor.GetBlockEntity(pos);
+            var bush = entity?.GetBehavior<BEBehaviorFruitingBush>();
+            // The game's growth states: young, mature, flowering, ripening, ripe, dormant; berries come off a ripe bush.
+            growth = bush?.BState.Growthstate.ToString().ToLowerInvariant();
+
+
+        }
         return new
         {
             name = ContextSensor.Clip(block.GetPlacedBlockName(world, pos), 96),
