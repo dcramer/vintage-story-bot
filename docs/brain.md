@@ -2,7 +2,7 @@
 
 A brain is what a bot does on its own. The bot process (`src/bot.ts`) runs
 with a brain installed or with none: with none it stands still until an
-adapter (MCP, CLI, script) tells it what to do; with one, a core run loop
+adapter (CLI, script, agent) tells it what to do; with one, a core run loop
 reads what the player knows every couple of seconds and answers with one
 decision, carried out through the same public goals an agent would call.
 One brain per bot, one goal at a time. `stop` interrupts everything; nothing
@@ -12,7 +12,7 @@ resumes on its own.
 - Switch while running: the `brain` action reads status, installs by name, or removes (`null`).
 - A goal started by an adapter always wins: the brain waits until it is over and never cancels it. Its own goals it interrupts only for danger, storms and hunger.
 - Every brain gets respawn for free: dead with a respawn available means respawn, then carry on.
-- Code: `src/brain/<name>.ts` default-exports `{ name, description, fresh(), decide(reading, memory), summary?(memory) }`; `src/runtime/brain.ts` owns the loop. `decide` is pure: one reading (`observe`, `inventory`, `environment`, the active goal, the brain's own goal that just finished) and the brain's memory in, one decision out (`{ start, args, why }`, `{ stop }`, `{ wait }`). `test/brain.test.mjs` covers it without a game.
+- Code: `src/brain/<name>.ts` default-exports `{ name, description, fresh(), decide(reading, memory), summary?(memory) }`; `src/runtime/brain.ts` owns the loop. `decide` is pure: one reading (`observe`, `inventory`, `environment`, the active goal, the brain's own goal that just finished) and the brain's memory in, one decision out (`{ start, args, why }`, `{ stop }`, `{ wait }`). `test/brain.test.ts` covers it without a game.
 
 Later brains (roles) differ only in `decide`. Behavior sources: [getting-started](getting-started.md), [architecture](architecture.md), [bot API](bot-api-reference.md).
 

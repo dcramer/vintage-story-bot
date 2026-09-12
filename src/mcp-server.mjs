@@ -1,2 +1,2 @@
-// Stable entrypoint for existing local MCP registrations.
-import './mcp/server.mjs';
+// Kept for MCP registrations that point here; the server lives in mcp-server.ts.
+import './mcp-server.ts';

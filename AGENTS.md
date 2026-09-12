@@ -1,6 +1,6 @@
 # Seraph
 
-Seraph is a bot system for Vintage Story: client C# mod → Node controller → MCP/CLI. Read [Conventions](docs/conventions.md) first.
+Seraph is a bot system for Vintage Story: client C# mod → Node bot (controller, goals, brain) → CLI/agents. Read [Conventions](docs/conventions.md) first.
 
 - Intent: let an LLM agent play the game as an ordinary survival player, assigning goals to a bot that senses, plans and acts through the real client, and prove that against live gameplay.
 - Bots are Seraphs: one codebase, many independent instances, each a separate game account and client with its own name (`VINTAGE_STORY_BOT_ID`; the user's own bot is Diggy Smalls). Instances share nothing at runtime except the optional fleet report service ([runtime](docs/runtime.md)).
@@ -101,17 +101,17 @@ The split is by what a player does in one act, never by convenience.
 
 | Path | Owns | Touch when |
 | --- | --- | --- |
-| `src/actions/<name>.mjs` | One public query/command: schema, description, mod wire alias or controller-local handler. | Adding/changing that tool. |
-| `src/goals/<name>.mjs` | One public goal: schema, description, chat announcement, and its behavior as exported functions other goals compose. | Adding/changing that goal. |
-| `src/brain/<name>.mjs` | One installable brain: what the bot does on its own, as pure decisions over readings. | Changing how the bot runs itself. |
-| `src/support/` | Helpers goals share: the `fieldwork.mjs` session harness, `task.mjs`, inventory, food, survival, threats, blocks, forming, structures. | A helper two goals share. `fieldwork.mjs`/`survival.mjs` are hubs: keep edits minimal. |
-| `src/runtime/` | The bot core: `controller.mjs` (tool registry, goal lifecycle), `game.mjs`/`bridge.mjs` (mod RPC, control holds, transport), `navigation/` (terrain memory, planning, steering; pure, no I/O), shared zod fragments, telemetry. | Lifecycle, wire protocol (pair with `mod/`) or route/terrain logic only. |
+| `src/actions/<name>.ts` | One public query/command: schema, description, mod wire alias or controller-local handler. | Adding/changing that tool. |
+| `src/goals/<name>.ts` | One public goal: schema, description, chat announcement, and its behavior as exported functions other goals compose. | Adding/changing that goal. |
+| `src/brain/<name>.ts` | One installable brain: what the bot does on its own, as pure decisions over readings. | Changing how the bot runs itself. |
+| `src/support/` | Helpers goals share: the `fieldwork.ts` session harness, `task.ts`, inventory, food, survival, threats, blocks, forming, structures. | A helper two goals share. `fieldwork.ts`/`survival.ts` are hubs: keep edits minimal. |
+| `src/runtime/` | The bot core: `controller.ts` (tool registry, goal lifecycle), `game.ts`/`bridge.ts` (mod RPC, control holds, transport), `navigation/` (terrain memory, planning, steering; pure, no I/O), shared zod fragments, telemetry. | Lifecycle, wire protocol (pair with `mod/`) or route/terrain logic only. |
 | `src/bot.ts` | The Seraph process: serves the controller, runs the eye, installs the brain. | Startup/shutdown only. |
-| `src/mcp/`, `src/operator/`, `scripts/` | Adapters, operator UI, launch/CLI. | Never import gameplay code into `operator/`. |
+| `src/operator/`, `scripts/` | Operator UI, launch/CLI. | Never import gameplay code into `operator/`. |
 | `mod/Bridge/` | `AiBridgeMod` partials: lifecycle/dispatch, `Sensing`, `Movement`, `Hands`; control hold and life tracker. | New mod action (dispatch line + method in the owning partial) or safety rule. |
 | `mod/Sensors/` | Read-only perception classes. | New observation. Must respect the perception limits above. |
 | `mod/Actuators/` | Input-driven mutations (blocks, inventory, forming). | New interaction. Must go through native input/packets. |
-| `test/` | Unit checks: `*.test.mjs` (Node), `test/mod/` (C#). | Critical regressions only. |
+| `test/` | Unit checks: `*.test.ts` (Node), `test/mod/` (C#). | Critical regressions only. |
 | `docs/` | Contracts and constraints, not inventories. | A contract or constraint changes. |
 
 Tools are discovered by filename: the basename is the public name and the file must default-export it. No registry to edit.
@@ -120,7 +120,7 @@ Tools are discovered by filename: the basename is the public name and the file m
 
 - Add a tool as a new file; extend an existing one only if you own that change. Do not touch unrelated tools, hubs or docs in the same commit.
 - New mod behavior: add the mod action in `mod/Bridge/AiBridgeMod.cs` dispatch, implement it in the owning partial or a new `Sensors`/`Actuators` class, and advertise a feature flag in `observe.capabilities`. Node checks the flag (`field.start([...])`), never the mod version.
-- Wire changes land mod and Node sides together; public schemas change with behavior. MCP/CLI need no edits.
+- Wire changes land mod and Node sides together; public schemas change with behavior. The CLI needs no edits.
 - Check the working tree before editing; preserve others' uncommitted changes, never revert or overwrite work you did not make, never stash or rebase over it.
 - Commit one verified slice at a time on `main`, push, then pull/rebase when the tree is clean. No branches or pull requests.
 - Worktrees: `pnpm worktree add <name>` creates `.worktrees/<name>` and runs `pnpm worktree setup`, which links `.runtime/*` and `.dotnet` to the main checkout, copies the gitignored files in `.worktreeinclude` and installs dependencies; `pnpm worktree remove <name>` cleans up. Claude Code (`.claude/settings.json` SessionStart hook) and Codex (`.codex/environments/environment.toml`) run the same setup on the worktrees they create. Every worktree shares the one game client and bot profile; run a second controller on its own `VINTAGE_STORY_CONTROLLER_PORT`. Work still lands on `main`.
@@ -131,10 +131,10 @@ Tools are discovered by filename: the basename is the public name and the file m
 Linux, headless, one bot client per profile; flags, phases and constraints in [Runtime](docs/runtime.md).
 
 1. Once: `pnpm install --frozen-lockfile`, `pnpm setup:linux`, sign in once with the bot account.
-2. `pnpm bot` (`pnpm controller` is the same; MCP adapters and `scripts/control.mjs` share it). `--brain default` makes the bot play on its own ([brain](docs/brain.md)); without it the bot only does what it is told.
+2. `pnpm bot` (`pnpm controller` is the same; `scripts/control.ts` talks to it). `--brain default` makes the bot play on its own ([brain](docs/brain.md)); without it the bot only does what it is told.
 3. `pnpm game start --world <save>` (or `--new <name> --play-style surviveandbuild`, `--server host:port`); returns at `world_ready`. `pnpm game status` any time.
-4. Blocking dialogs (character creation, death): `node scripts/control.mjs ui_dialogs`, then `ui_activate --json '{"dialog":"…","element":"…"}'` until `observe` reports `controlReady`.
-5. Play through MCP or `node scripts/control.mjs <action>`; goals via `pnpm goal:*`.
+4. Blocking dialogs (character creation, death): `node scripts/control.ts ui_dialogs`, then `ui_activate --json '{"dialog":"…","element":"…"}'` until `observe` reports `controlReady`.
+5. Play through `node scripts/control.ts <action> [--json …]`; goals via `pnpm goal:*`.
 6. `pnpm game stop` (the game's own saving exit path; never kill a loaded world), then redeploy the mod if rebuilt.
 
 ## Working baseline
@@ -151,7 +151,7 @@ Linux, headless, one bot client per profile; flags, phases and constraints in [R
 - [Development](docs/development.md) — read when changing code or running checks.
 - [Architecture](docs/architecture.md) — read when changing module boundaries, RPC, control, or goal lifecycle.
 - [Bot API reference](docs/bot-api-reference.md) — read when designing bot APIs, support helpers, or goals; Mineflayer analogues and design criteria.
-- [Runtime](docs/runtime.md) — read before launching, deploying, configuring MCP, or controlling the bot.
+- [Runtime](docs/runtime.md) — read before launching, deploying, or controlling the bot.
 - [Navigation](docs/navigation.md) — read when changing sensing, terrain memory, route planning or steering; perception layers, planners, walk loop, statuses.
 - [Getting started](docs/getting-started.md) — read when defining or prioritizing goals; survival rules, house/kiln specs, day 1–5 checklists.
 - [Brain](docs/brain.md) — read when changing what the bot does on its own; the brain contract and the default brain's jobs.

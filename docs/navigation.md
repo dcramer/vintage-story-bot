@@ -16,10 +16,10 @@ Rules that hold for every layer: perception is a snapshot of what the camera see
 
 ## Memory (Node, `src/runtime/navigation/`)
 
-- `TerrainMemory` (`terrain.mjs`): cells with absolute collision boxes from the near-field deltas, read as a block grid. A cell is a place to stand when it has a floor and a body's worth of known free cells above it; water, fire and unknown are walls. `moves(node)` lists the ways out: walk or step (up to 0.6) to any of eight neighbours, jump one block up or drop up to three along a cardinal, never a diagonal past something solid, never a drop beside water, extra cost beside water. `gapMoves` hops a one-cell hole as a last resort. `frontier(node)` is the unknown cells a move would need.
-- `SurfaceMemory` (`surface.mjs`): far-field columns from the vision feed keyed by world coordinates so views from different spots merge. Answers coarse neighbours, shoreline adjacency and nearest known column.
-- `SightingsMemory` (`sightings.mjs`): entities, items and watched blocks from the snapshots, visible now or remembered as last seen (20 s entities, 60 s items, 5 min blocks). `Fieldwork.scan` adds to the attention list, waits one sweep, and reads it; threats read `nearbyEntities`, which the game client overlays from this memory on every state.
-- All live on the game client and, for terrain, surface and blocks, on disk per world (`knowledge.mjs`): loaded when the world's identifier is first observed, saved at most once a minute and on shutdown, kept for a week unless a block change is reported. The controller's eye loop refreshes them every 250 ms whether or not a goal is running. Entities and items are transient.
+- `TerrainMemory` (`terrain.ts`): cells with absolute collision boxes from the near-field deltas, read as a block grid. A cell is a place to stand when it has a floor and a body's worth of known free cells above it; water, fire and unknown are walls. `moves(node)` lists the ways out: walk or step (up to 0.6) to any of eight neighbours, jump one block up or drop up to three along a cardinal, never a diagonal past something solid, never a drop beside water, extra cost beside water. `gapMoves` hops a one-cell hole as a last resort. `frontier(node)` is the unknown cells a move would need.
+- `SurfaceMemory` (`surface.ts`): far-field columns from the vision feed keyed by world coordinates so views from different spots merge. Answers coarse neighbours, shoreline adjacency and nearest known column.
+- `SightingsMemory` (`sightings.ts`): entities, items and watched blocks from the snapshots, visible now or remembered as last seen (20 s entities, 60 s items, 5 min blocks). `Fieldwork.scan` adds to the attention list, waits one sweep, and reads it; threats read `nearbyEntities`, which the game client overlays from this memory on every state.
+- All live on the game client and, for terrain, surface and blocks, on disk per world (`knowledge.ts`): loaded when the world's identifier is first observed, saved at most once a minute and on shutdown, kept for a week unless a block change is reported. The controller's eye loop refreshes them every 250 ms whether or not a goal is running. Entities and items are transient.
 
 ## Planning
 
@@ -38,7 +38,7 @@ Two planners, one contract: a route is a list of standing cells; every cell and 
 
 ## Policies
 
-Default all off, as pathfinder's `Movements` flags: no swimming, digging, placing, doors, or falls over three blocks. Leaf clearing is a stuck recovery in `leaf-clearing.mjs`, aimed at the real destination, never a routing primitive. Hostile avoidance (`threats.mjs`) replaces the target with a flee point while a seen, heard or recently seen hostile is inside its radius and resumes afterwards; a hostile behind a ridge and out of earshot is unknown, as it is to a player.
+Default all off, as pathfinder's `Movements` flags: no swimming, digging, placing, doors, or falls over three blocks. Leaf clearing is a stuck recovery in `leaf-clearing.ts`, aimed at the real destination, never a routing primitive. Hostile avoidance (`threats.ts`) replaces the target with a flee point while a seen, heard or recently seen hostile is inside its radius and resumes afterwards; a hostile behind a ridge and out of earshot is unknown, as it is to a player.
 
 ## Observability
 

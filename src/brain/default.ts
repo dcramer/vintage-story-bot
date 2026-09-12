@@ -4,12 +4,12 @@
 // trading. Pure: decide() reads one Reading and its own memory and returns one
 // Decision; the loop in src/runtime/brain.ts does the talking to the game.
 import type { Brain, Decision, Reading } from '../runtime/brain.ts';
-import { horizontal } from '../runtime/navigation/terrain.mjs';
-import { temporalStormUnsafe } from '../support/fieldwork.mjs';
-import { foodReserve, hunger } from '../support/food.mjs';
-import { kinds } from '../support/forming.mjs';
-import { ownedSlots } from '../support/inventory.mjs';
-import { fleeTarget, nearestThreat } from '../support/threats.mjs';
+import { horizontal } from '../runtime/navigation/terrain.ts';
+import { temporalStormUnsafe } from '../support/fieldwork.ts';
+import { foodReserve, hunger } from '../support/food.ts';
+import { kinds } from '../support/forming.ts';
+import { ownedSlots } from '../support/inventory.ts';
+import { fleeTarget, nearestThreat } from '../support/threats.ts';
 
 export const STICK_MIN = 10;
 export const TORCH_MIN = 2;

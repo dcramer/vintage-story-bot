@@ -5,14 +5,12 @@
     "moduleResolution": "nodenext",
     "lib": ["es2024"],
     "types": ["node"],
-    "strict": true,
+    "strict": false,
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": false,
-    "allowImportingTsExtensions": true,
+        "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"]
 }

@@ -1,13 +1,13 @@
 // One Seraph: the shared controller on a loopback port, the eye reading what
 // the player sees, and an installed brain that plays on its own. With no
-// brain the bot does nothing until an adapter (MCP, CLI, script) tells it to.
+// brain the bot does nothing until an adapter (CLI, script, agent) tells it to.
 //   pnpm bot [--brain default]      VINTAGE_STORY_BRAIN=default
 import net from 'node:net';
 import { once } from 'node:events';
-import { Controller } from './runtime/controller.mjs';
-import { controllerPort } from './runtime/rpc.mjs';
-import { Telemetry } from './runtime/telemetry.mjs';
-import { Reporter } from './runtime/reporter.mjs';
+import { Controller } from './runtime/controller.ts';
+import { controllerPort } from './runtime/rpc.ts';
+import { Telemetry } from './runtime/telemetry.ts';
+import { Reporter } from './runtime/reporter.ts';
 import { installBrain } from './runtime/brain.ts';
 
 const argument = (name: string): string | undefined => {
