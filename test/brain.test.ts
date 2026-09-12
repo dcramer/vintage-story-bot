@@ -633,10 +633,11 @@ test('brain: opening a morning burrow is followed by digging steps to the surfac
 
 test('brain: a fresh controller recovers a sealed burrow from observed terrain', () => {
   const full = { hazard: null, boxes: [[0, 0, 0, 1, 1, 1]] };
+  let sealed = true;
   const terrain = {
     get(x, y, z) {
       if (y === 102 && (x !== 0 || z !== 0)) return full;
-      if (x === 0 && y === 102 && z === 0) return full;
+      if (x === 0 && y === 102 && z === 0) return sealed ? full : { hazard: null, boxes: [] };
       return { hazard: null, boxes: [] };
     },
   };
@@ -645,6 +646,17 @@ test('brain: a fresh controller recovers a sealed burrow from observed terrain',
   assert.deepEqual(memory.burrow, { x: 0, y: 102, z: 0 });
   assert.equal(next.start, 'dig_area');
   assert.deepEqual(next.args.cells, [memory.burrow]);
+
+  sealed = false;
+  const openAtNight = fresh();
+  const sheltered = decide(reading({ environment: night, state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain }), openAtNight);
+  assert.deepEqual(openAtNight.burrow, { x: 0, y: 102, z: 0 });
+  assert.equal(sheltered.wait, 'night, dug in', 'an intentionally unsealed emergency shaft remains shelter at night');
+
+  const openByDay = fresh();
+  const climbing = decide(reading({ state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain }), openByDay);
+  assert.equal(openByDay.burrow, null);
+  assert.equal(climbing.start, 'dig_out');
 
   memory.burrow = null;
   decide(reading({ state: state({ position: { x: 20.5, y: 100, z: 20.5 } }), terrain, now: 2000 }), memory);

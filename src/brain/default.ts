@@ -303,9 +303,9 @@ export function decide(reading: Reading, memory: Memory): Decision {
       by = Math.floor(state.position.y),
       bz = Math.floor(state.position.z),
       observedShaft = !state.motion?.swimming && !state.motion?.feetInLiquid && reading.terrain ? dugInState(reading.terrain, bx, by, bz) : null;
-    if (observedShaft === 'sealed') memory.burrow = { x: bx, y: by + 2, z: bz };
-    if (observedShaft === 'open' && !isNight(environment) && !temporalStormUnsafe(state))
-      memory.pit = { x: state.position.x + 8, z: state.position.z };
+    if (observedShaft === 'sealed' || (observedShaft === 'open' && (isNight(environment) || temporalStormUnsafe(state))))
+      memory.burrow = { x: bx, y: by + 2, z: bz };
+    if (observedShaft === 'open' && !memory.burrow) memory.pit = { x: state.position.x + 8, z: state.position.z };
   }
   const threat = nearestThreat(state);
   if (threat) memory.lastThreat = { point: threat.point, code: threat.code, at: now };
