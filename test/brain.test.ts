@@ -33,6 +33,7 @@ const situation = (extra = {}) => ({
   threat: false,
   storm: false,
   hunger: 0.8,
+  reserve: 0,
   night: false,
   home: true,
   atHome: true,
@@ -52,6 +53,8 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ threat: true, hunger: 0.1 })), 'hide');
   assert.equal(pickJob(situation({ storm: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true })), 'eat');
+  assert.equal(pickJob(situation({ hunger: 0.35 })), 'eat', 'peckish with an empty pack: go find food');
+  assert.equal(pickJob(situation({ hunger: 0.35, reserve: 200 })), 'explore', 'peckish with food in the pack: carry on');
   assert.equal(pickJob(situation({ dangerHere: true, night: true })), 'relocate', 'a place full of scares is left');
   assert.equal(pickJob(situation({ night: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ night: true, home: false, dirt: 0 })), 'seal');

@@ -17,6 +17,8 @@ export const LOG_MIN = 8;
 // 23 blocks for walls and roof, 2 to seal the door, a small margin.
 export const SHELTER_DIRT = 28;
 export const HUNGRY = 0.2;
+// With nothing to eat in the pack, start looking while there is still strength to search.
+export const PECKISH = 0.4;
 export const KNIFE_BLADE = 'game:knifeblade-flint';
 export const AXE_BLADE = 'game:axehead-flint';
 export const KNIFE = 'game:knife-generic-flint';
@@ -101,6 +103,7 @@ export type Situation = {
   threat: boolean;
   storm: boolean;
   hunger: number | null;
+  reserve: number;
   night: boolean;
   home: boolean;
   atHome: boolean;
@@ -124,7 +127,7 @@ export type Situation = {
 export function pickJob(s: Situation): Job {
   if (s.threat) return 'hide';
   if (s.storm) return s.home && !s.atHome ? 'go_home' : 'wait';
-  if (s.hunger !== null && s.hunger < HUNGRY) return 'eat';
+  if (s.hunger !== null && (s.hunger < HUNGRY || (s.hunger < PECKISH && s.reserve <= 0))) return 'eat';
   // A place that keeps producing scares is left behind, day or night, before anything else here.
   if (s.dangerHere && !s.burrowed) return 'relocate';
   if (s.night) return s.home ? (s.atHome ? 'wait' : 'go_home') : s.burrowed ? 'wait' : s.dirt > 0 ? 'burrow' : 'seal';
@@ -187,6 +190,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     threat: !!threat,
     storm,
     hunger: satiety,
+    reserve: k.reserve,
     night: isNight(environment),
     home: !!home,
     atHome: !!home && horizontal(state.position, home) < 8,
