@@ -61,7 +61,7 @@ public sealed class StepTracker
         double wantYaw = SceneGeometry.Normalize(Math.Atan2(dx, dz) * 180 / Math.PI);
         if (State != "walking") return (false, buoyant, wantYaw);
         double dy = Toward.Y - position.Y;
-        bool level = Math.Abs(dy) <= ReachY;
+        bool level = Math.Abs(dy) <= (Hop ? Math.Min(ReachY, 0.6) : ReachY);
         // On the point, or past it: the plane through the point across the step has been crossed.
         double sx = Toward.X - Start.X, sz = Toward.Z - Start.Z, length = Math.Sqrt(sx * sx + sz * sz);
         bool passed = length > 0.05 && (dx * sx + dz * sz) / length < 0 && Math.Abs(dx * sz - dz * sx) / length <= PassedLateral;
@@ -88,7 +88,7 @@ public sealed class StepTracker
                 dx = Toward.X - position.X; dz = Toward.Z - position.Z; Distance = Math.Sqrt(dx * dx + dz * dz);
                 wantYaw = SceneGeometry.Normalize(Math.Atan2(dx, dz) * 180 / Math.PI);
                 dy = Toward.Y - position.Y;
-                level = Math.Abs(dy) <= ReachY;
+                level = Math.Abs(dy) <= (Hop ? Math.Min(ReachY, 0.6) : ReachY);
                 passed = false;
             }
             else { State = "arrived"; return (false, buoyant, wantYaw); }
@@ -105,7 +105,7 @@ public sealed class StepTracker
         // run on through the arc. A hop fires only while the point is still above the feet: a body that
         // stepped up onto its level already must not be launched over it.
         bool forward = aligned && (onGround || wet || Hop || carry || airborneCarry) && !(passed && !level && !carry);
-        bool jump = buoyant || (Hop && aligned && Distance < HopDistance && dy > ReachY);
+        bool jump = buoyant || (Hop && aligned && Distance < HopDistance && dy > Math.Min(ReachY, 0.6));
         return (forward, jump, wantYaw);
     }
 

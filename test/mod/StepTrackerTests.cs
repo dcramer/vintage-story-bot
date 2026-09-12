@@ -61,6 +61,11 @@ static class StepTrackerTests
         Check(shallow.Forward && !shallow.Jump, "wading on the bottom does not hop");
         var bank = new StepTracker(new Point3(1.5, 101, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
         Check(bank.Update(new Point3(.5, 100, .5), 90, true, true, 0).Jump, "wading still jumps onto a raised bank");
+        var queuedBank = new StepTracker(new Point3(1.5, 99.5, .5), new Point3(.5, 99.5, .5), .35, 1.5, false, 0);
+        queuedBank.Queue(new Point3(2.5, 101, .5), true);
+        Check(queuedBank.Update(new Point3(1.4, 100, .5), 90, true, true, 100).Jump, "a queued bank jump cannot inherit swimming height tolerance");
+        queuedBank.Update(new Point3(2.3, 100, .5), 90, true, true, 200);
+        Check(queuedBank.State == "walking", "being below the bank is not arrival");
         // A step still going after 2.5 s is stuck, even while the distance wobbles about.
         var bounce = new StepTracker(toward, new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
         for (long t = 0; t <= 2600; t += 100) bounce.Update(new Point3(1.0 + (t % 300) / 300.0, 100 + (t % 200) / 100.0, 0.5), 90, t % 200 == 0, false, t);
