@@ -136,6 +136,7 @@ export function compileGoalScript(source, definitions) {
   return parseGoalScript(source).map((call, index) => {
     const goal = available.get(call.name);
     if (!goal) throw new Error(`Goal ${index + 1}: ${call.name} is not an existing composable goal`);
+    if (Object.hasOwn(call.args, 'timeoutMs')) throw new Error(`Goal ${index + 1} (${call.name}) cannot set a deadline; stop the outer goal to interrupt it`);
     const parsed = goal.schema.safeParse(call.args);
     if (!parsed.success) throw new Error(`Goal ${index + 1} (${call.name}) invalid arguments: ${parsed.error.issues[0]?.message ?? 'schema mismatch'}`);
     return { goal, args: parsed.data };

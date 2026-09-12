@@ -5,7 +5,7 @@ import { Controller } from '../src/runtime/controller.mjs';
 import { compileGoalScript, parseGoalScript, runGoalPlan } from '../src/runtime/goal-script.mjs';
 
 const definitions = [
-  { name: 'forage', schema: z.object({ count: z.number().int().min(1).default(1) }).strict(), run() {} },
+  { name: 'forage', schema: z.object({ count: z.number().int().min(1).default(1), timeoutMs: z.number().optional() }).strict(), run() {} },
   { name: 'travel', schema: z.object({ x: z.number(), z: z.number() }).strict(), compose() {} },
   { name: 'goal_script', schema: z.object({}).strict(), run() {} },
 ];
@@ -31,6 +31,7 @@ test('goal scripts reject arbitrary code, dynamic arguments and recursive compos
   ]) assert.throws(() => parseGoalScript(source));
   assert.throws(() => compileGoalScript('await goals.goal_script({});', definitions), /not an existing composable goal/);
   assert.throws(() => compileGoalScript('await goals.travel({ x: 1 });', definitions), /invalid arguments/);
+  assert.throws(() => compileGoalScript('await goals.forage({ count: 8, timeoutMs: 60000 });', definitions), /cannot set a deadline/);
 });
 
 test('goal plans run in order, nest progress and stop at the first failure', async () => {
