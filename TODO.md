@@ -34,7 +34,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [x] `look` — absolute yaw/pitch.
 - [x] `select_hotbar`.
 - [x] `stop` — global release.
-- [ ] **P1 · `look_at {x,y,z}` / `{target:entity}`** — smooth aim at a point or tracked entity; entity form re-aims per frame while holding control (`mod`). Mineflayer `lookAt`. Prerequisite for hunting.
+- [x] `look_at` — easing camera lock on an observed block, sighted entity or point; tracks moving entities, owns the camera until released.
 - [ ] **P2 · `move` with `yaw`** — walk toward a heading in one frame instead of `look`+`move` (`ctl`).
 - [ ] **P2 · held-input while re-aiming** — knapping drag and combat need aim changes during a hand action; today `look` cancels hand actions. Decide: refuse forever (document) or allow bounded yaw delta under a control hold (`mod`).
 
