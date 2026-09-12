@@ -1,7 +1,8 @@
 // A knife, an axe and a shovel, each its own task, the knife first: one stick
 // and one flint (or a knappable stone) make a head, the head and a stick make
-// the tool. Each task gathers only what its tool still lacks, so a knife is
-// made the moment a flint and a stick are in hand.
+// the tool. Each task gathers only what its tool still lacks (sticks and flint
+// for the heads still missing, in one trip), so a knife is made the moment a
+// flint and a stick are in hand.
 import type { Decision } from '../../../runtime/brain.ts';
 import type { Concern } from '../concern.ts';
 import { headMaterial, type Kit, KNAPPABLE } from '../situation.ts';
@@ -17,7 +18,11 @@ const flintShort = (k: Kit) => Math.max(0, missing(k) + 1 - k.knappables);
 export function makeTool(k: Kit, tool: string, head: string, blades: number, output: string): Decision {
   if (blades < 1) {
     if (k.sticks < 1)
-      return { start: 'gather', args: { match: 'stick', item: 'game:stick', count: 1, timeoutMs: 600000 }, why: `a stick for the ${tool}` };
+      return {
+        start: 'gather',
+        args: { match: 'stick', item: 'game:stick', count: missing(k), timeoutMs: 600000 },
+        why: `sticks for the ${tool} and the rest`,
+      };
     if (k.knappables < 2)
       return {
         start: 'gather',
@@ -27,7 +32,11 @@ export function makeTool(k: Kit, tool: string, head: string, blades: number, out
     return { start: 'knap', args: { output: `game:${head}-${k.material ?? 'flint'}`, timeoutMs: 600000 }, why: `no ${tool}` };
   }
   if (k.sticks < 1)
-    return { start: 'gather', args: { match: 'stick', item: 'game:stick', count: 1, timeoutMs: 600000 }, why: `a stick to haft the ${tool}` };
+    return {
+      start: 'gather',
+      args: { match: 'stick', item: 'game:stick', count: missing(k), timeoutMs: 600000 },
+      why: `sticks to haft the ${tool} and the rest`,
+    };
   return {
     start: 'craft_item',
     args: { output: `${output}-${headMaterial(k, head)}`, count: 1, timeoutMs: 300000 },
