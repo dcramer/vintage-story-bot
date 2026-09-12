@@ -100,6 +100,36 @@ public sealed partial class AiBridgeMod
         return inventory.Drop(request);
     }
 
+    private object OpenContainer(JsonElement request)
+    {
+        if (!CanControl())
+            return new { ok = false, error = "Close menus and enter the world before opening." };
+        if (!request.TryGetProperty("target", out var target) || target.ValueKind != JsonValueKind.String ||
+            target.GetString() != CurrentTargetKey())
+        {
+            StopMovement();
+            StopHandAction();
+            return new { ok = false, error = "Aim at the container first; observe and aim again." };
+        }
+        StopMovement();
+        StopHandAction();
+        return containers.Open(request, worldInteractions, lastTickDt);
+    }
+
+    private object ContainerMove(JsonElement request)
+    {
+        StopMovement();
+        StopHandAction();
+        return containers.Move(request);
+    }
+
+    private object CloseContainer(JsonElement request)
+    {
+        StopMovement();
+        StopHandAction();
+        return containers.Close();
+    }
+
     private object BlockActionBegin(JsonElement request)
     {
         var entity = api.World!.Player.Entity;

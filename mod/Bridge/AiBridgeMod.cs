@@ -29,6 +29,8 @@ public sealed partial class AiBridgeMod : ModSystem
     private long lastSenseAt;
     private LifeTracker life = new();
     private InventoryAdapter inventory = null!;
+    private ContainerAdapter containers = null!;
+    private float lastTickDt;
     private ContextSensor context = null!;
     private HandbookSensor handbook = null!;
     private BlockActions blockActions = null!;
@@ -48,6 +50,7 @@ public sealed partial class AiBridgeMod : ModSystem
         sensor = new SceneSensor(api, CanControl);
         vision = new VisionSensor(api, surface, sightings);
         inventory = new InventoryAdapter(api);
+        containers = new ContainerAdapter(api);
         context = new ContextSensor(api);
         handbook = new HandbookSensor(api);
         mapWaypoints = new MapWaypointSensor(api);
@@ -77,6 +80,7 @@ public sealed partial class AiBridgeMod : ModSystem
         control.Release("world_changed");
         life = new LifeTracker();
         inventory = new InventoryAdapter(api);
+        containers = new ContainerAdapter(api);
         blockActions.Reset();
         SampleLife();
         // The bridge controls this client whenever a world is loaded; there is no in-game opt-in.
@@ -156,6 +160,7 @@ public sealed partial class AiBridgeMod : ModSystem
 
     private void OnTick(float dt)
     {
+        lastTickDt = dt;
         priorWorldInteraction ??= api.Input.MouseWorldInteractAnyway;
         bool ready = CanControl();
         api.Input.MouseWorldInteractAnyway = ready;
@@ -286,6 +291,9 @@ public sealed partial class AiBridgeMod : ModSystem
             case "inventory_move":
             case "craft": return InventoryMove(name, request);
             case "drop": return InventoryDrop(request);
+            case "open_container": return OpenContainer(request);
+            case "container_move": return ContainerMove(request);
+            case "close_container": return CloseContainer(request);
             case "select": return SelectHotbar(request);
             case "select_recipe": return context.Forming.SelectRecipe(request);
             case "interact":
@@ -314,7 +322,7 @@ public sealed partial class AiBridgeMod : ModSystem
     }
 
     // Wire actions refused while a control hold owns the inputs; stop releases it first.
-    private static readonly HashSet<string> Mutations = ["move_to", "move", "look", "aim_cell", "select", "interact", "attack", "stop", "respawn", "craft", "inventory_move", "drop", "block_action_begin", "block_action_continue", "select_recipe", "ui_activate"];
+    private static readonly HashSet<string> Mutations = ["move_to", "move", "look", "aim_cell", "select", "interact", "attack", "stop", "respawn", "craft", "inventory_move", "drop", "open_container", "container_move", "close_container", "block_action_begin", "block_action_continue", "select_recipe", "ui_activate"];
     private bool CanControl() => api.World?.Player?.Entity?.Alive == true && !api.IsGamePaused &&
         !api.Gui.OpenedGuis.Any(dialog => dialog.IsOpened() && DialogAdapter.BlocksControl(dialog));
 
