@@ -49,8 +49,7 @@ public sealed partial class AiBridgeMod
         if (request.TryGetProperty("expectedTarget", out var expected) &&
             (expected.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) || expected.GetString() != CurrentTargetKey()))
         {
-            StopMovement();
-            StopHandAction();
+            StopActs();
             return new { ok = false, error = "Target changed; observe and aim again." };
         }
         if (request.TryGetProperty("expectedState", out var expectedInventory) &&
@@ -72,8 +71,7 @@ public sealed partial class AiBridgeMod
                 return new { ok = false, error = "sneak must be boolean." };
             sneakHand = handSneakField.GetBoolean();
         }
-        StopMovement();
-        StopHandAction();
+        StopActs();
         handSneak = sneakHand;
         handSneakArmedAt = sneakHand ? Environment.TickCount64 : 0;
         handAction = action;
@@ -89,15 +87,13 @@ public sealed partial class AiBridgeMod
 
     private object InventoryMove(string action, JsonElement request)
     {
-        StopMovement();
-        StopHandAction();
+        StopActs();
         return inventory.Move(request, action == "craft");
     }
 
     private object InventoryDrop(JsonElement request)
     {
-        StopMovement();
-        StopHandAction();
+        StopActs();
         return inventory.Drop(request);
     }
 
@@ -109,26 +105,22 @@ public sealed partial class AiBridgeMod
         if (!request.TryGetProperty("target", out var target) || target.ValueKind != JsonValueKind.String ||
             target.GetString() != CurrentTargetKey())
         {
-            StopMovement();
-            StopHandAction();
+            StopActs();
             return new { ok = false, error = "Aim at the container first; observe and aim again." };
         }
-        StopMovement();
-        StopHandAction();
+        StopActs();
         return containers.Open(request, worldInteractions, lastTickDt);
     }
 
     private object ContainerMove(JsonElement request)
     {
-        StopMovement();
-        StopHandAction();
+        StopActs();
         return containers.Move(request);
     }
 
     private object CloseContainer(JsonElement request)
     {
-        StopMovement();
-        StopHandAction();
+        StopActs();
         return containers.Close();
     }
 
@@ -142,7 +134,7 @@ public sealed partial class AiBridgeMod
             return new { ok = false, error = "allowStarvingRecovery must be boolean." };
         if (!CanControl() || ManualInput() || !entity.OnGround || entity.FeetInLiquid || entity.MountedOn != null)
             return new { ok = false, error = "Block actions need grounded, dry, ready controls." };
-        StopMovement(); StopHandAction();
+        StopActs();
         return blockActions.Begin(request, inventory, blockRecovery);
     }
 

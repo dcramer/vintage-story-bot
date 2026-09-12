@@ -52,7 +52,8 @@ public sealed partial class AiBridgeMod
             return new { ok = false, error = "Controls unavailable." };
         if (!control.Begin(ownerField.GetString()!, epoch, Environment.TickCount64, controlRecovery))
             return new { ok = false, error = "Control epoch changed or another controller owns inputs." };
-        StopMovement(); StopHandAction();
+        // A walk owns the camera: no look set before it is kept.
+        StopActs(); ClearTargetLock();
         controlYaw = entity.Pos.Yaw * 180 / Math.PI; controlPitch = (entity.Pos.Pitch - Math.PI) * 180 / Math.PI;
         return new { ok = true, control = control.Observe(Environment.TickCount64) };
     }
@@ -201,8 +202,7 @@ public sealed partial class AiBridgeMod
             if (jumpField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return new { ok = false, error = "jump must be boolean." };
             jump = jumpField.GetBoolean();
         }
-        StopHandAction();
-        StopMovement();
+        StopActs();
         if (request.TryGetProperty("sprint", out var sprintField))
         {
             if (sprintField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
@@ -413,9 +413,20 @@ public sealed partial class AiBridgeMod
         return false;
     }
 
+    // The one way inputs are let go of: the hold, the keys and the step, the hand, and the look.
+    // Every release path (stop, control_end, expiry, manual input, menus, death, world exit, a
+    // failed act) comes through here, so nothing stays held by a path that forgot one of them.
     private void ReleaseControl(string reason)
     {
-        control.Release(reason); sensorPriority = null; StopMovement();
+        control.Release(reason); sensorPriority = null;
+        StopActs();
+        ClearTargetLock();
+    }
+    // The act in progress ends before another begins: a new input is never layered on the last.
+    private void StopActs()
+    {
+        StopMovement();
+        StopHandAction();
     }
 
     private void ApplyCamera(float dt)

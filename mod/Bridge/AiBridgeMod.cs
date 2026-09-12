@@ -296,7 +296,6 @@ public sealed partial class AiBridgeMod : ModSystem
             catch (Exception exception)
             {
                 ReleaseControl("sensor_error");
-                StopMovement();
                 api.Logger.Error($"AI navigation failed: {exception}");
             }
         }
@@ -360,7 +359,7 @@ public sealed partial class AiBridgeMod : ModSystem
             catch (Exception exception)
             {
                 // Only an act that may have touched the inputs lets go of them; a failed read never does.
-                if (TouchesInputs(pending.Json)) { ReleaseControl("action_error"); StopMovement(); StopHandAction(); }
+                if (TouchesInputs(pending.Json)) ReleaseControl("action_error");
                 api.Logger.Error($"AI bridge request failed: {exception}");
                 pending.Completion.TrySetResult(new { ok = false, error = "Game action failed; see client log." });
             }
@@ -439,9 +438,7 @@ public sealed partial class AiBridgeMod : ModSystem
             case "control_frame":
             case "control_step": return ControlFrame(name, request, receivedAt);
             case "stop":
-                StopMovement();
-                StopHandAction();
-                ClearTargetLock();
+                // Already released above, before the switch, as every stop is.
                 return new { ok = true, status = "stopped" };
             default:
                 return new { ok = false, error = "Unknown action. Use observe, events, respawn, scan, look, select, move, interact, attack, or stop." };
@@ -459,8 +456,6 @@ public sealed partial class AiBridgeMod : ModSystem
         ReleaseControl("bridge_off");
         terrainSensor?.Reset();
         vision?.Reset();
-        StopMovement();
-        StopHandAction();
         if (priorWorldInteraction.HasValue)
         {
             api.Input.MouseWorldInteractAnyway = priorWorldInteraction.Value;

@@ -270,8 +270,7 @@ public sealed partial class AiBridgeMod
             return new { ok = true, status = "pending", deathId = life.DeathId };
         if (!CanRespawn() || api.World is not ClientMain game)
             return new { ok = false, error = "Respawn unavailable: wait for death dialog, check lives/paused state." };
-        StopMovement();
-        StopHandAction();
+        StopActs();
         if (!life.RequestRespawn(deathField.GetString()!, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()))
             return new { ok = false, error = "Respawn state changed; observe again." };
         // Same public client method used by GuiDialogDead.OnRespawn; server validates.
@@ -301,7 +300,7 @@ public sealed partial class AiBridgeMod
         {
             // Death releases everything. Damage and life alerts are reported, not enforced: the brain
             // decides what being hurt means, and a frozen bot next to a bear is the worst policy.
-            if (!entity.Alive) { ReleaseControl("dead"); StopMovement(); StopHandAction(); }
+            if (!entity.Alive) ReleaseControl("dead");
             ClearTargetLock();
         }
     }
