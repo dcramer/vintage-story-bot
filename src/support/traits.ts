@@ -133,7 +133,8 @@ export function traitsOf(object: { kind?: string; code?: string; facts?: any } |
   for (const [pattern, traits] of priors) {
     if (!pattern.test(code) || (kind === 'item' && page && !block)) continue;
     for (const trait of traits) {
-      const known =
+      // The fact the page would carry if it had been read: only its absence lets the prior speak.
+      const stated =
         trait === 'pickup'
           ? page?.behaviors
           : trait === 'replaceable'
@@ -141,7 +142,7 @@ export function traitsOf(object: { kind?: string; code?: string; facts?: any } |
             : trait === 'container'
               ? page?.class
               : page?.material;
-      if (!known) set.add(trait);
+      if (!stated) set.add(trait);
     }
   }
   return [...set].sort();
