@@ -130,7 +130,7 @@ public sealed partial class AiBridgeMod
         { ReleaseControl("control_unavailable"); return new { ok = false, error = "Controls unavailable." }; }
         long frameNow = Environment.TickCount64;
         if (!control.Frame(frameOwner.GetString()!, sequence, receivedAt ?? frameNow, frameNow, frameDuration))
-            return new { ok = false, error = "Expired, revoked, duplicate or foreign control frame." };
+            return new { ok = false, error = control.RefusalReason(frameOwner.GetString()!, sequence, receivedAt ?? frameNow, frameDuration) };
         StopMovement(); StopHandAction();
         sensorPriority = focus; controlYaw = frameYaw; controlPitch = framePitch;
         bool frameForward = forwardField.GetBoolean(), jumping = frameJump.GetBoolean();

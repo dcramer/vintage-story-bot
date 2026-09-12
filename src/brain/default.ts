@@ -164,12 +164,19 @@ export const TASKS: Task[] = [
   { id: 'torches', title: `${TORCH_MIN} torches`, done: s => s.torches >= TORCH_MIN, after: ['grass'] },
   { id: 'logs', title: `${LOG_MIN} logs`, done: s => s.logs >= LOG_MIN, after: ['torches'] },
 ];
-export type TaskState = 'done' | 'next' | 'open' | 'set aside';
+export type TaskState = 'done' | 'next' | 'open' | 'set aside' | 'waiting';
 // The list as the brain sees it now: what is done, what is next, what waits.
 export function tasks(s: Situation, tried: Set<Job> = new Set()): { id: Job; title: string; state: TaskState }[] {
   let next: Job | null = null;
+  const finished = new Set(TASKS.filter(task => task.done(s)).map(task => task.id));
   return TASKS.map(task => {
-    let state: TaskState = task.done(s) ? 'done' : tried.has(task.id) ? 'set aside' : 'open';
+    let state: TaskState = task.done(s)
+      ? 'done'
+      : tried.has(task.id)
+        ? 'set aside'
+        : (task.after ?? []).some(id => !finished.has(id))
+          ? 'waiting'
+          : 'open';
     if (state === 'open' && !next) {
       next = task.id;
       state = 'next';

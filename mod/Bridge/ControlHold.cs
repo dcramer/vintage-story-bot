@@ -2,7 +2,9 @@ namespace VintageStoryAI;
 
 public sealed class ControlHold
 {
-    private const int HeartbeatMs = 2000;
+    // How long the inputs stay held with no frame from the controller before they release on their own:
+    // a dead controller lets go within this; a render stall shorter than this does not throw the walk away.
+    private const int HeartbeatMs = 5000;
     public string? Owner { get; private set; }
     public long Epoch { get; private set; }
     public long Until { get; private set; }
@@ -25,6 +27,15 @@ public sealed class ControlHold
         // refresh arrives; held keys retain their separate <=500 ms deadline.
         Sequence = sequence; Until = now + HeartbeatMs;
         return true;
+    }
+    // Why a frame was refused, for the controller's log: each cause is a different fault.
+    public string RefusalReason(string owner, long sequence, long receivedAt, int duration)
+    {
+        if (!Active) return $"Control frame refused: no hold ({Reason ?? "never begun"}).";
+        if (owner != Owner) return "Control frame refused: another owner holds the inputs.";
+        if (sequence <= Sequence) return $"Control frame refused: duplicate sequence {sequence} (at {Sequence}).";
+        if (receivedAt >= Until) return $"Control frame refused: hold expired {receivedAt - Until} ms before it arrived.";
+        return $"Control frame refused: duration {duration} ms is outside 1-500.";
     }
     public void Release(string reason) { Owner = null; Until = 0; Epoch++; Reason = reason; StarvingRecovery = false; }
     public bool Expire(long now)

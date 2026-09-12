@@ -422,6 +422,8 @@ export class Controller {
       signal,
     );
     try {
+      // The mod takes a pitch of at most 89 degrees; straight down at the feet is 89.
+      angles = { ...angles, pitchDegrees: Math.max(-89, Math.min(89, angles.pitchDegrees ?? 0)) };
       for (let i = 0; i < 60; i++) {
         const batch = await control.step({ ...angles, forward: false, jump: false });
         const state = batch.state;
