@@ -24,7 +24,8 @@ const inventory = (...slots) => ({
   ok: true,
   inventories: [
     { name: 'hotbar', slots: slots.map((s, i) => ({ ...s, slot: i })) },
-    { name: 'backpack', slots: [] },
+    // Two hand baskets worn, as day 1 ends with.
+    { name: 'backpack', slots: [0, 1].map(i => ({ slot: i, code: 'game:basket-normal-reed', quantity: 1, bag: true })) },
   ],
 });
 const state = (extra = {}) => ({
@@ -89,6 +90,7 @@ const situation = (extra = {}) => ({
   dirt: 0,
   logs: 8,
   storage: true,
+  bags: 2,
   full: false,
   surplus: 0,
   short: 0,
@@ -975,6 +977,40 @@ test('brain: home is a note that outlives the process and is mirrored once on th
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('brain: a hand basket is woven from ten tops and worn by hand', () => {
+  const memory = fresh();
+  memory.notes.home = { x: 3.5, y: 100, z: 0.5 };
+  memory.notes.stash = basketNote();
+  const knife = slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 });
+  const axe = slot('game:axe-flint', 1, { tool: 'Axe', durability: 5 });
+  const pack = (...hotbar) => ({
+    ok: true,
+    state: 'ab'.repeat(32),
+    inventories: [
+      { name: 'hotbar', slots: hotbar.map((s, i) => ({ ...s, slot: i })) },
+      { name: 'backpack', slots: [{ slot: 0, code: null, quantity: 0, bag: true }] },
+    ],
+  });
+  const cut = decide(reading({ inventory: pack(knife, axe, slot('game:stick', 3)) }), memory);
+  assert.deepEqual(
+    [cut.start, cut.args.match, cut.args.count],
+    ['harvest', 'coopersreed', 20],
+    'tops for two baskets in one trip; the chest is already noted',
+  );
+  const weave = decide(reading({ inventory: pack(knife, axe, slot('game:cattailtops', 10)) }), memory);
+  assert.deepEqual([weave.start, weave.args.output], ['craft_item', 'game:basket-normal-reed']);
+  const wear = decide(reading({ inventory: pack(knife, axe, slot('game:basket-normal-reed', 1)) }), memory);
+  assert.deepEqual(wear.act, [
+    {
+      action: 'move_item',
+      from: { inventory: 'hotbar', slot: 2 },
+      to: { inventory: 'backpack', slot: 0 },
+      quantity: 1,
+      expectedState: 'ab'.repeat(32),
+    },
+  ]);
 });
 
 test('brain: a basket by the door is made in three steps, a full pack is put away, and the basket feeds the kit', () => {

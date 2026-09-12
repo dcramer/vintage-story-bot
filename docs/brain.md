@@ -61,6 +61,7 @@ Wants (what every walk stops for within six blocks): berries on a ripe bush, an 
 | grass | `harvest tallgrass` | Wants torches, no dry grass or cattail tops |
 | torches | `craft_item torch` | Fewer than 2 torches |
 | logs | `fell_tree` | Fewer than 8 logs |
+| bags | `harvest coopersreed` with the knife (the chest's tops in the same trip), `craft_item` a hand basket, `move_item` into a bag slot | Fewer than 2 bags worn |
 | storage | `harvest coopersreed` with the knife, `craft_item` a reed chest (the game's stationary basket), `build` it where it stands | A knife and no basket noted; that spot is the site |
 | stash | `store_items` into the basket: everything the kit does not keep on hand, most first | A basket noted and the pack full (one free slot or none) with something to put away |
 | resupply | `take_items` from the basket | The basket was last seen holding something the kit is short of (sticks, flint, dirt, grass, torches, logs); before gathering it |

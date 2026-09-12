@@ -40,6 +40,7 @@ import { surfacing } from './default/reflexes/swim.ts';
 import { unburrow } from './default/reflexes/unburrow.ts';
 import { wait } from './default/reflexes/wait.ts';
 import { isNight, kit, type Situation, senseDanger } from './default/situation.ts';
+import { bags } from './default/tasks/bags.ts';
 import { dirt } from './default/tasks/dirt.ts';
 import { grass } from './default/tasks/grass.ts';
 import { logs } from './default/tasks/logs.ts';
@@ -60,7 +61,8 @@ export type { Job, Memory, Notes, Situation };
 
 // The list follows getting-started day 1, minus pottery and hunting: knife and
 // axe knapped first (each needs only a stick and a flint, so it is made the
-// moment both are in hand), the reed chest from cattails put down at the site,
+// moment both are in hand), two hand baskets worn and the reed chest from
+// cattails put down at the site,
 // the shovel, then the body if one lies somewhere, dirt and the house before
 // dark beside the basket, torches for the night, a backup knife into the
 // basket; day 2 chops a tree. Each task is done when the kit or the notes
@@ -68,7 +70,23 @@ export type { Job, Memory, Notes, Situation };
 // what a task waits on (dirt needs a shovel, a shelter needs dirt, torches
 // need a home to light). What the basket holds is fetched before anything is
 // gathered; a full pack is emptied before the rest of the list.
-export const TASKS: Concern[] = [resupply, knife, axe, storage, shovel, recover, dirt, shelter, stash, sticks, grass, torches, spareKnife, logs];
+export const TASKS: Concern[] = [
+  resupply,
+  knife,
+  axe,
+  bags,
+  storage,
+  shovel,
+  recover,
+  dirt,
+  shelter,
+  stash,
+  sticks,
+  grass,
+  torches,
+  spareKnife,
+  logs,
+];
 const REFLEXES: Concern[] = [hide, eat, goHome, burrow, unburrow, wait, relocate, digOut, explore];
 // What runs beside any job, through tools that only talk.
 const ALONGSIDE: Aside[] = [copper, homeMarker];
@@ -180,6 +198,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     dirt: k.dirt,
     logs: k.logs,
     storage: !!memory.notes.stash,
+    bags: k.bags,
     full: k.free <= FULL_SLOTS,
     surplus: surplusOf(k, { home: !!home, torches: k.torches }).reduce((n, i) => n + i.count, 0),
     short: resupplyOf(k, { home: !!home, torches: k.torches }, memory.notes.stash).reduce((n, i) => n + i.count, 0),

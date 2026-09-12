@@ -30,6 +30,7 @@ export type Job =
   | 'relocate'
   | 'recover'
   | 'storage'
+  | 'bags'
   | 'stash'
   | 'resupply';
 // The container the bot keeps things in: its observed key (cell and block code), and what it

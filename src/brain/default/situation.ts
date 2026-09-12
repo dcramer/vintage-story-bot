@@ -56,6 +56,18 @@ export function kit(inventory: any) {
     logs: part('log-'),
     reserve: foodReserve(inventory) as number,
     cattailtops: exact('game:cattailtops'),
+    // Bags worn, a hand basket carried but not worn, and a bag slot to wear it in.
+    bags: slots.filter(s => s.bag && s.code).length,
+    bagItem: (() => {
+      const bag = slots.find(s => !s.bag && s.code?.startsWith('game:basket-normal-'));
+      return bag ? { inventory: bag.inventory, slot: bag.slot } : null;
+    })(),
+    emptyBagSlot: (() => {
+      const empty = slots.find(s => s.bag && !s.code);
+      return empty ? { inventory: empty.inventory, slot: empty.slot } : null;
+    })(),
+    // The inventory token a by-hand move must present.
+    state: inventory.state as string,
     // A basket carried, ready to put down.
     basket: slots.find(s => s.code?.startsWith('game:stationarybasket-'))?.code ?? null,
     // Ordinary slots with nothing in them; bag slots hold bags, not things.
@@ -94,6 +106,7 @@ export type Situation = {
   // A basket at home is noted; the pack has a slot or two at most; things to put away, in items;
   // things the basket was last seen holding that the kit is short of, in items.
   storage: boolean;
+  bags: number;
   full: boolean;
   surplus: number;
   short: number;
