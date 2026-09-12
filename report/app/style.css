@@ -115,6 +115,67 @@ section { display: block; padding: 18px; }
 .map-empty small { color: var(--muted); margin-top: 5px; }
 .bot-map-panel { overflow: hidden; }
 
+/* Individual Seraph mission control */
+.bot-detail { display: grid; gap: 18px; max-width: 1600px; }
+.bot-titlebar { align-items: center; display: flex; justify-content: space-between; min-height: 28px; }
+.bot-titlebar > div { align-items: baseline; display: flex; gap: 16px; }
+.bot-titlebar b { font-size: 18px; font-weight: 650; letter-spacing: -.02em; }
+.back-link, .panel-link { color: var(--cyan); font: 11px/1.2 ui-monospace, monospace; }
+.back-link:hover, .panel-link:hover { color: var(--ink); }
+.mission-hero {
+  background: radial-gradient(circle at 88% 0, rgba(99,215,221,.13), transparent 36%),
+    linear-gradient(135deg, #101921, #0b1117 70%);
+  border-color: var(--line-bright);
+  overflow: hidden;
+  padding: clamp(24px, 3.5vw, 48px);
+  position: relative;
+}
+.mission-hero::before { background: var(--cyan); content: ""; height: 100%; left: 0; position: absolute; top: 0; width: 3px; }
+.mission-kicker { align-items: center; display: flex; justify-content: space-between; margin-bottom: 12px; }
+.mission-kicker > span { color: var(--cyan); font: 600 10px/1.2 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.mission-kicker .tags { text-align: right; }
+.mission-hero h1 { font-size: clamp(28px, 4vw, 52px); font-weight: 520; letter-spacing: -.045em; line-height: 1.02; margin: 0; max-width: 1100px; }
+.mission-step { color: var(--ink2); font-size: 15px; margin: 14px 0 0; overflow-wrap: anywhere; }
+.mission-reason { border-left: 2px solid var(--bad); color: var(--bad); margin: 16px 0 0; max-width: 1000px; padding-left: 12px; }
+.mission-hero > .meter { margin-top: 18px; max-width: 560px; }
+.bot-stage { align-items: start; display: grid; gap: 18px; grid-template-columns: minmax(0, 2.2fr) minmax(310px, .8fr); }
+.live-console { overflow: hidden; padding: 0; }
+.live-frame { aspect-ratio: 16 / 9; background: #000; }
+.live-frame iframe { border: 0; display: block; height: 100%; width: 100%; }
+.live-foot { border-top: 1px solid var(--line); color: var(--muted); font: 10px/1 ui-monospace, monospace; padding: 9px 14px; }
+.bot-rail { display: grid; gap: 18px; }
+.rail-card { padding: 0; }
+.rail-body, .card-body { padding: 14px 16px 16px; }
+.rail-body dl, .card-body dl { margin-top: 0; }
+.position-value { color: var(--ink); font: 500 clamp(19px, 2vw, 26px)/1.2 ui-monospace, monospace; letter-spacing: -.03em; margin-bottom: 12px; }
+.chart-empty, .panel-empty { align-items: center; color: var(--muted); display: flex; justify-content: center; min-height: 120px; }
+.panel-empty.compact { min-height: 74px; padding: 14px; }
+.chart-legend { color: var(--ink2); display: flex; font: 10px/1.2 ui-monospace, monospace; gap: 14px; margin-top: 10px; }
+.chart-legend span { align-items: center; display: inline-flex; gap: 6px; }
+.chart-legend i { display: inline-block; height: 3px; width: 14px; }
+.chart-legend .series-1 { background: var(--series-1); }
+.chart-legend .series-2 { background: var(--series-2); }
+.bot-detail .bot-map-panel .detailed-map { aspect-ratio: 21 / 9; max-height: 650px; min-height: 420px; }
+.bot-secondary { align-items: stretch; display: grid; gap: 18px; grid-template-columns: 1.2fr .8fr 1fr; }
+.bot-secondary > section { padding: 0; }
+.card-body h3, .debug-block h3 { color: var(--muted); font: 600 10px/1.2 ui-monospace, monospace; letter-spacing: .08em; margin: 18px 0 8px; text-transform: uppercase; }
+.mission-list { display: grid; }
+.mission-row { align-items: start; border-bottom: 1px solid var(--line); display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) auto 52px; padding: 13px 16px; }
+.mission-row:last-child { border-bottom: 0; }
+.mission-row strong { display: block; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.mission-row small { color: var(--muted); display: block; margin-top: 3px; overflow-wrap: anywhere; }
+.mission-row > span { color: var(--ink2); font: 10px/1.2 ui-monospace, monospace; padding-top: 3px; }
+.mission-row > span.good { color: var(--good); }
+.mission-row > span.bad { color: var(--bad); }
+.mission-row time { color: var(--muted); font: 10px/1.2 ui-monospace, monospace; padding-top: 3px; text-align: right; }
+.debug-panel { padding: 0; }
+.debug-grid { display: grid; grid-template-columns: minmax(320px, .8fr) minmax(0, 1.2fr); }
+.debug-block { min-width: 0; padding: 18px; }
+.debug-block + .debug-block { border-left: 1px solid var(--line); }
+.debug-block h3 { margin-top: 0; }
+.goal-script { background: #070b0f; border: 1px solid var(--line); color: #c5e7df; font: 11px/1.6 ui-monospace, monospace; margin: 0; max-height: 300px; overflow: auto; padding: 14px; white-space: pre-wrap; }
+.debug-panel .scroll { max-height: 430px; }
+
 .connected-panel { min-width: 0; }
 .connected-list { display: grid; }
 .connected-bot { border-bottom: 1px solid var(--line); display: grid; gap: 12px; padding: 16px; transition: background .15s ease; }
@@ -199,6 +260,10 @@ td.err { color: var(--bad); }
   .fleet-overview { grid-template-columns: 1fr; }
   .connected-list { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
   .connected-bot { border-bottom: 0; border-right: 1px solid var(--line); }
+  .bot-stage { grid-template-columns: 1fr; }
+  .bot-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .bot-secondary { grid-template-columns: 1fr 1fr; }
+  .bot-secondary > section:first-child { grid-column: 1 / -1; }
 }
 
 @media (max-width: 720px) {
@@ -212,6 +277,13 @@ td.err { color: var(--bad); }
   .body { grid-template-columns: 1fr; }
   .hotbar { grid-template-columns: repeat(5, 1fr); }
   .meter { grid-template-columns: 54px 1fr 82px; }
+  .mission-hero { padding: 24px 20px; }
+  .mission-kicker { align-items: flex-start; gap: 10px; }
+  .bot-titlebar > div { gap: 10px; }
+  .bot-rail, .bot-secondary, .debug-grid { grid-template-columns: 1fr; }
+  .bot-secondary > section:first-child { grid-column: auto; }
+  .debug-block + .debug-block { border-left: 0; border-top: 1px solid var(--line); }
+  .bot-detail .bot-map-panel .detailed-map { min-height: 330px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
