@@ -4,7 +4,7 @@ import { horizontal } from '../runtime/navigation/terrain.ts';
 import { blockWorkReady, changeBlock, dryBlockWorkPosition } from '../support/blocks.ts';
 import { habitatsFor } from '../support/habitat.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
-import { SEARCH_PATIENCE, Search } from '../support/search.ts';
+import { Search } from '../support/search.ts';
 import { cleanName, runField } from '../support/task.ts';
 import { collectItem } from './collect_item.ts';
 
@@ -103,7 +103,7 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     await field.observe(true);
     if ((await refresh()) >= count) return { ok: true, goal: 'harvest', ...summary(), verification: 'inventory_delta' };
     await survival?.tend();
-    if (search.unproductive >= SEARCH_PATIENCE) return { ok: false, goal: 'harvest', reason: 'none_found', ...summary() };
+    if (search.exhausted()) return { ok: false, goal: 'harvest', reason: 'none_found', ...summary() };
     field.report('searching');
     await search.step();
   }

@@ -5,6 +5,7 @@
 // only orders them. The ladder (which reflex now) and the task list are data,
 // re-derived from the Situation every tick: nothing is queued.
 import type { Decision, Reading } from '../../runtime/brain.ts';
+import { horizontal } from '../../runtime/navigation/terrain.ts';
 import type { Kit, Situation } from './situation.ts';
 
 export type Cell = { x: number; y: number; z: number };
@@ -43,7 +44,8 @@ export type Stash = {
   code: string;
   seen: { at: number; items: Record<string, number> } | null;
 };
-// What is kept between runs: the decisions made about this world, never what was seen.
+// What is kept between runs: the decisions made about this world, and what the bot itself last
+// left in its own chest (re-verified when it is opened); what the eye saw of the world is Knowledge.
 export type Notes = {
   home: Cell | null;
   stash: Stash | null;
@@ -74,6 +76,10 @@ export type Memory = {
   pendingHurtAt: number | null;
   // When the brain last pressed Escape on a dialog that blocked the controls.
   dialogCloses: number[];
+  // Until when a hit is explained by the job just done (poison after a bite).
+  explainedUntil: number;
+  // Times in a row the chest could not be aimed at where its note says.
+  stashMisses: number;
   // Sighting keys already marked on the map, so one nugget is announced once.
   marked: Set<string>;
 };
@@ -128,7 +134,7 @@ export type Concern = {
   short?: (k: Kit, s: Pick<Situation, 'home' | 'torches'>) => { item: string; count: number } | null;
 };
 // Something done alongside any job through tools that only talk: a marker, a chat line.
-export type Aside = { id: string; act: (ctx: Context) => Decision | null };
+export type Alongside = { id: string; act: (ctx: Context) => Decision | null };
 // One rung of the ladder: the reflex to turn to when its condition holds, in order of concern.
 export type Rung = { job: Job; when: (s: Situation, tried: Set<Job>) => boolean };
 
@@ -183,7 +189,7 @@ export const stashNote = (n: any): Stash | null =>
     : null;
 // A task with a place goes there first: a walk when the place is farther than the goal itself would go, else null.
 export function goTo(ctx: Context, place: { x: number; z: number }, why: string, radius = 12, arrival = 3): Decision | null {
-  const far = Math.hypot(place.x - ctx.state.position.x, place.z - ctx.state.position.z);
+  const far = horizontal(place, ctx.state.position);
   if (far <= radius) return null;
   return {
     start: 'travel',
@@ -191,15 +197,21 @@ export function goTo(ctx: Context, place: { x: number; z: number }, why: string,
     why: `${why}, ${Math.round(far)} blocks away`,
   };
 }
-// A container the goal could not open again is gone: its note is dropped, and a new one is made.
-export const containerGone = (last: Ended) => /changed or obstructed|No container dialog|container_unreachable/i.test(last.reason ?? '');
+// The goal stood where the note says and found no chest to open there: not the same as a walk that
+// never got there. Twice in a row and the note is dropped, and a new chest is made.
+export const containerMissing = (last: Ended) => /changed or obstructed|No container dialog/i.test(last.reason ?? '');
+export const STASH_MISSES = 2;
 // What the container held when the goal closed it, remembered until the next look.
 export function noteContents(memory: Memory, last: Ended, now: number) {
   if (!memory.notes.stash) return;
-  if (containerGone(last)) {
-    memory.notes.stash = null;
+  if (containerMissing(last)) {
+    if (++memory.stashMisses >= STASH_MISSES) {
+      memory.notes.stash = null;
+      memory.stashMisses = 0;
+    }
     return;
   }
+  if (last.ok) memory.stashMisses = 0;
   const contents = last.result?.contents;
   if (!Array.isArray(contents)) return;
   const items: Record<string, number> = {};

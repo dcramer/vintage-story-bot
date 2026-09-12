@@ -2,13 +2,13 @@
 // unless one is already marked nearby. Copper lies where its nuggets show; one
 // marker per 32 blocks is enough to find the spot again.
 import { horizontal } from '../../../runtime/navigation/terrain.ts';
-import type { Aside } from '../concern.ts';
+import type { Alongside } from '../concern.ts';
 
 export const COPPER = /nativecopper/;
 export const COPPER_TITLE = 'Copper';
 export const MARKER_RADIUS = 32;
 
-export const copper: Aside = {
+export const copper: Alongside = {
   id: 'copper',
   act: ({ events, markers, memory }) => {
     const nugget = events.find(e => e.type === 'sighted' && e.kind === 'block' && COPPER.test(e.code ?? '') && !memory.marked.has(e.key));

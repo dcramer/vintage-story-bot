@@ -1,10 +1,12 @@
 // Food. Hungry (under 20%) is pressing whatever runs; peckish (under 40%) with
 // nothing carried starts a search while there is strength for it. Dug in with
 // food in the pack, one bite where it sits; otherwise forage to half, keeping two bites.
+import { HUNGRY } from '../../../support/food.ts';
 import type { Concern } from '../concern.ts';
 import type { Situation } from '../situation.ts';
 
-export const HUNGRY = 0.2;
+// Hungry is the goals' own line (support/food.ts), so the brain interrupts work where forage would stomach poor food.
+export { HUNGRY };
 // With nothing to eat in the pack, start looking while there is still strength to search.
 export const PECKISH = 0.4;
 export const hungry = (s: Situation) => s.hunger !== null && s.hunger < HUNGRY;

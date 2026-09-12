@@ -47,7 +47,7 @@ export function kit(inventory: any) {
     heads: slots.map(s => s.code).filter(code => /^game:(knifeblade|axehead|shovelhead)-/.test(code ?? '')) as string[],
     torches: part('torch-basic'),
     torch: slots.find(s => s.code?.includes('torch-basic'))?.code ?? null,
-    // Knives carried with an edge left; a second is the spare for the basket.
+    // Knives carried with an edge left; a second is the spare for the chest.
     knives: slots.filter(s => s.tool === 'Knife' && (s.durability ?? 1) > 0).length,
     dirt: part('soil-'),
     dirtCode: slots.find(s => s.code?.includes('soil-'))?.code ?? null,
@@ -61,7 +61,7 @@ export function kit(inventory: any) {
     // Bags worn, a hand basket carried but not worn, and a bag slot to wear it in.
     bags: slots.filter(s => s.bag && s.code).length,
     bagItem: (() => {
-      const bag = slots.find(s => !s.bag && s.code?.startsWith('game:basket-normal-'));
+      const bag = slots.find(s => !s.bag && s.code?.startsWith('game:chest-normal-'));
       return bag ? { inventory: bag.inventory, slot: bag.slot } : null;
     })(),
     emptyBagSlot: (() => {
@@ -70,8 +70,8 @@ export function kit(inventory: any) {
     })(),
     // The inventory token a by-hand move must present.
     state: inventory.state as string,
-    // A basket carried, ready to put down.
-    basket: slots.find(s => s.code?.startsWith('game:stationarybasket-'))?.code ?? null,
+    // A reed chest carried, ready to put down.
+    chest: slots.find(s => s.code?.startsWith('game:stationarybasket-'))?.code ?? null,
     // Ordinary slots with nothing in them; bag slots hold bags, not things.
     free: slots.filter(s => !s.code && !s.bag).length,
     slots,
@@ -105,14 +105,14 @@ export type Situation = {
   grass: number;
   dirt: number;
   logs: number;
-  // A basket at home is noted; the pack has a slot or two at most; things to put away, in items;
-  // things the basket was last seen holding that the kit is short of, in items.
+  // A chest at home is noted; the pack has a slot or two at most; things to put away, in items;
+  // things the chest was last seen holding that the kit is short of, in items.
   storage: boolean;
   bags: number;
   full: boolean;
   surplus: number;
   short: number;
-  // The basket was last seen holding a knife.
+  // The chest was last seen holding a knife.
   stashKnife: boolean;
 };
 

@@ -1,6 +1,6 @@
-// A tiny dirt shelter (docs/brain.md) built by day: beside the basket when one
+// A tiny dirt shelter (docs/brain.md) built by day: beside the chest when one
 // is noted (the shelter goal builds two blocks ahead, so it stands six blocks
-// west of the basket first, clear of it), else where it stands. The spot becomes home.
+// west of the chest first, clear of it), else where it stands. The spot becomes home.
 import type { Concern } from '../concern.ts';
 import { goTo, setHome } from '../concern.ts';
 
@@ -15,7 +15,7 @@ export const shelter: Concern = {
   run: ctx => {
     const site = ctx.memory.notes.stash;
     return (
-      (site && goTo(ctx, { x: site.x - 6, z: site.z }, 'the site by the basket', 3, 1)) ?? {
+      (site && goTo(ctx, { x: site.x - 6, z: site.z }, 'the site by the chest', 3, 1)) ?? {
         start: 'shelter',
         args: { item: ctx.k.dirtCode ?? 'soil-', timeoutMs: 1800000 },
         why: `${ctx.k.dirt} dirt, putting up a shelter`,

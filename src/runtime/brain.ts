@@ -168,6 +168,8 @@ export class BrainLoop<Memory> {
     // A world seen for the first time this run: memory starts from the notes kept about it.
     if (this.notes.enter(state.world?.identifier, state.player?.uid)) {
       this.memory = this.brain.fresh(this.notes.data as any);
+      // A goal of the world just left ended with it; its bookkeeping has no memory to land in.
+      this.goal = null;
       if (this.notes.loaded) this.log.info('brain', 'notes_loaded', { file: this.notes.status().file, ...this.notes.loaded });
     }
     const record = controller.active as any;

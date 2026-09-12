@@ -4,7 +4,7 @@ import { blockWorkReady, changeBlock, dryBlockWorkPosition } from '../support/bl
 import { Fieldwork } from '../support/fieldwork.ts';
 import { Gleaner, pickupBlock } from '../support/gleaning.ts';
 import { habitatsFor } from '../support/habitat.ts';
-import { SEARCH_PATIENCE, Search } from '../support/search.ts';
+import { Search } from '../support/search.ts';
 import { Survival } from '../support/survival.ts';
 import { cleanName, foodFeatures } from '../support/task.ts';
 
@@ -93,7 +93,7 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
           searched: field.searched,
         };
       await survival?.tend();
-      if (search.unproductive >= SEARCH_PATIENCE)
+      if (search.exhausted())
         return {
           ok: false,
           goal: 'gather',

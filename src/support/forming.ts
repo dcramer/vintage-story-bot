@@ -38,6 +38,7 @@ async function aimGround(field) {
   const state = await field.observe();
   const p = state.position;
   const tried = new Set();
+  let covered = null;
   for (const offset of [0, 25, -25, 50, -50, 90, -90])
     for (const dist of [1.3, 1.0, 1.7]) {
       const radians = (normalize(state.orientation.yawDegrees + offset) * Math.PI) / 180;
@@ -54,12 +55,17 @@ async function aimGround(field) {
       if (!sel.key?.startsWith('block:') || sel.face !== 'up' || replaceablePlant(sel.code)) continue;
       const hit = parseBlockKey(sel.key);
       if (hit.x !== x || hit.y !== y || hit.z !== z) continue; // occluded or grazed a neighbour
-      // Free above for the surface, and clear sky for three blocks over it: leaves or branches over a
-      // surface catch the aim at its voxels from where the body stands, and every click then takes minutes.
-      if ([1, 2, 3].some(dy => field.env.map.get(hit.x, hit.y + dy, hit.z)?.boxes.length)) continue;
+      const above = field.env.map.get(hit.x, hit.y + 1, hit.z);
+      if (above?.boxes.length) continue; // top not free for a surface
+      // Clear sky for two more blocks is preferred: leaves over a surface catch the aim at its voxels and
+      // every click then takes minutes. Under a canopy or a roof the best covered cell still serves.
+      if ([2, 3].some(dy => field.env.map.get(hit.x, hit.y + dy, hit.z)?.boxes.length)) {
+        covered ??= sel;
+        continue;
+      }
       return sel;
     }
-  return null;
+  return covered;
 }
 
 export async function form(field, { kind, output, material }) {

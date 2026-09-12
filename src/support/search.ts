@@ -106,14 +106,12 @@ export type SearchOptions = {
   pauseWhen?: ((state: any) => string | null) | null;
 };
 
-// Approaches that ended without getting nearer, in a row. After a few, everything
-// known around here is set aside for a while and the search ranges: a patch of
-// leads with no seen way to them (a bush up a cliff) is left behind, not circled
-// block by block until dark.
-export const STALLED_APPROACHES = 3;
-export const STALL_SKIP_MS = 5 * 60 * 1000;
-// Each approach that failed makes a lead this much farther in the ordering.
-export const ATTEMPT_PENALTY = 32;
+// Evidence about leads lives in the places memory every goal shares: an approach that got
+// nowhere marks the lead's area failed, a lead in an area failed this often is no lead for
+// twenty minutes (an unreachable ledge is not retried block by block, nor by the next goal),
+// and each failure makes the leads there this much farther in the ordering.
+export const LEAD_FAILURES = 2;
+export const FAILED_LEAD_PENALTY = 32;
 // A step that moved less than this without taking or seeing anything new was unproductive.
 export const PRODUCTIVE_DISTANCE = 6;
 // Unproductive steps in a row before a search reports none_found to its goal.
@@ -124,9 +122,7 @@ export class Search {
   options: SearchOptions;
   lastView: any = null;
   stuck = 0;
-  stalls = 0;
-  // Failed approaches per lead, and steps in a row that took, saw or covered nothing.
-  attempts = new Map<string, number>();
+  // Steps in a row that took, saw or covered nothing.
   unproductive = 0;
   lastSeenCheck = 0;
   constructor(field, options: SearchOptions) {
@@ -142,8 +138,12 @@ export class Search {
   // Wanted things known to this goal, best first.
   targets() {
     const p = this.field.latest.position;
-    const score = o => approachScore(p, o) + (this.attempts.get(o.key) ?? 0) * ATTEMPT_PENALTY;
-    return this.field.targets(o => this.options.wanted(o)).sort((a, b) => score(a) - score(b));
+    const failed = o => this.field.places.failed(o.point);
+    const score = o => approachScore(p, o) + failed(o) * FAILED_LEAD_PENALTY;
+    return this.field
+      .targets(o => this.options.wanted(o))
+      .filter(o => failed(o) < LEAD_FAILURES)
+      .sort((a, b) => score(a) - score(b));
   }
   ready(object) {
     return this.options.ready ? this.options.ready(object, this.field.latest) : object.withinPickingRange;
@@ -226,7 +226,6 @@ export class Search {
       this.lastView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
     }
     if (!this.targets().length) await this.options.learn?.(field.recall(memoryRange, this.match, 'all'));
-    this.rangeIfStalled();
     const target = this.targets()[0];
     if (target) {
       await this.approach(target, approachExclude?.(target) ?? null);
@@ -261,15 +260,13 @@ export class Search {
     if (['arrived', 'paused'].includes(result.state) || horizontal(p, field.latest.position) > 2) this.lastView = null;
     return 'ranged';
   }
-  // After a few approaches that got nowhere, everything known is set aside and the
-  // frontier dropped, so the next step ranges instead of trying the next block of the same patch.
-  rangeIfStalled() {
-    if (this.stalls < STALLED_APPROACHES) return false;
-    const stale = this.targets();
-    for (const object of stale) this.field.skip(object, STALL_SKIP_MS);
+  // Nothing taken, seen or covered for a while: the goal gives up here. Where it stood is marked
+  // failed and the frontier dropped, so the next search of this kind heads somewhere else.
+  exhausted() {
+    if (this.unproductive < SEARCH_PATIENCE) return false;
+    this.field.places.fail(this.field.latest.position);
     this.field.places.clearFrontier(this.options.kind);
-    this.stalls = 0;
-    this.field.report('stalled', { skipped: stale.length });
+    this.field.report('exhausted', { unproductive: this.unproductive });
     return true;
   }
   async approach(target, exclude) {
@@ -278,8 +275,8 @@ export class Search {
     const destination = field.approach(target, exclude);
     if (destination) {
       const result = await field.walk(destination, this.pause);
-      this.stalls = result.state === 'arrived' ? 0 : this.stalls + 1;
-      if (result.state !== 'arrived') this.attempts.set(target.key, (this.attempts.get(target.key) ?? 0) + 1);
+      // A leg that paused (a new lead in view, a bite, a threat) is not a leg that got nowhere.
+      if (!['arrived', 'paused'].includes(result.state)) field.places.fail(target.point);
       // The far eye is directional: reaching an old lead, read the surroundings
       // all around before calling the thing gone.
       const nearby = result.state === 'arrived' && target.visible === false ? await this.look(8) : [];
@@ -306,8 +303,7 @@ export class Search {
     if (horizontal(field.latest.position, target.point) > 6 || detour) {
       const result = await field.walk(field.explore(target.point, APPROACH_LEG, detour), this.pause);
       const nearer = horizontal(field.latest.position, target.point) + 2 < horizontal(before, target.point);
-      this.stalls = result.state === 'arrived' || nearer ? 0 : this.stalls + 1;
-      if (!nearer) this.attempts.set(target.key, (this.attempts.get(target.key) ?? 0) + 1);
+      if (!['arrived', 'paused'].includes(result.state) && !nearer) field.places.fail(target.point);
       if (result.state === 'paused' && result.reason === 'route_threatened') this.avoidThreat(target);
       else if (stuckLeg(result, before, field.latest.position)) {
         const elevated = Math.abs((target.point.y ?? before.y) - before.y) > 2;

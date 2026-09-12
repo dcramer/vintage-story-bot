@@ -12,8 +12,8 @@ resumes on its own.
 - Switch while running: the `brain` action reads status, installs by name, or removes (`null`).
 - The brain sees every goal, whoever started it. Danger (a hostile seen or heard, a hit) stops any goal; storms and hunger cut short only the brain's own; an adapter's goal is otherwise left to finish and never replaced.
 - Nothing happens without the brain: respawning, swimming for shore, running from a hit and marking a find are its decisions. The loop wakes it when the controller notices something (`events`) as well as every couple of seconds.
-- A brain may return `wants`: code substrings every walk picks up when they lie within six blocks (loose sticks, stones, flints, dropped items, food where it grows), whatever the current job. The default brain always wants berries, edible mushrooms and wild honeycomb, sticks until it has ten, flint and loose stones until it has tools.
-- Memory has two parts. **Notes** are the decisions the brain made about a world (home, chests, claimed spots): plain JSON the loop keeps on disk per world, player and brain (`<knowledge dir>/notes/`, written when they change and on stop) and hands back to `fresh(notes)` when the world is next entered. Everything else is transient and dies with the process. What was seen is never a note: that is `Knowledge`. Moving home is rewriting a note. The map mirrors what others should find: the default brain keeps a `Home` marker where its note says, once per home. Its notes are `home` and `stash` (the basket's observed key and last-seen contents).
+- A brain may return `wants`: code substrings every walk picks up when they lie within six blocks (loose sticks, stones, flints, dropped items, food where it grows), whatever the current job. The default brain always wants berries, edible mushrooms and wild honeycomb, sticks while short of a few, flint and loose stones until it has tools.
+- Memory has two parts. **Notes** are the decisions the brain made about a world (home, chests, claimed spots): plain JSON the loop keeps on disk per world, player and brain (`<knowledge dir>/notes/`, written when they change and on stop) and hands back to `fresh(notes)` when the world is next entered. Everything else is transient and dies with the process. What the eye saw of the world is never a note: that is `Knowledge`; what the bot itself last left in its own chest is, timestamped and re-verified when the chest is opened. Moving home is rewriting a note. The map mirrors what others should find: the default brain keeps a `Home` marker where its note says, once per home. Its notes are `home` and `stash` (the chest's observed key and last-seen contents).
 - Code: `src/brain/<name>.ts` default-exports `{ name, description, fresh(notes?), decide(reading, memory), notes?(memory), summary?(memory) }`; `src/runtime/brain.ts` owns the loop. `decide` is pure: one reading (`observe`, `inventory`, `environment`, the active goal, the brain's own goal that just finished, the events since the last decision, the player's own map markers, the nearest dry ground while swimming, the open dialogs while the controls are blocked) and the brain's memory in, one decision out (`{ start, args, why }`, `{ act, why }`, `{ stop }`, `{ wait }`). `act` runs actions by hand; alongside a running goal only tools that talk (chat, map markers, memory) are accepted. `test/brain.test.ts` covers it without a game.
 
 Later brains (roles) differ only in `decide`. Behavior sources: [getting-started](getting-started.md), [architecture](architecture.md), [bot API](bot-api-reference.md).
@@ -51,21 +51,21 @@ fights; it runs or hides.
 | unburrow | `dig_area` on the mouth | Morning, dug in |
 | wait | none | Storm at home, night at home, or dug in for the night |
 
-Wants (what every walk stops for within six blocks): berries on a ripe bush, an edible mushroom and a wild hive always; loose sticks while short of ten; loose flint and stones while a tool head is wanted and nothing knappable is carried.
+Wants (what every walk stops for within six blocks): berries on a ripe bush, an edible mushroom and a wild hive always; loose sticks while short of a few; loose flint and stones while a tool head is wanted and nothing knappable is carried.
 | eat | `forage` to half with two bites kept; `eat` alone when dug in with food | Satiety below 20% (or 40% with nothing carried); eats what is carried when hungry (in the burrow too, off an earth wall), keeps the rest, searches ever farther in one direction for more, and when starving stomachs a bite that costs a point of health |
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
-| shelter | `travel` to six blocks west of the basket when one is noted, then `shelter` | Enough dirt (by day, or at night with nowhere else) |
+| shelter | `travel` to six blocks west of the chest when one is noted, then `shelter` | Enough dirt (by day, or at night with nowhere else) |
 | knife | `gather` one stick or flint if short, `knap` a knife blade, `craft_item` the knife | No knife; first of the kit, the moment a stick and a flint are in hand |
 | axe, shovel | the same, one tool per task | No axe; no shovel |
 | sticks | `gather stick` (loose sticks, then branchy leaves in reach) | Fewer than 4 sticks, once there is a home |
-| spare_knife | a second knife made like the first, `store_items` into the basket | The basket was never seen holding a knife |
+| spare_knife | a second knife made like the first, `store_items` into the chest | The chest was never seen holding a knife |
 | grass | `harvest tallgrass` | Wants torches, no dry grass or cattail tops |
 | torches | `craft_item torch` | Fewer than 2 torches |
 | logs | `fell_tree` | Fewer than 8 logs |
 | bags | `harvest coopersreed` with the knife (the chest's tops in the same trip), `craft_item` a hand basket, `move_item` into a bag slot | Fewer than 2 bags worn |
-| storage | `harvest coopersreed` with the knife, `craft_item` a reed chest (the game's stationary basket), `build` it where it stands | A knife and no basket noted; that spot is the site |
-| stash | `store_items` into the basket: everything the kit does not keep on hand, most first | A basket noted and the pack full (one free slot or none) with something to put away |
-| resupply | `take_items` from the basket | The basket was last seen holding something the kit is short of (sticks, flint, dirt, grass, torches, logs); before gathering it |
+| storage | `harvest coopersreed` with the knife, `craft_item` a reed chest (the game's stationary basket), `build` it where it stands | A knife and no chest noted; that spot is the site |
+| stash | `store_items` into the chest: everything the kit does not keep on hand, most first | A chest noted and the pack full (one free slot or none) with something to put away |
+| resupply | `take_items` from the chest | The chest was last seen holding something the kit is short of (sticks, flint, dirt, grass, torches, logs); before gathering it |
 | explore | `explore` | Fed, safe, daylight, kit done |
 
 Order of concern, and the interrupt rule for a running job: danger (a hostile
@@ -80,11 +80,11 @@ to light; a tool needs one stick and one flint, so the knife comes first and
 a few sticks on hand wait for a home), and the first task not done is the one worked on. `brain` status
 shows every task as done, next, open or set aside. A failed job is set aside while the bot stays within 24
 blocks of where it failed, for five minutes at most; the next job in the ladder
-runs meanwhile, so a failure never leaves it standing about. The basket is the
+runs meanwhile, so a failure never leaves it standing about. The chest is the
 one container it uses: its key and what it held when last closed are notes; a
-basket that cannot be opened again is forgotten and made again. Tools, torches
+chest that cannot be opened again is forgotten and made again. Tools, torches
 and food stay in the pack, and so do the sticks, logs, dirt and grass the list
-keeps on hand; a task with a place (the basket) walks there first.
+keeps on hand; a task with a place (the chest) walks there first.
 
 ### Tiny shelter
 

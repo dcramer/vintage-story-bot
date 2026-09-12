@@ -1,5 +1,5 @@
 // The surplus put away when the pack is full: whatever the kit does not need on hand
-// goes into the basket at home, most of it first. Tools, torches and food stay; so do
+// goes into the chest at home, most of it first. Tools, torches and food stay; so do
 // the sticks, logs, dirt and grass the day-1 list keeps. Recurring: done until the
 // pack fills again.
 import type { Concern, Stash } from '../concern.ts';
@@ -24,7 +24,7 @@ export function surplusOf(k: Kit, { home, torches }: { home: boolean; torches: n
     return 0;
   };
   const totals = new Map<string, number>();
-  // One tool of each class stays, the one with the most edge left; a second is a spare for the basket.
+  // One tool of each class stays, the one with the most edge left; a second is a spare for the chest.
   const kept = new Set<any>();
   for (const cls of new Set(k.slots.filter(s => s.tool).map(s => s.tool)))
     kept.add(k.slots.filter(s => s.tool === cls).sort((a, b) => (b.durability ?? 0) - (a.durability ?? 0))[0]);

@@ -1,5 +1,6 @@
 // A place that keeps producing scares is left behind, day or night: three scares
 // within 48 blocks in a quarter hour, and the bot walks 96 blocks away from them.
+import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import { fleeTarget } from '../../../support/threats.ts';
 import type { Concern, Memory } from '../concern.ts';
 
@@ -12,7 +13,7 @@ export function forgetOldScares(memory: Memory, now: number) {
   memory.scares = memory.scares.filter(scare => now - scare.at < DANGER_MS);
 }
 export const dangerHere = (memory: Memory, position: { x: number; z: number }) =>
-  memory.scares.filter(scare => Math.hypot(scare.x - position.x, scare.z - position.z) <= DANGER_RADIUS).length >= DANGER_SCARES;
+  memory.scares.filter(scare => horizontal(scare, position) <= DANGER_RADIUS).length >= DANGER_SCARES;
 
 export const relocate: Concern = {
   id: 'relocate',

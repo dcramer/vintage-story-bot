@@ -2,13 +2,13 @@
 // and a home that moved takes its marker along. The note is the truth; the
 // marker mirrors it.
 import { horizontal } from '../../../runtime/navigation/terrain.ts';
-import type { Aside } from '../concern.ts';
+import type { Alongside } from '../concern.ts';
 
 export const HOME_TITLE = 'Home';
 // A marker this far from the note is stale.
 export const HOME_MARKER_RADIUS = 4;
 
-export const homeMarker: Aside = {
+export const homeMarker: Alongside = {
   id: 'home',
   act: ({ home, memory, markers, state }) => {
     if (!home || memory.homeMarked || !state.capabilities?.includes?.('map_waypoint_add')) return null;

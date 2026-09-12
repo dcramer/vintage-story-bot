@@ -14,7 +14,7 @@ import { hunger } from '../support/food.ts';
 import { copper } from './default/alongside/copper.ts';
 import { homeMarker } from './default/alongside/home.ts';
 import {
-  type Aside,
+  type Alongside,
   type Concern,
   type Context,
   cell,
@@ -64,11 +64,11 @@ export type { Job, Memory, Notes, Situation };
 // moment both are in hand), two hand baskets worn and the reed chest from
 // cattails put down at the site,
 // the shovel, then the body if one lies somewhere, dirt and the house before
-// dark beside the basket, torches for the night, a backup knife into the
-// basket; day 2 chops a tree. Each task is done when the kit or the notes
+// dark beside the chest, torches for the night, a backup knife into the
+// chest; day 2 chops a tree. Each task is done when the kit or the notes
 // show it, and the first task not done is the one to work on; `after` names
 // what a task waits on (dirt needs a shovel, a shelter needs dirt, torches
-// need a home to light). What the basket holds is fetched before anything is
+// need a home to light). What the chest holds is fetched before anything is
 // gathered; a full pack is emptied before the rest of the list.
 export const TASKS: Concern[] = [
   resupply,
@@ -89,7 +89,7 @@ export const TASKS: Concern[] = [
 ];
 const REFLEXES: Concern[] = [hide, eat, goHome, burrow, unburrow, wait, relocate, digOut, explore];
 // What runs beside any job, through tools that only talk.
-const ALONGSIDE: Aside[] = [copper, homeMarker];
+const ALONGSIDE: Alongside[] = [copper, homeMarker];
 // The ladder: danger, then hunger, then a storm, a bad place, night, then the
 // list. A sealed burrow is already the safest response to something prowling
 // outside: opening it to flee turns cover into a trap, and only actual damage
@@ -121,6 +121,8 @@ export const tasks = (s: Situation, tried: Set<Job> = new Set()) => taskList(TAS
 // a player presses Escape. Character creation, death and disconnection are not closed this way.
 // Escape is pressed at most a few times in a short while, then the wait says what is open.
 export const DIALOG_CLOSES = 3;
+// How long damage the job explained keeps explaining after the job ended.
+export const EXPLAINED_MS = 15000;
 export const DIALOG_CLOSE_MS = 10000;
 export const closableDialog = (dialogs: Reading['dialogs']) =>
   dialogs?.find(d => d.blocksControl && /^GuiDialog(?!CreateCharacter|Dead|Death|Disconnect|Confirm|Login)/.test(d.name))?.name ?? null;
@@ -139,6 +141,9 @@ function triedNow(memory: Memory, position: { x: number; z: number }, now: numbe
 export function decide(reading: Reading, memory: Memory): Decision {
   const { state, inventory, environment, active, last, now, events = [], markers = [], ground = null } = reading;
   // Bookkeeping for the brain's own goal that just ended.
+  // Damage the job just done explains (poison from a desperate bite) is known before the job is forgotten,
+  // and for a while after: the poison outlasts the bite.
+  if (memory.job && concern(memory.job).explains?.(events)) memory.explainedUntil = now + EXPLAINED_MS;
   if (last) {
     if (last.ok) memory.done[last.kind] = (memory.done[last.kind] ?? 0) + 1;
     const mine = memory.job ? concern(memory.job) : null;
@@ -170,7 +175,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // A world still loading, a menu or a dialog: no goal can begin, and one refused
   // before it began would only be started again at once. Wait for the controls.
   if (state.controlReady === false) {
-    const closable = closableDialog(reading.dialogs);
+    // A running goal's own dialog (a container open for a transfer, a recipe selector) is its to close.
+    const closable = active ? null : closableDialog(reading.dialogs);
     memory.dialogCloses = memory.dialogCloses.filter(at => now - at < DIALOG_CLOSE_MS);
     if (closable && memory.dialogCloses.length < DIALOG_CLOSES) {
       memory.dialogCloses.push(now);
@@ -180,7 +186,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
   }
   const startup = recoverBurrow(reading, memory);
   if (startup) return startup;
-  const { danger, hurt, classifyingHurt } = senseDanger(reading, memory, !!(memory.job && concern(memory.job).explains?.(events)));
+  const { danger, hurt, classifyingHurt } = senseDanger(reading, memory, now < memory.explainedUntil);
   let satiety: number | null = null;
   try {
     satiety = hunger(state);
@@ -243,8 +249,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
   };
   // Beside any job, when nothing is pressing.
   if (!danger && !hurt && !classifyingHurt)
-    for (const aside of ALONGSIDE) {
-      const decision = aside.act(ctx);
+    for (const alongside of ALONGSIDE) {
+      const decision = alongside.act(ctx);
       if (decision) return decision;
     }
   // A goal of its own is running. What cuts it short is what the ladder would rather do now:
@@ -253,7 +259,9 @@ export function decide(reading: Reading, memory: Memory): Decision {
     const mine = memory.job ? concern(memory.job) : null;
     const own = mine?.running?.(ctx);
     if (own) return own;
-    if ((danger || hurt) && !mine?.uncuttable) return { stop: danger ? 'threat' : 'hurt' };
+    // A hostile that cannot be run from (a flight just failed here) does not cut work short either: the
+    // alternative is a goal started and stopped every tick beside it. A hit still does.
+    if ((hurt || (danger && !tried.has('hide'))) && !mine?.uncuttable) return { stop: hurt ? 'hurt' : 'threat' };
     if (classifyingHurt) return { wait: 'identifying damage source' };
     // Someone else's goal is otherwise left alone.
     if (active.by !== 'brain') return { wait: `letting ${active.kind} finish (${active.by})` };
@@ -305,6 +313,8 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
     resting: false,
     pendingHurtAt: null,
     dialogCloses: [],
+    explainedUntil: 0,
+    stashMisses: 0,
   };
 }
 
