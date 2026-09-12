@@ -176,11 +176,6 @@ export class Navigation {
       this.route = planned;
       this.index = 0;
       this.state = 'moving';
-      if (process.env.SERAPH_TRACE_NAV)
-        console.error(
-          `${new Date().toISOString().slice(11, 23)} nav route #${this.replans} from ${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}: ` +
-            planned.map(n => `${n.x.toFixed(1)},${n.y},${n.z.toFixed(1)}${n.move && n.move !== 'walk' ? `(${n.move})` : ''}`).join(' > '),
-        );
       this.lookingAt = null;
       this.edgeStart = p;
       this.bestNear = undefined;
@@ -334,8 +329,9 @@ export class Navigation {
     const food = state.vitals?.hunger;
     const emergency = this.evading || this.target.emergency;
     const straight = turn < 5 && next.move === 'walk' && near > 3 && yawMagnitude < 5;
-    const sprint =
-      !!this.target.sprint && grounded && !this.jumpAt && straight && food?.max > 0 && food.current / food.max >= (emergency ? 0.1 : 0.6);
+    // Running from something is done at a sprint whatever the stomach says; otherwise only well fed, on a straight.
+    const fleeing = emergency && next.move === 'walk' && near > 1.5 && yawMagnitude < 15;
+    const sprint = !!this.target.sprint && grounded && !this.jumpAt && (fleeing || (straight && food?.max > 0 && food.current / food.max >= 0.6));
     return {
       yawDegrees,
       pitchDegrees: 15,

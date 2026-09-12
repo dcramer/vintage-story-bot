@@ -65,7 +65,8 @@ const situation = (extra = {}) => ({
 test('brain: danger, hunger and night come before the kit, and the kit comes in day-1 order', () => {
   assert.equal(pickJob(situation({ threat: true, hunger: 0.1 })), 'hide');
   assert.equal(pickJob(situation({ storm: true, atHome: false })), 'go_home');
-  assert.equal(pickJob(situation({ hunger: 0.1, night: true })), 'eat');
+  assert.equal(pickJob(situation({ hunger: 0.1, night: true, reserve: 100 })), 'eat', 'the pack is eaten from at night');
+  assert.equal(pickJob(situation({ hunger: 0.1, night: true, atHome: false })), 'go_home', 'but foraging waits for day');
   assert.equal(pickJob(situation({ hunger: 0.35 })), 'eat', 'peckish with an empty pack: go find food');
   assert.equal(pickJob(situation({ hunger: 0.35, reserve: 200 })), 'explore', 'peckish with food in the pack: carry on');
   assert.equal(pickJob(situation({ dangerHere: true, night: true })), 'relocate', 'a place full of scares is left');

@@ -36,7 +36,7 @@ fights; it runs or hides.
 | swim | `look` and `move` with jump held | In deep water with no goal running |
 | go_home | `travel` home | Storm or night, away from home |
 | wait | none | Storm at home, or night with nowhere to go |
-| eat | `eat`, else `forage` | Satiety below 20% |
+| eat | `eat`, else `forage` | Satiety below 20% (or 40% with nothing carried); the pack any time, foraging by day |
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
 | shelter | `shelter` | Enough dirt (by day, or at night with nowhere else) |
 | sticks | `gather stick` (loose sticks, then branchy leaves in reach) | Fewer than 10 sticks |

@@ -33,9 +33,10 @@ export const TORCH = 'game:torch-basic-extinct-up';
 // minutes at most; the ladder goes on to the next job meanwhile, so nothing ever idles on it.
 export const TRIED_RADIUS = 24;
 export const TRIED_MS = 5 * 60 * 1000;
-// Night when the sun is nearly gone; unknown light counts as day, since
+// Night from dusk (the sun's light under 0.4, when drifters come out and the eye
+// sees little) to dawn; unknown light counts as day, since
 // without a reading the brain cannot call itself home.
-export const NIGHT_LIGHT = 0.25;
+export const NIGHT_LIGHT = 0.4;
 // Copper lies where its nuggets show; one marker per 32 blocks is enough to find the spot again.
 export const COPPER = /nativecopper/;
 export const COPPER_TITLE = 'Copper';
@@ -178,11 +179,13 @@ export function tasks(s: Situation, tried: Set<Job> = new Set()): { id: Job; tit
 export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   if (s.threat || s.hurt) return 'hide';
   if (s.storm) return s.home && !s.atHome ? 'go_home' : 'wait';
-  if (s.hunger !== null && (s.hunger < HUNGRY || (s.hunger < PECKISH && s.reserve <= 0))) return 'eat';
+  // Something from the pack is eaten anywhere, any time; looking for food is daywork.
+  if (s.hunger !== null && s.hunger < HUNGRY && s.reserve > 0) return 'eat';
   // A place that keeps producing scares is left behind, day or night, before anything else here.
   if (s.dangerHere && !s.burrowed) return 'relocate';
   if (s.night) return s.home ? (s.atHome ? 'wait' : 'go_home') : s.burrowed ? 'wait' : s.dirt > 0 ? 'burrow' : 'seal';
   if (s.burrowed) return 'unburrow';
+  if (s.hunger !== null && (s.hunger < HUNGRY || (s.hunger < PECKISH && s.reserve <= 0))) return 'eat';
   // The first task on the list not done and not set aside around here; with none left, look around.
   return tasks(s, tried).find(task => task.state === 'next')?.id ?? 'explore';
 }
@@ -216,7 +219,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     if (last.reason === 'pit' && last.result?.position) memory.pit = { x: last.result.position.x + 8, z: last.result.position.z };
     // Running away is tried again at once, and a job the surroundings refused before it began (water, lost
     // controls) is not the job's fault; every other failed job is set aside around here for a while.
-    else if (!last.ok && memory.job && !['hide', 'dig_out'].includes(memory.job) && !/interruption/.test(last.reason ?? ''))
+    else if (!last.ok && memory.job && !['hide', 'dig_out'].includes(memory.job) && !/interruption|^brain:/.test(last.reason ?? ''))
       memory.tried[memory.job] = { x: state.position.x, z: state.position.z, at: now };
     if (memory.job === 'dig_out') memory.pit = null;
     // A finished shelter is home.
@@ -230,6 +233,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (memory.resting) return { wait: 'resting after too many scares' };
   memory.scares = memory.scares.filter(scare => now - scare.at < DANGER_MS);
   // Dead: respawn when the server offers it; nothing else matters until then.
+  if (!state.alive && active) return { stop: 'dead' };
   if (!state.alive)
     return state.life?.deathId
       ? { act: [{ action: 'respawn', deathId: state.life.deathId }], why: 'dead' }
@@ -329,7 +333,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       const away = threat ? fleeTarget(state.position, threat) : escapePoint(state.position, state.orientation?.yawDegrees ?? 0, home);
       return start(
         'travel',
-        { x: away.x, z: away.z, arrivalRadius: 8, timeoutMs: 600000 },
+        { x: away.x, z: away.z, arrivalRadius: 8, sprint: true, timeoutMs: 600000 },
         threat ? `${threat.code} at ${Math.round(horizontal(state.position, threat.point))} blocks` : 'hurt by something unseen',
       );
     }
