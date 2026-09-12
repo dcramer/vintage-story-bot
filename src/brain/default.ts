@@ -352,26 +352,28 @@ export function decide(reading: Reading, memory: Memory): Decision {
       : null;
   const danger = threat ?? rememberedThreat;
   // A hit with no attacker in sight is still danger. The server also advances
-  // lastDamageAt for fall damage, but its notification identifies gravity; a
-  // stumble is not an attacker and must not cancel food recovery for a flight.
+  // lastDamageAt for falls and for the mildly poisonous food authorized during
+  // starvation; their notifications identify the cause, so neither is an attacker.
   // The event cursor advances when the running goal is stopped. Carry the
   // stop reason into this decision so a one-tick hit actually starts a flight
   // instead of cancelling work and immediately restarting the same job.
-  const gravity = environmentalHurt(events);
+  const poisonFromFood =
+    memory.job === 'eat' && events.some(event => event.type === 'message' && /^Lost [\d.]+ hp through poison$/i.test(event.text ?? ''));
+  const explainedHurt = environmentalHurt(events) || poisonFromFood;
   // Max-health nutrition drift can lower current and maximum health together.
   // The bridge reports that as a hurt event even though the bar remains full;
   // only a real deficit is evidence of damage from something unseen.
   const health = state.vitals?.health,
     fullHealth = Number.isFinite(health?.current) && Number.isFinite(health?.max) && health.current >= health.max - 0.01,
     rawHurt = !fullHealth && events.some(e => e.type === 'hurt');
-  if (gravity || danger) memory.pendingHurtAt = null;
+  if (explainedHurt || danger) memory.pendingHurtAt = null;
   else if (rawHurt && memory.pendingHurtAt === null) memory.pendingHurtAt = now;
   const pendingHurt = memory.pendingHurtAt !== null && now - memory.pendingHurtAt >= HURT_CLASSIFY_MS;
   // A known nearby threat removes the need to wait for a cause notification.
   // This matters inside a burrow: merely hearing a creature outside is safe,
   // but losing health while it is nearby proves the pocket is compromised.
-  const hurt = !gravity && (last?.reason === 'brain: hurt' || pendingHurt || (rawHurt && !!danger));
-  const classifyingHurt = !gravity && !danger && memory.pendingHurtAt !== null && !pendingHurt;
+  const hurt = !explainedHurt && (last?.reason === 'brain: hurt' || pendingHurt || (rawHurt && !!danger));
+  const classifyingHurt = !explainedHurt && !danger && memory.pendingHurtAt !== null && !pendingHurt;
   if (pendingHurt) memory.pendingHurtAt = null;
   // Copper seen in passing: a marker and a word to the others, once per nugget, unless one is already marked nearby.
   const copper = events.find(e => e.type === 'sighted' && e.kind === 'block' && COPPER.test(e.code ?? '') && !memory.marked.has(e.key));
@@ -487,7 +489,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       return start(
         'dig_area',
         { cells: [memory.burrow], timeoutMs: 120000 },
-        hurt ? 'burrow breached, opening escape' : 'morning, opening the burrow',
+        hurt ? 'burrow breached, opening escape' : situation.night ? 'hungry, opening the burrow' : 'morning, opening the burrow',
       );
     case 'hide': {
       memory.scares.push({ x: state.position.x, z: state.position.z, at: now });
