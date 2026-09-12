@@ -41,6 +41,7 @@ export class Navigation {
   lookingAt = null;
   // The route index a straight-run merge started from, while one is in effect.
   mergedFrom: number | null = null;
+  routeReaches = false;
   jumpAt = 0;
   airborne = false;
   nextPlanAt = 0;
@@ -182,6 +183,12 @@ export class Navigation {
       this.route = planned;
       this.index = 0;
       this.state = 'moving';
+      // Whether this route's last cell satisfies the destination (a full route) or is only the nearest frontier.
+      const end = planned.at(-1);
+      this.routeReaches =
+        !!end &&
+        horizontal(end, this.target) <= Math.max(this.target.arrivalRadius ?? 0.3, 0.5) + 0.01 &&
+        (this.target.horizontalOnly || Math.abs(end.y - this.target.y) < 0.6);
       this.lookingAt = null;
       this.edgeStart = p;
       this.bestNear = undefined;
@@ -211,6 +218,9 @@ export class Navigation {
       this.mergedFrom = null;
     }
     if (this.index >= this.route.length) {
+      // The last cell of a full route was reached: the body stands within a step's tolerance of the
+      // destination, which is as close as a walk gets to any point; that is arrival.
+      if (this.routeReaches) return this.finish('arrived', 'destination_reached');
       // Remember the frontier cell this partial route ended on, by the cell's
       // own key, so the planner does not pick it again for this goal.
       const end = this.route.at(-1) ?? p,
