@@ -41,6 +41,7 @@ function publicItems(segments) {
 
 function archive(runs) {
   if (!runs.current) return;
+  if (runs.current.endedAt != null) runs.current.alive = false;
   runs.recent.push(runs.current);
   while (runs.recent.length > maxRecentRuns) runs.recent.shift();
 }
@@ -60,6 +61,22 @@ export function mergeRunMetric(bot, value) {
     return { changed: false, transition: false };
   const runs = (bot.runs ??= { current: null, recent: [] });
   let transition = false;
+  const priorDeath = runs.recent
+    .slice()
+    .reverse()
+    .find(run => run.lifeId === lifeId && run.endedAt != null);
+  if (priorDeath && runs.current?.lifeId === lifeId) {
+    priorDeath.alive = false;
+    // Heal records written by the first metrics revision, which let a
+    // pre-death controller segment leak back into the revived run.
+    if (runs.current.startedAt <= priorDeath.endedAt && segmentStartedAt > priorDeath.endedAt) {
+      runs.current = null;
+      bot.runSegments = {};
+      transition = true;
+    } else if (runs.current.startedAt > priorDeath.endedAt && segmentStartedAt <= priorDeath.endedAt) {
+      return { changed: false, transition: false };
+    }
+  }
   // Vintage Story keeps the same game session id after respawn. A newer alive
   // segment following a recorded death therefore starts a new survival run
   // even though lifeId is unchanged.

@@ -174,6 +174,60 @@ test('fleet metrics archive a death when the same game session respawns', () => 
   assert.equal(bot.runs.current.endedAt, null);
   assert.equal(bot.runs.current.startedAt, 3000);
   assert.equal(bot.runs.current.distance, 0);
+
+  const stale = { ...metric(3500, true), segmentId: 'old-controller', segmentStartedAt: 1000, distance: 99 };
+  assert.equal(mergeRunMetric(bot, stale).changed, false);
+  assert.equal(bot.runs.current.controllerSegments, 1);
+  assert.equal(bot.runs.current.distance, 0);
+});
+
+test('fleet metrics heal a revived run polluted by a pre-death segment', () => {
+  const bot: any = {
+    runs: {
+      current: {
+        lifeId: 'stable-game-session',
+        startedAt: 1000,
+        observedAt: 2500,
+        endedAt: null,
+        alive: true,
+        spawn: { x: 0, y: 100, z: 0, dimension: 0 },
+        position: { x: 9, y: 100, z: 0, dimension: 0 },
+        durationMs: 1500,
+        distance: 99,
+        movementSamples: 99,
+        estimatedSteps: 132,
+        maxFromSpawn: 9,
+        discontinuities: 0,
+        controllerSegments: 2,
+        items: { gained: 0, gathered: 0, crafted: 0, recovered: 0, other: 0, byCode: [] },
+      },
+      recent: [{ lifeId: 'stable-game-session', startedAt: 1000, observedAt: 2000, endedAt: 2000, alive: true }],
+    },
+    runSegments: {
+      old: { observedAt: 2500, startedAt: 1000, distance: 99, movementSamples: 99, discontinuities: 0, items: {} },
+    },
+  };
+  const fresh = {
+    segmentId: 'new-controller',
+    lifeId: 'stable-game-session',
+    segmentStartedAt: 3000,
+    observedAt: 3500,
+    endedAt: null,
+    alive: true,
+    origin: { x: 10, y: 100, z: 0, dimension: 0 },
+    position: { x: 12, y: 100, z: 0, dimension: 0 },
+    distance: 2,
+    movementSamples: 2,
+    maxFromOrigin: 2,
+    discontinuities: 0,
+    items: { byCode: [] },
+  };
+
+  mergeRunMetric(bot, fresh);
+  assert.equal(bot.runs.recent[0].alive, false);
+  assert.equal(bot.runs.current.startedAt, 3000);
+  assert.equal(bot.runs.current.distance, 2);
+  assert.equal(bot.runs.current.controllerSegments, 1);
 });
 
 test('fleet metrics consume transition logs and latest snapshots only once', () => {
