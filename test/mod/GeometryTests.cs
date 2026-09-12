@@ -34,3 +34,4 @@ Check(EdgeHeight(samples[0]) < 2 && samples.Skip(1).Any(p => EdgeHeight(p) > 2),
 Console.WriteLine($"{checks} geometry checks passed.");
 LifeTests.Run();
 ControlHoldTests.Run();
+StepTrackerTests.Run();

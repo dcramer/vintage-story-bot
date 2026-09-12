@@ -29,6 +29,8 @@ public sealed partial class AiBridgeMod
     private bool moveSprint;
     private bool moveSneak;
     private long stopAt;
+    // The step a toward-frame is walking, tracked every tick; null for plain frames.
+    private StepTracker? step;
     private readonly ControlHold control = new();
     private double controlYaw, controlPitch;
     private Cell? sensorPriority;
@@ -79,7 +81,7 @@ public sealed partial class AiBridgeMod
         }
         if (!request.TryGetProperty("owner", out var frameOwner) || frameOwner.ValueKind != JsonValueKind.String ||
             !request.TryGetProperty("sequence", out var sequenceField) || !sequenceField.TryGetInt64(out long sequence) ||
-            !TryInteger(request, "durationMs", out int frameDuration) || frameDuration is < 1 or > 500 ||
+            !TryInteger(request, "durationMs", out int frameDuration) || frameDuration is < 1 or > 2000 ||
             !TryNumber(request, "yawDegrees", out double frameYaw) || Math.Abs(frameYaw) > 36000 ||
             !TryNumber(request, "pitchDegrees", out double framePitch) || Math.Abs(framePitch) > 89 ||
             !request.TryGetProperty("forward", out var forwardField) || forwardField.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
@@ -99,6 +101,25 @@ public sealed partial class AiBridgeMod
                 return new { ok = false, error = "sneak must be boolean." };
             frameSneak = frameSneakField.GetBoolean();
         }
+        // A step: walk toward a point until on it, blocked or expired, the hand on the keys every tick.
+        Point3? toward = null; double reach = 0.35, reachY = 0.6; bool hop = false;
+        if (request.TryGetProperty("toward", out var towardField) && towardField.ValueKind != JsonValueKind.Null)
+        {
+            if (!TryNumber(towardField, "x", out double tx) || !TryNumber(towardField, "y", out double ty) || !TryNumber(towardField, "z", out double tz) ||
+                SceneGeometry.Distance(new(entity.Pos.X, entity.Pos.Y, entity.Pos.Z), new(tx, ty, tz)) > 8)
+                return new { ok = false, error = "toward must be a point within 8 blocks." };
+            toward = new Point3(tx, ty, tz);
+            if (request.TryGetProperty("reach", out var reachField) && (!reachField.TryGetDouble(out reach) || reach is < 0.15 or > 1.5))
+                return new { ok = false, error = "reach must be 0.15 to 1.5 blocks." };
+            if (request.TryGetProperty("reachY", out var reachYField) && (!reachYField.TryGetDouble(out reachY) || reachY is < 0.2 or > 3))
+                return new { ok = false, error = "reachY must be 0.2 to 3 blocks." };
+            if (request.TryGetProperty("hop", out var hopField))
+            {
+                if (hopField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return new { ok = false, error = "hop must be boolean." };
+                hop = hopField.GetBoolean();
+            }
+        }
+        else if (frameDuration > 500) return new { ok = false, error = "durationMs is at most 500 without a toward point." };
         if (request.TryGetProperty("focus", out var focusField) && focusField.ValueKind != JsonValueKind.Null)
         {
             if (!TryInteger(focusField, "x", out int fx) || !TryInteger(focusField, "y", out int fy) || !TryInteger(focusField, "z", out int fz) ||
@@ -114,7 +135,15 @@ public sealed partial class AiBridgeMod
         StopMovement(); StopHandAction();
         sensorPriority = focus; controlYaw = frameYaw; controlPitch = framePitch;
         bool frameForward = forwardField.GetBoolean(), jumping = frameJump.GetBoolean();
-        string[] frameMappings = frameForward ? (jumping ? ["walkforward", "jump"] : ["walkforward"]) : jumping ? ["jump"] : [];
+        if (toward is Point3 point)
+        {
+            var at = new Point3(entity.Pos.X, entity.Pos.Y, entity.Pos.Z);
+            if (step == null || !step.Same(point) || step.State != "walking") step = new StepTracker(point, at, reach, reachY, hop, frameNow);
+            // The tracker presses forward and jump itself; the keys are only registered here.
+            frameForward = true; jumping = false;
+        }
+        else step = null;
+        string[] frameMappings = frameForward ? (jumping || toward != null ? ["walkforward", "jump"] : ["walkforward"]) : jumping ? ["jump"] : [];
         if (sprinting && frameForward && !frameSneak) frameMappings = [..frameMappings, "sprint"];
         if (frameSneak) frameMappings = [..frameMappings, "sneak"];
         var frameKeys = frameMappings.Select(name => api.Input.GetHotKeyByCode(name)?.CurrentMapping.KeyCode ?? -1).ToArray();
@@ -131,11 +160,13 @@ public sealed partial class AiBridgeMod
         if (includeSense)
         {
             lastSenseAt = Environment.TickCount64;
-            return new { ok = true, sequence, state = Observe(),
+            if (step != null) ApplyStep(lastSenseAt);
+            return new { ok = true, sequence, step = step?.View(), state = Observe(),
                 terrain = terrain.Read(stepCursor, stepSession, lastSenseAt),
                 surface = vision.Surface(lastSenseAt), sightings = vision.Sightings(lastSenseAt) };
         }
-        return new { ok = true, sequence };
+        if (step != null) ApplyStep(frameNow);
+        return new { ok = true, sequence, step = step?.View() };
     }
 
     private object Move(JsonElement request)
@@ -401,6 +432,28 @@ public sealed partial class AiBridgeMod
         movingControls = null;
         movingKeys = [];
         moveJump = false;
+    }
+
+    // One tick of a step: face the point, press forward while facing it and supported, jump in water or
+    // for a hop; the frame's hold ends on its own when the step is over.
+    private void ApplyStep(long now)
+    {
+        if (step == null || movingControls == null) return;
+        var entity = api.World!.Player.Entity;
+        var at = new Point3(entity.Pos.X, entity.Pos.Y, entity.Pos.Z);
+        var (forward, jump, yaw) = step.Update(at, SceneGeometry.Normalize(entity.Pos.Yaw * 180 / Math.PI), entity.OnGround,
+            entity.FeetInLiquid || entity.Swimming, now);
+        controlYaw = yaw;
+        if (step.State != "walking") { StopMovement(); return; }
+        Press("walkforward", forward); movingControls.Forward = forward;
+        Press("jump", jump); movingControls.Jump = jump;
+        if (moveSprint) { Press("sprint", forward); movingControls.Sprint = forward; }
+    }
+
+    private void Press(string name, bool on)
+    {
+        int key = api.Input.GetHotKeyByCode(name)?.CurrentMapping.KeyCode ?? -1;
+        if (key >= 0 && key < api.Input.KeyboardKeyState.Length) api.Input.KeyboardKeyState[key] = on || api.Input.KeyboardKeyStateRaw[key];
     }
 
     private void SetMovement(bool pressed)

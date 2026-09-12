@@ -469,6 +469,7 @@ export class Controller {
       let terrainMore = false,
         route = nav.route;
       let input: any = null,
+        stepView: any = null,
         pagingSince = Date.now();
       while (nav.active) {
         const pausing = pauseWhen?.(state);
@@ -481,7 +482,7 @@ export class Controller {
         // re-checked; the last vetted frame carries on for up to a second, then the body waits.
         // The commanded yaw is always the follower's own: echoing the observed yaw back, which
         // lags the camera by a frame, rocks the head from side to side.
-        const frame = terrainMore ? null : nav.tick(state);
+        const frame = terrainMore ? null : nav.tick(state, Date.now(), stepView);
         const carryOn = terrainMore && !!input?.forward && !input.jump && Date.now() - pagingSince < 1000;
         if (!terrainMore) pagingSince = Date.now();
         input = {
@@ -493,6 +494,14 @@ export class Controller {
           sneak: frame?.sneak ?? false,
           focus: frame?.focus ?? null,
           durationMs: frame?.durationMs ?? 250,
+          ...(frame?.toward || (carryOn && input?.toward)
+            ? {
+                toward: frame?.toward ?? input.toward,
+                reach: frame?.reach ?? input.reach,
+                reachY: frame?.reachY ?? input.reachY,
+                hop: frame?.hop ?? input.hop,
+              }
+            : {}),
         };
         this.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
         if (nav.route !== route) {
@@ -515,6 +524,8 @@ export class Controller {
           jump: input.jump,
           sprint: input.sprint,
           ms: input.durationMs,
+          toward: input.toward ? `${input.toward.x.toFixed(1)},${input.toward.y},${input.toward.z.toFixed(1)}${input.hop ? '(hop)' : ''}` : undefined,
+          step: stepView ? `${stepView.state}@${stepView.distance}` : undefined,
           checkpoint: `${nav.index}/${nav.route?.length ?? 0}`,
           paging: terrainMore || undefined,
         });
@@ -528,6 +539,7 @@ export class Controller {
           break;
         }
         state = batch.state;
+        stepView = batch.step ?? null;
         if (state.life.lastDamageAt !== initial.life.lastDamageAt) {
           // Hurt: noted for the goal and its brain; the walk itself goes on.
           initial.life.lastDamageAt = state.life.lastDamageAt;
@@ -558,7 +570,7 @@ export class Controller {
         // planning on the next iteration. Repeating the already-vetted frame for
         // one game tick keeps planning time outside the heartbeat critical path.
         try {
-          await control.frame(
+          const renewed = await control.frame(
             batch.terrain.reset
               ? {
                   yawDegrees: input.yawDegrees,
@@ -571,6 +583,9 @@ export class Controller {
                 }
               : input,
           );
+          if (renewed?.step) stepView = renewed.step;
+          // A step in flight is watched about ten times a second, not as fast as the loopback allows.
+          if (input.toward && stepView?.state === 'walking') await sleep(60);
         } catch (error) {
           nav.finish('cancelled', 'control_lost: ' + message(error));
           break;

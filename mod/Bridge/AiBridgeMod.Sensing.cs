@@ -56,6 +56,7 @@ public sealed partial class AiBridgeMod
             nearbyEntities = NearbyEntities(),
             moving = movingControls != null,
             moveDirection = movingControls == null ? null : moveDirection,
+            step = step?.View(),
             remainingMs = movingControls == null ? 0 : Math.Max(0, stopAt - Environment.TickCount64),
             handAction,
             handRemainingMs = handAction == null ? 0 : Math.Max(0, handStopAt - Environment.TickCount64),

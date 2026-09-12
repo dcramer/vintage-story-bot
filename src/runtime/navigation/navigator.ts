@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { fleeTarget, nearbyThreats, nearbyUnclearedThreats } from '../../support/threats.ts';
 import { findRoute } from './planner.ts';
-import { angle, horizontal, JUMP_HEIGHT, key, lookAt, MAX_DROP, normalize, STEP_HEIGHT } from './terrain.ts';
+import { angle, horizontal, JUMP_HEIGHT, key, lookAt, MAX_DROP, STEP_HEIGHT } from './terrain.ts';
 
 // Follows a route of standing cells the way a player walks: aim at the next
 // cell, keep walking through bends while the head turns, jump when the next
 // cell is a block up, walk off a drop, and re-plan only when the next cell
 // stops being a place to stand or no progress is made for a while.
+const sameCell = (a, b) => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01 && Math.abs(a.z - b.z) < 0.01;
+
 export class Navigation {
   bestNear: any;
   deadline: any;
@@ -113,9 +115,9 @@ export class Navigation {
     this.replan(p, now, reason);
     if (!this.active || this.replannedAt === now) return null;
     this.replannedAt = now;
-    return this.tick(state, now);
+    return this.tick(state, now, null);
   }
-  tick(state, now = Date.now()) {
+  tick(state, now = Date.now(), step: any = null) {
     if (!this.active) return null;
     if (now >= this.deadline) return this.finish('blocked', 'deadline');
     // Standing in water counts as support: wading and swimming move on from there.
@@ -200,10 +202,9 @@ export class Navigation {
       const lateral = Math.abs((p.x - node.x) * dz - (p.z - node.z) * dx) / length;
       return along >= 0 && along < 2.5 && lateral < 0.5 && Math.abs(p.y - node.y) < 0.6;
     };
-    while (this.index < this.route.length && reached(this.route[this.index])) {
+    const arrivedAt = step?.state === 'arrived' ? step.toward : null;
+    while (this.index < this.route.length && (reached(this.route[this.index]) || (arrivedAt && sameCell(arrivedAt, this.route[this.index])))) {
       this.edgeStart = this.route[this.index++];
-      this.jumpAt = 0;
-      this.airborne = false;
       this.progressAt = now;
       this.bestNear = undefined;
       this.mergedFrom = null;
@@ -222,7 +223,7 @@ export class Navigation {
     }
     // Merge a straight, level run of checkpoints into one so bends are only
     // where the route really turns.
-    if (grounded && !this.jumpAt)
+    if (grounded)
       for (let ahead = this.index + 1; ahead < this.route.length; ahead++) {
         const node = this.route[ahead];
         if (
@@ -261,61 +262,24 @@ export class Navigation {
     const desiredYaw = lookAt(p, next).yawDegrees;
     this.desiredYaw = desiredYaw;
     this.yawError = angle(desiredYaw, state.orientation.yawDegrees);
-    const yawMagnitude = Math.abs(this.yawError);
-    if (now - this.progressAt > 3000) return this.replan(p, now, 'stalled');
-    // Steering: snap large turns, ease small ones, and sample often while turning. The eased yaw
-    // continues from the last command, never from the observed yaw, which lags the camera by a
-    // frame: steering from it turns the head back toward where it just was.
-    if (this.steeringYaw === null) this.steeringYaw = state.orientation.yawDegrees;
-    const delta = angle(desiredYaw, this.steeringYaw),
-      dt = Math.min(0.15, Math.max(0.01, (now - this.steeringAt) / 1000));
-    if (yawMagnitude > 30) this.steeringYaw = desiredYaw;
-    else if (Math.abs(delta) > 2) this.steeringYaw = normalize(this.steeringYaw + Math.sign(delta) * Math.min(Math.abs(delta), 240 * dt));
-    this.steeringAt = now;
-    const yawDegrees = this.steeringYaw;
-    const following = this.route[this.index + 1];
-    const turn = following ? Math.abs(angle(lookAt(next, following).yawDegrees, desiredYaw)) : 0;
-    // What the next cell asks of the body is decided from where the body
-    // is now, not from the cell the plan came from: a cell a block up is a
-    // jump even if the route reached it on the level.
-    const rise = next.y - p.y;
-    const jumpMove = next.move === 'gap' || rise > STEP_HEIGHT;
-    const dropping = rise < -STEP_HEIGHT;
-    // The last checkpoint is approached in short steps so the body stops on it instead of past it.
-    const last = this.index >= this.route.length - 1;
-    const tight = near < 2 && (jumpMove || dropping || turn > 60 || last);
-    const durationMs = dropping && near < 1.2 ? 120 : tight || yawMagnitude > 30 ? 180 : 500;
-    // Jumps go straight at the cell from close by; everything else keeps
-    // walking through the bend while the head comes round.
-    if (jumpMove && grounded && !this.jumpAt && yawMagnitude < 15 && near < (next.move === 'gap' ? 2.2 : 1.3)) this.jumpAt = now;
-    if (this.jumpAt && !grounded) this.airborne = true;
-    if (this.jumpAt && now - this.jumpAt > 2500) return this.replan(p, now, 'jump_failed');
-    // Turn first, then walk: walking while far off the line is how a body clips trees and walls.
-    let walking = jumpMove && near < 1.3 && !this.jumpAt ? yawMagnitude < 15 : yawMagnitude < 30;
-    // A drop is walked to the edge, then left with one short step so the
-    // body lands on the cell below instead of flying past it. Walking pace
-    // off an edge carries about two blocks before a three-block fall lands.
-    if (dropping && near < 1.2) {
-      if (yawMagnitude > 20) walking = false;
-      else if (near > 0.62) walking = true;
-      else if (this.steppedOff !== next) {
-        this.steppedOff = next;
-        walking = true;
-      } else walking = false;
-    }
-    // Cliff guard: never walk toward a cell that has nothing to stand on
-    // within a jump up or three blocks down, unless it is the checkpoint
-    // itself. Turning brings the facing back onto the route first.
-    if (walking && grounded && !this.jumpAt) {
-      const radians = (state.orientation.yawDegrees * Math.PI) / 180;
+    // The mod walks each step with its hand on the keys every tick and says how it went:
+    // blocked on this very point is a replan now, not after three seconds of hoping.
+    if (step?.state === 'blocked' && sameCell(step.toward, next)) return this.replan(p, now, 'stalled');
+    if (now - this.progressAt > 4000) return this.replan(p, now, 'stalled');
+    // A hop is what the route says or what the body sees from where it stands; mid-air the
+    // body's own height says nothing, so the last checkpoint's does.
+    const rise = next.y - (grounded ? p.y : this.edgeStart.y);
+    const jumpMove = next.move === 'gap' || next.move === 'jump' || rise > STEP_HEIGHT;
+    // Cliff guard: never step toward a cell that has nothing to stand on within a jump up or
+    // three blocks down, unless it is the checkpoint itself. A merged run whose straight line
+    // no longer fits from here goes back to the route's own cells, which are known to stand.
+    if (grounded && !wet) {
+      const radians = (desiredYaw * Math.PI) / 180;
       const fx = Math.floor(p.x + Math.sin(radians) * 0.7),
         fz = Math.floor(p.z + Math.cos(radians) * 0.7);
       const own = fx === Math.floor(p.x) && fz === Math.floor(p.z),
         checkpoint = fx === Math.floor(next.x) && fz === Math.floor(next.z);
       if (!own && !checkpoint && !map.levels(fx, fz, p.y, JUMP_HEIGHT, MAX_DROP).length) {
-        walking = false;
-        // A merged run whose straight line no longer fits from here goes back to the
-        // route's own cells, which are known to stand; otherwise this stalls in place.
         if (this.mergedFrom !== null && this.mergedFrom < this.index) {
           this.index = this.mergedFrom;
           this.mergedFrom = null;
@@ -323,25 +287,26 @@ export class Navigation {
           this.bestNear = undefined;
           this.progressAt = now;
         }
+        return { yawDegrees: desiredYaw, pitchDegrees: 15, forward: false, jump: wet, sprint: false, sneak: false, durationMs: 150 };
       }
     }
-    // Falling: let gravity land the body on the validated lower cell.
-    if (!grounded && !this.jumpAt) return { yawDegrees, pitchDegrees: 15, forward: false, jump: false, sprint: false, sneak: false, durationMs: 120 };
-    // In water the jump key keeps the head up and climbs the bank; never sneak there.
     const food = state.vitals?.hunger;
     const emergency = this.evading || this.target.emergency;
-    const straight = turn < 5 && next.move === 'walk' && near > 3 && yawMagnitude < 5;
-    // Running from something is done at a sprint whatever the stomach says; otherwise only well fed, on a straight.
-    const fleeing = emergency && next.move === 'walk' && near > 1.5 && yawMagnitude < 15;
-    const sprint = !!this.target.sprint && grounded && !this.jumpAt && (fleeing || (straight && food?.max > 0 && food.current / food.max >= 0.6));
+    // Running from something is done at a sprint whatever the stomach says; otherwise only well fed.
+    const sprint = !!this.target.sprint && next.move === 'walk' && near > 2 && (emergency || (food?.max > 0 && food.current / food.max >= 0.6));
+    const last = this.index >= this.route.length - 1;
     return {
-      yawDegrees,
+      toward: { x: next.x, y: next.y, z: next.z },
+      reach: last ? Math.max(0.2, Math.min(0.35, this.target.arrivalRadius ?? 0.35)) : 0.35,
+      reachY: next.swim || wet ? 1.5 : 0.6,
+      hop: jumpMove,
+      yawDegrees: desiredYaw,
       pitchDegrees: 15,
-      forward: walking && near > 0.12,
-      durationMs,
-      jump: wet || (!!this.jumpAt && now - this.jumpAt < 200),
+      forward: true,
+      jump: false,
       sprint,
       sneak: false,
+      durationMs: 1500,
     };
   }
 }

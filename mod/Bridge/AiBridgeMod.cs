@@ -229,10 +229,9 @@ public sealed partial class AiBridgeMod : ModSystem
         }
         if (movingControls != null)
         {
-            if (Environment.TickCount64 >= stopAt || !CanControl())
-                StopMovement();
-            else
-                SetMovement(true);
+            if (Environment.TickCount64 >= stopAt || !CanControl()) { step?.Expire(); StopMovement(); }
+            else if (step != null) ApplyStep(Environment.TickCount64);
+            else SetMovement(true);
         }
 
     }

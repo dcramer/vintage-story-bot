@@ -14,5 +14,7 @@
     <Compile Include="../../mod/Sensors/TerrainMap.cs" Link="TerrainMap.cs" />
     <Compile Include="../../mod/Bridge/ControlHold.cs" Link="ControlHold.cs" />
     <Compile Include="ControlHoldTests.cs" />
+    <Compile Include="../../mod/Bridge/StepTracker.cs" Link="StepTracker.cs" />
+    <Compile Include="StepTrackerTests.cs" />
   </ItemGroup>
 </Project>

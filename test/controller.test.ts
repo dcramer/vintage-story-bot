@@ -205,7 +205,7 @@ test('planner routes around a wall, jumps a hole only as a last resort, and ends
   assert.ok(deadline === null || Array.isArray(deadline), 'a spent deadline still returns cleanly');
 });
 
-test('navigation walks through bends without crouching, jumps a block up from close by', () => {
+test('navigation hands the mod one point per step, hops for a block up, and takes its arrival', () => {
   const map = world(6, (x, y, z) => x === 3 && z === 0 && y === 0);
   const body = { halfWidth: 0.3, height: 1.85, eyeHeight: 1.7 },
     vitals = { hunger: { current: 1000, max: 1500 } };
@@ -214,14 +214,16 @@ test('navigation walks through bends without crouching, jumps a block up from cl
   const first = nav.tick(state, 0);
   assert.equal(nav.state, 'moving');
   assert.equal(first.sneak, false);
-  assert.equal(first.forward, false, 'turns first when 90 degrees off the line; walking while that far off clips walls');
-  assert.equal(first.durationMs, 180);
+  assert.ok(first.toward, 'a step is a point the mod walks to with its hand on the keys every tick');
+  assert.equal(first.hop, false);
+  assert.equal(first.durationMs, 1500);
   const facing = { ...state, position: at(2, 0), orientation: { yawDegrees: 90 } };
   const jump = nav.tick(facing, 500);
   assert.equal(nav.route[nav.index].move, 'jump');
-  assert.equal(jump.jump, true, 'jumps when the block up is close and lined up');
+  assert.equal(jump.hop, true, 'the block up is a hop the mod times itself');
+  assert.equal(jump.jump, false);
   const airborne = { ...facing, position: { x: 2.9, y: 0.6, z: 0.5 }, motion: { onGround: false } };
-  assert.equal(nav.tick(airborne, 600).forward, true, 'keeps forward through the jump');
+  assert.equal(nav.tick(airborne, 600).hop, true, 'still the same hop while in the air');
   const landed = { ...facing, position: at(3, 0, 1), orientation: { yawDegrees: 90 } };
   nav.tick(landed, 800);
   assert.equal(nav.state, 'arrived');
@@ -253,7 +255,7 @@ test('navigation replans without stopping when the next cell stops being standab
   assert.equal(nav.replans, 1);
 });
 
-test('navigation lets gravity finish a drop and stalls into a replan', () => {
+test('navigation steps off a drop and replans at once when the mod reports the step blocked', () => {
   const map = world(6);
   map.apply({
     session: 'world',
@@ -277,11 +279,12 @@ test('navigation lets gravity finish a drop and stalls into a replan', () => {
   const first = nav.tick(state, 0);
   assert.equal(nav.route[0].move, 'drop');
   assert.equal(first.forward, true);
+  assert.ok(first.toward && !first.hop, 'a drop is a plain step; the mod lets go of forward in the air');
   const falling = { ...state, position: { x: 1.3, y: -0.8, z: 0.5 }, motion: { onGround: false } };
-  assert.equal(nav.tick(falling, 300).forward, false, 'forward released while airborne');
+  assert.ok(nav.tick(falling, 300).toward, 'the same step continues while falling');
   const stuck = { ...falling, motion: { onGround: true } };
-  nav.tick(stuck, 3500);
-  assert.equal(nav.lastReplan, 'stalled');
+  nav.tick(stuck, 800, { state: 'blocked', toward: first.toward, distance: 0.9 });
+  assert.equal(nav.lastReplan, 'stalled', 'blocked on the point means a replan now');
 });
 
 test('navigation temporarily routes away from an explicit nearby hostile', () => {

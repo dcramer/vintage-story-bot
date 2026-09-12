@@ -103,6 +103,7 @@ The mod/Node split inside that is by what a player does in one act, never by con
 | `look`: turn the head | `lookAhead`: where to look, for how long, and what the landscape means |
 | `watch`: what the eye is currently looking for | `scan`: set attention, wait one sweep, choose targets from what was seen |
 | `block_action_begin`: hold click on the aimed cell until it changes or expires | `dig_block`: pick the cell, walk into range, aim, act, verify air, handle drops |
+| `control_step` with `toward`: face a point within 8 blocks and walk to it, hand on the keys every tick, until on it, blocked or expired | `Navigation.tick`: plan the route, pick the next checkpoint, read the outcome, merge runs, replan when blocked |
 | `aim_cell`: aim at a cell face by its selection box | `place_block`: choose a standing spot and face, select the item, verify the change |
 
 ## Naming
