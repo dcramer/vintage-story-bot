@@ -17,6 +17,7 @@ import {
   foodViewChanged,
   harvestReady,
   matchingFoodDrops,
+  Survival,
   stuckFoodRoute,
   unproductiveFoodApproach,
   wideFoodSurveyNeeded,
@@ -159,7 +160,22 @@ test('food leads survive productive partial routes but skip stuck ones', () => {
   assert.equal(unproductiveFoodApproach(target, blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
   assert.equal(unproductiveFoodApproach(target, blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
   assert.equal(unproductiveFoodApproach(target, blocked, { x: 2, z: 0 }, { x: 1, z: 0 }), true);
+  assert.equal(unproductiveFoodApproach(target, { state: 'paused', reason: 'threat_near_food' }, { x: 0, z: 0 }, { x: 4, z: 0 }), false);
   assert.equal(unproductiveFoodApproach(target, { state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
+});
+
+test('a predator pauses a food route before navigation can carry it into danger', () => {
+  const survival = new Survival(null);
+  const state = {
+    position: { x: 0, y: 0, z: 0 },
+    vitals: { hunger: { current: 100, max: 1000 } },
+    nearbyEntities: [],
+  };
+  assert.equal(survival.pauseFoodWalk(state), null);
+  state.nearbyEntities.push({ code: 'game:wolf-eurasian-adult-male', point: { x: 10, y: 0, z: 0 } });
+  assert.equal(survival.pauseFoodWalk(state), 'threat_near_food');
+  survival.reserve = 80;
+  assert.equal(survival.pauseFoodWalk(state), 'food_available');
 });
 
 test('food search drops an unreachable habitat bias after two stationary legs', () => {
