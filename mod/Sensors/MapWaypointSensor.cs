@@ -24,7 +24,7 @@ internal sealed class MapWaypointSensor(ICoreClientAPI api)
             waypoints = waypoints.Select((waypoint, index) => new
             {
                 index,
-                guid = waypoint.Guid,
+                guid = Id(waypoint),
                 title = waypoint.Title,
                 icon = waypoint.Icon,
                 color = waypoint.Color,
@@ -35,11 +35,15 @@ internal sealed class MapWaypointSensor(ICoreClientAPI api)
         };
     }
 
+    // Markers the server adds (death) may carry no Guid; identify those by what the map shows for them.
+    private static string Id(Waypoint waypoint) => waypoint.Guid ??
+        $"{waypoint.Icon}:{Math.Round(waypoint.Position.X)}:{Math.Round(waypoint.Position.Y)}:{Math.Round(waypoint.Position.Z)}";
+
     public int? IndexOf(string guid)
     {
         var waypoints = Layer?.ownWaypoints;
         if (waypoints == null) return null;
-        int index = waypoints.FindIndex(waypoint => waypoint.Guid == guid);
+        int index = waypoints.FindIndex(waypoint => Id(waypoint) == guid);
         return index < 0 ? null : index;
     }
 }
