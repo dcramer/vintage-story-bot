@@ -8,14 +8,21 @@ import { leafBlock, leafClearCandidate, threatAllowsLeafClearing } from '../src/
 import {
   accessibleForage,
   desperateFoodSightRange,
+  exhaustedFoodLead,
+  foodApproachScore,
   foodElevationDetourDistance,
+  foodLeadGuarded,
   foodRecoverySatisfied,
+  foodSearchBias,
   foodSearchDistance,
   foodSightRange,
   foodViewChanged,
   harvestReady,
   matchingFoodDrops,
+  Survival,
+  sameFoodPatch,
   stuckFoodRoute,
+  unproductiveFoodApproach,
   wideFoodSurveyNeeded,
 } from '../src/support/survival.ts';
 import {
@@ -152,6 +159,120 @@ test('food leads survive productive partial routes but skip stuck ones', () => {
   assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
   assert.equal(stuckFoodRoute(blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
   assert.equal(stuckFoodRoute({ state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
+  const target = { point: { x: 10, z: 0 } };
+  assert.equal(unproductiveFoodApproach(target, blocked, { x: 0, z: 0 }, { x: 2.1, z: 0 }), false);
+  assert.equal(unproductiveFoodApproach(target, blocked, { x: 0, z: 0 }, { x: 2, z: 0 }), true);
+  assert.equal(unproductiveFoodApproach(target, blocked, { x: 2, z: 0 }, { x: 1, z: 0 }), true);
+  assert.equal(unproductiveFoodApproach(target, { state: 'paused', reason: 'threat_near_food' }, { x: 0, z: 0 }, { x: 4, z: 0 }), false);
+  assert.equal(unproductiveFoodApproach(target, { state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
+});
+
+test('a predator pauses a food route before navigation can carry it into danger', () => {
+  const survival = new Survival(null);
+  const state = {
+    position: { x: 0, y: 0, z: 0 },
+    vitals: { hunger: { current: 100, max: 1000 } },
+    nearbyEntities: [],
+  };
+  assert.equal(survival.pauseFoodWalk(state), null);
+  state.nearbyEntities.push({ code: 'game:wolf-eurasian-adult-male', point: { x: 10, y: 0, z: 0 } });
+  assert.equal(survival.pauseFoodWalk(state), 'threat_near_food');
+  survival.reserve = 80;
+  assert.equal(survival.pauseFoodWalk(state), 'food_available');
+});
+
+test('only food inside a predator perimeter is abandoned', () => {
+  const target = distance => ({ point: { x: distance, y: 0, z: 0 } });
+  const wolf = { code: 'game:wolf-eurasian-adult-male', point: { x: 0, y: 0, z: 0 } };
+  assert.equal(foodLeadGuarded(target(threatClearDistance(wolf.code)), wolf), true);
+  assert.equal(foodLeadGuarded(target(threatClearDistance(wolf.code) + 0.1), wolf), false);
+  assert.equal(foodLeadGuarded(target(1), null), false);
+});
+
+test('food search drops an unreachable habitat bias after two stationary legs', () => {
+  const destination = { x: 20, z: 20 };
+  const habitat = { x: 10, z: 10 };
+  assert.equal(foodSearchBias(0, destination, habitat), destination);
+  assert.equal(foodSearchBias(1, null, habitat), habitat);
+  assert.equal(foodSearchBias(2, destination, habitat), null);
+});
+
+test('food search prefers level meals and abandons a failed elevated patch together', () => {
+  const at = { x: 0, y: 100, z: 0 };
+  const overhead = { point: { x: 1, y: 109, z: 0 } };
+  const level = { point: { x: 20, y: 100, z: 0 } };
+  assert.ok(foodApproachScore(at, level) < foodApproachScore(at, overhead));
+  assert.equal(sameFoodPatch(overhead, { point: { x: 5, y: 108, z: 3 } }), true);
+  assert.equal(sameFoodPatch(overhead, { point: { x: 5, y: 100, z: 3 } }), false);
+  assert.equal(sameFoodPatch(overhead, { point: { x: 10, y: 109, z: 0 } }), false);
+});
+
+test('an unseen remembered food lead expires after reaching its approach cell', () => {
+  assert.equal(exhaustedFoodLead({ visible: false }, { state: 'arrived' }), true);
+  assert.equal(exhaustedFoodLead({ key: 'mushroom', visible: false }, { state: 'arrived' }, [{ key: 'mushroom' }]), false);
+  assert.equal(exhaustedFoodLead({ visible: true }, { state: 'arrived' }), false);
+  assert.equal(exhaustedFoodLead({ visible: false }, { state: 'paused' }), false);
+});
+
+test('recalled blocks enter the goal working set even when the sighting is old', () => {
+  const remembered = {
+    kind: 'block',
+    key: 'block:0:10:1:10:game:fruitingbush-wild-blueberry-free',
+    code: 'game:fruitingbush-wild-blueberry-free',
+    point: { x: 10.5, y: 1.5, z: 10.5 },
+    ageMs: 8 * 60 * 60 * 1000,
+  };
+  const field = new Fieldwork(
+    {
+      sightings: { view: () => [remembered] },
+    },
+    { now: () => 1000 },
+  );
+  field.latest = {
+    capabilities: ['sightings'],
+    position: { x: 0.5, y: 1, z: 0.5 },
+    body: { eyeHeight: 1.6 },
+    pickingRange: 4.5,
+  };
+  assert.deepEqual(field.recall(128, ['bush'], 'blocks'), [remembered]);
+  assert.equal(field.targets(object => object.key === remembered.key).length, 1);
+});
+
+test('nearby field scans use the native 360-degree pass when the directional stream misses', async () => {
+  const state = {
+    ok: true,
+    alive: true,
+    controlReady: true,
+    mounted: false,
+    capabilities: ['sightings'],
+    player: { uid: 'test' },
+    position: { x: 0.5, y: 1, z: 0.5, dimension: 0 },
+    body: { eyeHeight: 1.6 },
+    motion: { onGround: true, swimming: false },
+    life: { alerts: [], session: 'test', lastDamageAt: null },
+    pickingRange: 4.5,
+  };
+  const mushroom = {
+    kind: 'block',
+    key: 'block:0:1:2:0:game:mushroom-witchhat-normal',
+    code: 'game:mushroom-witchhat-normal',
+    point: { x: 1.5, y: 2.2, z: 0.5 },
+  };
+  const requests: any[] = [];
+  const field = new Fieldwork({
+    sightings: { view: () => [] },
+    send: async request => {
+      requests.push(request);
+      return request.action === 'scan' ? { ok: true, objects: [mushroom], more: false } : state;
+    },
+  });
+  field.latest = state;
+  assert.deepEqual(await field.scan(8, 'mushroom', 'blocks'), [mushroom]);
+  assert.equal(
+    requests.some(request => request.action === 'scan'),
+    true,
+  );
+  assert.equal(field.targets(object => object.key === mushroom.key).length, 1);
 });
 
 test('threat avoidance is explicit, proximity-bounded and points away', () => {
@@ -286,6 +407,39 @@ test('food recovery marks safe search legs as emergency sprint between ten and t
   await field.walk({ x: 8.5, y: 1, z: 0.5 });
   assert.equal(navigationTarget.sprint, true);
   assert.equal(navigationTarget.emergency, true);
+});
+
+test('critical food recovery does not stop to glean unrelated supplies', async () => {
+  const state = {
+    ok: true,
+    alive: true,
+    controlReady: true,
+    mounted: false,
+    player: { uid: 'test' },
+    position: { x: 0.5, y: 1, z: 0.5, dimension: 0 },
+    body: { halfWidth: 0.3, height: 1.85 },
+    motion: { onGround: true, swimming: false, feetInLiquid: false },
+    life: { alerts: ['low_food'], session: 'test', lastDamageAt: null },
+    orientation: { yawDegrees: 0 },
+    vitals: { hunger: { current: 0, max: 1500 } },
+  };
+  let pauseReason;
+  const env = {
+    send: async () => state,
+    sync: async () => state,
+    navigate: async (_target, pauseWhen) => {
+      pauseReason = pauseWhen(state);
+      return { state: pauseReason ? 'paused' : 'arrived' };
+    },
+  };
+  const field = new Fieldwork(env, { now: () => 0 });
+  field.initial = field.latest = state;
+  field.recoveringFood = true;
+  let gleaned = 0;
+  field.gleaner = { pauseWhen: () => 'want_in_reach', tend: async () => gleaned++ };
+  await field.walk({ x: 8.5, y: 1, z: 0.5 });
+  assert.equal(pauseReason, null);
+  assert.equal(gleaned, 0);
 });
 
 test('a blocked exploration leg penalizes its destination for the next deterministic choice', async () => {

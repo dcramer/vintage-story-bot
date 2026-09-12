@@ -36,6 +36,9 @@ export type Reading = {
   markers: { guid: string; title: string; icon: string; position: { x: number; y: number; z: number } }[];
   // The nearest remembered dry standing cell within 16 blocks while swimming, else null.
   ground: { x: number; y: number; z: number } | null;
+  // The terrain cells currently known to the controller. Brains may inspect
+  // them but never mutate them.
+  terrain: any;
   now: number;
 };
 // start: run a goal (only while none runs). act: call actions by hand, in order; alongside a
@@ -172,6 +175,7 @@ export class BrainLoop<Memory> {
       events: batch.events,
       markers,
       ground: state.motion?.swimming ? this.dryGround(state) : null,
+      terrain: controller.map ?? null,
       now: Date.now(),
     };
     if (this.brain.wants) controller.wants = this.brain.wants(reading, this.memory);

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
-import { changeBlock } from '../support/blocks.ts';
+import { blockWorkReady, changeBlock, dryBlockWorkPosition } from '../support/blocks.ts';
 import { habitatsFor } from '../support/habitat.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
 import { cleanName, runField } from '../support/task.ts';
@@ -70,13 +70,15 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     // A player digs into a bank or the surface around, never a shaft under their own feet: blocks
     // below the ground the bot stands on are left alone, higher ones (a slope face) come first.
     const feet = Math.floor(field.latest.position.y);
-    const ready = near
-      .filter(o => lowest || o.point.y >= feet - 1)
-      .sort(
-        (a, b) =>
-          (lowest ? a.point.y - b.point.y : Math.floor(b.point.y) - Math.floor(a.point.y)) ||
-          horizontal(a.point, field.latest.position) - horizontal(b.point, field.latest.position),
-      )[0];
+    const ready = blockWorkReady(field.latest)
+      ? near
+          .filter(o => lowest || o.point.y >= feet - 1)
+          .sort(
+            (a, b) =>
+              (lowest ? a.point.y - b.point.y : Math.floor(b.point.y) - Math.floor(a.point.y)) ||
+              horizontal(a.point, field.latest.position) - horizontal(b.point, field.latest.position),
+          )[0]
+      : null;
     if (ready) {
       const slot = await held();
       inventory = await field.send({ action: 'inventory' });
@@ -100,7 +102,7 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     if (target) {
       const destination = field.approach(
         target,
-        q => Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z),
+        q => !dryBlockWorkPosition(q) || (Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z)),
       );
       if (destination) {
         const result = await field.walk(destination, survival?.pauseWhen);

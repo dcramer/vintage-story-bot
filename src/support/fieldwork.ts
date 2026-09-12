@@ -236,7 +236,11 @@ export class Fieldwork {
   async scan(radius, match?, kind = 'all') {
     const matches = Array.isArray(match) ? match : match ? [match] : [];
     await this.observe();
-    if (!this.attentive) return this.scanView(radius, match, kind);
+    // The streamed eye is intentionally directional. Native scan's close pass
+    // is 360 degrees, so use it inside the eight-block awareness radius: a
+    // mushroom above the shoulder or flint underfoot must not be missed while
+    // the long-range stream still supplies remembered search leads.
+    if (!this.attentive || radius <= 8) return this.scanView(radius, match, kind);
     this.env.watch?.(matches);
     await this.settle();
     const p = this.latest.position,
@@ -264,7 +268,11 @@ export class Fieldwork {
       remembered: true,
       reach: this.latest.pickingRange ?? 4.5,
     });
-    for (const object of objects) if (!this.seen.has(object.key)) this.seen.set(object.key, { ...object, seenAt: this.now() - object.ageMs });
+    // `seen` is the goal's short-lived working set. The sighting still carries
+    // its real age in ageMs; entering working memory happens now, otherwise
+    // prune() immediately discards every useful block remembered over two
+    // minutes ago and recall silently cannot produce a target.
+    for (const object of objects) if (!this.seen.has(object.key)) this.seen.set(object.key, { ...object, seenAt: this.now() });
     return objects;
   }
   // Turn through a full circle from where the bot stands, letting the vision
@@ -344,7 +352,18 @@ export class Fieldwork {
   // A walk that also picks up what the bot wants when it passes within reach.
   async walk(target, pauseWhen?) {
     const gleaner = this.gleaner;
-    const pause = gleaner ? state => pauseWhen?.(state) ?? gleaner.pauseWhen(state) : pauseWhen;
+    const pause = gleaner
+      ? state => {
+          const requested = pauseWhen?.(state);
+          if (requested) return requested;
+          const food = state.vitals?.hunger;
+          // A stick beside the route is not worth a detour while starvation
+          // is already the job. Resume ordinary opportunistic pickup once the
+          // emergency threshold has been recovered.
+          if (this.recoveringFood && food?.max > 0 && food.current / food.max < 0.2) return null;
+          return gleaner.pauseWhen(state);
+        }
+      : pauseWhen;
     for (let stops = 0; ; stops++) {
       const result = await this.walkOn(target, pause);
       if (result.state !== 'paused' || result.reason !== 'want_in_reach' || stops >= 4) return result;

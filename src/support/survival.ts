@@ -6,6 +6,7 @@ import { sightRange } from './fieldwork.ts';
 import { consume, emptyHand, foodCount, foodReserve, foodYield, forageWatch, hunger } from './food.ts';
 import { ownedSlots } from './inventory.ts';
 import { clearLeafPath } from './leaf-clearing.ts';
+import { nearestThreat, threatClearDistance } from './threats.ts';
 
 export const foodSightRange = Math.min(32, sightRange);
 export const desperateFoodSightRange = Math.min(48, sightRange);
@@ -39,6 +40,19 @@ export const harvestReady = (object, position, halfWidth = 0.3) =>
 export const foodViewChanged = (view, state) =>
   !view || horizontal(view.position, state.position) > 2 || Math.abs(normalize(state.orientation.yawDegrees - view.yawDegrees + 180) - 180) > 15;
 export const stuckFoodRoute = (result, before, after) => !['arrived', 'paused'].includes(result.state) && horizontal(before, after) <= 2;
+export const unproductiveFoodApproach = (target, result, before, after) =>
+  !['arrived', 'paused'].includes(result.state) && horizontal(after, target.point) + 2 >= horizontal(before, target.point);
+const threatenedFoodApproach = result => result.state === 'paused' && result.reason === 'threat_near_food';
+export const foodLeadGuarded = (target, threat) => !!threat && horizontal(target.point, threat.point) <= threatClearDistance(threat.code);
+export const exhaustedFoodLead = (target, result, nearby = []) =>
+  result.state === 'arrived' && target.visible === false && !nearby.some(object => object.key === target.key);
+export const foodSearchBias = (stuckSearches, toward, habitat) => (stuckSearches >= 2 ? null : (toward ?? habitat));
+// Nearby food several blocks above or below the body often needs a long,
+// indirect climb. Prefer a slightly farther source at the current elevation
+// instead of treating the overhead block as the nearest meal.
+export const foodApproachScore = (position, target) => horizontal(position, target.point) + Math.abs((target.point.y ?? position.y) - position.y) * 3;
+export const sameFoodPatch = (target, candidate) =>
+  horizontal(target.point, candidate.point) <= 8 && Math.abs((target.point.y ?? 0) - (candidate.point.y ?? 0)) <= 3;
 export const matchingFoodDrops = (objects, foodCode, point) =>
   objects
     .filter(object => object.kind === 'item' && object.code === foodCode && Number.isInteger(object.quantity) && object.quantity > 0)
@@ -75,7 +89,25 @@ export class Survival {
     return objects;
   }
   pauseWhen = state => (hunger(state) < 0.2 ? 'food_needed' : null);
-  eatWhen = state => (this.reserve > 0 && hunger(state) < this.until ? 'food_available' : null);
+  pauseFoodWalk = state => {
+    if (this.reserve > 0 && hunger(state) < this.until) return 'food_available';
+    // Give the forage loop control at the first predator sighting. Its next
+    // iteration flees before doing anything else, while the interrupted food
+    // lead is set aside below instead of pulling us back into the same danger.
+    return nearestThreat(state) ? 'threat_near_food' : null;
+  };
+  avoidThreatenedFood(target) {
+    const field = this.field;
+    const threat = nearestThreat(field.latest);
+    const guarded = threat ? field.targets(forage).filter(object => foodLeadGuarded(object, threat)) : [];
+    if (foodLeadGuarded(target, threat) && !guarded.some(object => object.key === target.key)) guarded.push(target);
+    for (const object of guarded) field.skip(object, 120000);
+    field.report(guarded.length ? 'food_lead_threatened' : 'food_route_threatened', {
+      target: target.key,
+      threat: threat?.code,
+      skipped: guarded.map(object => object.key),
+    });
+  }
   until = 0.8;
   keep = 320;
   async tend({
@@ -181,7 +213,9 @@ export class Survival {
           remembered.map(object => object.code),
         );
       }
-      const target = field.targets(forage)[0];
+      const target = field
+        .targets(forage)
+        .sort((a, b) => foodApproachScore(field.latest.position, a) - foodApproachScore(field.latest.position, b))[0];
       if (target) {
         this.searchTarget = null;
         const destination = field.approach(
@@ -190,9 +224,27 @@ export class Survival {
         );
         if (destination) {
           const before = { ...field.latest.position };
-          const result = await field.walk(destination, this.eatWhen);
-          if (stuckFoodRoute(result, before, field.latest.position)) {
+          const result = await field.walk(destination, this.pauseFoodWalk);
+          // The streamed eye is directional. After reaching an old lead, ask
+          // the 360-degree nearby sensor before deciding the block is gone;
+          // otherwise a mushroom just behind the camera is suppressed at the
+          // exact moment it comes within reach.
+          const nearby = result.state === 'arrived' && target.visible === false ? await this.study(8) : [];
+          if (exhaustedFoodLead(target, result, nearby)) {
+            // Reaching a remembered block's harvest position without seeing it
+            // again is the successful-route version of a stale lead. Do not
+            // orbit alternate approach cells around an occluded or gone block.
             field.skip(target, 120000);
+            field.report('food_lead_unseen', { target: target.key });
+          } else if (threatenedFoodApproach(result)) {
+            this.avoidThreatenedFood(target);
+          } else if (
+            stuckFoodRoute(result, before, field.latest.position) ||
+            unproductiveFoodApproach(target, result, before, field.latest.position)
+          ) {
+            const elevated = Math.abs((target.point.y ?? before.y) - before.y) > 2;
+            for (const object of elevated ? field.targets(forage).filter(candidate => sameFoodPatch(target, candidate)) : [target])
+              field.skip(object, 120000);
             await clearLeafPath(field, target.point);
           }
           continue;
@@ -200,9 +252,13 @@ export class Survival {
         const elevationDetour = foodElevationDetourDistance(Math.abs(field.latest.position.y - target.point.y));
         if (horizontal(field.latest.position, target.point) > 6 || elevationDetour) {
           const before = { ...field.latest.position };
-          const result = await field.walk(field.explore(target.point, foodSearchDistance, elevationDetour), this.eatWhen);
-          if (stuckFoodRoute(result, before, field.latest.position)) {
-            field.skip(target, 120000);
+          const result = await field.walk(field.explore(target.point, foodSearchDistance, elevationDetour), this.pauseFoodWalk);
+          if (threatenedFoodApproach(result)) {
+            this.avoidThreatenedFood(target);
+          } else if (stuckFoodRoute(result, before, field.latest.position)) {
+            const elevated = Math.abs((target.point.y ?? before.y) - before.y) > 2;
+            for (const object of elevated ? field.targets(forage).filter(candidate => sameFoodPatch(target, candidate)) : [target])
+              field.skip(object, 120000);
             await clearLeafPath(field, target.point);
           }
           continue;
@@ -211,8 +267,11 @@ export class Survival {
       }
       const before = { ...field.latest.position };
       // With no food in sight, head for where it grows: forest edges, then the water's edge.
-      const destination = this.searchTarget ?? field.explore(toward ?? field.habitat(['edge', 'shore']), foodSearchDistance);
-      const result = await field.walk(destination, this.eatWhen);
+      // If that bias produced two stationary legs, rotate through reachable
+      // local directions instead of selecting more points on the same cliff.
+      const bias = foodSearchBias(this.stuckSearches, toward, field.habitat(['edge', 'shore']));
+      const destination = this.searchTarget ?? field.explore(bias, foodSearchDistance);
+      const result = await field.walk(destination, this.pauseFoodWalk);
       const progress = horizontal(before, field.latest.position);
       this.searchTarget = !['arrived', 'paused'].includes(result.state) && progress > 2 ? destination : null;
       if (stuckFoodRoute(result, before, field.latest.position)) {

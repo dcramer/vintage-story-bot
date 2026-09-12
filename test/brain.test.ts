@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import brain, { decide as decision, fresh, kit, pickJob, SHELTER_DIRT, STICK_MIN } from '../src/brain/default.ts';
+import brain, {
+  decide as decision,
+  environmentalHurt,
+  fresh,
+  HURT_CLASSIFY_MS,
+  kit,
+  pickJob,
+  SHELTER_DIRT,
+  STICK_MIN,
+} from '../src/brain/default.ts';
 import { shelter as shelterCells } from '../src/support/structures.ts';
 
 const decide = (reading, memory): any => decision(reading, memory);
@@ -35,6 +44,7 @@ const reading = (extra = {}) => ({
   events: [],
   markers: [],
   ground: null,
+  terrain: null,
   now: 1000,
   ...extra,
 });
@@ -64,9 +74,18 @@ const situation = (extra = {}) => ({
 
 test('brain: danger, hunger and night come before the kit, and the kit comes in day-1 order', () => {
   assert.equal(pickJob(situation({ threat: true, hunger: 0.1 })), 'hide');
+  assert.equal(pickJob(situation({ threat: true, burrowed: true })), 'wait', 'visible threats cannot lure the bot out of a sealed burrow');
+  assert.equal(pickJob(situation({ hurt: true, burrowed: true })), 'unburrow', 'actual damage opens an escape from the unsafe burrow');
   assert.equal(pickJob(situation({ storm: true, atHome: false })), 'go_home');
+  assert.equal(pickJob(situation({ storm: true, home: false })), 'burrow', 'a storm sends a homeless bot underground');
+  assert.equal(pickJob(situation({ storm: true, home: false, burrowed: true })), 'wait', 'an existing burrow shelters from a storm');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true, reserve: 100 })), 'eat', 'the pack is eaten from at night');
-  assert.equal(pickJob(situation({ hunger: 0.1, night: true, atHome: false })), 'go_home', 'but foraging waits for day');
+  assert.equal(pickJob(situation({ hunger: 0.1, night: true, atHome: false })), 'eat', 'critical hunger cannot wait for day');
+  assert.equal(
+    pickJob(situation({ hunger: 0.1, night: true, reserve: 100, burrowed: true })),
+    'unburrow',
+    'a starving bot opens its burrow before eating or searching',
+  );
   const starvingNight = fresh();
   starvingNight.job = 'burrow';
   const digging = decide(
@@ -134,6 +153,13 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
   assert.deepEqual(decide(reading({ state: wolf, active: { id: 'g1', kind: 'gather', state: 'running', by: 'brain' } }), memory), {
     stop: 'threat',
   });
+  const handoff = decide(
+    reading({ last: { id: 'g1', kind: 'gather', ok: false, reason: 'brain: threat' }, state: state({ orientation: { yawDegrees: 0 } }), now: 1001 }),
+    memory,
+  );
+  assert.equal(handoff.start, 'travel', 'a predator cancellation becomes a flight even when the predator leaves the next observation');
+  assert.ok(handoff.args.x < 0, 'the flight keeps the predator position and runs away from it');
+  memory.job = 'sticks';
   decide(
     reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'g1', kind: 'gather', ok: false, reason: 'blocked' }, now: 2000 }),
     memory,
@@ -176,14 +202,97 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
   assert.deepEqual(shelterMemory.home, home);
 });
 
+test('brain: a flight hands daywork back only after landing', () => {
+  const memory = fresh();
+  memory.job = 'hide';
+  const airborne = state({ motion: { onGround: false, swimming: false } });
+  assert.deepEqual(
+    decide(
+      reading({
+        state: airborne,
+        last: { id: 'flight', kind: 'travel', ok: false, reason: 'brain: safe' },
+      }),
+      memory,
+    ),
+    { wait: 'settling after movement' },
+  );
+  assert.equal(decide(reading({ state: state({ motion: { onGround: true, swimming: false } }) }), memory).start, 'gather');
+});
+
+test('brain: a transient ungrounded start does not set a kit job aside', () => {
+  const memory = fresh();
+  memory.job = 'stone';
+  const next = decide(
+    reading({
+      inventory: inventory(slot('game:stick', STICK_MIN)),
+      last: { id: 'flint', kind: 'gather', ok: false, reason: 'Start grounded' },
+    }),
+    memory,
+  );
+  assert.equal(memory.tried.stone, undefined);
+  assert.equal(next.start, 'gather');
+  assert.equal(next.args.match, 'looseflints');
+});
+
+test('brain: danger interrupts body recovery and backs it off across a flight', () => {
+  const grave = [{ guid: 'g', title: 'You died here', icon: 'gravestone', position: { x: 0, y: 100, z: 0 } }];
+  const memory = fresh();
+  memory.job = 'recover';
+  const wolf = state({
+    position: { x: 40, y: 100, z: 0 },
+    nearbyEntities: [{ code: 'game:wolf-male', point: { x: 45, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }],
+  });
+  assert.deepEqual(
+    decide(reading({ markers: grave, state: wolf, active: { id: 'body', kind: 'retrieve_body', state: 'running', by: 'brain' } }), memory),
+    {
+      stop: 'threat',
+    },
+  );
+  const afterDanger = decide(
+    reading({
+      markers: grave,
+      state: state({ position: { x: 40, y: 100, z: 0 } }),
+      last: { id: 'body', kind: 'retrieve_body', ok: false, reason: 'brain: threat' },
+      now: 2000,
+    }),
+    memory,
+  );
+  assert.equal(afterDanger.start, 'travel', 'finishes escaping before returning to ordinary work');
+  assert.ok(afterDanger.args.x < 40, 'continues away from the predator that interrupted recovery');
+  assert.ok(memory.tried.recover, 'the recovery is set aside');
+
+  memory.job = null;
+  const afterFlight = decide(reading({ markers: grave, state: state({ position: { x: 100, y: 100, z: 0 } }), now: 3000 }), memory);
+  assert.equal(afterFlight.start, 'gather', 'the recovery cooldown follows the bot away from the grave');
+
+  memory.job = null;
+  const retry = decide(reading({ markers: grave, state: state({ position: { x: 100, y: 100, z: 0 } }), now: 2001 + 5 * 60 * 1000 }), memory);
+  assert.equal(retry.start, 'retrieve_body', 'the grave is tried again after the cooldown');
+
+  const clusteredDanger = fresh();
+  clusteredDanger.job = 'recover';
+  decide(reading({ markers: grave, last: { id: 'body', kind: 'retrieve_body', ok: false, reason: 'brain: relocate' }, now: 4000 }), clusteredDanger);
+  assert.ok(clusteredDanger.tried.recover, 'relocating from a dangerous grave also backs recovery off');
+});
+
 test('brain: a hit from nowhere is danger, and copper seen in passing is marked once and told', () => {
   const memory = fresh();
   const hurt = [{ id: 1, at: 1, type: 'hurt', health: 10 }];
   const running = { id: 'o1', kind: 'travel', state: 'running', by: 'operator' };
-  assert.deepEqual(decide(reading({ events: hurt, active: running }), memory), { stop: 'hurt' }, "danger stops anyone's goal");
-  const flight = decide(reading({ events: hurt, state: state({ orientation: { yawDegrees: 0 } }) }), memory);
-  assert.equal(flight.start, 'travel');
-  assert.ok(flight.args.z > 20, 'runs straight ahead when there is no home to run to');
+  assert.deepEqual(decide(reading({ events: hurt, active: running, now: 1000 }), memory), { wait: 'identifying damage source' });
+  assert.deepEqual(
+    decide(reading({ active: running, now: 1000 + HURT_CLASSIFY_MS + 1 }), memory),
+    { stop: 'hurt' },
+    "unexplained damage stops anyone's goal after the cause grace period",
+  );
+  const interrupted = fresh();
+  interrupted.job = 'sticks';
+  const afterStop = decide(
+    reading({ last: { id: 'g1', kind: 'gather', ok: false, reason: 'brain: hurt' }, state: state({ orientation: { yawDegrees: 0 } }) }),
+    interrupted,
+  );
+  assert.equal(afterStop.start, 'travel', 'the stop reason survives the event cursor and produces a flight');
+  assert.ok(afterStop.args.z > 20, 'runs straight ahead when there is no home to run to');
   const nugget = {
     id: 2,
     at: 1,
@@ -207,6 +316,104 @@ test('brain: a hit from nowhere is danger, and copper seen in passing is marked 
   assert.ok(!('act' in near), 'a marker already nearby means no new one');
 });
 
+test('brain: death waits out a temporal storm before respawning', () => {
+  const dead = state({
+    alive: false,
+    life: { deathId: 'death-1', canRespawn: true },
+    condition: { temporalStorm: { phase: 'active' } },
+  });
+  assert.deepEqual(decide(reading({ state: dead }), fresh()), { wait: 'dead, waiting out temporal storm' });
+  assert.deepEqual(decide(reading({ state: { ...dead, condition: {} } }), fresh()), {
+    act: [{ action: 'respawn', deathId: 'death-1' }],
+    why: 'dead',
+  });
+});
+
+test('brain: death waits until the respawn dialog is ready', () => {
+  const dead = state({ alive: false, life: { deathId: 'death-1', canRespawn: false } });
+  assert.deepEqual(decide(reading({ state: dead }), fresh()), { wait: 'dead, waiting for respawn' });
+});
+
+test('brain: death forgets transient burrow and pit state before respawn', () => {
+  const memory = fresh();
+  memory.burrow = { x: 10, y: 100, z: 10 };
+  memory.pit = { x: 18, y: 98, z: 10 };
+  memory.startupChecked = true;
+  const dead = state({ alive: false, life: { deathId: 'death-1', canRespawn: true } });
+  decide(reading({ state: dead }), memory);
+  assert.equal(memory.burrow, null);
+  assert.equal(memory.pit, null);
+  assert.equal(memory.startupChecked, false, 'the new spawn is inspected for its own terrain state');
+});
+
+test('brain: a fall is not mistaken for an unseen attacker', () => {
+  const fall = [
+    { id: 1, at: 1, type: 'hurt', health: 10 },
+    { id: 2, at: 2, type: 'message', text: 'Lost 3.64 hp through gravity', kind: 'Notification' },
+  ];
+  assert.equal(environmentalHurt(fall), true);
+  const memory = fresh();
+  memory.job = 'sticks';
+  const running = { id: 'g1', kind: 'gather', state: 'running', by: 'brain' };
+  assert.deepEqual(decide(reading({ events: fall, active: running }), memory), { wait: 'letting gather finish' });
+  const delayed = fresh();
+  delayed.job = 'sticks';
+  assert.deepEqual(decide(reading({ events: fall.slice(0, 1), active: running, now: 1000 }), delayed), { wait: 'identifying damage source' });
+  assert.deepEqual(
+    decide(reading({ events: fall.slice(1), active: running, now: 1500 }), delayed),
+    { wait: 'letting gather finish' },
+    'a gravity notification arriving after the raw hit preserves the running goal',
+  );
+  assert.deepEqual(
+    decide(reading({ active: running, now: 1000 + HURT_CLASSIFY_MS + 1000 }), delayed),
+    { wait: 'letting gather finish' },
+    'clearing the pending hit prevents a later phantom flight',
+  );
+  memory.job = 'sticks';
+  const afterPrematureStop = decide(reading({ events: fall.slice(1), last: { id: 'g1', kind: 'gather', ok: false, reason: 'brain: hurt' } }), memory);
+  assert.notEqual(afterPrematureStop.start, 'travel', 'a delayed gravity message also cancels the carried flight');
+  const mistakenFlight = fresh();
+  mistakenFlight.job = 'hide';
+  mistakenFlight.scares.push({ x: 0, z: 0, at: 1 });
+  assert.deepEqual(
+    decide(reading({ events: fall.slice(1), active: { id: 'f1', kind: 'travel', state: 'running', by: 'brain' } }), mistakenFlight),
+    { stop: 'fall' },
+    'a gravity message one tick late ends a flight already launched by the raw hurt event',
+  );
+});
+
+test('brain: full-health drift is not mistaken for damage', () => {
+  const memory = fresh();
+  memory.job = 'sticks';
+  const running = { id: 'g1', kind: 'gather', state: 'running', by: 'brain' };
+  const full = state({ vitals: { health: { current: 20.57154, max: 20.57154 }, hunger: { current: 600, max: 1500 } } });
+  assert.deepEqual(decide(reading({ state: full, events: [{ id: 1, at: 1, type: 'hurt', health: 20.57154 }], active: running }), memory), {
+    wait: 'letting gather finish',
+  });
+  assert.equal(memory.pendingHurtAt, null);
+});
+
+test('brain: damage from a nearby threat proves a burrow is unsafe', () => {
+  const memory = fresh();
+  memory.burrow = { x: 0, y: 102, z: 0 };
+  const attacked = state({
+    nearbyEntities: [{ code: 'game:drifter-normal', point: { x: 1, y: 100, z: 0 }, distance: 1, how: 'near', at: 1 }],
+    vitals: { health: { current: 17.5, max: 20 }, hunger: { current: 750, max: 1500 } },
+  });
+  const next = decide(reading({ environment: night, state: attacked, events: [{ id: 1, at: 1, type: 'hurt', health: 17.5 }] }), memory);
+  assert.equal(next.start, 'dig_area', 'actual damage opens the completed burrow before attempting to flee');
+  assert.deepEqual(next.args.cells, [memory.burrow]);
+  assert.equal(next.why, 'burrow breached, opening escape');
+
+  memory.job = 'unburrow';
+  const opening = { id: 'mouth', kind: 'dig_area', state: 'running', by: 'brain' };
+  assert.deepEqual(
+    decide(reading({ environment: night, state: attacked, active: opening }), memory),
+    { wait: 'letting dig_area finish' },
+    'the nearby attacker cannot cancel the only route out',
+  );
+});
+
 test('brain: kit reads tools by class and dirt by code', () => {
   const k = kit(
     inventory(slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }), slot('game:soil-medium-none', 12), slot('game:flint', 3)),
@@ -225,7 +432,7 @@ test('brain loop: respawns when dead, waits behind an operator goal, starts and 
     history: new Map(),
     send: async request => {
       calls.push(request);
-      if (request.action === 'observe') return dead ? { ok: true, alive: false, life: { deathId: 'd:1' } } : state();
+      if (request.action === 'observe') return dead ? { ok: true, alive: false, life: { deathId: 'd:1', canRespawn: true } } : state();
       if (request.action === 'respawn') {
         dead = false;
         return { ok: true };
@@ -362,6 +569,91 @@ test('brain: hunger does not interrupt a flight; danger outranks it', () => {
   );
 });
 
+test('brain: forage keeps its own threat evasion instead of being cancelled', () => {
+  const memory = fresh();
+  memory.job = 'eat';
+  const wolf = state({
+    nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }],
+    vitals: { hunger: { current: 100, max: 1500 } },
+  });
+  assert.deepEqual(decide(reading({ state: wolf, active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' } }), memory), {
+    wait: 'letting forage evade threat',
+  });
+  const food = { id: 'food', kind: 'forage', state: 'running', by: 'brain' };
+  assert.deepEqual(
+    decide(
+      reading({
+        state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+        active: food,
+        events: [{ id: 1, at: 1, type: 'hurt', health: 10 }],
+        now: 1000,
+      }),
+      memory,
+    ),
+    { wait: 'identifying damage source' },
+  );
+  assert.deepEqual(
+    decide(reading({ state: state({ vitals: { hunger: { current: 100, max: 1500 } } }), active: food, now: 1000 + HURT_CLASSIFY_MS + 1 }), memory),
+    { stop: 'hurt' },
+    'unexplained damage still interrupts food recovery',
+  );
+});
+
+test('brain: night waits for forage to finish food already in hand', () => {
+  const memory = fresh();
+  memory.job = 'eat';
+  const berries = inventory(
+    slot('game:fruit-blackberry', 3, {
+      nutrition: { saturation: 80, health: 0 },
+      freshness: { state: 'fresh', freshHoursLeft: 100 },
+    }),
+  );
+  assert.deepEqual(
+    decide(
+      reading({
+        environment: night,
+        inventory: berries,
+        state: state({ vitals: { hunger: { current: 330, max: 1500 } } }),
+        active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' },
+      }),
+      memory,
+    ),
+    { wait: 'letting forage finish' },
+  );
+  assert.deepEqual(
+    decide(
+      reading({
+        environment: night,
+        state: state({ vitals: { hunger: { current: 430, max: 1500 } } }),
+        active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' },
+      }),
+      memory,
+    ),
+    { wait: 'letting forage finish' },
+    'crossing the urgent threshold on the last carried bite does not cancel the recovery run',
+  );
+});
+
+test('brain: carried food enters one complete recovery run', () => {
+  const memory = fresh();
+  const berries = inventory(
+    slot('game:fruit-blackberry', 3, {
+      nutrition: { saturation: 80, health: 0 },
+      freshness: { state: 'fresh', freshHoursLeft: 100 },
+    }),
+  );
+  const choice = decide(
+    reading({
+      inventory: berries,
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+    }),
+    memory,
+  );
+  assert.equal(choice.start, 'forage');
+  assert.ok(Math.abs(choice.args.until - 0.6) < 1e-9);
+  assert.match(choice.why, /240 carried/);
+});
+
 test('brain: digging out of a hole is never interrupted by a threat', () => {
   const digging = fresh();
   digging.job = 'dig_out';
@@ -370,6 +662,99 @@ test('brain: digging out of a hole is never interrupted by a threat', () => {
   });
   const during = decide(reading({ state: wolf, active: { id: 'd1', kind: 'dig_out', state: 'running', by: 'brain' } }), digging);
   assert.equal(during.wait, 'letting dig_out finish');
+});
+
+test('brain: a partial pit escape resumes instead of starting work underground', () => {
+  const memory = fresh();
+  memory.pit = { x: 8.5, y: 100, z: 0.5 };
+  memory.job = 'dig_out';
+  const next = decide(
+    reading({
+      last: { id: 'd1', kind: 'dig_out', ok: false, reason: 'no_footing', result: { ok: false, climbed: 1, reason: 'no_footing' } },
+    }),
+    memory,
+  );
+  assert.equal(next.start, 'dig_out');
+  assert.deepEqual([next.args.x, next.args.z], [8.5, 0.5]);
+
+  memory.job = 'dig_out';
+  const escaped = decide(reading({ last: { id: 'd2', kind: 'dig_out', ok: true, result: { ok: true, climbed: 1 } } }), memory);
+  assert.notEqual(escaped.start, 'dig_out');
+  assert.equal(memory.pit, null);
+});
+
+test('brain: observed height preserves a partial pit escape when an action error omits its result', () => {
+  const memory = fresh();
+  memory.pit = { x: 8.5, y: 100, z: 0.5 };
+  memory.job = 'dig_out';
+  const next = decide(
+    reading({
+      state: state({ position: { x: 1.5, y: 102, z: 0.5 } }),
+      last: { id: 'd1', kind: 'dig_out', ok: false, reason: 'Target or inventory changed; inspect before acting.' },
+    }),
+    memory,
+  );
+  assert.equal(next.start, 'dig_out');
+  assert.deepEqual([next.args.x, next.args.z], [8.5, 0.5]);
+});
+
+test('brain: opening a morning burrow is followed by digging steps to the surface', () => {
+  const memory = fresh();
+  memory.burrow = { x: 0, y: 2, z: 0 };
+  memory.job = 'unburrow';
+  const outside = decide(
+    reading({
+      state: state({ position: { x: 0.5, y: 0, z: 0.5 } }),
+      last: { id: 'mouth', kind: 'dig_area', ok: true, result: { dug: 1 } },
+    }),
+    memory,
+  );
+  assert.equal(memory.burrow, null);
+  assert.equal(outside.start, 'dig_out');
+  assert.deepEqual([outside.args.x, outside.args.z], [8.5, 0.5]);
+});
+
+test('brain: a fresh controller recovers a sealed burrow from observed terrain', () => {
+  const full = { hazard: null, boxes: [[0, 0, 0, 1, 1, 1]] };
+  let ready = false,
+    sealed = true;
+  const terrain = {
+    get(x, y, z) {
+      if (!ready) return null;
+      if (y === 102 && (x !== 0 || z !== 0)) return full;
+      if (x === 0 && y === 102 && z === 0) return sealed ? full : { hazard: null, boxes: [] };
+      return { hazard: null, boxes: [] };
+    },
+  };
+  const memory = fresh();
+  assert.deepEqual(decide(reading({ state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain }), memory), {
+    wait: 'inspecting surroundings after startup',
+  });
+  assert.equal(memory.startupChecked, false, 'an empty first terrain delta cannot trigger a second burrow');
+  ready = true;
+  const next = decide(reading({ state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain }), memory);
+  assert.deepEqual(memory.burrow, { x: 0, y: 102, z: 0 });
+  assert.equal(next.start, 'dig_area');
+  assert.deepEqual(next.args.cells, [memory.burrow]);
+
+  sealed = false;
+  const openAtNight = fresh();
+  const sheltered = decide(reading({ environment: night, state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain }), openAtNight);
+  assert.deepEqual(openAtNight.burrow, { x: 0, y: 102, z: 0 });
+  assert.equal(sheltered.wait, 'night, dug in', 'an intentionally unsealed emergency shaft remains shelter at night');
+
+  const openByDay = fresh();
+  const climbing = decide(reading({ state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain }), openByDay);
+  assert.equal(openByDay.burrow, null);
+  assert.equal(climbing.start, 'dig_out');
+
+  memory.burrow = null;
+  decide(reading({ state: state({ position: { x: 20.5, y: 100, z: 20.5 } }), terrain, now: 2000 }), memory);
+  assert.equal(memory.burrow, null, 'similar terrain encountered later cannot invent a burrow');
+
+  const wet = fresh();
+  decide(reading({ state: state({ position: { x: 0.5, y: 100, z: 0.5 }, motion: { feetInLiquid: true } }), terrain }), wet);
+  assert.equal(wet.burrow, null, 'shallow water terrain is not a burrow');
 });
 
 test('brain: three scares around the same spot make it move on; a failed stick search is set aside around here', () => {

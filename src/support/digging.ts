@@ -50,7 +50,10 @@ export function stairStep(map, node, toward) {
   for (const { dx, dz } of directions) {
     const wx = x + dx,
       wz = z + dz;
-    if (!solid(map, wx, h, wz)) continue;
+    // The step itself is occluded by the wall above when the bot is inside a
+    // one-cell shaft. Known air is unsafe; unknown may be planned, then must
+    // be observed as solid after the wall is opened and before climbing.
+    if (known(map, wx, h, wz) && !solid(map, wx, h, wz)) continue;
     const above = [h + 1, h + 2, h + 3];
     if (!above.every(y => known(map, wx, y, wz)) || above.some(y => map.get(wx, y, wz).hazard)) continue;
     const dig = above.filter(y => solid(map, wx, y, wz)).map(y => ({ x: wx, y, z: wz }));
@@ -85,7 +88,21 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       reason = null;
       break;
     }
-    const plan = stairStep(map, origin, toward);
+    let plan = stairStep(map, origin, toward);
+    if (!plan) {
+      // A narrow shaft can hide its foot-level neighbours from the passive
+      // terrain stream. Look directly at each wall once before concluding
+      // there is no block from which to cut the next stair.
+      field.report('surveying_exit', { at: origin });
+      const h = Math.floor(origin.y),
+        x = Math.floor(origin.x),
+        z = Math.floor(origin.z);
+      for (const [dx, dz] of cardinals) {
+        const eye = { ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight };
+        await field.aim(lookAt(eye, { x: x + dx + 0.5, y: h + 0.5, z: z + dz + 0.5 }));
+      }
+      plan = stairStep(map, origin, toward);
+    }
     if (!plan) {
       reason = 'no_wall_to_cut';
       break;
@@ -107,6 +124,7 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       }
       const result = await changeBlock(field, 'dig', { target: selected.key, slot, acceptTransform: true, timeoutMs: 45000 });
       if (!result.ok) {
+        field.report('cut_failed', { cell, code: selected.code, reason: result.reason });
         cut = false;
         break;
       }
@@ -117,7 +135,7 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
     }
     // A cut cell is forgotten on change and known again only once the eye has seen it; look at
     // the opening until the map holds every cell, then the step is an ordinary jump up.
-    const seen = () => plan.dig.every(cell => map.get(cell.x, cell.y, cell.z));
+    const seen = () => map.get(plan.step.x, plan.step.y, plan.step.z) && plan.dig.every(cell => map.get(cell.x, cell.y, cell.z));
     for (let looks = 0; looks < 6 && !seen(); looks++) {
       const eye = { ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight };
       await field.aim(lookAt(eye, { x: plan.step.x + 0.5, y: plan.dig[0].y + 0.5, z: plan.step.z + 0.5 }));
@@ -128,8 +146,13 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       reason = 'cut_not_seen';
       break;
     }
+    if (!solid(map, plan.step.x, plan.step.y, plan.step.z)) {
+      reason = 'no_step';
+      break;
+    }
     const up = await field.walk({ x: plan.step.x + 0.5, y: origin.y + 1, z: plan.step.z + 0.5, arrivalRadius: 0.3 });
-    if (!['arrived', 'paused'].includes(up.state) || horizontal(field.latest.position, plan.step) > 0.8) {
+    const stepCenter = { x: plan.step.x + 0.5, z: plan.step.z + 0.5 };
+    if (!['arrived', 'paused'].includes(up.state) || horizontal(field.latest.position, stepCenter) > 0.8) {
       reason = 'cannot_climb';
       break;
     }

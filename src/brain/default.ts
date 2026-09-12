@@ -5,6 +5,7 @@
 // or trading. Pure: decide() reads one Reading and its own memory and returns
 // one Decision; the loop in src/runtime/brain.ts does the talking to the game.
 
+import { dugInState } from '../goals/burrow.ts';
 import { isDeathMarker } from '../goals/retrieve_body.ts';
 import type { Brain, Decision, Reading } from '../runtime/brain.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
@@ -48,6 +49,9 @@ const URGENT: Job[] = ['hide', 'go_home', 'eat', 'relocate', 'burrow'];
 // A flight ends when no threat has shown for this long and the scare is this far behind.
 export const SAFE_MS = 20000;
 export const SAFE_DISTANCE = 16;
+// Hurt arrives before the server notification that identifies its cause. Give
+// gravity a fraction of a second to identify itself before abandoning useful work.
+export const HURT_CLASSIFY_MS = 750;
 
 export type Job =
   | 'hide'
@@ -78,13 +82,19 @@ export type Memory = {
   tried_now: Job[];
   job: Job | null;
   // Where the last walk was heading when it ended in a pit; dig_out cuts stairs that way.
-  pit: { x: number; z: number } | null;
+  pit: { x: number; y: number; z: number } | null;
   // The pocket the bot dug in for the night: its mouth cell, to dig open again at dawn.
   burrow: { x: number; y: number; z: number } | null;
+  // Physical burrow recovery is only valid before this controller has moved.
+  startupChecked: boolean;
   done: Record<string, number>;
   // Where and when the bot had to run; a cluster of these around it means this is a bad place to be.
   scares: { x: number; z: number; at: number }[];
+  // The predator that caused the current goal to be cancelled, retained for the handoff into flight.
+  lastThreat: { point: Cell; code: string; at: number } | null;
   resting: boolean;
+  // A raw hit waiting briefly for the server's cause notification.
+  pendingHurtAt: number | null;
   // Sighting keys already marked on the map, so one nugget is announced once.
   marked: Set<string>;
 };
@@ -191,10 +201,22 @@ export function tasks(s: Situation, tried: Set<Job> = new Set()): { id: Job; tit
   });
 }
 export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
+  // A sealed burrow is already the safest response to something prowling
+  // outside. Opening it to flee turns cover into a trap; only actual damage
+  // proves the shelter is unsafe. Open the mouth before trying to travel from
+  // two blocks underground; the existing pit escape then gets it outside.
+  if (s.hurt && s.burrowed) return 'unburrow';
+  if (s.threat && s.burrowed && !s.hurt) return 'wait';
   if (s.threat || s.hurt) return 'hide';
-  if (s.storm) return s.home && !s.atHome ? 'go_home' : 'wait';
-  // Something from the pack is eaten anywhere, any time; looking for food is daywork.
-  if (s.hunger !== null && s.hunger < HUNGRY && s.reserve > 0) return 'eat';
+  // Below the recovery threshold, food is no longer optional daywork. With
+  // nothing in the pack, sheltering through the night guarantees starvation;
+  // keep searching and let forage's own threat handling decide when to run.
+  if (s.hunger !== null && s.hunger < HUNGRY) return s.burrowed ? 'unburrow' : 'eat';
+  if (s.storm) {
+    if (s.home) return s.atHome ? 'wait' : 'go_home';
+    if (s.burrowed) return 'wait';
+    return tried.has('burrow') ? 'wait' : 'burrow';
+  }
   // A place that keeps producing scares is left behind, day or night, before anything else here.
   if (s.dangerHere && !s.burrowed) return 'relocate';
   if (s.night) {
@@ -205,7 +227,7 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   }
   // Opening the burrow is a job like the others: set aside when it fails, forgotten when the burrow is far away.
   if (s.burrowed && !tried.has('unburrow')) return 'unburrow';
-  if (s.hunger !== null && (s.hunger < HUNGRY || (s.hunger < PECKISH && s.reserve <= 0))) return 'eat';
+  if (s.hunger !== null && s.hunger < PECKISH && s.reserve <= 0) return 'eat';
   // The first task on the list not done and not set aside around here; with none left, look around.
   return tasks(s, tried).find(task => task.state === 'next')?.id ?? 'explore';
 }
@@ -216,6 +238,8 @@ export function escapePoint(position: Cell, yawDegrees: number, home: Cell | nul
   const yaw = (yawDegrees * Math.PI) / 180;
   return { x: position.x + Math.sin(yaw) * 24, z: position.z + Math.cos(yaw) * 24 };
 }
+export const environmentalHurt = (events: any[]) =>
+  events.some(event => event.type === 'message' && /^Lost [\d.]+ hp through gravity$/i.test(event.text ?? ''));
 // In deep water: face the nearest dry ground and swim with the jump key held, one stroke per decision.
 export function surfacing(state: any, ground: Cell | null): Decision {
   const p = state.position;
@@ -236,16 +260,34 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (last) {
     if (last.ok) memory.done[last.kind] = (memory.done[last.kind] ?? 0) + 1;
     // A walk that ended in a hole is not a failed job: the hole is dealt with first.
-    if (last.reason === 'pit' && last.result?.position) memory.pit = { x: last.result.position.x + 8, z: last.result.position.z };
+    if (last.reason === 'pit' && last.result?.position)
+      memory.pit = { x: last.result.position.x + 8, y: last.result.position.y, z: last.result.position.z };
     // Running away is tried again at once, and a job the surroundings refused before it began (water, lost
-    // controls) is not the job's fault; every other failed job is set aside around here for a while.
-    else if (!last.ok && memory.job && !['hide', 'dig_out'].includes(memory.job) && !/interruption|^brain:/.test(last.reason ?? ''))
+    // controls) is not the job's fault. A body recovery interrupted by danger is different: immediately
+    // returning to the same grave makes the fresh life repeat the death, so leave it alone for a while.
+    else if (
+      !last.ok &&
+      memory.job &&
+      !['hide', 'dig_out'].includes(memory.job) &&
+      (!/interruption|^brain:|^Start grounded$/.test(last.reason ?? '') ||
+        (memory.job === 'recover' && /^brain: (threat|hurt|relocate)$/.test(last.reason ?? '')))
+    )
       memory.tried[memory.job] = { x: state.position.x, z: state.position.z, at: now };
-    if (memory.job === 'dig_out') memory.pit = null;
+    // A partial staircase is useful progress, not proof the pit is gone. The
+    // action RPC can reject a changed block after a successful step and omit
+    // dig_out's result, so the observed height is also evidence of progress.
+    if (memory.job === 'dig_out' && (last.ok || (!(last.result?.climbed > 0) && (!memory.pit || state.position.y <= memory.pit.y + 0.5))))
+      memory.pit = null;
     // A finished shelter is home.
     if (memory.job === 'shelter' && last.ok && last.result?.home) memory.home = last.result.home;
     if (memory.job === 'burrow' && last.ok && last.result?.mouth) memory.burrow = last.result.mouth;
-    if (memory.job === 'unburrow' && last.ok) memory.burrow = null;
+    if (memory.job === 'unburrow' && last.ok) {
+      // Removing the seal opens the shaft but does not put the body back on
+      // the surface. Hand the existing dig-out goal an arbitrary direction
+      // for its staircase before resuming food or kit work.
+      memory.burrow = null;
+      memory.pit = { x: state.position.x + 8, y: state.position.y, z: state.position.z };
+    }
     // A burrow that could not be opened is not the place to keep coming back to.
     if (memory.job === 'unburrow' && !last.ok) memory.burrow = null;
     // Whatever the trip's outcome, this place has been judged; judge the new one afresh.
@@ -255,18 +297,84 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (memory.resting) return { wait: 'resting after too many scares' };
   memory.scares = memory.scares.filter(scare => now - scare.at < DANGER_MS);
   // Dead: respawn when the server offers it; nothing else matters until then.
-  if (!state.alive) memory.burrow = null;
+  // A respawn moves the character independently of the place it died. Forget
+  // transient terrain state so the next live reading inspects the new spawn
+  // instead of treating it as the old burrow or pit.
+  if (!state.alive) {
+    memory.burrow = null;
+    memory.pit = null;
+    memory.startupChecked = false;
+    memory.pendingHurtAt = null;
+  }
   if (!state.alive && active) return { stop: 'dead' };
+  if (!state.alive && temporalStormUnsafe(state)) return { wait: 'dead, waiting out temporal storm' };
   if (!state.alive)
-    return state.life?.deathId
+    return state.life?.deathId && state.life?.canRespawn
       ? { act: [{ action: 'respawn', deathId: state.life.deathId }], why: 'dead' }
-      : { wait: 'dead, no respawn offered yet' };
+      : { wait: 'dead, waiting for respawn' };
+  // Brain memory is deliberately fresh on each controller process, but a
+  // completed burrow is durable world state. Recover its mouth from the
+  // observed shaft before choosing work, and treat an already-open shaft as
+  // a pit to climb out of in safe daylight.
+  if (!memory.startupChecked) {
+    const bx = Math.floor(state.position.x),
+      by = Math.floor(state.position.y),
+      bz = Math.floor(state.position.z),
+      wet = state.motion?.swimming || state.motion?.feetInLiquid;
+    if (
+      !wet &&
+      reading.terrain &&
+      ![
+        [bx, by + 1, bz],
+        [bx, by + 2, bz],
+        [bx + 1, by + 2, bz],
+        [bx - 1, by + 2, bz],
+        [bx, by + 2, bz + 1],
+        [bx, by + 2, bz - 1],
+      ].every(([x, y, z]) => reading.terrain.get(x, y, z))
+    )
+      return { wait: 'inspecting surroundings after startup' };
+    memory.startupChecked = true;
+    const observedShaft = !wet && reading.terrain ? dugInState(reading.terrain, bx, by, bz) : null;
+    if (observedShaft === 'sealed' || (observedShaft === 'open' && (isNight(environment) || temporalStormUnsafe(state))))
+      memory.burrow = { x: bx, y: by + 2, z: bz };
+    if (observedShaft === 'open' && !memory.burrow) memory.pit = { x: state.position.x + 8, y: state.position.y, z: state.position.z };
+  }
   const threat = nearestThreat(state);
-  // A hit with no attacker in sight is still danger.
-  const hurt = events.some(e => e.type === 'hurt');
+  if (threat) memory.lastThreat = { point: threat.point, code: threat.code, at: now };
+  // A predator can leave the observation radius while its cancellation is
+  // completing. Carry that exact threat through the next decision so the
+  // cancelled job becomes a flight instead of immediately restarting work.
+  const rememberedThreat =
+    last?.reason === 'brain: threat' && memory.lastThreat && now - memory.lastThreat.at < SAFE_MS
+      ? { point: memory.lastThreat.point, code: memory.lastThreat.code }
+      : null;
+  const danger = threat ?? rememberedThreat;
+  // A hit with no attacker in sight is still danger. The server also advances
+  // lastDamageAt for fall damage, but its notification identifies gravity; a
+  // stumble is not an attacker and must not cancel food recovery for a flight.
+  // The event cursor advances when the running goal is stopped. Carry the
+  // stop reason into this decision so a one-tick hit actually starts a flight
+  // instead of cancelling work and immediately restarting the same job.
+  const gravity = environmentalHurt(events);
+  // Max-health nutrition drift can lower current and maximum health together.
+  // The bridge reports that as a hurt event even though the bar remains full;
+  // only a real deficit is evidence of damage from something unseen.
+  const health = state.vitals?.health,
+    fullHealth = Number.isFinite(health?.current) && Number.isFinite(health?.max) && health.current >= health.max - 0.01,
+    rawHurt = !fullHealth && events.some(e => e.type === 'hurt');
+  if (gravity || danger) memory.pendingHurtAt = null;
+  else if (rawHurt && memory.pendingHurtAt === null) memory.pendingHurtAt = now;
+  const pendingHurt = memory.pendingHurtAt !== null && now - memory.pendingHurtAt >= HURT_CLASSIFY_MS;
+  // A known nearby threat removes the need to wait for a cause notification.
+  // This matters inside a burrow: merely hearing a creature outside is safe,
+  // but losing health while it is nearby proves the pocket is compromised.
+  const hurt = !gravity && (last?.reason === 'brain: hurt' || pendingHurt || (rawHurt && !!danger));
+  const classifyingHurt = !gravity && !danger && memory.pendingHurtAt !== null && !pendingHurt;
+  if (pendingHurt) memory.pendingHurtAt = null;
   // Copper seen in passing: a marker and a word to the others, once per nugget, unless one is already marked nearby.
   const copper = events.find(e => e.type === 'sighted' && e.kind === 'block' && COPPER.test(e.code ?? '') && !memory.marked.has(e.key));
-  if (copper && !threat && !hurt) {
+  if (copper && !danger && !hurt && !classifyingHurt) {
     memory.marked.add(copper.key);
     const x = Math.floor(copper.point.x),
       y = Math.floor(copper.point.y),
@@ -291,11 +399,13 @@ export function decide(reading: Reading, memory: Memory): Decision {
   const home = memory.home;
   const tried = new Set<Job>(
     (Object.entries(memory.tried) as [Job, { x: number; z: number; at: number }][])
-      .filter(([, where]) => now - where.at < TRIED_MS && horizontal(state.position, where) <= TRIED_RADIUS)
+      // Recovery danger belongs to the grave, not the point from which the bot happened to notice it.
+      // Keep that cooldown across a flight instead of retrying as soon as it has run 24 blocks away.
+      .filter(([job, where]) => now - where.at < TRIED_MS && (job === 'recover' || horizontal(state.position, where) <= TRIED_RADIUS))
       .map(([job]) => job),
   );
   const situation: Situation = {
-    threat: !!threat,
+    threat: !!danger,
     hurt,
     storm,
     hunger: satiety,
@@ -322,24 +432,43 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // A goal of its own is running. What cuts it short is what the ladder would rather do now:
   // danger first, then a storm, night, a bad place, or food in hand when hungry.
   if (active) {
+    // Forage owns a deterministic evade-and-resume loop. Cancelling it on the
+    // same sighting throws away its food leads and starts a second flight on
+    // top of navigation's evasion, which is especially costly near starvation.
+    // Actual damage still interrupts below, as it may be from an unseen source.
+    if (danger && !hurt && memory.job === 'eat' && active.kind === 'forage') return { wait: 'letting forage evade threat' };
     // A flight is never interrupted, and neither is digging out: there is no running from a hole.
     // Nor is digging in at night: two blocks down is the safest place from whatever is coming.
-    if ((threat || hurt) && !['hide', 'dig_out', 'burrow'].includes(memory.job ?? '')) return { stop: threat ? 'threat' : 'hurt' };
+    if ((danger || hurt) && !['hide', 'dig_out', 'burrow', 'unburrow'].includes(memory.job ?? '')) return { stop: danger ? 'threat' : 'hurt' };
+    if (classifyingHurt) return { wait: 'identifying damage source' };
+    // Damage chat can trail the life event by one brain tick. If gravity is
+    // identified only after the reflex already launched a flight, end that
+    // mistaken flight and return to the interrupted survival job.
+    if (memory.job === 'hide' && !danger && environmentalHurt(events)) return { stop: 'fall' };
     // A flight is over once nothing has been seen or heard for a while and the scare is well behind.
     const scare = memory.scares.at(-1);
-    if (memory.job === 'hide' && !threat && !hurt && scare && now - scare.at > SAFE_MS && horizontal(state.position, scare) >= SAFE_DISTANCE)
+    if (memory.job === 'hide' && !danger && !hurt && scare && now - scare.at > SAFE_MS && horizontal(state.position, scare) >= SAFE_DISTANCE)
       return { stop: 'safe' };
     // Someone else's goal is otherwise left alone.
     if (active.by !== 'brain') return { wait: `letting ${active.kind} finish (${active.by})` };
+    // A recovery run owns food until it reaches its target, even when the last
+    // carried bite briefly clears the urgent hunger alert. Cancelling it at
+    // that boundary for night shelter leaves the bot peckish and restarts the
+    // same forage/burrow cycle a few ticks later.
+    if (memory.job === 'eat' && active.kind === 'forage') return { wait: 'letting forage finish' };
     // A dig-in is finished whatever is about: two blocks down is safer than any flight at night.
-    const pressing =
-      URGENT.includes(job) && job !== memory.job && !['hide', 'dig_out'].includes(memory.job ?? '') && !(memory.job === 'burrow' && job === 'hide');
+    const pressing = URGENT.includes(job) && job !== memory.job && !['hide', 'dig_out', 'burrow', 'unburrow'].includes(memory.job ?? '');
     // Peckish is not an interruption; hungry is, and only when the ladder would actually eat.
     if (pressing && (job !== 'eat' || (satiety !== null && satiety < HUNGRY))) return { stop: job };
     return { wait: `letting ${active.kind} finish` };
   }
+  if (classifyingHurt) return { wait: 'identifying damage source' };
   // Deep water with nothing running: swim for shore before anything else.
   if (state.motion?.swimming) return surfacing(state, ground);
+  // Stopping a flight can catch the body between a jump and its landing. Every
+  // fieldwork goal requires grounded footing, so let physics settle instead of
+  // immediately failing the resumed kit job and setting it aside for minutes.
+  if (state.motion?.onGround === false) return { wait: 'settling after movement' };
   if (memory.pit) {
     memory.job = 'dig_out';
     return { start: 'dig_out', args: { x: memory.pit.x, z: memory.pit.z }, why: 'in a hole' };
@@ -354,14 +483,18 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'burrow':
       return start('burrow', {}, 'night with no home');
     case 'unburrow':
-      return start('dig_area', { cells: [memory.burrow], timeoutMs: 120000 }, 'morning, opening the burrow');
+      return start(
+        'dig_area',
+        { cells: [memory.burrow], timeoutMs: 120000 },
+        hurt ? 'burrow breached, opening escape' : 'morning, opening the burrow',
+      );
     case 'hide': {
       memory.scares.push({ x: state.position.x, z: state.position.z, at: now });
-      const away = threat ? fleeTarget(state.position, threat) : escapePoint(state.position, state.orientation?.yawDegrees ?? 0, home);
+      const away = danger ? fleeTarget(state.position, danger) : escapePoint(state.position, state.orientation?.yawDegrees ?? 0, home);
       return start(
         'travel',
         { x: away.x, z: away.z, arrivalRadius: 8, sprint: true, timeoutMs: 600000 },
-        threat ? `${threat.code} at ${Math.round(horizontal(state.position, threat.point))} blocks` : 'hurt by something unseen',
+        danger ? `${danger.code} at ${Math.round(horizontal(state.position, danger.point))} blocks` : 'hurt by something unseen',
       );
     }
     case 'relocate': {
@@ -379,9 +512,14 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'go_home':
       return start('travel', { x: home!.x, z: home!.z, arrivalRadius: 3, timeoutMs: 600000 }, storm ? 'storm coming' : 'night falling');
     case 'eat':
-      return k.reserve > 0
-        ? start('eat', {}, `satiety ${Math.round((satiety ?? 0) * 100)}%`)
-        : start('forage', { until: 0.5, keep: 160, timeoutMs: 1800000 }, `satiety ${Math.round((satiety ?? 0) * 100)}%, nothing carried`);
+      return start(
+        'forage',
+        // Food recovery may finish once one meal lands within 20 points of its
+        // target. Aim that margin above the brain's own threshold so one run
+        // eats what is carried, then searches only if that was not enough.
+        { until: PECKISH + 0.2, keep: 160, timeoutMs: 1800000 },
+        `satiety ${Math.round((satiety ?? 0) * 100)}%, ${k.reserve > 0 ? `${k.reserve} carried` : 'nothing carried'}`,
+      );
     case 'dirt':
       return start(
         'harvest',
@@ -461,9 +599,12 @@ export function fresh(): Memory {
     job: null,
     pit: null,
     burrow: null,
+    startupChecked: false,
     done: {},
     scares: [],
+    lastThreat: null,
     resting: false,
+    pendingHurtAt: null,
   };
 }
 

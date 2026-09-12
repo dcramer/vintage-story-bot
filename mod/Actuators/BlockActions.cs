@@ -189,7 +189,10 @@ internal sealed class BlockActions(ICoreClientAPI api)
         BlockSelection? selected = null;
         EntitySelection? selectedEntity = null;
         api.World.RayTraceForSelection(eye, hit, ref selected, ref selectedEntity);
-        return selectedEntity == null && (selected == null || selected.Position.Equals(position) ||
+        // A loose drop from the previous cut can sit between the eye and the
+        // next stair block. Items do not prevent the game's block selection
+        // or digging input, so they must not invalidate that observation.
+        return (selectedEntity == null || selectedEntity.Entity is EntityItem) && (selected == null || selected.Position.Equals(position) ||
             SceneSensor.BlockKey(selected.Position, blocks.GetBlock(selected.Position)) == target);
     }
 
