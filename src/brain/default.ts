@@ -321,7 +321,9 @@ export function decide(reading: Reading, memory: Memory): Decision {
       return { stop: 'safe' };
     // Someone else's goal is otherwise left alone.
     if (active.by !== 'brain') return { wait: `letting ${active.kind} finish (${active.by})` };
-    const pressing = URGENT.includes(job) && job !== memory.job && !['hide', 'dig_out'].includes(memory.job ?? '');
+    // A dig-in is finished whatever is about: two blocks down is safer than any flight at night.
+    const pressing =
+      URGENT.includes(job) && job !== memory.job && !['hide', 'dig_out'].includes(memory.job ?? '') && !(memory.job === 'burrow' && job === 'hide');
     // Peckish is not an interruption; hungry is, and only when the ladder would actually eat.
     if (pressing && (job !== 'eat' || (satiety !== null && satiety < HUNGRY))) return { stop: job };
     return { wait: `letting ${active.kind} finish` };

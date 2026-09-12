@@ -78,6 +78,19 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
     starvingNight,
   );
   assert.equal(digging.wait, 'letting burrow finish', 'hunger with nothing to eat does not cut the night dig-in short');
+  starvingNight.job = 'burrow';
+  assert.equal(
+    decide(
+      reading({
+        environment: night,
+        state: state({ nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }] }),
+        active: { id: 'b', kind: 'burrow', state: 'running', by: 'brain' },
+      }),
+      starvingNight,
+    ).wait,
+    'letting burrow finish',
+    'a wolf does not cut the dig-in short either',
+  );
   starvingNight.job = 'sticks';
   assert.deepEqual(
     decide(reading({ environment: night, active: { id: 's', kind: 'gather', state: 'running', by: 'brain' } }), starvingNight),
