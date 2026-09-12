@@ -1,6 +1,6 @@
 import { findRoute } from '../runtime/navigation/planner.ts';
 import { nextLeg, planRoughRoute } from '../runtime/navigation/surface.ts';
-import { distance, horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
+import { horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
 import { Gleaner } from './gleaning.ts';
 import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.ts';
 
@@ -226,28 +226,7 @@ export class Fieldwork {
       eye = { ...p, y: p.y + (this.latest.body?.eyeHeight ?? 1.6) };
     const reach = this.latest.pickingRange ?? 4.5;
     const kinds = { all: null, blocks: 'block', items: 'item', entities: 'entity' };
-    const objects = this.env.sightings
-      .visible(kinds[kind] ?? null)
-      .filter(s => !matches.length || matches.some(m => s.code.toLowerCase().includes(m.toLowerCase())))
-      .map(s => {
-        const far = distance(eye, s.point);
-        return {
-          kind: s.kind,
-          key: s.key,
-          code: s.code,
-          point: s.point,
-          distance: +far.toFixed(2),
-          quantity: s.extra?.quantity ?? null,
-          access: s.extra?.access ?? null,
-          facts: s.extra?.facts ?? null,
-          how: s.how,
-          source: far <= 8 ? 'nearby' : 'sight',
-          withinPickingRange: far <= reach,
-          look: lookAt(eye, s.point),
-        };
-      })
-      .filter(o => o.distance <= radius)
-      .sort((a, b) => a.distance - b.distance);
+    const objects = this.env.sightings.view(eye, { matches, kind: kinds[kind] ?? null, radius, remembered: false, reach });
     for (const object of objects) this.seen.set(object.key, { ...object, seenAt: this.now() });
     this.searched++;
     this.prune();
