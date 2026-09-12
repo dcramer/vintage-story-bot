@@ -40,6 +40,15 @@ test('the stair step goes through the wall toward the goal and lists the blocks 
   assert.ok(pit.moves({ x: 0.5, y: 0, z: 0.5 }).some(m => m.node.move === 'jump' && Math.floor(m.node.x) === 1));
 });
 
+test('a stair may be planned through a wall that occludes its foot block', () => {
+  const pit = world(3, (x, y, z) => (Math.abs(x) >= 1 || Math.abs(z) >= 1) && y >= 0 && y <= 3);
+  pit.forget('1,0,0');
+  assert.deepEqual(stairStep(pit, { x: 0.5, y: 0, z: 0.5 }, { x: 5, y: 0, z: 0.5 })?.step, { x: 1, y: 0, z: 0 });
+
+  pit.apply({ session: 'w', reset: false, cursor: 2, more: false, clock: 0, cells: [[1, 0, 0, 0, null, []]] });
+  assert.notDeepEqual(stairStep(pit, { x: 0.5, y: 0, z: 0.5 }, { x: 5, y: 0, z: 0.5 })?.step, { x: 1, y: 0, z: 0 });
+});
+
 test('water cells over solid ground are waded, deeper water only swum when allowed', () => {
   const pond = new TerrainMemory(),
     cells = [];
