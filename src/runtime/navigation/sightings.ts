@@ -4,6 +4,7 @@
 // what left the view as last seen for a while, and forgets the rest. Absent
 // means unknown. Blocks are part of the bot's lasting knowledge; entities and
 // items are not.
+import { Bounded } from './bounded.ts';
 import { distance, lookAt } from './terrain.ts';
 
 export const rememberMs = { entity: 20000, item: 60000, block: 7 * 24 * 60 * 60 * 1000 };
@@ -17,10 +18,10 @@ export const cellOfKey = key => {
 };
 
 export class SightingsMemory {
-  records = new Map();
+  // Forgetting by age is a once-a-second sweep, not one per sense.
+  records = new Bounded<any>(32768, 1000);
   now = 0;
   wall = 0;
-  capacity = 32768;
   // What a sighting affords, read from its code and facts; injected so memory stays pure.
   traits: (object: { kind: string; code: string; facts?: any }) => string[];
   constructor(traits: (object: { kind: string; code: string; facts?: any }) => string[] = () => []) {
@@ -33,8 +34,7 @@ export class SightingsMemory {
     const fresh = [];
     for (const [key, kind, code, x, y, z, how, at, extra] of snapshot.sightings ?? []) {
       const record = { key, kind, code, point: { x, y, z }, how, at: at ?? this.now, seenAt: wall, extra: extra ?? null, visible: true };
-      // A re-seen key moves to the end, so eviction takes the least recently seen first.
-      if (!this.records.delete(key)) fresh.push(record);
+      if (!this.records.has(key)) fresh.push(record);
       this.records.set(key, record);
     }
     // The snapshot carries only what was confirmed since the last look; a
@@ -68,16 +68,9 @@ export class SightingsMemory {
     this.prune();
     return fresh;
   }
-  prunedAt = 0;
   prune() {
     const wall = this.wall || Date.now();
-    // Forgetting by age is a once-a-second sweep, not one per sense.
-    if (wall - this.prunedAt >= 1000) {
-      this.prunedAt = wall;
-      for (const [key, record] of this.records)
-        if (!record.visible && wall - (record.seenAt ?? wall) > (rememberMs[record.kind] ?? 60000)) this.records.delete(key);
-    }
-    while (this.records.size > this.capacity) this.records.delete(this.records.keys().next().value);
+    this.records.bound(wall, record => !record.visible && wall - (record.seenAt ?? wall) > (rememberMs[record.kind] ?? 60000));
   }
   forget(key) {
     this.records.delete(key);

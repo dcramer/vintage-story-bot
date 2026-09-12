@@ -1,3 +1,4 @@
+import { Bounded } from './bounded.ts';
 import { Heap } from './planner.ts';
 import { horizontal, normalize } from './terrain.ts';
 
@@ -20,28 +21,18 @@ const directions = [
 ];
 
 export class SurfaceMemory {
-  prunedAt: any;
-  columns = new Map();
+  columns = new Bounded<any>(262144);
   now = 0;
   sweeps = 0;
   ttlMs = 7 * 24 * 60 * 60 * 1000;
-  capacity = 262144;
   apply(snapshot, wall = Date.now()) {
     if (!snapshot) return 0;
     this.now = snapshot.clock ?? this.now;
     // Completed passes of the mod's eye over the current view.
     this.sweeps = snapshot.sweeps ?? this.sweeps;
-    for (const [x, z, y, kind, step, code, at] of snapshot.columns ?? []) {
-      const id = columnKey(x, z);
-      // A re-seen column moves to the end, so eviction takes the least recently seen first.
-      this.columns.delete(id);
-      this.columns.set(id, { x, z, y, kind, step, code, at: at ?? this.now, seenAt: wall });
-    }
-    if (wall - (this.prunedAt ?? 0) > 60000) {
-      this.prunedAt = wall;
-      for (const [id, column] of this.columns) if (wall - column.seenAt > this.ttlMs) this.columns.delete(id);
-    }
-    while (this.columns.size > this.capacity) this.columns.delete(this.columns.keys().next().value);
+    for (const [x, z, y, kind, step, code, at] of snapshot.columns ?? [])
+      this.columns.set(columnKey(x, z), { x, z, y, kind, step, code, at: at ?? this.now, seenAt: wall });
+    this.columns.bound(wall, column => wall - column.seenAt > this.ttlMs);
     return snapshot.columns?.length ?? 0;
   }
   // Persistence: columns with wall-clock stamps.

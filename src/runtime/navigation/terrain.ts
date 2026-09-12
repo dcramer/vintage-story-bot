@@ -45,16 +45,17 @@ const around = [...cardinals, ...diagonals];
 // reported or the memory is very old. The mod's eye forgetting a cell it
 // no longer keeps in range is not a reason for the player to forget it.
 export const REMEMBER_MS = 7 * 24 * 60 * 60 * 1000;
+
+import { Bounded } from './bounded.ts';
+
 // The mod's trait word list for a cell; older memories and tests carry one hazard word or a boolean.
 const traitsOf = value => (typeof value === 'string' ? value.split(',').filter(Boolean) : value === true ? ['shape'] : []);
 export class TerrainMemory {
-  prunedAt: any;
-  cells = new Map();
+  cells = new Bounded<any>(262144);
   hazards = new Map();
   session = null;
   cursor = 0;
   now = 0;
-  capacity = 262144;
   // Deep water is swum unless a route says otherwise; it costs enough that dry ground wins when there is any.
   swim = true;
   apply(batch, wall = Date.now()) {
@@ -80,13 +81,11 @@ export class TerrainMemory {
           boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])),
         });
     }
-    // Forgetting by age is a once-a-minute sweep; over capacity the least recently seen
-    // cell goes (put keeps the map in seen order), never a sweep on every batch.
-    if (wall - (this.prunedAt ?? 0) > 60000) {
-      this.prunedAt = wall;
-      for (const [id, cell] of this.cells) if (wall - cell.seenAt > REMEMBER_MS) this.forget(id);
-    }
-    while (this.cells.size > this.capacity) this.forget(this.cells.keys().next().value);
+    this.cells.bound(
+      wall,
+      cell => wall - cell.seenAt > REMEMBER_MS,
+      id => this.forget(id),
+    );
   }
   put(cell) {
     // What blocks the body: fire and lava always, water when nothing solid stands in it, a shape
@@ -94,8 +93,6 @@ export class TerrainMemory {
     const has = trait => cell.traits.includes(trait);
     cell.hazard = has('fire') || has('lava') ? 'fire' : has('water') && !cell.boxes.length ? 'water' : has('shape') ? 'shape' : null;
     const id = cellKey(cell.x, cell.y, cell.z);
-    // A re-seen cell moves to the end, so eviction takes the least recently seen first.
-    this.cells.delete(id);
     this.cells.set(id, cell);
     if (cell.hazard) this.hazards.set(id, cell);
     else this.hazards.delete(id);
