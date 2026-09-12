@@ -203,7 +203,11 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   // nothing in the pack, sheltering through the night guarantees starvation;
   // keep searching and let forage's own threat handling decide when to run.
   if (s.hunger !== null && s.hunger < HUNGRY) return s.burrowed ? 'unburrow' : 'eat';
-  if (s.storm) return s.home && !s.atHome ? 'go_home' : 'wait';
+  if (s.storm) {
+    if (s.home) return s.atHome ? 'wait' : 'go_home';
+    if (s.burrowed) return 'wait';
+    return tried.has('burrow') ? 'wait' : 'burrow';
+  }
   // A place that keeps producing scares is left behind, day or night, before anything else here.
   if (s.dangerHere && !s.burrowed) return 'relocate';
   if (s.night) {
