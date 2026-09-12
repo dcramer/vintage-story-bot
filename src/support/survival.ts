@@ -117,19 +117,11 @@ export async function harvestFood(
         expectedState: inventory.state,
         expectedItem: { slot, code: null },
       });
-      for (let i = 0; i < 7; i++) {
-        await field.wait(200);
-        await field.observe();
-        // The harvest is in the pack as soon as the count rises; no need to sit out the whole hold.
-        if (await gained()) break;
-      }
+      // The harvest is in the pack as soon as the count rises; no need to sit out the whole hold.
+      await field.until(() => gained(), { timeoutMs: 1400, everyMs: 200 });
       await field.send({ action: 'stop' });
     }
-    for (let i = 0; i < 10; i++) {
-      await field.observe();
-      if (await gained()) return true;
-      await field.wait(200);
-    }
+    if ((await field.until(() => gained(), { timeoutMs: 2000, everyMs: 200 })).met) return true;
     if (needsBreaking) {
       // Broken forage can become a loose stack just outside native pickup
       // range. Reacquire only the exact expected food drop before giving

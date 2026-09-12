@@ -65,21 +65,15 @@ export async function retrieveBody(field, survival, { guid, radius = 12, arrival
     const result = await field.walk(destination, _state => null);
     let gained = await gainedNow();
     // Native proximity pickup and the server's inventory update trail arrival.
-    for (let i = 0; i < 8 && gained <= 0; i++) {
-      await field.wait(200);
-      await field.observe();
-      gained = await gainedNow();
-    }
+    if (gained <= 0) await field.until(async () => (gained = await gainedNow()) > 0, { timeoutMs: 1600, everyMs: 200 });
     if (gained > 0) collected.push({ item: drop.code, quantity: gained });
     else skip(['arrived', 'paused'].includes(result.state) ? 'pickup_failed' : (result.reason ?? 'route_blocked'));
   }
   field.report('clearing_marker', { marker: marker.guid });
   const removal = await field.send({ action: 'map_waypoint_remove', guid: marker.guid });
-  let markerRemoved = false;
-  for (let i = 0; i < 15 && removal.ok && !markerRemoved; i++) {
-    await field.wait(200);
-    markerRemoved = !(await readMarkers(field)).some(w => w.guid === marker.guid);
-  }
+  const markerRemoved =
+    removal.ok &&
+    (await field.until(async () => !(await readMarkers(field)).some(w => w.guid === marker.guid), { timeoutMs: 3000, everyMs: 200 })).met;
   // A marker still on the map means the body is not recovered as far as anyone can see.
   return {
     ok: markerRemoved,

@@ -33,12 +33,12 @@ export async function collectItem(field, { target, expectedItem, radius = 8 }) {
     field.report('collecting', { target, item: expectedItem, wanted, gained });
     if (!drop || horizontal(field.latest.position, drop.point) < 1.2) {
       // Native pickup/server inventory updates can lag behind arrival or entity removal.
-      for (let i = 0; i < 8; i++) {
-        await field.wait(200);
-        await field.observe();
-        gained = itemCount(await field.send({ action: 'inventory' }), expectedItem) - initialCount;
-        if (gained >= wanted) return success(gained);
-      }
+      const picked = await field.until((_, contents) => (gained = itemCount(contents, expectedItem) - initialCount) >= wanted, {
+        timeoutMs: 1600,
+        everyMs: 200,
+        read: () => field.send({ action: 'inventory' }),
+      });
+      if (picked.met) return success(gained);
     }
     drop = find(await sight());
     if (!drop) return { ok: false, reason: 'target_lost_without_verified_pickup', target, wanted, gained };

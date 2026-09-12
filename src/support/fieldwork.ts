@@ -26,6 +26,27 @@ export const explorationDistance = (distance, offset) =>
 export const explorationReach = (towardDistance, maxDistance, minDistance = 0) => Math.min(maxDistance, Math.max(minDistance, towardDistance));
 
 // Shared session guard, observed-resource memory and travel; no transport/control ownership.
+export type UntilOptions = { timeoutMs?: number; everyMs?: number; read?: null | (() => Promise<any>); sync?: boolean };
+// Wait for something observed, not for a clock: look, judge, look again until it is so or the
+// time is up. read runs after each look for what a look alone does not carry (the inventory, a
+// target's page); the result says whether the condition was met and what the last look saw.
+// A free function over anything with observe, wait and now, so a goal's harness can be a stub.
+export async function until(
+  field: { observe: (sync?: boolean) => Promise<any>; wait: (ms: number) => Promise<unknown>; now?: () => number },
+  condition: (state: any, read: any) => boolean | Promise<boolean>,
+  { timeoutMs = 2000, everyMs = 100, read = null, sync = false }: UntilOptions = {},
+): Promise<{ met: boolean; state: any; read: any }> {
+  const now = field.now ?? Date.now;
+  const deadline = now() + timeoutMs;
+  for (;;) {
+    const state = await field.observe(sync);
+    const seen = read ? await read() : undefined;
+    if (await condition(state, seen)) return { met: true, state, read: seen };
+    if (now() >= deadline) return { met: false, state, read: seen };
+    await field.wait(everyMs);
+  }
+}
+
 export class Fieldwork {
   env: any;
   // The goal's session log, bound to its id; goals write what they noticed and why they chose.
@@ -155,6 +176,9 @@ export class Fieldwork {
   async observe(sync = false) {
     this.check();
     return this.guard(sync ? await this.env.sync() : await this.send({ action: 'observe' }));
+  }
+  until(condition: (state: any, read: any) => boolean | Promise<boolean>, options: UntilOptions = {}) {
+    return until(this, condition, options);
   }
   async start(features = []) {
     this.initial = await this.env.sync();

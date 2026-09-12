@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { elevationDetourDistance, routeRegressed, travel } from '../src/goals/travel.ts';
 import { remember } from '../src/support/facts.ts';
-import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe } from '../src/support/fieldwork.ts';
+import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe, until } from '../src/support/fieldwork.ts';
 import { eatingLooks, edible, foodRecoverySatisfied, foodTolerance, foodYield, safeFood, shouldEat } from '../src/support/food.ts';
 import { leafBlock, leafClearCandidate, threatAllowsLeafClearing } from '../src/support/leaf-clearing.ts';
 import { Places } from '../src/support/places.ts';
@@ -149,6 +149,7 @@ test('a harvested stack is counted once across hold and final verification', asy
     wait: async () => {},
     report: () => {},
     skip: () => {},
+    until: (condition, options) => until(field, condition, options),
   };
   let harvested = 0;
 

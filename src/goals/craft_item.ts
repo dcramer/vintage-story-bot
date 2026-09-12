@@ -109,18 +109,13 @@ export async function craftItem(field, { output, count = 1 }) {
         expectedState: inventory.state,
         expectedOutput: output,
       });
-      let verified = false;
-      for (let i = 0; i < 10; i++) {
-        await field.wait(200);
-        await field.observe();
-        const contents = await field.send({ action: 'inventory' });
-        if (itemCount(contents, output) >= itemCount(inventory, output) + recipe.output.quantity) {
-          inventory = contents;
-          verified = true;
-          break;
-        }
-      }
-      if (!verified) {
+      const crafted = await field.until((_, contents) => itemCount(contents, output) >= itemCount(inventory, output) + recipe.output.quantity, {
+        timeoutMs: 2000,
+        everyMs: 200,
+        read: () => field.send({ action: 'inventory' }),
+      });
+      if (crafted.met) inventory = crafted.read;
+      else {
         await clearGrid(field);
         return { ok: false, reason: 'craft_unverified', output, gained: gained(), crafts };
       }

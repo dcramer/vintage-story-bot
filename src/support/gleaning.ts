@@ -89,9 +89,8 @@ export class Gleaner {
     }
     const before = carried(await field.observe());
     await field.send({ action: 'interact', expectedTarget: object.key, durationMs: 150 });
-    await field.wait(500);
-    const after = carried(await field.observe());
+    const picked = await field.until(state => carried(state) > before, { timeoutMs: 600, everyMs: 100 });
     await field.env.send({ action: 'stop' });
-    return after > before;
+    return picked.met;
   }
 }

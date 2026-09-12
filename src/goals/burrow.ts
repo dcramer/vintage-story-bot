@@ -192,11 +192,7 @@ async function digIn(field, inventory) {
       field.report('cutting', { cell: selected.key, code: selected.code });
       const dug = await changeBlock(field, 'dig', { target: selected.key, slot, acceptTransform: true, timeoutMs: 45000 });
       if (!dug.ok) return { ok: false, goal: 'burrow', reason: dug.reason ?? 'dig_failed', cell: selected.key };
-      for (let waits = 0; waits < 8; waits++) {
-        await field.wait(250);
-        const now = await field.observe(true);
-        if (now.motion.onGround && now.position.y < y) break;
-      }
+      await field.until(now => now.motion.onGround && now.position.y < y, { timeoutMs: 2000, everyMs: 250, sync: true });
       y = Math.floor(field.latest.position.y + 0.01);
     }
     if (y > Math.floor(start.y) - 2) return { ok: false, goal: 'burrow', reason: 'hole_too_shallow', depth: Math.floor(start.y) - y };

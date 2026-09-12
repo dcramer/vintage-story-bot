@@ -45,39 +45,30 @@ export async function equip(field, { item, tool, minTier = 0, slot }: { item?: a
       quantity: 1,
       expectedState: inventory.state,
     });
-    let verified = false;
-    for (let i = 0; i < 10; i++) {
-      await field.wait(200);
-      await field.observe();
-      const contents = await field.send({ action: 'inventory' });
-      const current = ownedSlots(contents);
-      const received = current.find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
-      const remaining = current.find(s => s.inventory === source.inventory && s.slot === source.slot);
-      if (
-        received?.code === source.code &&
-        received.quantity === 1 &&
-        matches(received) &&
-        remaining?.quantity === source.quantity - 1 &&
-        (remaining.quantity === 0 || remaining.code === source.code) &&
-        itemCount(contents, source.code) === itemCount(inventory, source.code)
-      ) {
-        inventory = contents;
-        destination = received;
-        moved = 1;
-        verified = true;
-        break;
-      }
-    }
-    if (!verified) throw Error('Equip transfer unverified; inspect inventory before another attempt');
+    const transfer = await field.until(
+      (_, contents) => {
+        const current = ownedSlots(contents);
+        const received = current.find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
+        const remaining = current.find(s => s.inventory === source.inventory && s.slot === source.slot);
+        return (
+          received?.code === source.code &&
+          received.quantity === 1 &&
+          matches(received) &&
+          remaining?.quantity === source.quantity - 1 &&
+          (remaining.quantity === 0 || remaining.code === source.code) &&
+          itemCount(contents, source.code) === itemCount(inventory, source.code)
+        );
+      },
+      { timeoutMs: 2000, everyMs: 200, read: () => field.send({ action: 'inventory' }) },
+    );
+    if (!transfer.met) throw Error('Equip transfer unverified; inspect inventory before another attempt');
+    inventory = transfer.read;
+    destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
+    moved = 1;
   }
   await field.observe();
   await field.send({ action: 'select', slot: destination.slot });
-  let after = await field.observe();
-  // The selection usually shows on the next look; wait only when it has not.
-  if (after.activeSlot !== destination.slot) {
-    await field.wait(200);
-    after = await field.observe();
-  }
+  const after = (await field.until(state => state.activeSlot === destination.slot, { timeoutMs: 400, everyMs: 100 })).state;
   inventory = await field.send({ action: 'inventory' });
   const held = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
   if (after.activeSlot !== destination.slot || !held || !matches(held) || held.code !== source.code)

@@ -109,10 +109,8 @@ export async function form(field, { kind, output, material }) {
     if (!detail.forming.recipes?.some(r => r.output === output))
       return { ok: false, reason: 'recipe_unavailable', ...summary(), recipes: detail.forming.recipes?.map(r => r.output) };
     await field.send({ action: 'select_recipe', target: key, output });
-    for (let i = 0; i < 15 && !detail?.forming?.recipe; i++) {
-      await field.wait(200);
-      detail = await inspectSurface(field, cell);
-    }
+    detail = (await field.until((_, seen) => !!seen?.forming?.recipe, { timeoutMs: 3000, everyMs: 200, read: () => inspectSurface(field, cell) }))
+      .read;
     if (detail?.forming?.recipe?.output !== output) return { ok: false, reason: 'recipe_not_selected', ...summary() };
   }
   let stuck = 0,
@@ -123,11 +121,8 @@ export async function form(field, { kind, output, material }) {
     await field.observe(true);
     if (!detail?.forming) {
       // Surface gone: finished (output given) or destroyed.
-      for (let i = 0; i < 10; i++) {
-        if ((await gained()) >= 1)
-          return { ok: true, goal: kind === 'knapping' ? 'knap' : 'clayform', ...summary(), gained: await gained(), verification: 'inventory_delta' };
-        await field.wait(200);
-      }
+      if ((await field.until(async () => (await gained()) >= 1, { timeoutMs: 2000, everyMs: 200 })).met)
+        return { ok: true, goal: kind === 'knapping' ? 'knap' : 'clayform', ...summary(), gained: await gained(), verification: 'inventory_delta' };
       return { ok: false, reason: 'surface_gone_without_output', ...summary() };
     }
     const f = detail.forming;

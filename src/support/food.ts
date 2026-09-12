@@ -83,11 +83,15 @@ export async function consume(field, { match, tolerance = 0 }: { match?: string;
       quantity: 1,
       expectedState: inventory.state,
     });
-    await field.wait(300);
-    inventory = await field.send({ action: 'inventory' });
-    const moved = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
-    if (!safeFood(moved ?? {}, tolerance) || moved.code !== food.code) throw Error('Food transfer unverified; inspect inventory');
-    food = moved;
+    const slotFood = contents => ownedSlots(contents).find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
+    const transfer = await field.until((_, contents) => safeFood(slotFood(contents) ?? {}, tolerance) && slotFood(contents).code === food.code, {
+      timeoutMs: 1000,
+      everyMs: 100,
+      read: () => field.send({ action: 'inventory' }),
+    });
+    if (!transfer.met) throw Error('Food transfer unverified; inspect inventory');
+    inventory = transfer.read;
+    food = slotFood(inventory);
   }
   await field.send({ action: 'select', slot: food.slot });
   // Look for clear air without placing food or accidentally activating nearby
@@ -132,23 +136,24 @@ export async function consume(field, { match, tolerance = 0 }: { match?: string;
       expectedItem: { slot: food.slot, code: food.code },
     });
     // Native consumption takes ~1s; poll life while the bounded hold runs.
-    for (let i = 0; i < 7; i++) {
-      await field.wait(200);
-      // The bite is in as soon as satiety rises; no need to sit out the whole hold.
-      if (hunger(await field.observe()) > hunger(before) + 0.005) break;
-    }
+    // The bite is in as soon as satiety rises; no need to sit out the whole hold.
+    await field.until(state => hunger(state) > hunger(before) + 0.005, { timeoutMs: 1400, everyMs: 200 });
     await field.send({ action: 'stop' });
-    for (let i = 0; i < 10; i++) {
-      const after = await field.observe();
-      const contents = await field.send({ action: 'inventory' });
-      const remaining = ownedSlots(contents)
+    const left = contents =>
+      ownedSlots(contents)
         .filter(s => s.code === food.code)
         .reduce((n, s) => n + s.quantity, 0);
-      if (remaining < quantity && after.vitals.hunger.current > before.vitals.hunger.current)
-        return { food: food.code, consumed: quantity - remaining, satietyGained: after.vitals.hunger.current - before.vitals.hunger.current };
-      await field.wait(200);
-    }
-    throw Error('Consumption unverified; inspect before another attempt');
+    const eaten = await field.until((after, contents) => left(contents) < quantity && after.vitals.hunger.current > before.vitals.hunger.current, {
+      timeoutMs: 2000,
+      everyMs: 200,
+      read: () => field.send({ action: 'inventory' }),
+    });
+    if (!eaten.met) throw Error('Consumption unverified; inspect before another attempt');
+    return {
+      food: food.code,
+      consumed: quantity - left(eaten.read),
+      satietyGained: eaten.state.vitals.hunger.current - before.vitals.hunger.current,
+    };
   } finally {
     await field.env.send({ action: 'stop' });
   }
