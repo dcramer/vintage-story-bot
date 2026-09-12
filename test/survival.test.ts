@@ -237,6 +237,43 @@ test('recalled blocks enter the goal working set even when the sighting is old',
   assert.equal(field.targets(object => object.key === remembered.key).length, 1);
 });
 
+test('nearby field scans use the native 360-degree pass when the directional stream misses', async () => {
+  const state = {
+    ok: true,
+    alive: true,
+    controlReady: true,
+    mounted: false,
+    capabilities: ['sightings'],
+    player: { uid: 'test' },
+    position: { x: 0.5, y: 1, z: 0.5, dimension: 0 },
+    body: { eyeHeight: 1.6 },
+    motion: { onGround: true, swimming: false },
+    life: { alerts: [], session: 'test', lastDamageAt: null },
+    pickingRange: 4.5,
+  };
+  const mushroom = {
+    kind: 'block',
+    key: 'block:0:1:2:0:game:mushroom-witchhat-normal',
+    code: 'game:mushroom-witchhat-normal',
+    point: { x: 1.5, y: 2.2, z: 0.5 },
+  };
+  const requests: any[] = [];
+  const field = new Fieldwork({
+    sightings: { view: () => [] },
+    send: async request => {
+      requests.push(request);
+      return request.action === 'scan' ? { ok: true, objects: [mushroom], more: false } : state;
+    },
+  });
+  field.latest = state;
+  assert.deepEqual(await field.scan(8, 'mushroom', 'blocks'), [mushroom]);
+  assert.equal(
+    requests.some(request => request.action === 'scan'),
+    true,
+  );
+  assert.equal(field.targets(object => object.key === mushroom.key).length, 1);
+});
+
 test('threat avoidance is explicit, proximity-bounded and points away', () => {
   const player = { x: 10.5, y: 2, z: 10.5 };
   const wolf = { code: 'game:wolf-male', point: { x: 8.5, y: 2, z: 10.5 } };

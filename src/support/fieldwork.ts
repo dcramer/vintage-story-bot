@@ -236,7 +236,11 @@ export class Fieldwork {
   async scan(radius, match?, kind = 'all') {
     const matches = Array.isArray(match) ? match : match ? [match] : [];
     await this.observe();
-    if (!this.attentive) return this.scanView(radius, match, kind);
+    // The streamed eye is intentionally directional. Native scan's close pass
+    // is 360 degrees, so use it inside the eight-block awareness radius: a
+    // mushroom above the shoulder or flint underfoot must not be missed while
+    // the long-range stream still supplies remembered search leads.
+    if (!this.attentive || radius <= 8) return this.scanView(radius, match, kind);
     this.env.watch?.(matches);
     await this.settle();
     const p = this.latest.position,
