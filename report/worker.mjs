@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import { markRespawnBreaks } from './trail.mjs';
 
 // Fleet state service. Bots POST /api/report batches `{bot:{id,...},topics:{[topic]:{at,data}},log:[{topic,at,data}]}`;
 // the single SeraphFleet object keeps the latest value per bot/topic plus a bounded log, evicts bots unseen for RETENTION_HOURS,
@@ -305,12 +306,13 @@ export class SeraphFleet extends DurableObject {
       bot.log.push({ topic: entry.topic, at: number(entry.at, now), data: entry.data ?? null });
     }
     while (bot.log.length > maxLog) bot.log.shift();
+    const segmented = markRespawnBreaks(bot.trail ?? [], bot.log);
     this.bots.set(id, bot); this.dirty.add(id);
     this.broadcast({ type: 'bot', bot });
     if (mapped.length) this.broadcast({ type: 'map', id, columns: mapped });
     // Unlike latest topics, a historical sample cannot be refilled by the next report.
     // Persist movement immediately; stationary updates keep the existing write throttle.
-    await this.persist(now, trailed);
+    await this.persist(now, trailed || segmented);
     await this.schedule();
     return json(200, { ok: true, bots: this.bots.size });
   }

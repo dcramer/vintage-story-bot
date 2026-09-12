@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isLive, positionHistory } from './store.js';
+import { contiguousTrails } from '../trail.mjs';
 
 const finitePoint = point => point && Number.isFinite(point.x) && Number.isFinite(point.z);
 const stateOf = bot => bot.topics.state?.data ?? {};
@@ -8,16 +9,6 @@ const navOf = bot => bot.topics.navigation?.data;
 const targetOf = bot => finitePoint(goalOf(bot)?.args) ? goalOf(bot).args : finitePoint(navOf(bot)?.target) ? navOf(bot).target : null;
 const query = bot => bot ? `?bot=${encodeURIComponent(bot)}` : '';
 const manifestCache = new Map(), regionCache = new Map(), maxCachedRegions = 192;
-
-function contiguousTrails(points) {
-  const trails = [];
-  for (const point of points) {
-    const trail = trails.at(-1), prior = trail?.at(-1);
-    if (!prior || Math.hypot(point.x - prior.x, point.z - prior.z) > 128) trails.push([point]);
-    else trail.push(point);
-  }
-  return trails;
-}
 
 function decodePixels(value) {
   const binary = atob(value), pixels = new Uint8ClampedArray(binary.length);
@@ -175,7 +166,8 @@ function GlobalMap({ bots, world, bot, detailed }) {
   const agents = useMemo(() => bots.filter(item => isLive(item) && item.nativeMap?.world === world).map((item, index) => {
     const state = stateOf(item), current = state.position, target = targetOf(item), dimension = current?.dimension ?? 0;
     return finitePoint(current) && dimension === 0 ? { bot: item, index, state, current: screenPoint(current, camera, size), target: screenPoint(target, camera, size),
-      trails: contiguousTrails(positionHistory(item).filter(point => (point.dimension ?? 0) === dimension)).map(trail => trail.map(point => screenPoint(point, camera, size)).filter(Boolean)) } : null;
+      trails: contiguousTrails(positionHistory(item).filter(point => (point.dimension ?? 0) === dimension), item.log)
+        .map(trail => trail.map(point => screenPoint(point, camera, size)).filter(Boolean)) } : null;
   }).filter(Boolean), [bots, world, camera, size]);
   const terrainMap = useMemo(() => map ? { ...map, chunks } : null, [map, chunks]);
   if (error) return <div class="map-empty"><span>Could not load the global map</span><small>{error}</small></div>;
