@@ -2,6 +2,7 @@ import { findRoute } from '../runtime/navigation/planner.ts';
 import { nextLeg, planRoughRoute } from '../runtime/navigation/surface.ts';
 import { horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
 import { Gleaner } from './gleaning.ts';
+import { type Habitat, habitatTarget } from './habitat.ts';
 import { fleeTarget, nearestThreat, nearestUnclearedThreat } from './threats.ts';
 
 export const area = p => `${Math.floor(p.x / 16)},${Math.floor(p.z / 16)}`;
@@ -280,6 +281,7 @@ export class Fieldwork {
   }
   skip(object, ms = 30000) {
     this.skipped.set(object.key, this.now() + ms);
+    this.env.sightings?.skip?.(object.key, ms);
   }
   penalize(target, amount = 1) {
     this.visits.set(area(target), (this.visits.get(area(target)) ?? 0) + amount);
@@ -452,6 +454,11 @@ export class Fieldwork {
         if (route) candidates.push({ q: { ...q, arrivalRadius: 0.35 }, score: route.length + horizontal(q, object.point) * 2 });
       }
     return candidates.sort((a, b) => a.score - b.score)[0]?.q;
+  }
+  // Where to look for something not in sight: the nearest unwalked place of
+  // the kind it is found in, from far-view memory; null when none is known.
+  habitat(habitats: Habitat[]) {
+    return habitatTarget(this.env.surface, this.latest.position, habitats, this.visits);
   }
   explore(toward?, maxDistance = sightRange * 0.75, minDistance = 0) {
     const p = this.latest.position;

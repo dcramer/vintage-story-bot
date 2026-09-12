@@ -71,6 +71,9 @@ export type Memory = {
   home: Cell | null;
   // Where and when each job last failed.
   tried: Partial<Record<Job, { x: number; z: number; at: number }>>;
+  // The last reading's situation and set-aside jobs, for the task list in status.
+  situation: Situation | null;
+  tried_now: Job[];
   job: Job | null;
   // Where the last walk was heading when it ended in a pit; dig_out cuts stairs that way.
   pit: { x: number; z: number } | null;
@@ -139,6 +142,36 @@ export type Situation = {
 // needs a shovel, a shovel (like a knife and an axe) needs a knapped head and
 // a stick, a head needs flint or stone. Night without a home means a burrow,
 // which needs one block in hand: that block alone may be dug bare-handed.
+// The day-1 list, in dependency order: each task is done when the kit shows
+// it, and the first task not done is the one to work on. The order carries
+// the dependencies (a tool needs a stick and a head; dirt needs a shovel; a
+// shelter needs dirt; torches need a home to light), and `after` names them
+// so the list can say what a task waits on.
+export type Task = { id: Job; title: string; done: (s: Situation) => boolean; after?: Job[] };
+export const TASKS: Task[] = [
+  { id: 'recover', title: 'my things from where I died', done: s => !s.body },
+  { id: 'sticks', title: `${STICK_MIN} sticks`, done: s => s.sticks >= STICK_MIN },
+  { id: 'stone', title: 'flint or stone to knap', done: s => s.stone || (s.knife && s.axe && s.shovel) },
+  { id: 'tools', title: 'a knife, an axe and a shovel', done: s => s.knife && s.axe && s.shovel, after: ['sticks', 'stone'] },
+  { id: 'dirt', title: `${SHELTER_DIRT} dirt for a shelter`, done: s => s.home || s.dirt >= SHELTER_DIRT, after: ['tools'] },
+  { id: 'shelter', title: 'a dirt shelter to call home', done: s => s.home, after: ['dirt'] },
+  { id: 'grass', title: 'dry grass for torches', done: s => s.torches >= TORCH_MIN || s.grass > 0, after: ['shelter'] },
+  { id: 'torches', title: `${TORCH_MIN} torches`, done: s => s.torches >= TORCH_MIN, after: ['grass'] },
+  { id: 'logs', title: `${LOG_MIN} logs`, done: s => s.logs >= LOG_MIN, after: ['torches'] },
+];
+export type TaskState = 'done' | 'next' | 'open' | 'set aside';
+// The list as the brain sees it now: what is done, what is next, what waits.
+export function tasks(s: Situation, tried: Set<Job> = new Set()): { id: Job; title: string; state: TaskState }[] {
+  let next: Job | null = null;
+  return TASKS.map(task => {
+    let state: TaskState = task.done(s) ? 'done' : tried.has(task.id) ? 'set aside' : 'open';
+    if (state === 'open' && !next) {
+      next = task.id;
+      state = 'next';
+    }
+    return { id: task.id, title: task.title, state };
+  });
+}
 export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   if (s.threat || s.hurt) return 'hide';
   if (s.storm) return s.home && !s.atHome ? 'go_home' : 'wait';
@@ -147,25 +180,8 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   if (s.dangerHere && !s.burrowed) return 'relocate';
   if (s.night) return s.home ? (s.atHome ? 'wait' : 'go_home') : s.burrowed ? 'wait' : s.dirt > 0 ? 'burrow' : 'seal';
   if (s.burrowed) return 'unburrow';
-  // A job that failed around here is skipped for now; the rest of the ladder goes on.
-  const open = (job: Job) => !tried.has(job);
-  // What the last life carried comes before gathering it all again.
-  if (s.body && open('recover')) return 'recover';
-  if (s.sticks < STICK_MIN && open('sticks')) return 'sticks';
-  if (!s.knife || !s.axe || !s.shovel) {
-    const job: Job = s.stone ? 'tools' : 'stone';
-    if (open(job)) return job;
-  }
-  if (!s.home) {
-    const job: Job = s.dirt >= SHELTER_DIRT ? 'shelter' : 'dirt';
-    if (open(job)) return job;
-  }
-  if (s.torches < TORCH_MIN) {
-    const job: Job = s.grass > 0 ? 'torches' : 'grass';
-    if (open(job)) return job;
-  }
-  if (s.logs < LOG_MIN && open('logs')) return 'logs';
-  return 'explore';
+  // The first task on the list not done and not set aside around here; with none left, look around.
+  return tasks(s, tried).find(task => task.state === 'next')?.id ?? 'explore';
 }
 
 // Where to run when hit by something unseen: home if it is not right here, else straight ahead.
@@ -265,31 +281,31 @@ export function decide(reading: Reading, memory: Memory): Decision {
       .filter(([, where]) => now - where.at < TRIED_MS && horizontal(state.position, where) <= TRIED_RADIUS)
       .map(([job]) => job),
   );
-  const job = pickJob(
-    {
-      threat: !!threat,
-      hurt,
-      storm,
-      hunger: satiety,
-      reserve: k.reserve,
-      night: isNight(environment),
-      home: !!home,
-      atHome: !!home && horizontal(state.position, home) < 8,
-      burrowed: !!memory.burrow,
-      dangerHere: memory.scares.filter(scare => horizontal(state.position, scare) <= DANGER_RADIUS).length >= DANGER_SCARES,
-      body: markers.some(isDeathMarker),
-      sticks: k.sticks,
-      knife: k.knife,
-      axe: k.axe,
-      shovel: k.shovel,
-      stone: k.stone,
-      torches: k.torches,
-      grass: k.grass,
-      dirt: k.dirt,
-      logs: k.logs,
-    },
-    tried,
-  );
+  const situation: Situation = {
+    threat: !!threat,
+    hurt,
+    storm,
+    hunger: satiety,
+    reserve: k.reserve,
+    night: isNight(environment),
+    home: !!home,
+    atHome: !!home && horizontal(state.position, home) < 8,
+    burrowed: !!memory.burrow,
+    dangerHere: memory.scares.filter(scare => horizontal(state.position, scare) <= DANGER_RADIUS).length >= DANGER_SCARES,
+    body: markers.some(isDeathMarker),
+    sticks: k.sticks,
+    knife: k.knife,
+    axe: k.axe,
+    shovel: k.shovel,
+    stone: k.stone,
+    torches: k.torches,
+    grass: k.grass,
+    dirt: k.dirt,
+    logs: k.logs,
+  };
+  memory.situation = situation;
+  memory.tried_now = [...tried];
+  const job = pickJob(situation, tried);
   const start = (goal: string, args: Record<string, unknown>, why: string): Decision => {
     memory.job = job;
     return { start: goal, args, why };
@@ -390,6 +406,8 @@ export function fresh(): Memory {
   return {
     home: null,
     tried: {},
+    situation: null,
+    tried_now: [],
     marked: new Set(),
     job: null,
     pit: null,
@@ -415,6 +433,7 @@ const brain: Brain<Memory> = {
     job: memory.job,
     done: memory.done,
     tried: memory.tried,
+    tasks: memory.situation ? tasks(memory.situation, new Set(memory.tried_now)) : [],
   }),
 };
 export default brain;

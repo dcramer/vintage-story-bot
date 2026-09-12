@@ -4,6 +4,7 @@ import { horizontal } from '../runtime/navigation/terrain.ts';
 import { changeBlock } from '../support/blocks.ts';
 import { area, Fieldwork, sightRange } from '../support/fieldwork.ts';
 import { pickupBlock } from '../support/gleaning.ts';
+import { habitatsFor } from '../support/habitat.ts';
 import { Survival } from '../support/survival.ts';
 import { cleanName, foodFeatures } from '../support/task.ts';
 
@@ -112,7 +113,8 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
       // Sticks lie under trees; anything else is looked for in the open.
       const tree = o => sticks && o.code.startsWith('game:leaves') && !field.visits.has(area(o.point));
       if (sticks && !field.targets(tree).length) await field.scan(sightRange, ['leaves', TWIGS], 'blocks');
-      const destination = field.explore(field.targets(tree)[0]?.point);
+      // Nothing seen: toward the nearest unwalked place such things are found.
+      const destination = field.explore(field.targets(tree)[0]?.point ?? field.habitat(habitatsFor(match)));
       await field.walk(destination, survival?.pauseWhen);
     }
   } finally {

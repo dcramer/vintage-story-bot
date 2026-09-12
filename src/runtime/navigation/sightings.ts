@@ -65,11 +65,26 @@ export class SightingsMemory {
   forget(key) {
     this.records.delete(key);
   }
+  // Blocks and items set aside after a failed attempt, by every goal: a player
+  // does not try the same stuck stick again a minute later. Entities never.
+  skips = new Map<string, number>();
+  skip(key: string, ms: number) {
+    this.skips.set(key, (this.wall || Date.now()) + ms);
+    while (this.skips.size > 1024) this.skips.delete(this.skips.keys().next().value);
+  }
+  skipped(record) {
+    if (record.kind === 'entity') return false;
+    const until = this.skips.get(record.key);
+    if (until === undefined) return false;
+    if (until > (this.wall || Date.now())) return true;
+    this.skips.delete(record.key);
+    return false;
+  }
   visible(kind = null) {
-    return [...this.records.values()].filter(record => record.visible && (kind === null || record.kind === kind));
+    return [...this.records.values()].filter(record => record.visible && (kind === null || record.kind === kind) && !this.skipped(record));
   }
   remembered(kind = null) {
-    return [...this.records.values()].filter(record => kind === null || record.kind === kind);
+    return [...this.records.values()].filter(record => (kind === null || record.kind === kind) && !this.skipped(record));
   }
   // What threat logic sees: entities visible now or seen within the memory window, at their last known point.
   entities(position = null) {

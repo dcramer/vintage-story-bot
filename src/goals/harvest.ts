@@ -3,6 +3,7 @@ import { defineGoal } from '../runtime/define.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { changeBlock } from '../support/blocks.ts';
 import { area } from '../support/fieldwork.ts';
+import { habitatsFor } from '../support/habitat.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
 import { cleanName, runField } from '../support/task.ts';
 import { collectItem } from './collect_item.ts';
@@ -115,7 +116,7 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
       field.skip(target, 15000);
     }
     const unvisited = o => blocks(o) && !field.visits.has(area(o.point));
-    await field.walk(field.explore(field.targets(unvisited)[0]?.point), survival?.pauseWhen);
+    await field.walk(field.explore(field.targets(unvisited)[0]?.point ?? field.habitat(habitatsFor(match))), survival?.pauseWhen);
   }
 }
 

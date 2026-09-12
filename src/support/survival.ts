@@ -200,7 +200,8 @@ export class Survival {
         field.skip(target, 30000);
       }
       const before = { ...field.latest.position };
-      const destination = this.searchTarget ?? field.explore(toward, foodSearchDistance);
+      // With no food in sight, head for where it grows: forest edges, then the water's edge.
+      const destination = this.searchTarget ?? field.explore(toward ?? field.habitat(['edge', 'shore']), foodSearchDistance);
       const result = await field.walk(destination, this.eatWhen);
       const progress = horizontal(before, field.latest.position);
       this.searchTarget = !['arrived', 'paused'].includes(result.state) && progress > 2 ? destination : null;

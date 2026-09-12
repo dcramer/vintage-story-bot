@@ -59,7 +59,7 @@ export class Gleaner {
           if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
         }
         if (ok) this.picked++;
-        else field.skip(object, 60000);
+        else field.skip(object, 600000);
         field.env.sightings?.forget?.(object.key);
       }
     } finally {

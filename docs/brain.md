@@ -47,8 +47,12 @@ fights; it runs or hides.
 | logs | `fell_tree` | Fewer than 8 logs |
 | explore | `explore` | Fed, safe, daylight, kit done |
 
-Order of concern: danger, storm, hunger, night, shelter, then the kit in that
-order, then exploring. A failed job is set aside while the bot stays within 24
+Order of concern: danger, storm, hunger, night, then the day-1 list, then
+exploring. The list (`TASKS` in the brain) is a task tracker: each task says
+when the kit shows it done, the order carries the dependencies (a tool needs a
+stick and a head, dirt needs a shovel, a shelter needs dirt, torches need a home
+to light), and the first task not done is the one worked on. `brain` status
+shows every task as done, next, open or set aside. A failed job is set aside while the bot stays within 24
 blocks of where it failed, for five minutes at most; the next job in the ladder
 runs meanwhile, so a failure never leaves it standing about. Chests,
 `store_items`/`take_items` and body pickup are not used yet: it carries everything.
