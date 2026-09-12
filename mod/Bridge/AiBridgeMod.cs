@@ -293,6 +293,7 @@ public sealed partial class AiBridgeMod : ModSystem
             case "inventory": return inventory.Observe();
             case "recipes": return Recipes(request);
             case "item_info": return ItemInfo(request);
+            case "catalog": return handbook.CatalogPage(request);
             case "inventory_move":
             case "craft": return InventoryMove(name, request);
             case "drop": return InventoryDrop(request);

@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Util;
@@ -7,10 +8,9 @@ using Vintagestory.GameContent;
 
 namespace VintageStoryAI;
 
-// One look at the handbook page of an item or block: the facts the page is
-// drawn from (nutrition, drops, harvest, tool, fuel) and its text. Reading a
-// page is one player act; which pages matter is Node's to decide from what
-// the eye has seen.
+// The handbook as data: one item/block page per code, or the whole collectible
+// index in pages. Same facts either way; the catalog batches what item_info
+// reads one code at a time. Public game data, never world state.
 internal sealed class HandbookSensor(ICoreClientAPI api)
 {
     private static readonly FieldInfo? StackSlot = typeof(ItemstackTextComponent).GetField("slot", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -20,35 +20,63 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
         var location = new AssetLocation(code);
         CollectibleObject? collectible = api.World.GetItem(location) ?? (CollectibleObject?)api.World.GetBlock(location);
         if (collectible?.Code == null || collectible.Id == 0) return new { ok = false, error = "No handbook page for that code." };
+        var page = new Dictionary<string, object?> { ["ok"] = true, ["observedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
+        foreach (var (key, value) in Entry(collectible, -1)) page[key] = value;
+        return page;
+    }
+
+    // Every loaded block and item, stable-sorted by code. One read of the
+    // public collectible registry per page; entries carry the item_info facts
+    // with the page body trimmed to a short description.
+    public object CatalogPage(JsonElement request)
+    {
+        int offset = 0, limit = 50;
+        if (request.TryGetProperty("offset", out var offsetField) && (!offsetField.TryGetInt32(out offset) || offset < 0 || offset > 100000) ||
+            request.TryGetProperty("limit", out var limitField) && (!limitField.TryGetInt32(out limit) || limit < 1 || limit > 100))
+            return new { ok = false, error = "offset: 0–100000; limit: 1–100." };
+        var all = api.World.Collectibles.Where(collectible => collectible != null && collectible.Code != null && collectible.Id != 0)
+            .OrderBy(collectible => collectible.Code.ToString(), StringComparer.Ordinal).ToArray();
+        var entries = all.Skip(offset).Take(limit).Select(collectible => Entry(collectible, 3)).ToArray();
+        return new { ok = true, offset, total = all.Length, more = offset + entries.Length < all.Length, entries };
+    }
+
+    // One handbook page as facts. maxTextLines < 0 keeps the full page body as
+    // text; otherwise the first lines become a short desc.
+    private Dictionary<string, object?> Entry(CollectibleObject collectible, int maxTextLines)
+    {
         var stack = new ItemStack(collectible);
         var slot = new DummySlot(stack);
         var block = collectible as Block;
         var nutrition = collectible.GetNutritionProperties(api.World, stack, api.World.Player.Entity);
         var fuel = collectible.CombustibleProps;
         int bagSlots = collectible.Attributes?["backpack"]?["quantitySlots"]?.AsInt(0) ?? 0;
-        return new
+        var entry = new Dictionary<string, object?>
         {
-            ok = true, observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            code = collectible.Code.ToString(), type = block == null ? "item" : "block",
-            name = ContextSensor.Clip(collectible.GetHeldItemName(stack), 96),
-            maxStackSize = collectible.MaxStackSize,
-            tool = collectible.Tool?.ToString(), toolTier = collectible.ToolTier,
-            durability = collectible.Durability > 1 ? collectible.GetMaxDurability(stack) : (int?)null,
-            bagSlots = bagSlots > 0 ? bagSlots : (int?)null,
-            nutrition = nutrition == null ? null : new
+            ["code"] = collectible.Code.ToString(),
+            ["type"] = block == null ? "item" : "block",
+            ["name"] = ContextSensor.Clip(collectible.GetHeldItemName(stack), 96),
+            ["maxStackSize"] = collectible.MaxStackSize,
+            ["tool"] = collectible.Tool?.ToString(),
+            ["toolTier"] = collectible.ToolTier,
+            ["durability"] = collectible.Durability > 1 ? collectible.GetMaxDurability(stack) : (int?)null,
+            ["bagSlots"] = bagSlots > 0 ? bagSlots : (int?)null,
+            ["nutrition"] = nutrition == null ? null : new
             {
                 saturation = nutrition.Satiety, health = nutrition.Health, category = nutrition.FoodCategory.ToString(),
                 intoxication = nutrition.Intoxication, psychedelic = nutrition.Psychedelic
             },
-            combustible = fuel == null ? null : new
+            ["combustible"] = fuel == null ? null : new
             {
                 burnTemperature = fuel.BurnTemperature, burnDuration = fuel.BurnDuration, meltingPoint = fuel.MeltingPoint,
                 smeltsInto = fuel.SmeltedStack?.ResolvedItemstack?.Collectible?.Code?.ToString(), smeltedRatio = fuel.SmeltedRatio
             },
-            drops = block == null ? null : Drops(block.GetDropsForHandbook(stack, api.World.Player)),
-            harvest = block == null ? null : Harvest(block),
-            text = PageText(collectible, slot)
+            ["drops"] = block == null ? null : Drops(block.GetDropsForHandbook(stack, api.World.Player)),
+            ["harvest"] = block == null ? null : Harvest(block),
         };
+        var text = PageText(collectible, slot);
+        if (maxTextLines < 0) entry["text"] = text;
+        else entry["desc"] = text == null ? null : ContextSensor.Clip(string.Join(" ", text.Take(maxTextLines)), 600);
+        return entry;
     }
 
     private static object[]? Drops(BlockDropItemStack[]? drops) => drops?

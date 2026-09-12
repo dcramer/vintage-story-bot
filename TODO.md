@@ -20,7 +20,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [x] `inspect_target` — crosshair block/entity, HUD text, hints, forming state.
 - [x] `aim_cell` — aim at a cell/face/voxel by coordinates using the block's real selection-box geometry; used by forming placement instead of caller-computed angles.
 - [ ] **P1 · `block_at {x,y,z}`** — code/state of one cell if observed or remembered; `unknown` otherwise, never air (`game`, `ctl`). Mineflayer `blockAt`. Source: terrain memory + last scan; no hidden-world lookup.
-- [ ] **P1 · `can_see {x,y,z}`** — sampled line of sight from eye to cell (`mod`). Mineflayer `canSeeBlock`. Prerequisite for interact-range goals.
+- [ ] **P1 · `can_see {x,y,z}`** — sampled line of sight from eye to cell (`mod`). Mineflayer `canSeeBlock`. Prerequisite for interact-range goals. Small: the LOS primitive already exists inside `SceneSensor`/`VisionSensor`; needs only a wire action.
 - [~] sightings — `sense` returns a snapshot of entities, items and watched blocks a line of sight reached; a default salient set plus goal attention; `Fieldwork.scan` reads memory instead of paging `scan`; the controller's eye loop keeps memory fresh. Not live-verified.
 - [~] look-around search — `Fieldwork.lookAround` turns through 360° and reads memory before exploring; `harvest` uses it. Still to do: `find_sticks`/`find_flint`/`find_cattails` example goals with a legible search (look around, nearest seen, walk, repeat; spiral outward, never revisit) replacing heading-based exploration (`skill`, `goal`).
 - [ ] **P1 · `find_blocks {match,radius,limit}`** — controller-local read of remembered sightings only, never a world query; tagged visible/remembered, radius+limit bound the page (`ctl`). Mineflayer `findBlocks`.
@@ -28,6 +28,7 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [~] `terrain` — merged observed/seen surface view around a point; absent columns unknown. Not live-verified.
 - [ ] **P2 · `ground_at {x,z}`** — one-column projection of the remembered `terrain` view; absent columns unknown, never air (`ctl`). Site picking, `travel` with omitted y.
 - [ ] **P2 · entity detail** — `inspect_target` on entities: health if visible, hostile/passive class, tameable/harvestable hints (`mod`).
+- [ ] **P2 · entity catalog** — creature/entity index for hunting (drops, hostility); the catalog covers blocks+items only today (`mod`, static or `ctl`).
 
 ## 3. Controls (`setControlState`, `clearControlStates`, `look`, `lookAt`)
 
@@ -37,7 +38,9 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 - [x] `stop` — global release.
 - [x] `look_at` — easing camera lock on an observed block, sighted entity or point; tracks moving entities, owns the camera until released.
 - [ ] **P2 · `move` with `yaw`** — walk toward a heading in one frame instead of `look`+`move` (`ctl`).
-- [ ] **P2 · held-input while re-aiming** — knapping drag and combat need aim changes during a hand action; today `look` cancels hand actions. Decide: refuse forever (document) or allow bounded yaw delta under a control hold (`mod`).
+- [ ] **P2 · held-input while re-aiming** — knapping drag and combat need aim changes during a hand action; today `look`/`aim_cell` cancel hand actions. Decide: refuse forever (document) or allow bounded yaw delta under a control hold (`mod`).
+- [ ] **P1 · F8/camera-mode release** — the safety contract promises release on F8, but the mod only detects movement-key input; watch free-move camera mode, or narrow the doc (`mod`).
+- [ ] **P2 · `aim_cell` reach from `pickingRange`** — today hardcoded to 8 blocks; use the player's native reach so aim and interaction agree (`mod`).
 
 ## 4. Block interaction (`dig`, `stopDigging`, `placeBlock`, `activateBlock`)
 
@@ -53,9 +56,9 @@ Legend: `[x]` public action exists · `[~]` exists, not live-verified or known-b
 
 ## 5. Entity interaction (`attack`, `activateEntity`, `useOn`)
 
-Nothing exists. Blocks day 2 hunting and all threat response.
+No attack/throw/butcher yet; `look_at` already locks and tracks entities, `players` lists server players, and hostile avoidance runs during navigation. Blocks day 2 hunting until attack lands.
 
-- [ ] **P0 · `attack_entity {target,expectedKind,weapon?}`** — approach to melee range, aim, left-click until entity gone or fled; verify by entity disappearance + carcass/drop sighting (`mod` aim-at-entity, `skill`, `goal`). Mineflayer `attack`.
+- [ ] **P0 · `attack_entity {target,expectedKind,weapon?}`** — approach to melee range, aim, left-click until entity gone or fled; verify by entity disappearance + carcass/drop sighting (`skill`, `goal`; mod side mostly present: `look_at` already locks/tracks entities). Mineflayer `attack`.
 - [ ] **P0 · `throw {target}`** — spear throw: hold right-click with spear aimed at entity, verify spear count drop; pair with `collect_item` for retrieval (`skill`).
 - [ ] **P1 · `butcher {target}`** — VS `EntityBehaviorHarvestable`: hold right-click with a knife on a dead animal for its harvest time, then take drops from the harvest inventory it opens; depends on container access (§7) (`mod`, `skill`). Mineflayer `activateEntity`.
 - [ ] **P2 · `activate_entity {target}`** — other right-click uses: shear, milk, feed; taming is generational, never instant (`skill`).
@@ -70,12 +73,14 @@ Nothing exists. Blocks day 2 hunting and all threat response.
 - [x] `eat` — berries only.
 - [ ] **P0 · bag/basket equipping** — handbasket/backpack into bag slots so capacity grows; today equipment is read-only (`mod`, `ctl`, `skill`). Blocks day 1 (2 handbaskets).
 - [~] `eat` edibility from the tooltip — anything with positive saturation, no health loss, not psychedelic or intoxicating, fresh; optional `item` filter; no code lists. Not live-verified beyond berries (`skill`).
-- [ ] **P1 · nutrition-category policy** — VS max health follows fruit/vegetable/protein/grain/dairy saturation; `eat` picks by lowest category, `inventory` exposes category per food (`mod`, `skill`).
+- [ ] **P1 · nutrition-category policy** — VS max health follows fruit/vegetable/protein/grain/dairy saturation; `eat` picks by lowest category (`skill`; mod side done: `inventory` exposes category per food, `observe.condition` the five levels).
 - [ ] **P1 · freshness-aware eating** — prefer soonest-to-spoil; refuse rotten; `inventory.freshness` already exists (`skill`).
 - [x] `drop` — toss one owned slot (1 item or the whole stack) onto the ground; split partial stacks with `inventory_move` first.
 - [ ] **P1 · `equip` clothing/armor/offhand** — character slots: warmth clothing for winter (body temperature), straw hat, improvised armor, offhand torch (`mod`, `ctl`).
-- [ ] **P1 · `recipes` for knapping/clay/smithing** — list forming recipes and required material (`mod` FormingAdapter, `ctl`). Today grid only.
+- [ ] **P1 · `recipes` for knapping/clay/smithing** — list forming recipes and required material (`mod` FormingAdapter, `ctl`). Today grid only at runtime; static coverage via `search_items` (recipes baked per catalog entry). Live surface-aware listing still missing.
+- [ ] **P2 · reverse recipe lookup (`usedIn`)** — recipes consuming a code, for "how do I get more of X / what is X for" planning; `search_items` bakes only `makes` today (`ctl`, static join over `docs/recipes.json`).
 - [~] `item_info {code}` — handbook facts: nutrition, tool class/tier, durability, bag slots, fuel, drops, harvest yield and page text; `forage` reads it for every seen code (`skills/facts.mjs`). Not live-verified.
+- [ ] **P2 · handbook guide chapters** — the H-menu's tutorial/guide pages as data, completing the help-menu replication; guides are code/lang-driven, not file assets, so the source is still TBD (`mod` or static).
 - [ ] **P2 · `sort_inventory`** — consolidate stacks, hotbar layout policy; sequencing over `inventory_move`, no new mod act (`skill`).
 
 ## 7. Containers (`openContainer`, `deposit`, `withdraw`, `close`)
@@ -148,7 +153,7 @@ Blocks day 4 (storage vessel, crock) until firepit/vessel specifics land; the da
 
 - [x] Temporal stability in `observe`, rust-world attrition classification.
 - [x] Body condition: body temperature, wetness, freezing, tiredness, intoxication.
-- [ ] **P1 · temporal storm awareness** — storm approaching/active in `observe`/`events`; policy: get indoors, no travel during storms (`mod`, `skill`).
+- [ ] **P1 · temporal storm awareness** — phase/strength/timing already in `observe.condition`/`environment`; still missing from the `events` stream, plus the policy: get indoors, no travel during storms (`mod` stream, `skill`).
 - [ ] **P1 · stability retreat** — when `temporalStability` keeps dropping, leave the low-stability region toward the last stable waypoint (`skill`).
 - [ ] **P1 · season/winter prep** — days-until-winter from calendar; goals for stored food and clothing warmth (`ctl`, `goal`).
 - [ ] **P1 · rain vs pit kiln** — `environment` precipitation gates kiln firing, or build the full cover (`skill`).
