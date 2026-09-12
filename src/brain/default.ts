@@ -41,7 +41,8 @@ export const DANGER_RADIUS = 48;
 export const DANGER_MS = 15 * 60 * 1000;
 export const RELOCATE_DISTANCE = 96;
 // Jobs that cut a lesser running job short when the ladder turns to them.
-const URGENT: Job[] = ['hide', 'go_home', 'wait', 'eat', 'relocate', 'burrow'];
+// Waiting is never pressing: a wait never cuts a bite or a walk short.
+const URGENT: Job[] = ['hide', 'go_home', 'eat', 'relocate', 'burrow'];
 // A flight ends when no threat has shown for this long and the scare is this far behind.
 export const SAFE_MS = 20000;
 export const SAFE_DISTANCE = 16;
