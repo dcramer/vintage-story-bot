@@ -9,6 +9,7 @@ import {
   accessibleForage,
   desperateFoodSightRange,
   exhaustedFoodLead,
+  foodApproachScore,
   foodElevationDetourDistance,
   foodLeadGuarded,
   foodRecoverySatisfied,
@@ -19,6 +20,7 @@ import {
   harvestReady,
   matchingFoodDrops,
   Survival,
+  sameFoodPatch,
   stuckFoodRoute,
   unproductiveFoodApproach,
   wideFoodSurveyNeeded,
@@ -193,6 +195,16 @@ test('food search drops an unreachable habitat bias after two stationary legs', 
   assert.equal(foodSearchBias(0, destination, habitat), destination);
   assert.equal(foodSearchBias(1, null, habitat), habitat);
   assert.equal(foodSearchBias(2, destination, habitat), null);
+});
+
+test('food search prefers level meals and abandons a failed elevated patch together', () => {
+  const at = { x: 0, y: 100, z: 0 };
+  const overhead = { point: { x: 1, y: 109, z: 0 } };
+  const level = { point: { x: 20, y: 100, z: 0 } };
+  assert.ok(foodApproachScore(at, level) < foodApproachScore(at, overhead));
+  assert.equal(sameFoodPatch(overhead, { point: { x: 5, y: 108, z: 3 } }), true);
+  assert.equal(sameFoodPatch(overhead, { point: { x: 5, y: 100, z: 3 } }), false);
+  assert.equal(sameFoodPatch(overhead, { point: { x: 10, y: 109, z: 0 } }), false);
 });
 
 test('an unseen remembered food lead expires after reaching its approach cell', () => {

@@ -46,6 +46,12 @@ const threatenedFoodApproach = result => result.state === 'paused' && result.rea
 export const foodLeadGuarded = (target, threat) => !!threat && horizontal(target.point, threat.point) <= threatClearDistance(threat.code);
 export const exhaustedFoodLead = (target, result) => result.state === 'arrived' && target.visible === false;
 export const foodSearchBias = (stuckSearches, toward, habitat) => (stuckSearches >= 2 ? null : (toward ?? habitat));
+// Nearby food several blocks above or below the body often needs a long,
+// indirect climb. Prefer a slightly farther source at the current elevation
+// instead of treating the overhead block as the nearest meal.
+export const foodApproachScore = (position, target) => horizontal(position, target.point) + Math.abs((target.point.y ?? position.y) - position.y) * 3;
+export const sameFoodPatch = (target, candidate) =>
+  horizontal(target.point, candidate.point) <= 8 && Math.abs((target.point.y ?? 0) - (candidate.point.y ?? 0)) <= 3;
 export const matchingFoodDrops = (objects, foodCode, point) =>
   objects
     .filter(object => object.kind === 'item' && object.code === foodCode && Number.isInteger(object.quantity) && object.quantity > 0)
@@ -206,7 +212,9 @@ export class Survival {
           remembered.map(object => object.code),
         );
       }
-      const target = field.targets(forage)[0];
+      const target = field
+        .targets(forage)
+        .sort((a, b) => foodApproachScore(field.latest.position, a) - foodApproachScore(field.latest.position, b))[0];
       if (target) {
         this.searchTarget = null;
         const destination = field.approach(
@@ -228,7 +236,9 @@ export class Survival {
             stuckFoodRoute(result, before, field.latest.position) ||
             unproductiveFoodApproach(target, result, before, field.latest.position)
           ) {
-            field.skip(target, 120000);
+            const elevated = Math.abs((target.point.y ?? before.y) - before.y) > 2;
+            for (const object of elevated ? field.targets(forage).filter(candidate => sameFoodPatch(target, candidate)) : [target])
+              field.skip(object, 120000);
             await clearLeafPath(field, target.point);
           }
           continue;
@@ -240,7 +250,9 @@ export class Survival {
           if (threatenedFoodApproach(result)) {
             this.avoidThreatenedFood(target);
           } else if (stuckFoodRoute(result, before, field.latest.position)) {
-            field.skip(target, 120000);
+            const elevated = Math.abs((target.point.y ?? before.y) - before.y) > 2;
+            for (const object of elevated ? field.targets(forage).filter(candidate => sameFoodPatch(target, candidate)) : [target])
+              field.skip(object, 120000);
             await clearLeafPath(field, target.point);
           }
           continue;
