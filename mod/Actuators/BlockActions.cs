@@ -70,9 +70,11 @@ internal sealed class BlockActions(ICoreClientAPI api)
             var body = entity.CollisionBox;
             // No digging a block intersecting the body; the block under the feet is fair game, as it is for
             // any player digging straight down (a night hole, a mine shaft).
+            // The feet may sit a little into a layer or plant cell; a cell whose top is within a third of a
+            // block under the feet is footing, anything from the feet up to the head is the body.
             if (destination.X + 1 > p.X + body.X1 && destination.X < p.X + body.X2 &&
                 destination.Z + 1 > p.Z + body.Z1 && destination.Z < p.Z + body.Z2 &&
-                destination.Y + 1 > p.Y + .05 && destination.Y < p.Y + body.Y2)
+                destination.Y + 1 > p.Y + .35 && destination.Y < p.Y + body.Y2)
                 return Error("Refusing to dig a cell the player's body is in.");
             if (block.GetRequiredMiningTier(api.World, destination) > (stack?.Collectible.ToolTier ?? 0))
                 return Error("Selected tool mining tier is insufficient.");

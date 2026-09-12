@@ -19,7 +19,8 @@ export const lookAt = (eye, p) => ({
 // Beside water only a one-block step down is allowed.
 export const BODY_HEIGHT = 1.85;
 export const STEP_HEIGHT = 0.6; // Vintage Story auto-steps sub-block heights; a full block needs a jump.
-export const JUMP_HEIGHT = 1.05;
+// A jump clears a block and a thin layer on it (forest floor, snow, sticks), not a block and a slab.
+export const JUMP_HEIGHT = 1.25;
 export const MAX_DROP = 3.05; // No fall damage at three blocks; deeper is never planned.
 export const JUMP_HEADROOM = 2.3; // Body top rises about one block during a jump.
 export const WADE_COST = 3; // Shallow water is slow and cold; a route prefers dry ground.
