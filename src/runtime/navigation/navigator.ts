@@ -124,6 +124,9 @@ export class Navigation {
       map = this.map,
       w = this.width,
       h = this.height;
+    // In water the jump key keeps the head up; a body that stops holding it sinks and drowns.
+    const wet = !!(state.motion.feetInLiquid || state.motion.swimming);
+    const from = wet ? { ...p, afloat: true } : p;
     const threats = this.evading ? nearbyUnclearedThreats(state) : nearbyThreats(state);
     const nearby = threats[0] ?? null;
     if (!this.evading && nearby) {
@@ -160,14 +163,14 @@ export class Navigation {
       let planned = null;
       if (now >= this.nextPlanAt) {
         this.nextPlanAt = now + 300;
-        planned = findRoute(map, p, this.target, w, h, this);
+        planned = findRoute(map, from, this.target, w, h, this);
       }
       if (!planned) {
         if (now - this.surveyAt < 2500) {
           this.lookingAt = [...map.views(p).values()].sort((a, b) => horizontal(a, this.target) - horizontal(b, this.target))[0] ?? null;
-          return { yawDegrees: lookAt(p, this.target).yawDegrees, pitchDegrees: 15, focus: this.lookingAt };
+          return { yawDegrees: lookAt(p, this.target).yawDegrees, pitchDegrees: 15, focus: this.lookingAt, jump: wet };
         }
-        planned = findRoute(map, p, this.target, w, h, this);
+        planned = findRoute(map, from, this.target, w, h, this);
       }
       if (!planned) {
         this.diagnostics = { missing: [...map.views(p).values()].slice(0, 24), standing: map.standingOn(p) };
@@ -325,7 +328,6 @@ export class Navigation {
     // Falling: let gravity land the body on the validated lower cell.
     if (!grounded && !this.jumpAt) return { yawDegrees, pitchDegrees: 15, forward: false, jump: false, sprint: false, sneak: false, durationMs: 120 };
     // In water the jump key keeps the head up and climbs the bank; never sneak there.
-    const wet = !!(state.motion.feetInLiquid || state.motion.swimming);
     const food = state.vitals?.hunger;
     const emergency = this.evading || this.target.emergency;
     const straight = turn < 5 && next.move === 'walk' && near > 3 && yawMagnitude < 5;

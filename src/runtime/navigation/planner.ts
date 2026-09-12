@@ -25,12 +25,14 @@ export function findRoute(
   if (typeof map.nodeAt !== 'function') return null;
   const cx = Math.floor(start.x),
     cz = Math.floor(start.z);
-  let origin = map.nodeAt(cx, cz, start.y, 0.6, 0.6);
+  // A body in water may have sunk well under its swim node: look further up for it.
+  const up = start.afloat ? 3 : 0.6;
+  let origin = map.nodeAt(cx, cz, start.y, up, 0.6);
   if (!origin) {
     const candidates = [];
     for (let dx = -1; dx <= 1; dx++)
       for (let dz = -1; dz <= 1; dz++) {
-        const node = map.nodeAt(cx + dx, cz + dz, start.y, 0.6, 0.6);
+        const node = map.nodeAt(cx + dx, cz + dz, start.y, up, 0.6);
         if (node && horizontal(node, start) < 1.3) candidates.push(node);
       }
     origin = candidates.sort((a, b) => horizontal(a, start) - horizontal(b, start))[0] ?? null;
