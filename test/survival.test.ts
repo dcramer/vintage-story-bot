@@ -20,7 +20,7 @@ import {
   unproductiveApproach,
   viewChanged,
 } from '../src/support/search.ts';
-import { accessibleForage, harvestReady, matchingFoodDrops, Survival } from '../src/support/survival.ts';
+import { accessibleForage, harvestFood, harvestReady, matchingFoodDrops, Survival } from '../src/support/survival.ts';
 import {
   fleeTarget,
   hostileEntity,
@@ -102,6 +102,59 @@ test('forage planning skips targets denied by cached server access', () => {
   assert.equal(accessibleForage({ ...berries, access: { buildOrBreak: true, use: false } }), false);
   assert.equal(accessibleForage({ ...mushroom, access: { buildOrBreak: true, use: false } }), true);
   assert.equal(accessibleForage(berries), true);
+});
+
+test('a harvested stack is counted once across hold and final verification', async () => {
+  const fruit = 'game:fruit-blackcurrant';
+  const bush = 'game:fruitingbush-wild-blackcurrant-free';
+  page(fruit, { nutrition: food });
+  page(bush, { harvest: { drops: [{ code: fruit }] } });
+  const target = {
+    kind: 'block',
+    key: `block:0:10:1:10:${bush}`,
+    code: bush,
+    point: { x: 10.5, y: 1.5, z: 10.5 },
+    withinPickingRange: true,
+  };
+  let quantity = 0;
+  const state: any = {
+    ok: true,
+    activeSlot: 0,
+    position: { x: 9.5, y: 1, z: 10.5, dimension: 0 },
+    body: { eyeHeight: 1.6 },
+    target,
+  };
+  const contents = () => ({
+    state: `inventory-${quantity}`,
+    inventories: [
+      {
+        name: 'hotbar',
+        slots: [{ slot: 0, code: quantity ? fruit : null, quantity }],
+      },
+      { name: 'backpack', slots: [] },
+    ],
+  });
+  const send = async request => {
+    if (request.action === 'inventory') return contents();
+    if (request.action === 'inspect_target') return { ok: true, ...target, facts: { growth: 'ripe' }, access: { use: true } };
+    if (request.action === 'interact') quantity = 3;
+    return { ok: true };
+  };
+  const field: any = {
+    latest: state,
+    seen: new Map([[target.key, target]]),
+    env: { send },
+    observe: async () => state,
+    send,
+    wait: async () => {},
+    report: () => {},
+    skip: () => {},
+  };
+  let harvested = 0;
+
+  assert.equal(await harvestFood(field, target, { onGain: gain => (harvested += gain) }), true);
+  assert.equal(quantity, 3);
+  assert.equal(harvested, 3);
 });
 
 test('breakable forage is harvested beside its drop, never at maximum reach or underfoot', () => {

@@ -83,10 +83,12 @@ export async function harvestFood(
       .filter(s => s.code === foodCode)
       .reduce((n, s) => n + s.quantity, 0);
   const before = count(inventory);
+  let reported = 0;
   const gained = async () => {
     const gain = count(await field.send({ action: 'inventory' })) - before;
     if (gain <= 0) return false;
-    onGain?.(gain);
+    if (gain > reported) onGain?.(gain - reported);
+    reported = Math.max(reported, gain);
     field.seen.delete(target.key);
     field.skip(target, 120000);
     return true;
