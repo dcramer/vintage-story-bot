@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { markRespawnBreaks, trimTrail } from './trail.mjs';
+import { ingestRunMetrics, publicBot } from './runs.mjs';
 
 // Fleet state service. Bots POST /api/report batches `{bot:{id,...},topics:{[topic]:{at,data}},log:[{topic,at,data}]}`;
 // the single SeraphFleet object keeps the latest value per bot/topic plus a bounded log, evicts bots unseen for RETENTION_HOURS,
@@ -148,7 +149,7 @@ export class SeraphFleet extends DurableObject {
     });
   }
   retentionMs() { return Math.max(1, Number(this.env.RETENTION_HOURS) || 6) * 3600000; }
-  snapshot() { return { now: Date.now(), retentionMs: this.retentionMs(), bots: [...this.bots.values()] }; }
+  snapshot() { return { now: Date.now(), retentionMs: this.retentionMs(), bots: [...this.bots.values()].map(publicBot) }; }
   async schedule() { if (this.bots.size && !(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(Date.now() + sweepMs); }
   async fetch(request) {
     const url = new URL(request.url);
@@ -183,7 +184,7 @@ export class SeraphFleet extends DurableObject {
     await this.ctx.storage.put(`map-image:${capture.id}`, capture.bytes);
     bot.mapImage = capture.meta; this.dirty.add(capture.id);
     await this.persist(capture.meta.at, true);
-    this.broadcast({ type: 'bot', bot });
+    this.broadcast({ type: 'bot', bot: publicBot(bot) });
     return json(200, { ok: true, at: capture.meta.at, bytes: capture.bytes.byteLength });
   }
   nativeManifest(world, botId = null) {
@@ -264,6 +265,7 @@ export class SeraphFleet extends DurableObject {
     }
     delete bot.topics.map;
     const trailed = appendTrail(bot, body.topics?.state, now);
+    const run = ingestRunMetrics(bot, body.topics, body.log);
     for (const entry of (Array.isArray(body.log) ? body.log : []).slice(-maxLog)) {
       if (!entry || typeof entry !== 'object' || !topicRe.test(entry.topic)) continue;
       bot.log.push({ topic: entry.topic, at: number(entry.at, now), data: entry.data ?? null });
@@ -271,10 +273,10 @@ export class SeraphFleet extends DurableObject {
     while (bot.log.length > maxLog) bot.log.shift();
     const segmented = markRespawnBreaks(bot.trail ?? [], bot.log);
     this.bots.set(id, bot); this.dirty.add(id);
-    this.broadcast({ type: 'bot', bot });
+    this.broadcast({ type: 'bot', bot: publicBot(bot) });
     // Unlike latest topics, a historical sample cannot be refilled by the next report.
     // Persist movement immediately; stationary updates keep the existing write throttle.
-    await this.persist(now, trailed || segmented);
+    await this.persist(now, trailed || segmented || run.transition);
     await this.schedule();
     return json(200, { ok: true, bots: this.bots.size });
   }

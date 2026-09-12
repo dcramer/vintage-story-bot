@@ -51,3 +51,23 @@ test('fleet reporter keeps goal intent, script and subgoal', async () => {
   assert.equal(report.topics.goal.data.progress.subgoal.kind, 'forage');
   assert.equal(report.topics.goal.data.args.goalScript.includes('goals.forage'), true);
 });
+
+test('fleet reporter keeps cumulative run metrics and transition records', async () => {
+  let report;
+  const reporter = new Reporter({
+    url: 'https://fleet.test',
+    token: 'token',
+    id: 'Kiln',
+    intervalMs: 60000,
+    fetch: async (_url, request) => {
+      report = JSON.parse(request.body as string);
+      return new Response(null, { status: 204 });
+    },
+  });
+  const run = { segmentId: 'controller-1', lifeId: 'life-1', observedAt: 2000, distance: 12.5, estimatedSteps: 17 };
+  reporter.publish('run', run);
+  await reporter.flush();
+  reporter.close();
+  assert.deepEqual(report.topics.run.data, run);
+  assert.deepEqual(report.log, [{ topic: 'run', at: report.log[0].at, data: run }]);
+});

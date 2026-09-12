@@ -8,6 +8,7 @@ import { type Log, noLog } from './log.ts';
 import { Knowledge } from './navigation/knowledge.ts';
 import { Navigation } from './navigation/navigator.ts';
 import { findTool, goals, tools } from './registry.ts';
+import { RunMetrics } from './run-metrics.ts';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 // A promise settled once, from wherever settles it first.
@@ -57,6 +58,7 @@ export class Controller {
   knowledge: any;
   send: any;
   telemetry: any;
+  metrics: RunMetrics;
   log: Log;
   active = null;
   last = null;
@@ -85,6 +87,7 @@ export class Controller {
       this.log[type === 'sighted' ? 'debug' : 'info']('event', type, { event: id, ...data });
     });
     this.telemetry = telemetry;
+    this.metrics = new RunMetrics(this.session);
     this.knowledge = this.game.knowledge = new Knowledge(process.env.VINTAGE_STORY_KNOWLEDGE_DIR ?? '.runtime/knowledge', this.game);
     const raw = this.game.send;
     this.game.send = (request, options) => {
@@ -111,6 +114,18 @@ export class Controller {
     if (!result.ok)
       this.log.info('mod', 'refused', { action, args: looping.has(action) ? undefined : args, error: result.error, code: result.code, ms });
     else if (!polling.has(action) && !looping.has(action)) this.log.debug('mod', action, { args, ms });
+    const metricState = state => {
+      const metric = this.metrics.observeState(state);
+      if (metric) this.telemetry?.publish('run', metric.data, { coalesce: !metric.transition });
+    };
+    if (result.ok) {
+      if (action === 'sense' || action === 'control_step') metricState(result.state);
+      else if (action === 'observe') metricState(result);
+      else if (action === 'inventory') {
+        const metric = this.metrics.observeInventory(result, this.active?.kind ?? null);
+        if (metric) this.telemetry?.publish('run', metric, { coalesce: true });
+      }
+    }
     if (!this.telemetry) return;
     const perception = () => {
       if (!result.ok) return;
@@ -176,6 +191,7 @@ export class Controller {
       terrainCells: this.map.cells.size,
       knowledge: this.knowledge.status(),
       brain: this.brain?.status() ?? null,
+      run: this.metrics.view(),
     };
   }
   goalView(record = this.last) {
