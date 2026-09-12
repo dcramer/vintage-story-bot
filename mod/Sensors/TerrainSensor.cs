@@ -91,16 +91,21 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map)
             if (!visible) continue;
             var boxes = block.GetCollisionBoxes(blocks, blockPos) ?? [];
             var fluid = blocks.GetBlock(blockPos, BlockLayersAccess.Fluid);
-            // What kind of hazard a cell is: fire and lava are never entered, water can be waded or swum,
-            // oversized or overflowing shapes are avoided because their geometry is not a cell's.
-            string? hazard = block.Code?.Path.Contains("fire") == true || block.Code?.Path.Contains("lava") == true ||
-                    fluid.Code?.Path.Contains("lava") == true ? "fire"
-                // A solid with collision boxes inside a water-logged cell (leaves, a slab) is stood on, not swum.
-                : fluid.IsLiquid() && boxes.Length == 0 ? "water"
-                : boxes.Length > 16 || boxes.Any(b => b.X1 < 0 || b.Y1 < 0 || b.Z1 < 0 || b.X2 > 1 || b.Y2 > 1 || b.Z2 > 1) ? "shape"
-                : null;
+            // What a cell is, beyond its collision boxes, as words Node reasons with: which liquid fills it,
+            // whether the solid is foliage (leaves, plants) or climbable, whether its shape overflows the cell,
+            // and the mining tier a tool needs to break it. Facts only; Node decides what to do with them.
+            var traits = new List<string>();
+            string path = block.Code?.Path ?? "";
+            if (path.Contains("fire") || path.Contains("lava") || fluid.Code?.Path.Contains("lava") == true) traits.Add(path.Contains("fire") ? "fire" : "lava");
+            else if (fluid.IsLiquid()) traits.Add("water");
+            if (path.Contains("leaves")) traits.Add("leaves");
+            else if (block.BlockMaterial == EnumBlockMaterial.Plant) traits.Add("plant");
+            if (block.Climbable) traits.Add("climbable");
+            if (boxes.Length > 16 || boxes.Any(b => b.X1 < 0 || b.Y1 < 0 || b.Z1 < 0 || b.X2 > 1 || b.Y2 > 1 || b.Z2 > 1)) traits.Add("shape");
+            int tier = boxes.Length > 0 ? block.GetRequiredMiningTier(api.World, blockPos) : 0;
+            if (tier > 0) traits.Add($"tier{tier}");
             map.Put(cell, boxes.Take(16).Select(b => new Bounds(cell.X + b.X1, cell.Y + b.Y1, cell.Z + b.Z1,
-                cell.X + b.X2, cell.Y + b.Y2, cell.Z + b.Z2)).ToArray(), hazard, now);
+                cell.X + b.X2, cell.Y + b.Y2, cell.Z + b.Z2)).ToArray(), traits.Count == 0 ? null : string.Join(",", traits), now);
         }
     }
 }

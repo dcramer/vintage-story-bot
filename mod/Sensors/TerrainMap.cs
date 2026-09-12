@@ -9,7 +9,7 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
     // A null Boxes row is either a real change (the block was replaced) or
     // the eye merely forgetting a cell it no longer keeps; Node's map keeps
     // forgotten geometry and drops only changed cells.
-    private sealed record Observation(Bounds[]? Boxes, string? Hazard, long At, long Sequence, long PublishedAt, string? Reason = null);
+    private sealed record Observation(Bounds[]? Boxes, string? Traits, long At, long Sequence, long PublishedAt, string? Reason = null);
     private readonly Dictionary<Cell, Observation> cells = new();
     private long sequence, lostThrough;
     public string Session { get; private set; } = Guid.NewGuid().ToString("N");
@@ -32,16 +32,16 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
         if (cells.TryGetValue(cell, out var prior) && prior.Boxes != null)
             cells[cell] = prior with { At = 0 };
     }
-    public void Put(Cell cell, Bounds[] boxes, string? hazard, long now)
+    public void Put(Cell cell, Bounds[] boxes, string? traits, long now)
     {
-        if (cells.TryGetValue(cell, out var prior) && prior.Boxes != null && prior.Hazard == hazard &&
+        if (cells.TryGetValue(cell, out var prior) && prior.Boxes != null && prior.Traits == traits &&
             prior.Boxes.AsSpan().SequenceEqual(boxes))
         {
             bool publish = now - prior.PublishedAt >= RefreshDeltaMs;
-            cells[cell] = new(prior.Boxes, hazard, now, publish ? ++sequence : prior.Sequence,
+            cells[cell] = new(prior.Boxes, traits, now, publish ? ++sequence : prior.Sequence,
                 publish ? now : prior.PublishedAt);
         }
-        else cells[cell] = new(boxes, hazard, now, ++sequence, now);
+        else cells[cell] = new(boxes, traits, now, ++sequence, now);
         Bound();
     }
     private void Bound()
@@ -65,8 +65,8 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
         long cursor = batch.Length == 0 ? sequence : batch[^1].Value.Sequence;
         return new { session = Session, reset, cursor, more = cursor < sequence, clock = now,
             cells = batch.Select(p => p.Value.Boxes == null
-                ? new object?[] { p.Key.X, p.Key.Y, p.Key.Z, p.Value.At, p.Value.Hazard, null, p.Value.Reason ?? "changed" }
-                : new object?[] { p.Key.X, p.Key.Y, p.Key.Z, p.Value.At, p.Value.Hazard,
+                ? new object?[] { p.Key.X, p.Key.Y, p.Key.Z, p.Value.At, p.Value.Traits, null, p.Value.Reason ?? "changed" }
+                : new object?[] { p.Key.X, p.Key.Y, p.Key.Z, p.Value.At, p.Value.Traits,
                     p.Value.Boxes.Select(b => new[] { b.X1 - p.Key.X, b.Y1 - p.Key.Y, b.Z1 - p.Key.Z,
                         b.X2 - p.Key.X, b.Y2 - p.Key.Y, b.Z2 - p.Key.Z }).ToArray() }).ToArray() };
     }

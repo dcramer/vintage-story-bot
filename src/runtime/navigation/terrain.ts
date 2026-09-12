@@ -44,6 +44,8 @@ const around = [...cardinals, ...diagonals];
 // reported or the memory is very old. The mod's eye forgetting a cell it
 // no longer keeps in range is not a reason for the player to forget it.
 export const REMEMBER_MS = 7 * 24 * 60 * 60 * 1000;
+// The mod's trait word list for a cell; older memories and tests carry one hazard word or a boolean.
+const traitsOf = value => (typeof value === 'string' ? value.split(',').filter(Boolean) : value === true ? ['shape'] : []);
 export class TerrainMemory {
   prunedAt: any;
   cells = new Map();
@@ -64,7 +66,7 @@ export class TerrainMemory {
       const id = cellKey(x, y, z);
       if (boxes === null) {
         if (reason !== 'forgot') this.forget(id);
-      } else this.put({ x, y, z, at, seenAt: wall, hazard, boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) });
+      } else this.put({ x, y, z, at, seenAt: wall, traits: traitsOf(hazard), boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) });
     }
     if (this.cells.size > this.capacity || wall - (this.prunedAt ?? 0) > 60000) {
       this.prunedAt = wall;
@@ -73,6 +75,10 @@ export class TerrainMemory {
     }
   }
   put(cell) {
+    // What blocks the body: fire and lava always, water when nothing solid stands in it, a shape
+    // whose geometry is not the cell's. Other traits (leaves, plant, climbable, tierN) are facts for goals.
+    const has = trait => cell.traits.includes(trait);
+    cell.hazard = has('fire') || has('lava') ? 'fire' : has('water') && !cell.boxes.length ? 'water' : has('shape') ? 'shape' : null;
     const id = cellKey(cell.x, cell.y, cell.z);
     this.cells.set(id, cell);
     if (cell.hazard) this.hazards.set(id, cell);
@@ -80,13 +86,20 @@ export class TerrainMemory {
   }
   // Persistence: relative boxes and wall-clock stamps; the delta cursor is not part of memory.
   export() {
-    return [...this.cells.values()].map(c => [c.x, c.y, c.z, c.seenAt, c.hazard, c.boxes.map(b => b.map((n, i) => n - [c.x, c.y, c.z][i % 3]))]);
+    return [...this.cells.values()].map(c => [
+      c.x,
+      c.y,
+      c.z,
+      c.seenAt,
+      c.traits.join(',') || null,
+      c.boxes.map(b => b.map((n, i) => n - [c.x, c.y, c.z][i % 3])),
+    ]);
   }
   restore(rows) {
     this.cells.clear();
     this.hazards.clear();
     for (const [x, y, z, seenAt, hazard, boxes] of rows)
-      this.put({ x, y, z, at: 0, seenAt, hazard, boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) });
+      this.put({ x, y, z, at: 0, seenAt, traits: traitsOf(hazard), boxes: boxes.map(b => b.map((n, i) => n + [x, y, z][i % 3])) });
   }
   forget(id) {
     this.cells.delete(id);
