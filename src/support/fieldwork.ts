@@ -344,7 +344,18 @@ export class Fieldwork {
   // A walk that also picks up what the bot wants when it passes within reach.
   async walk(target, pauseWhen?) {
     const gleaner = this.gleaner;
-    const pause = gleaner ? state => pauseWhen?.(state) ?? gleaner.pauseWhen(state) : pauseWhen;
+    const pause = gleaner
+      ? state => {
+          const requested = pauseWhen?.(state);
+          if (requested) return requested;
+          const food = state.vitals?.hunger;
+          // A stick beside the route is not worth a detour while starvation
+          // is already the job. Resume ordinary opportunistic pickup once the
+          // emergency threshold has been recovered.
+          if (this.recoveringFood && food?.max > 0 && food.current / food.max < 0.2) return null;
+          return gleaner.pauseWhen(state);
+        }
+      : pauseWhen;
     for (let stops = 0; ; stops++) {
       const result = await this.walkOn(target, pause);
       if (result.state !== 'paused' || result.reason !== 'want_in_reach' || stops >= 4) return result;

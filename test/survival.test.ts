@@ -288,6 +288,39 @@ test('food recovery marks safe search legs as emergency sprint between ten and t
   assert.equal(navigationTarget.emergency, true);
 });
 
+test('critical food recovery does not stop to glean unrelated supplies', async () => {
+  const state = {
+    ok: true,
+    alive: true,
+    controlReady: true,
+    mounted: false,
+    player: { uid: 'test' },
+    position: { x: 0.5, y: 1, z: 0.5, dimension: 0 },
+    body: { halfWidth: 0.3, height: 1.85 },
+    motion: { onGround: true, swimming: false, feetInLiquid: false },
+    life: { alerts: ['low_food'], session: 'test', lastDamageAt: null },
+    orientation: { yawDegrees: 0 },
+    vitals: { hunger: { current: 0, max: 1500 } },
+  };
+  let pauseReason;
+  const env = {
+    send: async () => state,
+    sync: async () => state,
+    navigate: async (_target, pauseWhen) => {
+      pauseReason = pauseWhen(state);
+      return { state: pauseReason ? 'paused' : 'arrived' };
+    },
+  };
+  const field = new Fieldwork(env, { now: () => 0 });
+  field.initial = field.latest = state;
+  field.recoveringFood = true;
+  let gleaned = 0;
+  field.gleaner = { pauseWhen: () => 'want_in_reach', tend: async () => gleaned++ };
+  await field.walk({ x: 8.5, y: 1, z: 0.5 });
+  assert.equal(pauseReason, null);
+  assert.equal(gleaned, 0);
+});
+
 test('a blocked exploration leg penalizes its destination for the next deterministic choice', async () => {
   const state = {
     ok: true,
