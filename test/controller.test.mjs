@@ -47,6 +47,15 @@ function world(width = 6, solid = () => false, hazard = () => false, unknown = (
 }
 const at = (x, z, y = 0) => ({ x: x + .5, y, z: z + .5 });
 
+test('grid: a one-block step down beside water is a move; a deeper drop there is not', () => {
+  const water = (x, y, z) => x === 1 && z === 1 && y === -1;
+  const ledge = world(3, (x, y, z) => x === 0 && z === 0 && y === 0, water);
+  const down = ledge.moves(at(0, 0, 1)).find(m => Math.floor(m.node.z) === 1 && Math.floor(m.node.x) === 0);
+  assert.equal(down?.node.move, 'drop');
+  const cliff = world(3, (x, y, z) => x === 0 && z === 0 && (y === 0 || y === 1), water);
+  assert.equal(cliff.moves(at(0, 0, 2)).some(m => Math.floor(m.node.z) === 1 && Math.floor(m.node.x) === 0), false);
+});
+
 test('grid: a cell stands when it has a floor, headroom and is known', () => {
   const map = world(3, (x, y, z) => x === 1 && z === 0 && y === 1, (x, y, z) => x === 2 && z === 0 && y === -1,
     (x, y, z) => x === -2 && z === 0 && y === 1);

@@ -11,7 +11,8 @@ export const lookAt = (eye, p) => ({ yawDegrees: normalize(Math.atan2(p.x - eye.
 // place to stand when it has a floor and enough free cells above for the
 // body; moves between cells are a walk, a step, a jump up one block, or a
 // drop of up to three. Water and fire are walls, unknown is a wall, and a
-// pit is simply a set of cells the search cannot leave.
+// pit is simply a set of cells the search cannot leave. Beside water only a
+// one-block step down is allowed; the landing cell itself is never water.
 export const BODY_HEIGHT = 1.85;
 export const STEP_HEIGHT = .6;   // Vintage Story auto-steps sub-block heights; a full block needs a jump.
 export const JUMP_HEIGHT = 1.05;
@@ -147,7 +148,9 @@ export class TerrainMemory {
           if (diagonal && !this.cornerOpen(x, z, dx, dz, to.y, missing)) continue;
           kind = 'jump'; cost = d + 1.5;
         } else if (rise < -STEP_HEIGHT) {
-          if (diagonal || this.shore(to) || !this.clearBetween(x + dx, z + dz, to.y, t + BODY_HEIGHT, missing)) continue;
+          // A one-block step down onto dry ground is an ordinary move even at the
+          // water's edge; a longer fall beside water is not planned.
+          if (diagonal || (-rise > 1.05 && this.shore(to)) || !this.clearBetween(x + dx, z + dz, to.y, t + BODY_HEIGHT, missing)) continue;
           // Stepping down is cheap; a stair of big drops is not a shortcut.
           kind = 'drop'; cost = d + (-rise > 1.5 ? 1.5 * -rise : .4 * -rise);
         } else {
