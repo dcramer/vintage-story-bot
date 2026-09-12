@@ -42,6 +42,7 @@ export class Navigation {
   // The route index a straight-run merge started from, while one is in effect.
   mergedFrom: number | null = null;
   routeReaches = false;
+  guardHolds = 0;
   jumpAt = 0;
   airborne = false;
   nextPlanAt = 0;
@@ -293,14 +294,20 @@ export class Navigation {
         checkpoint = fx === Math.floor(next.x) && fz === Math.floor(next.z);
       if (!own && !checkpoint && !map.levels(fx, fz, p.y, JUMP_HEIGHT, MAX_DROP).length) {
         if (this.mergedFrom !== null && this.mergedFrom < this.index) {
+          // Back to the route's own cells; the progress clock keeps running, so a guard that
+          // trips every tick still ends in a replan instead of a body standing for minutes.
           this.index = this.mergedFrom;
           this.mergedFrom = null;
           this.edgeStart = p;
           this.bestNear = undefined;
-          this.progressAt = now;
+          this.guardHolds = 0;
+          return this.tick(state, now, step);
         }
+        // The route's own next cell is guarded against: the map changed under the plan; plan again.
+        if (++this.guardHolds > 3) return this.replan(p, now, 'stalled');
         return { yawDegrees: desiredYaw, pitchDegrees: 15, forward: false, jump: wet, sprint: false, sneak: false, durationMs: 150 };
       }
+      this.guardHolds = 0;
     }
     const food = state.vitals?.hunger;
     const emergency = this.evading || this.target.emergency;

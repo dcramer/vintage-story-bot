@@ -203,7 +203,8 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
     // Dig in where it stands; what it digs seals the hole. A dig-in that failed here is not tried again at once.
     return tried.has('burrow') ? 'wait' : 'burrow';
   }
-  if (s.burrowed) return 'unburrow';
+  // Opening the burrow is a job like the others: set aside when it fails, forgotten when the burrow is far away.
+  if (s.burrowed && !tried.has('unburrow')) return 'unburrow';
   if (s.hunger !== null && (s.hunger < HUNGRY || (s.hunger < PECKISH && s.reserve <= 0))) return 'eat';
   // The first task on the list not done and not set aside around here; with none left, look around.
   return tasks(s, tried).find(task => task.state === 'next')?.id ?? 'explore';
@@ -245,6 +246,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
     if (memory.job === 'shelter' && last.ok && last.result?.home) memory.home = last.result.home;
     if (memory.job === 'burrow' && last.ok && last.result?.mouth) memory.burrow = last.result.mouth;
     if (memory.job === 'unburrow' && last.ok) memory.burrow = null;
+    // A burrow that could not be opened is not the place to keep coming back to.
+    if (memory.job === 'unburrow' && !last.ok) memory.burrow = null;
     // Whatever the trip's outcome, this place has been judged; judge the new one afresh.
     if (memory.job === 'relocate') memory.scares = [];
     memory.job = null;
@@ -252,6 +255,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (memory.resting) return { wait: 'resting after too many scares' };
   memory.scares = memory.scares.filter(scare => now - scare.at < DANGER_MS);
   // Dead: respawn when the server offers it; nothing else matters until then.
+  if (!state.alive) memory.burrow = null;
   if (!state.alive && active) return { stop: 'dead' };
   if (!state.alive)
     return state.life?.deathId
@@ -299,7 +303,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     night: isNight(environment),
     home: !!home,
     atHome: !!home && horizontal(state.position, home) < 8,
-    burrowed: !!memory.burrow,
+    burrowed: !!memory.burrow && horizontal(state.position, memory.burrow) <= 8,
     dangerHere: memory.scares.filter(scare => horizontal(state.position, scare) <= DANGER_RADIUS).length >= DANGER_SCARES,
     body: markers.some(isDeathMarker),
     sticks: k.sticks,
