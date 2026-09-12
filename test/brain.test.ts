@@ -216,3 +216,14 @@ test('brain loop: an act decision runs its actions in order by hand', async () =
   );
   assert.equal(calls[0].by, 'brain');
 });
+
+test('brain: hunger does not interrupt a flight; danger outranks it', () => {
+  const memory = fresh();
+  const wolf = state({
+    nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }],
+    vitals: { hunger: { current: 100, max: 1500 } },
+  });
+  assert.equal(decide(reading({ state: wolf }), memory).start, 'travel');
+  const during = decide(reading({ state: wolf, active: { id: 'f1', kind: 'travel', state: 'running', by: 'brain' } }), memory);
+  assert.equal(during.wait, 'letting travel finish');
+});

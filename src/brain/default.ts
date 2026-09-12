@@ -208,7 +208,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (active) {
     if (threat && memory.job !== 'hide') return { stop: 'threat' };
     if (storm && !['go_home', 'wait'].includes(memory.job ?? '')) return { stop: 'storm' };
-    if (satiety !== null && satiety < HUNGRY && memory.job !== 'eat') return { stop: 'hungry' };
+    // Hunger never interrupts a flight: danger outranks it, as in pickJob.
+    if (satiety !== null && satiety < HUNGRY && !['eat', 'hide'].includes(memory.job ?? '')) return { stop: 'hungry' };
     return { wait: `letting ${active.kind} finish` };
   }
   if (memory.pit) {
