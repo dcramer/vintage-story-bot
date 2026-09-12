@@ -11,7 +11,7 @@ Use Vintage Story's word when one exists; otherwise these, exactly. No new synon
 
 Game:
 
-- **Seraph**: the game's name for a player character; here, one bot instance, indistinguishable from a human's in what the server receives.
+- **Seraph**: the game's name for a player character; here, one bot instance (`src/bot.ts`), indistinguishable from a human's in what the server receives.
 - **block code**: the game's asset id for a block, item or entity (`game:loosestick-free`); searches match substrings of it.
 - **selection**: the block or entity under the crosshair; every hand action applies to it.
 - **picking range**: how far the player can reach to break, place or use (`observe.pickingRange`).
@@ -131,7 +131,7 @@ Tools are discovered by filename: the basename is the public name and the file m
 Linux, headless, one bot client per profile; flags, phases and constraints in [Runtime](docs/runtime.md).
 
 1. Once: `pnpm install --frozen-lockfile`, `pnpm setup:linux`, sign in once with the bot account.
-2. `pnpm controller` (MCP adapters and `scripts/control.mjs` share it).
+2. `pnpm bot` (`pnpm controller` is the same; MCP adapters and `scripts/control.mjs` share it). `--brain default` makes the bot play on its own ([brain](docs/brain.md)); without it the bot only does what it is told.
 3. `pnpm game start --world <save>` (or `--new <name> --play-style surviveandbuild`, `--server host:port`); returns at `world_ready`. `pnpm game status` any time.
 4. Blocking dialogs (character creation, death): `node scripts/control.mjs ui_dialogs`, then `ui_activate --json '{"dialog":"…","element":"…"}'` until `observe` reports `controlReady`.
 5. Play through MCP or `node scripts/control.mjs <action>`; goals via `pnpm goal:*`.
@@ -154,5 +154,6 @@ Linux, headless, one bot client per profile; flags, phases and constraints in [R
 - [Runtime](docs/runtime.md) — read before launching, deploying, configuring MCP, or controlling the bot.
 - [Navigation](docs/navigation.md) — read when changing sensing, terrain memory, route planning or steering; perception layers, planners, walk loop, statuses.
 - [Getting started](docs/getting-started.md) — read when defining or prioritizing goals; survival rules, house/kiln specs, day 1–5 checklists.
+- [Brain](docs/brain.md) — read when changing what the bot does on its own; the brain contract and the default brain's jobs.
 - [Game API reference](docs/capabilities.md) — read when changing game integration or sensing; entry points, source material, perception constraints.
 - [TODO](TODO.md) — read when picking up work; Mineflayer-shaped API surface mapped to Vintage Story mechanics.

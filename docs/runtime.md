@@ -24,7 +24,7 @@
 
 ## MCP
 
-Name `vintage-story`; WSL Codex user scope, Claude private project scope. Agent clients spawn stdio adapters to one shared controller. Start `pnpm controller` (or `pnpm controller:dev` for watch/restart). No API key/tunnel. New sessions load registrations; existing entrypoint remains valid.
+Name `vintage-story`; WSL Codex user scope, Claude private project scope. Agent clients spawn stdio adapters to one shared controller. Start `pnpm bot` (or `pnpm controller:dev` for watch/restart). No API key/tunnel. New sessions load registrations; existing entrypoint remains valid.
 
 ```sh
 codex mcp get vintage-story
