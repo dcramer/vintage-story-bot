@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import brain, { decide as decision, fresh, kit, pickJob, SHELTER_DIRT, STICK_MIN } from '../src/brain/default.ts';
+import brain, { decide as decision, environmentalHurt, fresh, kit, pickJob, SHELTER_DIRT, STICK_MIN } from '../src/brain/default.ts';
 import { shelter as shelterCells } from '../src/support/structures.ts';
 
 const decide = (reading, memory): any => decision(reading, memory);
@@ -213,6 +213,21 @@ test('brain: a hit from nowhere is danger, and copper seen in passing is marked 
   const marked = [{ guid: 'g', title: 'Copper', icon: 'rocks', position: { x: 20, y: 100, z: 5 } }];
   const near = decide(reading({ events: [{ ...nugget, key: 'k2' }], markers: marked }), fresh());
   assert.ok(!('act' in near), 'a marker already nearby means no new one');
+});
+
+test('brain: a fall is not mistaken for an unseen attacker', () => {
+  const fall = [
+    { id: 1, at: 1, type: 'hurt', health: 10 },
+    { id: 2, at: 2, type: 'message', text: 'Lost 3.64 hp through gravity', kind: 'Notification' },
+  ];
+  assert.equal(environmentalHurt(fall), true);
+  const memory = fresh();
+  memory.job = 'sticks';
+  const running = { id: 'g1', kind: 'gather', state: 'running', by: 'brain' };
+  assert.deepEqual(decide(reading({ events: fall, active: running }), memory), { wait: 'letting gather finish' });
+  memory.job = 'sticks';
+  const afterPrematureStop = decide(reading({ events: fall.slice(1), last: { id: 'g1', kind: 'gather', ok: false, reason: 'brain: hurt' } }), memory);
+  assert.notEqual(afterPrematureStop.start, 'travel', 'a delayed gravity message also cancels the carried flight');
 });
 
 test('brain: kit reads tools by class and dirt by code', () => {

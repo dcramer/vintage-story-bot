@@ -217,6 +217,8 @@ export function escapePoint(position: Cell, yawDegrees: number, home: Cell | nul
   const yaw = (yawDegrees * Math.PI) / 180;
   return { x: position.x + Math.sin(yaw) * 24, z: position.z + Math.cos(yaw) * 24 };
 }
+export const environmentalHurt = (events: any[]) =>
+  events.some(event => event.type === 'message' && /^Lost [\d.]+ hp through gravity$/i.test(event.text ?? ''));
 // In deep water: face the nearest dry ground and swim with the jump key held, one stroke per decision.
 export function surfacing(state: any, ground: Cell | null): Decision {
   const p = state.position;
@@ -260,11 +262,13 @@ export function decide(reading: Reading, memory: Memory): Decision {
       ? { act: [{ action: 'respawn', deathId: state.life.deathId }], why: 'dead' }
       : { wait: 'dead, no respawn offered yet' };
   const threat = nearestThreat(state);
-  // A hit with no attacker in sight is still danger.
+  // A hit with no attacker in sight is still danger. The server also advances
+  // lastDamageAt for fall damage, but its notification identifies gravity; a
+  // stumble is not an attacker and must not cancel food recovery for a flight.
   // The event cursor advances when the running goal is stopped. Carry the
   // stop reason into this decision so a one-tick hit actually starts a flight
   // instead of cancelling work and immediately restarting the same job.
-  const hurt = events.some(e => e.type === 'hurt') || last?.reason === 'brain: hurt';
+  const hurt = (events.some(e => e.type === 'hurt') || last?.reason === 'brain: hurt') && !environmentalHurt(events);
   // Copper seen in passing: a marker and a word to the others, once per nugget, unless one is already marked nearby.
   const copper = events.find(e => e.type === 'sighted' && e.kind === 'block' && COPPER.test(e.code ?? '') && !memory.marked.has(e.key));
   if (copper && !threat && !hurt) {
