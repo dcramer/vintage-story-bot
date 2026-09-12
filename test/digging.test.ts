@@ -62,3 +62,19 @@ test('water cells over solid ground are waded, deeper water only swum when allow
     'unless a route forbids swimming',
   );
 });
+
+test('a burrow site is a standable cell beside two blocks of plain earth two deep, closed all round', async () => {
+  const { burrowSite } = await import('../src/goals/burrow.ts');
+  const hill = world(6, (x, y) => x >= 1 && y >= 0 && y <= 3);
+  const site = burrowSite(hill, { x: 0.5, y: 0, z: 0.5 }, 3);
+  assert.deepEqual(
+    [site.mouth, site.back],
+    [
+      { x: 1, y: 0, z: 0 },
+      { x: 2, y: 0, z: 0 },
+    ],
+  );
+  assert.equal(site.cut.length, 4);
+  const thin = world(6, (x, y) => x === 1 && y >= 0 && y <= 3);
+  assert.equal(burrowSite(thin, { x: 0.5, y: 0, z: 0.5 }, 3), null, 'a one-block wall makes no pocket');
+});

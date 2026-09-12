@@ -41,7 +41,9 @@ export type Job =
   | 'torches'
   | 'logs'
   | 'explore'
-  | 'dig_out';
+  | 'dig_out'
+  | 'burrow'
+  | 'unburrow';
 type Cell = { x: number; y: number; z: number };
 type Shelter = {
   origin: Cell;
@@ -58,6 +60,8 @@ export type Memory = {
   job: Job | null;
   // Where the last walk was heading when it ended in a pit; dig_out cuts stairs that way.
   pit: { x: number; z: number } | null;
+  // The pocket the bot dug in for the night: its mouth cell, to dig open again at dawn.
+  burrow: { x: number; y: number; z: number } | null;
   done: Record<string, number>;
   scares: number;
   resting: boolean;
@@ -113,6 +117,7 @@ export type Situation = {
   night: boolean;
   home: boolean;
   atHome: boolean;
+  burrowed: boolean;
   sticks: number;
   knife: boolean;
   axe: boolean;
@@ -128,7 +133,8 @@ export function pickJob(s: Situation): Job {
   if (s.threat) return 'hide';
   if (s.storm) return s.home && !s.atHome ? 'go_home' : 'wait';
   if (s.hunger !== null && s.hunger < HUNGRY) return 'eat';
-  if (s.night) return s.home ? (s.atHome ? 'wait' : 'go_home') : s.dirt >= SHELTER_DIRT ? 'shelter' : 'wait';
+  if (s.night) return s.home ? (s.atHome ? 'wait' : 'go_home') : s.burrowed ? 'wait' : 'burrow';
+  if (s.burrowed) return 'unburrow';
   if (!s.home) return s.dirt >= SHELTER_DIRT ? 'shelter' : 'dirt';
   if (s.sticks < STICK_MIN) return 'sticks';
   if (!s.knife || !s.axe) return s.stone ? 'tools' : 'stone';
@@ -193,6 +199,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
     else if (!last.ok && memory.job && !['hide', 'dig_out'].includes(memory.job) && !/interruption/.test(last.reason ?? ''))
       memory.cool.set(memory.job, now + COOLDOWN_MS);
     if (memory.job === 'dig_out') memory.pit = null;
+    if (memory.job === 'burrow' && last.ok && last.result?.mouth) memory.burrow = last.result.mouth;
+    if (memory.job === 'unburrow' && last.ok) memory.burrow = null;
     memory.job = null;
   }
   if (memory.resting) return { wait: 'resting after too many scares' };
@@ -226,6 +234,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     night: isNight(environment),
     home: !!home,
     atHome: !!home && horizontal(state.position, home) < 8,
+    burrowed: !!memory.burrow,
     sticks: k.sticks,
     knife: k.knife,
     axe: k.axe,
@@ -242,7 +251,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
   };
   switch (job) {
     case 'wait':
-      return { wait: storm ? 'storm' : 'night, nowhere to go' };
+      return { wait: storm ? 'storm' : memory.burrow ? 'night, dug in' : 'night, nowhere to go' };
+    case 'burrow':
+      return start('burrow', {}, 'night with no home');
+    case 'unburrow':
+      return start('dig_area', { cells: [memory.burrow], timeoutMs: 120000 }, 'morning, opening the burrow');
     case 'hide': {
       const away = fleeTarget(state.position, threat);
       return start(
@@ -306,7 +319,7 @@ export function wants(reading: Reading): string[] {
 }
 
 export function fresh(): Memory {
-  return { home: null, cool: new Map(), shelter: null, job: null, pit: null, done: {}, scares: 0, resting: false };
+  return { home: null, cool: new Map(), shelter: null, job: null, pit: null, burrow: null, done: {}, scares: 0, resting: false };
 }
 
 const brain: Brain<Memory> = {
@@ -319,6 +332,7 @@ const brain: Brain<Memory> = {
   wants,
   summary: memory => ({
     home: memory.home,
+    burrow: memory.burrow,
     job: memory.job,
     shelter: memory.shelter?.phase ?? null,
     done: memory.done,

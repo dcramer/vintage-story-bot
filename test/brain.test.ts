@@ -27,6 +27,7 @@ const day = { calendar: { daylight: 1 } },
   _night = { calendar: { daylight: 0.1 } };
 const reading = (extra = {}) => ({ state: state(), inventory: inventory(), environment: day, active: null, last: null, now: 1000, ...extra });
 const situation = (extra = {}) => ({
+  burrowed: false,
   threat: false,
   storm: false,
   hunger: 0.8,
@@ -49,7 +50,9 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ storm: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true })), 'eat');
   assert.equal(pickJob(situation({ night: true, atHome: false })), 'go_home');
-  assert.equal(pickJob(situation({ night: true, home: false, dirt: 0 })), 'wait');
+  assert.equal(pickJob(situation({ night: true, home: false, dirt: 0 })), 'burrow');
+  assert.equal(pickJob(situation({ night: true, home: false, burrowed: true })), 'wait');
+  assert.equal(pickJob(situation({ home: false, burrowed: true })), 'unburrow');
   assert.equal(pickJob(situation({ home: false, dirt: SHELTER_DIRT })), 'shelter');
   assert.equal(pickJob(situation({ home: false })), 'dirt');
   assert.equal(pickJob(situation({ sticks: 3 })), 'sticks');

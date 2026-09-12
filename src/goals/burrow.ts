@@ -1,0 +1,132 @@
+import { z } from 'zod';
+import { defineGoal } from '../runtime/define.ts';
+import { horizontal, lookAt } from '../runtime/navigation/terrain.ts';
+import { changeBlock, selectCell } from '../support/blocks.ts';
+import { diggingSlot, known, solid } from '../support/digging.ts';
+import { equip, ownedSlots } from '../support/inventory.ts';
+import { runField } from '../support/task.ts';
+
+// Night one without a house: dig two blocks into a bank at foot and head height, step in, and seal the
+// mouth with a block from the pack. A one-by-two pocket in solid ground keeps drifters and wolves out.
+const cardinals = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+const earth = (map, x, y, z) => {
+  const cell = map.get(x, y, z);
+  return !!cell && solid(map, x, y, z) && !cell.traits.some(t => t === 'leaves' || t === 'plant' || t === 'shape' || t.startsWith('tier'));
+};
+// A blocking item the pack holds: dirt, sand, gravel, stone, logs, anything the game places as a block.
+export const sealStone = inventory =>
+  ownedSlots(inventory).find(s => s.itemClass === 'Block' && s.quantity > 0 && /soil-|sand-|gravel-|rock-|log-|cobble|clay-|peat/.test(s.code ?? ''));
+
+// A place to burrow: a standable cell beside a bank of hand-diggable earth two blocks high and two deep,
+// with earth around the pocket so it is sealed once the mouth is closed. Nearest first.
+export function burrowSite(map, origin, radius = 10) {
+  const sites: any[] = [];
+  const ox = Math.floor(origin.x),
+    oz = Math.floor(origin.z);
+  for (let dx = -radius; dx <= radius; dx++)
+    for (let dz = -radius; dz <= radius; dz++) {
+      const node = map.nodeAt(ox + dx, oz + dz, origin.y, 3, 3);
+      if (!node || node.wet || node.swim) continue;
+      const x = Math.floor(node.x),
+        z = Math.floor(node.z),
+        h = Math.floor(node.y);
+      for (const [ax, az] of cardinals) {
+        const mouth = { x: x + ax, y: h, z: z + az },
+          back = { x: x + 2 * ax, y: h, z: z + 2 * az };
+        const cut = [mouth, { ...mouth, y: h + 1 }, back, { ...back, y: h + 1 }];
+        if (!cut.every(c => earth(map, c.x, c.y, c.z))) continue;
+        // Roof, floor and side walls of the pocket must be solid and known, or the pocket is not a pocket.
+        const around = [
+          { x: back.x + ax, y: h, z: back.z + az },
+          { x: back.x + ax, y: h + 1, z: back.z + az },
+          { x: mouth.x, y: h + 2, z: mouth.z },
+          { x: back.x, y: h + 2, z: back.z },
+          { x: mouth.x, y: h - 1, z: mouth.z },
+          { x: back.x, y: h - 1, z: back.z },
+          ...[
+            [az, ax],
+            [-az, -ax],
+          ].flatMap(([px, pz]) => [
+            { x: mouth.x + px, y: h, z: mouth.z + pz },
+            { x: mouth.x + px, y: h + 1, z: mouth.z + pz },
+            { x: back.x + px, y: h, z: back.z + pz },
+            { x: back.x + px, y: h + 1, z: back.z + pz },
+          ]),
+        ];
+        if (!around.every(c => known(map, c.x, c.y, c.z) && solid(map, c.x, c.y, c.z))) continue;
+        sites.push({ stand: node, mouth, back, cut, distance: horizontal(node, origin) });
+      }
+    }
+  return sites.sort((a, b) => a.distance - b.distance)[0] ?? null;
+}
+
+export async function burrow(field, survival) {
+  const map = field.env.map;
+  const state = await field.observe(true);
+  const inventory = await field.send({ action: 'inventory' });
+  const seal = sealStone(inventory);
+  if (!seal) return { ok: false, goal: 'burrow', reason: 'nothing_to_seal_with' };
+  const site = burrowSite(map, state.position);
+  if (!site) return { ok: false, goal: 'burrow', reason: 'no_bank_nearby', position: state.position };
+  field.report('walking_to_bank', { stand: site.stand, mouth: site.mouth });
+  if (horizontal(state.position, site.stand) > 0.6) {
+    const walked = await field.walk({ ...site.stand, arrivalRadius: 0.4 }, survival?.pauseWhen);
+    if (!['arrived', 'paused'].includes(walked.state)) return { ok: false, goal: 'burrow', reason: walked.reason ?? 'bank_unreachable' };
+  }
+  // Cut the mouth first, then the back, head height before foot height so nothing falls on the bot.
+  for (const cell of site.cut
+    .slice()
+    .sort(
+      (a, b) =>
+        b.y - a.y || Math.abs(a.x - site.mouth.x) + Math.abs(a.z - site.mouth.z) - Math.abs(b.x - site.mouth.x) - Math.abs(b.z - site.mouth.z),
+    )) {
+    if (!solid(map, cell.x, cell.y, cell.z)) continue;
+    if (horizontal(field.latest.position, cell) > 3 && cell.x === site.back.x && cell.z === site.back.z) {
+      const inward = await field.walk({ x: site.mouth.x + 0.5, y: site.mouth.y, z: site.mouth.z + 0.5, arrivalRadius: 0.4 });
+      if (!['arrived', 'paused'].includes(inward.state)) return { ok: false, goal: 'burrow', reason: 'mouth_unreachable' };
+    }
+    const selected = await selectCell(field, cell, { clearPlants: true });
+    if (!selected) return { ok: false, goal: 'burrow', reason: 'cannot_aim', cell };
+    const slot = await diggingSlot(field, selected, inventory);
+    if (slot === null) return { ok: false, goal: 'burrow', reason: 'cannot_dig', cell, code: selected.code };
+    field.report('cutting', { cell, code: selected.code });
+    const dug = await changeBlock(field, 'dig', { target: selected.key, slot, acceptTransform: true, timeoutMs: 45000 });
+    if (!dug.ok) return { ok: false, goal: 'burrow', reason: dug.reason ?? 'dig_failed', cell };
+  }
+  field.report('entering', { back: site.back });
+  const inside = await field.walk({ x: site.back.x + 0.5, y: site.back.y, z: site.back.z + 0.5, arrivalRadius: 0.35 });
+  if (!['arrived', 'paused'].includes(inside.state) || horizontal(field.latest.position, { x: site.back.x + 0.5, z: site.back.z + 0.5 }) > 0.6)
+    return { ok: false, goal: 'burrow', reason: 'cannot_enter', back: site.back };
+  // Seal: place the block on the top face of the floor under the mouth, from inside.
+  const slot = (await equip(field, { item: seal.code })).slot;
+  const floor = { x: site.mouth.x, y: site.mouth.y - 1, z: site.mouth.z };
+  const point = { x: floor.x + 0.5, y: floor.y + 1, z: floor.z + 0.5 };
+  await field.aim(lookAt({ ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight }, point));
+  const support = await selectCell(field, floor, { point, face: 'up' });
+  if (!support) return { ok: false, goal: 'burrow', reason: 'mouth_floor_not_selectable', inside: true };
+  field.report('sealing', { mouth: site.mouth, item: seal.code });
+  const placed = await changeBlock(field, 'place', { target: support.key, face: 'up', slot, expectedItem: seal.code });
+  if (!placed.ok) return { ok: false, goal: 'burrow', reason: placed.reason ?? 'seal_failed', inside: true };
+  return { ok: true, goal: 'burrow', mouth: site.mouth, inside: site.back, sealed: seal.code, verification: 'client_observed' };
+}
+
+export default defineGoal({
+  name: 'burrow',
+  schema: z
+    .object({
+      timeoutMs: z.number().int().min(1000).max(1200000).default(300000),
+    })
+    .strict(),
+  destructive: true,
+  description:
+    'Dig into the nearest bank of plain earth two blocks deep at foot and head height, step in, and seal the mouth ' +
+    'with a block from the pack: a one-by-two pocket for the night. Ends with the mouth cell to dig out of in the ' +
+    'morning (dig_area), or a reason: nothing_to_seal_with, no_bank_nearby, cannot_dig, cannot_enter, seal_failed.',
+  announce: () => 'Digging in for the night.',
+  run: (env, options) => runField(env, options, ['inventory', 'block_actions'], (field, survival) => burrow(field, survival)),
+});

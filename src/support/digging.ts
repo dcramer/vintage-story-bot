@@ -30,11 +30,11 @@ export function reachable(map, origin, limit = pitLimit) {
   return seen.size;
 }
 
-const solid = (map, x, y, z) => {
+export const solid = (map, x, y, z) => {
   const c = map.get(x, y, z);
   return !!c && !c.hazard && c.boxes.some(b => b[4] - b[1] > 0.99 && b[3] - b[0] > 0.99 && b[5] - b[2] > 0.99);
 };
-const known = (map, x, y, z) => !!map.get(x, y, z);
+export const known = (map, x, y, z) => !!map.get(x, y, z);
 
 // The first stair step toward a point: a cardinal neighbour whose cell at foot
 // level is a solid block (the step) with solid blocks above it (the wall to cut).
