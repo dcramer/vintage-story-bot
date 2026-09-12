@@ -54,6 +54,9 @@ static class StepTrackerTests
         // A drop: forward released in the air so the body falls onto the cell below.
         var down = new StepTracker(new Point3(1.5, 99, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
         Check(!down.Update(new Point3(1.1, 99.6, 0.5), 90, false, false, 100).Forward, "no forward while falling");
+        var pastDrop = new StepTracker(new Point3(1.5, 99, .5), new Point3(.5, 100, .5), .35, .6, false, 0);
+        var fallingPast = pastDrop.Update(new Point3(1.6, 99.8, .5), 90, false, false, 100);
+        Check(!fallingPast.Forward && Math.Abs(fallingPast.Yaw - 90) < 1e-9, "a passed descent keeps its heading while landing");
         // Water: jump held to keep the head up; arrival tolerates the float.
         var swim = new StepTracker(new Point3(1.5, 99.5, 0.5), new Point3(0.5, 99.5, 0.5), 0.35, 1.5, false, 0);
         var stroke = swim.Update(new Point3(0.5, 98.6, 0.5), 90, false, true, 0, swimming: true);

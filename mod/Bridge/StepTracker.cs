@@ -94,6 +94,9 @@ public sealed class StepTracker
             }
             else { State = "arrived"; return (false, buoyant, wantYaw); }
         }
+        // The checkpoint can be behind the body while a descent finishes. Keep the travel
+        // heading until landing instead of turning back toward a point already passed.
+        if (passed && !carry) wantYaw = SceneGeometry.Normalize(Math.Atan2(sx, sz) * 180 / Math.PI);
         double error = Math.Abs(SceneGeometry.Normalize(wantYaw - yawDegrees + 180) - 180);
         // A point with another queued behind it is passed through, not stopped on: the wide gate all the way.
         bool aligned = error < ((Distance > WideAlignDistance || Next is Point3) && !Hop ? WideAlignDegrees : AlignDegrees);
