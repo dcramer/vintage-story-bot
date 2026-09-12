@@ -154,6 +154,30 @@ test('food leads survive productive partial routes but skip stuck ones', () => {
   assert.equal(stuckFoodRoute({ state: 'arrived' }, { x: 0, z: 0 }, { x: 0, z: 0 }), false);
 });
 
+test('recalled blocks enter the goal working set even when the sighting is old', () => {
+  const remembered = {
+    kind: 'block',
+    key: 'block:0:10:1:10:game:fruitingbush-wild-blueberry-free',
+    code: 'game:fruitingbush-wild-blueberry-free',
+    point: { x: 10.5, y: 1.5, z: 10.5 },
+    ageMs: 8 * 60 * 60 * 1000,
+  };
+  const field = new Fieldwork(
+    {
+      sightings: { view: () => [remembered] },
+    },
+    { now: () => 1000 },
+  );
+  field.latest = {
+    capabilities: ['sightings'],
+    position: { x: 0.5, y: 1, z: 0.5 },
+    body: { eyeHeight: 1.6 },
+    pickingRange: 4.5,
+  };
+  assert.deepEqual(field.recall(128, ['bush'], 'blocks'), [remembered]);
+  assert.equal(field.targets(object => object.key === remembered.key).length, 1);
+});
+
 test('threat avoidance is explicit, proximity-bounded and points away', () => {
   const player = { x: 10.5, y: 2, z: 10.5 };
   const wolf = { code: 'game:wolf-male', point: { x: 8.5, y: 2, z: 10.5 } };

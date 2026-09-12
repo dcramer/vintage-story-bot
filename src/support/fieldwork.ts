@@ -264,7 +264,11 @@ export class Fieldwork {
       remembered: true,
       reach: this.latest.pickingRange ?? 4.5,
     });
-    for (const object of objects) if (!this.seen.has(object.key)) this.seen.set(object.key, { ...object, seenAt: this.now() - object.ageMs });
+    // `seen` is the goal's short-lived working set. The sighting still carries
+    // its real age in ageMs; entering working memory happens now, otherwise
+    // prune() immediately discards every useful block remembered over two
+    // minutes ago and recall silently cannot produce a target.
+    for (const object of objects) if (!this.seen.has(object.key)) this.seen.set(object.key, { ...object, seenAt: this.now() });
     return objects;
   }
   // Turn through a full circle from where the bot stands, letting the vision
