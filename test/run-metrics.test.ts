@@ -246,6 +246,12 @@ test('fleet metrics recover a missed dead sample from the respawn trail marker',
   assert.equal(bot.runs.current.startedAt, 3000);
   assert.equal(bot.runs.current.distance, 3);
   assert.equal(bot.runs.current.controllerSegments, 1);
+
+  mergeRunMetric(bot, metric('restarted-controller', 6000, 7000, 4, 23));
+  assert.equal(bot.runs.recent.length, 1);
+  assert.equal(bot.runs.current.startedAt, 3000);
+  assert.equal(bot.runs.current.distance, 7);
+  assert.equal(bot.runs.current.controllerSegments, 2);
 });
 
 test('fleet metrics heal a revived run polluted by a pre-death segment', () => {

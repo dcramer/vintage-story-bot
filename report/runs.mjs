@@ -142,7 +142,7 @@ export function mergeRunMetric(bot, value) {
     priorDeath.alive = false;
     // Heal records written by the first metrics revision, which let a
     // pre-death controller segment leak back into the revived run.
-    if (runs.current.startedAt <= priorDeath.endedAt && segmentStartedAt > priorDeath.endedAt) {
+    if (runs.current.startedAt < priorDeath.endedAt && segmentStartedAt > priorDeath.endedAt) {
       runs.current = null;
       bot.runSegments = {};
       transition = true;
