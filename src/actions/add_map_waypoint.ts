@@ -25,6 +25,7 @@ export default defineAction({
     .strict()
     .refine(a => [a.x, a.y, a.z].every(v => v === undefined) || [a.x, a.y, a.z].every(v => v !== undefined), 'Supply all of x/y/z or none'),
   destructive: true,
+  concurrent: true,
   description:
     "Add a marker to the player's own game map the way the map screen does (the game's add command), at x/y/z or where the bot " +
     'stands. Server-validated; verify by reading map_waypoints until a marker with the title appears. Never retry blindly. ' +

@@ -10,17 +10,18 @@ resumes on its own.
 
 - Install at start: `pnpm bot --brain default` or `VINTAGE_STORY_BRAIN=default`.
 - Switch while running: the `brain` action reads status, installs by name, or removes (`null`).
-- A goal started by an adapter always wins: the brain waits until it is over and never cancels it. Its own goals it interrupts only for danger, storms and hunger.
-- Every brain gets respawn for free: dead with a respawn available means respawn, then carry on. Deep water with no goal running means swim for the nearest remembered dry ground with the jump key held.
+- The brain sees every goal, whoever started it. Danger (a hostile seen or heard, a hit) stops any goal; storms and hunger cut short only the brain's own; an adapter's goal is otherwise left to finish and never replaced.
+- Nothing happens without the brain: respawning, swimming for shore, running from a hit and marking a find are its decisions. The loop wakes it when the controller notices something (`events`) as well as every couple of seconds.
 - A brain may return `wants`: code substrings every walk picks up when they lie within six blocks (loose sticks, stones, flints, dropped items), whatever the current job. The default brain wants sticks until it has ten, flint and loose stones until it has tools.
-- Code: `src/brain/<name>.ts` default-exports `{ name, description, fresh(), decide(reading, memory), summary?(memory) }`; `src/runtime/brain.ts` owns the loop. `decide` is pure: one reading (`observe`, `inventory`, `environment`, the active goal, the brain's own goal that just finished) and the brain's memory in, one decision out (`{ start, args, why }`, `{ stop }`, `{ wait }`). `test/brain.test.ts` covers it without a game.
+- Code: `src/brain/<name>.ts` default-exports `{ name, description, fresh(), decide(reading, memory), summary?(memory) }`; `src/runtime/brain.ts` owns the loop. `decide` is pure: one reading (`observe`, `inventory`, `environment`, the active goal, the brain's own goal that just finished, the events since the last decision, the player's own map markers, the nearest dry ground while swimming) and the brain's memory in, one decision out (`{ start, args, why }`, `{ act, why }`, `{ stop }`, `{ wait }`). `act` runs actions by hand; alongside a running goal only tools that talk (chat, map markers, memory) are accepted. `test/brain.test.ts` covers it without a game.
 
 Later brains (roles) differ only in `decide`. Behavior sources: [getting-started](getting-started.md), [architecture](architecture.md), [bot API](bot-api-reference.md).
 
 ## Default brain: cautious beginner
 
-A new player who stays alive first and builds up slowly. Afraid of monsters,
-keeps its belly full, spends the night inside four walls. Follows
+A new player who stays alive first and builds up slowly. Afraid of monsters
+and of whatever just hit it, keeps its belly full, spends the night inside four walls,
+marks copper it passes for later. Follows
 [getting-started](getting-started.md) days 1–2 minus all pottery. It never
 fights; it runs or hides.
 
@@ -28,9 +29,12 @@ fights; it runs or hides.
 
 | Job | Goal | When |
 | --- | --- | --- |
-| hide | `travel` away from the threat | Monster seen or heard near |
+| hide | `travel` away from the threat, or home / straight ahead | Monster seen or heard near, or hurt by something unseen |
+| copper | `add_map_waypoint` Copper and a `chat` line, alongside whatever runs | A copper nugget sighted with no Copper marker within 32 blocks |
+| dead | `respawn` | Dead with a respawn offered |
+| swim | `look` and `move` with jump held | In deep water with no goal running |
 | go_home | `travel` home | Storm or night, away from home |
-| wait | none | Storm at home, night with nowhere to go, or a job cooling down |
+| wait | none | Storm at home, or night with nowhere to go |
 | eat | `eat`, else `forage` | Satiety below 20% |
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
 | shelter | `shelter` | Enough dirt (by day, or at night with nowhere else) |

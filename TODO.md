@@ -120,9 +120,9 @@ Blocks day 4 (storage vessel, crock) until firepit/vessel specifics land; the da
 - [~] `chat {to}` — private message to one player through the game's own `/pm`; Mineflayer `whisper` (`mod`, `ctl`). Not live-verified.
 - [ ] **P1 · block_changed stream** — bounded ring of visible cell changes near the player; dedupe with terrain deltas (`mod`, `ctl`).
 - [ ] **P1 · inventory_changed stream** — bounded `SlotModified` ring with session/reset/overflow semantics like life events, for pickup confirmation without polling (`mod`, `ctl`). Mineflayer `playerCollect`.
-- [ ] **P1 · goal events** — goal completed/failed appended to the same cursor so one poll covers both (`ctl`).
-- [ ] **P2 · entity events** — hostile sighted/lost, entity hurt near player (`mod`).
-- [ ] **P2 · long-poll `events {waitMs}`** — block up to N ms for the next event to cut idle polling (`ctl`).
+- [x] goal events — `goal_started`/`goal_finished` on the controller `events` log.
+- [~] entity events — `sighted` on first confirmation (entities, items, watched blocks); `hurt`, `died`, `alert`, `storm` from state deltas. No `lost` yet. Not live-verified.
+- [x] long-poll `events {waitMs}` — served ahead of the request lock.
 
 ## 10. Navigation (`goto`, `setGoal`, `stop`, goals, movements, `path_update`)
 

@@ -12,6 +12,10 @@ export const salient = ['ore', 'berry', 'stick', 'flint', 'loose', 'mushroom', '
 // Node remembers.
 export class GameClient {
   knowledge: any = null;
+  // The controller's event log; what changes between two states is reported there.
+  events: any = null;
+  lifeSeen: any = null;
+  capabilities: string[] = [];
   send: (request: any, options?: any) => Promise<any>;
   map = new TerrainMemory();
   surface = new SurfaceMemory();
@@ -24,8 +28,9 @@ export class GameClient {
       // observe carries only this instant's entities; memory adds what left the view.
       if (request.action === 'observe' && result?.ok && Array.isArray(result.nearbyEntities)) {
         this.knowledge?.enter(result.world?.identifier);
-        this.sightings.observeEntities(result.nearbyEntities);
+        this.sighted(this.sightings.observeEntities(result.nearbyEntities));
         result.nearbyEntities = this.sightings.entities(result.position);
+        this.notice(result);
       }
       return result;
     };
@@ -50,8 +55,37 @@ export class GameClient {
     this.map.apply(batch.terrain);
     this.knowledge?.touch();
     if (batch.surface) this.surface.apply(batch.surface);
-    if (batch.sightings) this.sightings.apply(batch.sightings);
+    if (batch.sightings) this.sighted(this.sightings.apply(batch.sightings));
     if (batch.sightings && batch.state) batch.state.nearbyEntities = this.sightings.entities(batch.state.position);
+    if (batch.state) this.notice(batch.state);
+  }
+  // Something confirmed by a line of sight for the first time.
+  sighted(fresh = []) {
+    for (const s of fresh) this.events?.emit('sighted', { kind: s.kind ?? 'entity', key: s.key, code: s.code, point: s.point, how: s.how ?? 'seen' });
+  }
+  // Life, as it changed since the last state: hurt, died, alive, alerts, storm.
+  // Attrition (starvation, instability) does not move lastDamageAt, so hurt means an attack or a fall.
+  notice(state) {
+    if (!state?.ok || !state.life) return;
+    if (Array.isArray(state.capabilities)) this.capabilities = state.capabilities;
+    const life = state.life;
+    const now = {
+      session: life.session,
+      alive: !!state.alive,
+      lastDamageAt: life.lastDamageAt ?? null,
+      alerts: (life.alerts ?? []).join(','),
+      storm: state.condition?.temporalStorm?.phase ?? 'clear',
+    };
+    const seen = this.lifeSeen?.session === now.session ? this.lifeSeen : null;
+    this.lifeSeen = now;
+    if (!seen) return;
+    const position = state.position ? { x: state.position.x, y: state.position.y, z: state.position.z } : null;
+    const health = state.vitals?.health?.current ?? null;
+    if (now.lastDamageAt !== null && now.lastDamageAt !== seen.lastDamageAt) this.events?.emit('hurt', { health, position });
+    if (seen.alive && !now.alive) this.events?.emit('died', { deathId: life.deathId ?? null, position });
+    if (!seen.alive && now.alive) this.events?.emit('alive', { position });
+    if (now.alerts !== seen.alerts) this.events?.emit('alert', { alerts: life.alerts ?? [], health });
+    if (now.storm !== seen.storm) this.events?.emit('storm', { phase: now.storm });
   }
   async sense(signal?: AbortSignal) {
     const batch = await this.io({ action: 'sense', ...this.cursors() }, signal);

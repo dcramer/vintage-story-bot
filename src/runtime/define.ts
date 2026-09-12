@@ -7,6 +7,7 @@
  * @property {boolean} [readOnly]
  * @property {boolean} [idempotent]
  * @property {boolean} [destructive]
+ * @property {boolean} [concurrent] Talks without holding the body (chat, map markers, memory): allowed while a goal runs.
  * @property {(runtime: object, args: object) => Promise<object>} [local] Controller-local handler; otherwise forwarded to the mod.
  */
 export const defineAction = definition => definition;

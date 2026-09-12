@@ -16,7 +16,7 @@
 | `mod/Actuators/` | Input-driven mutations: block actions, inventory transfer/craft, knapping/clay forming. |
 
 - Controller/goals/navigation cannot use screenshots, UI tools, OS focus, or hidden world queries.
-- One shared controller, one active goal. START ≠ completion; observe ids. Restart cancels goals; never auto-resume. Memory is ephemeral.
+- One shared controller, one active goal. A tool marked `concurrent` (chat, map markers, controller memory) runs alongside a goal because it never holds the body. START ≠ completion; observe ids. Restart cancels goals; never auto-resume. Memory is ephemeral.
 - Plain async everywhere: a goal is cancelled through its AbortSignal and its own cleanup (control_end, stop) runs before the next goal can hold the inputs; mod deadlines remain independent. Never retry mutations, including frames.
 
 ## Design intent
@@ -43,7 +43,7 @@ Loopback JSON line: `{action,...args}` → `{ok,...result}` or `{ok:false,error,
 - `goal_status {id?}`: latest or retained goal, `args` (parsed request), timestamps (UTC ms), state/progress/result, `active`, controller session. No game I/O or waiting behind game startup. Last 64 completed goals; unknown/evicted/restarted id → `goal_not_found`, never inferred success.
 - `active` remains true through finalization. States: `starting|running`, navigation phases, `arrived|blocked|cancelled`; arrival is success only after cleanup. Controller session changes on restart; history is not durable.
 - `stop {expectedGoal?}`: guarded cancellation of current/latest goal; no guard = global stop. Reject mismatched id. Separate stop/start deliberately avoids implicit replacement races.
-- `events` remains the mod's bounded life-event cursor API, separate from goal status; `messages` is the same ring shape for chat lines the player has seen. Resync after missed events. Polling never wakes an idle LLM.
+- `events {after?,session?,types?,limit?,waitMs?}` (controller-local): what the controller noticed, as a bounded ring with cursor/session/missed semantics: `sighted` (first confirmation of a sighting), `hurt`, `died`, `alive`, `alert`, `storm` (derived from state deltas), `message` (chat lines polled from the mod's ring), `goal_started`, `goal_finished`. `waitMs` blocks for the next event, served ahead of the request lock. The same log wakes an installed brain. `messages` reads the mod's chat ring directly. The bus reports; it decides nothing.
 
 ## Telemetry
 

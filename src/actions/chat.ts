@@ -17,6 +17,7 @@ export default defineAction({
         .describe("Player name for a private message through the game's own /pm instead of general chat."),
     })
     .strict(),
+  concurrent: true,
   description:
     'Send one plain chat line to the server general chat as the bot, or privately to one player with to. Fire-and-forget; ' +
     'not gameplay control. Leading command characters are stripped. Goals announce themselves automatically on start; ' +

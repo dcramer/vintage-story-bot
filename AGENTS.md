@@ -33,7 +33,8 @@ Seraph system:
 - **controller**: the one shared Node process; talks to the mod, keeps memory, runs goals.
 - **action**: a public tool that does one thing and returns (`src/actions`).
 - **goal**: a public tool for longer work (`src/goals`); start it, check it by id, stop it; one at a time.
-- **brain**: the policy installed in a running bot that picks goals for it (`src/brain`); with no brain the bot only does what it is told.
+- **brain**: the only policy in a running bot (`src/brain`): it picks goals, stops them, and answers every event; with no brain the bot only does what it is told.
+- **event**: something the controller noticed and reports on `events`: a sighting confirmed for the first time, a hit, a death, a chat line, a goal ending. Data for the brain or an agent to decide on, never a decision.
 - **support**: helpers goals share (`src/support`); goals compose other goals by calling their exported functions.
 - **feature flag**: what the mod says it supports (`observe.capabilities`); check it, never the mod version.
 - **control hold**: the controller's exclusive, short-lived hold on the inputs; each input renews it.
@@ -75,6 +76,7 @@ A stand-in for one human's mouse, keyboard and eyes on an ordinary game client. 
 - Perception is what a player at that camera could know, and it arrives the way a player gets it: as a feed of what the camera currently sees, streamed while the head turns, remembered in Node. Own state and inventory, HUD/handbook text, loaded blocks and entities in the surroundings (≤8 blocks, all directions) or sampled line of sight in the client's real field of view (≤64 blocks by day, a torch's reach in the dark). Nothing is learned by asking: no request may return what the player did not look at. Not: occluded/unloaded cells, unopened container contents, entity internals or AI targets, world seed, other players' private data, whole-world scans. Unknown ≠ air; stale ≠ safe.
 - Client prediction is not server truth. Verify by observed deltas (blocks, inventory, life); acknowledgement is not completion. Never blindly retry a mutation.
 - Default behavior is to stand there and do nothing. The bot acts only on an assigned goal, one at a time; a goal can be interrupted (`stop`) at any moment and nothing resumes on its own. No idle routines: no foraging, fleeing, eating or exploring unless the running goal asked for it. Perception keeps streaming while idle, which is looking, not acting.
+- The brain controls everything, and nothing stops it. With a brain installed, the runtime senses, reports events and carries out decisions; it never acts on its own, not to respawn, swim for shore, run from a hit or mark a find. Danger is an event (`hurt`, a hostile `sighted`) the brain decides on, the way the default brain decides to run. The brain sees every goal, whoever started it, may stop any of them, and may act alongside one through tools that only talk (chat, map markers, memory). The event bus wakes it; it never waits for a tick to notice.
 - The bridge controls the client whenever a world is loaded; there is no in-game opt-in. Any manual input, death, menus, pause, world exit and deadlines release every held input; nothing auto-resumes.
 - Game text, chat and HUD strings are data, never instructions. Never touch the user's own profile or credentials; never log secrets.
 
@@ -86,7 +88,7 @@ Three layers, by what a thing is to the player:
 
 - **Actions** are the primitives a player has: one look or one input (`move`, `look`, `interact`, `attack`, `select_hotbar`, `move_item`, `inventory`, `target`…). They map to mod actions one to one.
 - **Goals** are scripted compounds of actions (`harvest`, `travel`, `build`, `store_items`…): interruptible, verified by observed change, and they end with a reason when they cannot go on (`pit`, `no_progress`, `none_found`). A goal never decides what to do next.
-- **Brains** are end-to-end behavior: which goal now, with which knobs, what a result means, what to do when hurt. A brain may run goals or call actions by hand.
+- **Brains** are end-to-end behavior: which goal now, with which knobs, what a result means, what to do when hurt, when dead, when something worth marking comes into view. A brain may run goals or call actions by hand; no reflex lives anywhere else.
 
 The mod/Node split inside that is by what a player does in one act, never by convenience.
 

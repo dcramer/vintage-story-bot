@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { EventLog } from './events.ts';
 import { GameClient } from './game.ts';
 import { compileGoalScript, runGoalPlan } from './goal-script.ts';
 import { Knowledge } from './navigation/knowledge.ts';
@@ -43,8 +44,12 @@ export class Controller {
   history = new Map();
   waypoints = new Map();
   lock = Promise.resolve();
+  events = new EventLog();
+  chatCursor = { after: 0, session: undefined as string | undefined };
   constructor(send, telemetry = null) {
     this.game = new GameClient(send);
+    this.game.events = this.events;
+    this.events.subscribe(event => this.telemetry?.publish('event', event));
     this.telemetry = telemetry;
     this.knowledge = this.game.knowledge = new Knowledge(process.env.VINTAGE_STORY_KNOWLEDGE_DIR ?? '.runtime/knowledge', this.game);
     if (telemetry) {
@@ -153,6 +158,7 @@ export class Controller {
   // The eye: read what the player sees at a steady cadence whether or not a
   // goal is walking, so memory and threats are never older than a glance.
   // Read-only; a lost bridge just backs off until it returns.
+  eyeTicks = 0;
   eye(intervalMs = 250) {
     if (this.eyeTimer) return;
     const tick = async () => {
@@ -165,6 +171,19 @@ export class Controller {
           await this.game.sense();
         } catch {
           delay = 2000;
+        }
+      }
+      // Chat lines the player has read since the last look, once a second.
+      if (++this.eyeTicks % 4 === 0 && this.game.capabilities.includes('chat_messages')) {
+        try {
+          const batch = await this.game.send({ action: 'messages', ...this.chatCursor });
+          if (batch.ok) {
+            this.chatCursor = { after: batch.cursor, session: batch.session };
+            for (const line of batch.messages ?? [])
+              this.events.emit('message', { sender: line.sender ?? null, text: line.text, kind: line.type, group: line.group });
+          }
+        } catch {
+          /* the next tick reads again */
         }
       }
       try {
@@ -200,9 +219,10 @@ export class Controller {
   request(request, { by }: { by?: string } = {}) {
     if (!request || typeof request !== 'object' || Array.isArray(request)) return Promise.reject(new Error('Expected an action object'));
     // Control-plane reads never wait for a game request or an in-flight goal startup.
-    if (request.action === 'api' || request.action === 'goal_status') {
+    if (request.action === 'api' || request.action === 'goal_status' || request.action === 'events') {
       const { action, ...args } = request;
       const parsed = findTool(action).schema.parse(args);
+      if (action === 'events') return findTool('events').local(this, parsed);
       if (action === 'api')
         return Promise.resolve({
           ok: true,
@@ -211,6 +231,7 @@ export class Controller {
             name: t.name,
             action: t.action ?? t.name,
             execution: goals.includes(t) ? 'goal' : t.readOnly ? 'query' : 'command',
+            concurrent: !!t.concurrent,
             description: t.description,
             inputSchema: z.toJSONSchema(t.schema),
           })),
@@ -235,7 +256,8 @@ export class Controller {
       if (!tool) throw new Error('Unknown controller action; screenshots/UI and raw control frames are not exposed.');
       const { action, ...args } = request;
       const parsed = tool.schema.parse(args);
-      if (this.active && !tool.readOnly) throw new Error('Goal active; stop it before another mutation.');
+      // A tool that needs the body waits for the goal; one that only talks (chat, map markers, memory) runs alongside it.
+      if (this.active && !tool.readOnly && !tool.concurrent) throw new Error('Goal active; stop it before another mutation.');
       if (tool.launch) return this.launch(tool.name, parsed, (record, started, signal) => tool.launch(this, parsed, record, started, signal), by);
       if (tool.run) return this.launch(tool.name, parsed, (record, started, signal) => this.runTask(tool.run, parsed, record, started, signal), by);
       if (tool.local) return tool.local(this, parsed);
@@ -274,6 +296,7 @@ export class Controller {
     };
     this.active = this.last = record;
     this.track(record);
+    this.events.emit('goal_started', { goal: record.id, kind, by });
     this.announce(kind, args);
     record.done = (async () => {
       try {
@@ -292,6 +315,14 @@ export class Controller {
         if (this.active === record) this.active = null;
         record.finishedAt = Date.now();
         this.history.set(record.id, this.goalView(record));
+        this.events.emit('goal_finished', {
+          goal: record.id,
+          kind,
+          by,
+          state: record.state,
+          ok: record.state === 'arrived',
+          reason: record.reason ?? record.result?.reason ?? null,
+        });
         this.track(record);
         while (this.history.size > 64) this.history.delete(this.history.keys().next().value);
       }

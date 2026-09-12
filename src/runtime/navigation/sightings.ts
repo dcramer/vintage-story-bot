@@ -18,23 +18,29 @@ export class SightingsMemory {
   wall = 0;
   capacity = 32768;
   apply(snapshot, wall = Date.now()) {
-    if (!snapshot) return 0;
+    if (!snapshot) return [];
     this.now = snapshot.clock ?? this.now;
     this.wall = wall;
     for (const record of this.records.values()) record.visible = false;
-    for (const [key, kind, code, x, y, z, how, at, extra] of snapshot.sightings ?? [])
-      this.records.set(key, { key, kind, code, point: { x, y, z }, how, at: at ?? this.now, seenAt: wall, extra: extra ?? null, visible: true });
+    const fresh = [];
+    for (const [key, kind, code, x, y, z, how, at, extra] of snapshot.sightings ?? []) {
+      const record = { key, kind, code, point: { x, y, z }, how, at: at ?? this.now, seenAt: wall, extra: extra ?? null, visible: true };
+      if (!this.records.has(key)) fresh.push(record);
+      this.records.set(key, record);
+    }
     this.prune();
-    return snapshot.sightings?.length ?? 0;
+    return fresh;
   }
   // observe reports entities seen this instant without a snapshot clock;
   // fold them in so memory stays current between sense reads.
   observeEntities(entities = [], wall = Date.now()) {
     for (const record of this.records.values()) if (record.kind === 'entity') record.visible = false;
     this.wall = wall;
+    const fresh = [];
     for (const entity of entities) {
       const at = entity.seenAt ?? this.now;
       this.now = Math.max(this.now, at);
+      if (!this.records.has(entity.key)) fresh.push(entity);
       this.records.set(entity.key, {
         key: entity.key,
         kind: 'entity',
@@ -48,6 +54,7 @@ export class SightingsMemory {
       });
     }
     this.prune();
+    return fresh;
   }
   prune() {
     const wall = this.wall || Date.now();

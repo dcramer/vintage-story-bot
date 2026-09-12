@@ -1,8 +1,9 @@
-// The core run loop of a bot with a brain installed. Every tick it reads what
-// the player knows right now, hands that reading to the brain, and carries out
-// the one decision it returns by starting or stopping a public goal through
-// the controller, exactly as an adapter would. Any brain gets respawn for free.
-// Goals started by someone else are never touched: the brain waits for them.
+// The core run loop of a bot with a brain installed. Every tick, and as soon
+// as the controller notices something, it reads what the player knows right
+// now, hands that reading to the brain, and carries out the one decision it
+// returns by starting or stopping a goal or calling actions by hand, exactly
+// as an adapter would. The loop decides nothing itself: respawning, swimming
+// for shore, running from a hit are all the brain's to choose.
 // The slice of the controller a brain loop uses; the class itself is plain JS.
 export interface ControllerLike {
   active: any;
@@ -11,6 +12,7 @@ export interface ControllerLike {
   history: Map<string, any>;
   wants: string[];
   map?: any;
+  events?: any;
   send(request: object): Promise<any>;
   request(request: object, options?: { by?: string }): Promise<any>;
   stop(reason?: string): Promise<void>;
@@ -25,9 +27,17 @@ export type Reading = {
   active: { id: string; kind: string; state: string; by: string } | null;
   // The brain's own goal that finished since the previous tick, once.
   last: { id: string; kind: string; ok: boolean; reason?: string; result?: any } | null;
+  // What the controller noticed since the previous decision, oldest first (events).
+  events: any[];
+  // The player's own markers on the game map, when the mod reports them.
+  markers: { guid: string; title: string; icon: string; position: { x: number; y: number; z: number } }[];
+  // The nearest remembered dry standing cell within 16 blocks while swimming, else null.
+  ground: { x: number; y: number; z: number } | null;
   now: number;
 };
-// start: run a goal. act: call actions by hand, in order (a brain's own reflex, e.g. flee when no goal may walk).
+// start: run a goal (only while none runs). act: call actions by hand, in order; alongside a
+// goal only tools that talk (chat, map markers, memory) are allowed. stop: cancel the running
+// goal, whoever started it. wait: nothing.
 export type Decision =
   | { start: string; args: Record<string, unknown>; why: string }
   | { act: Record<string, unknown>[]; why: string }
@@ -43,16 +53,6 @@ export interface Brain<Memory = unknown> {
   wants?(reading: Reading, memory: Memory): string[];
 }
 
-const sleep = (ms: number, signal: AbortSignal) =>
-  new Promise<void>(resolve => {
-    const timer = setTimeout(done, ms);
-    function done() {
-      clearTimeout(timer);
-      signal.removeEventListener('abort', done);
-      resolve();
-    }
-    signal.addEventListener('abort', done, { once: true });
-  });
 const say = (text: string) => console.error(`${new Date().toISOString().slice(11, 19)} brain ${text}`);
 
 export class BrainLoop<Memory> {
@@ -67,11 +67,17 @@ export class BrainLoop<Memory> {
   private controller: ControllerLike;
   brain: Brain<Memory>;
   private tickMs: number;
+  // Events are read from here on; the loop wakes early when one lands.
+  private cursor: number;
+  private nudge: (() => void) | null = null;
+  private unsubscribe: (() => void) | null = null;
   constructor(controller: ControllerLike, brain: Brain<Memory>, tickMs = 2000) {
     this.controller = controller;
     this.brain = brain;
     this.tickMs = tickMs;
     this.memory = brain.fresh();
+    this.cursor = controller.events?.sequence ?? 0;
+    this.unsubscribe = controller.events?.subscribe?.(() => this.nudge?.()) ?? null;
   }
   status() {
     return {
@@ -98,14 +104,30 @@ export class BrainLoop<Memory> {
           this.faults++;
           say(`fault: ${error instanceof Error ? error.message : String(error)}`);
         }
-        await sleep(this.faults ? Math.min(30000, 2000 * this.faults) : this.tickMs, signal);
+        await this.rest(this.faults ? Math.min(30000, 2000 * this.faults) : this.tickMs, signal);
       }
     })();
+  }
+  // Sleep until the tick is due, an event lands, or the loop stops; a fault's back-off is not cut short.
+  private rest(ms: number, signal: AbortSignal) {
+    return new Promise<void>(resolve => {
+      const done = () => {
+        clearTimeout(timer);
+        this.nudge = null;
+        signal.removeEventListener('abort', done);
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      if (!this.faults) this.nudge = () => setTimeout(done, 50);
+      signal.addEventListener('abort', done, { once: true });
+      if (!this.faults && (this.controller.events?.sequence ?? 0) > this.cursor) this.nudge?.();
+    });
   }
   // Uninstall: end the loop and cancel the brain's own goal; a goal someone
   // else started is left alone.
   async stop() {
     this.stopping.abort();
+    this.unsubscribe?.();
     await this.running;
     const active = this.controller.active as any;
     if (active && active.by === 'brain') await this.controller.stop('brain_removed');
@@ -115,18 +137,6 @@ export class BrainLoop<Memory> {
     const controller = this.controller;
     const state = await controller.send({ action: 'observe' });
     if (!state.ok) throw new Error(state.error ?? 'observe refused');
-    if (!state.alive) {
-      if (!state.life?.deathId) return;
-      say(`dead; respawning (${state.life.deathId})`);
-      const respawn = await controller.send({ action: 'respawn', deathId: state.life.deathId });
-      if (!respawn.ok) throw new Error(respawn.error ?? 'respawn refused');
-      return;
-    }
-    // Deep water is the one thing no goal handles once a life alert is up: swim for the nearest dry ground.
-    if (state.motion?.swimming && !controller.active) {
-      await this.surface(state);
-      return;
-    }
     const record = controller.active as any;
     const active = record ? { id: record.id, kind: record.kind, state: record.state, by: record.by } : null;
     let last: Reading['last'] = null;
@@ -141,15 +151,26 @@ export class BrainLoop<Memory> {
       };
       this.goal = null;
     }
-    // Someone else's goal: the brain keeps its hands off until it is over.
-    if (active && active.by !== 'brain') {
-      this.lastDecision = `waiting for ${active.kind} (${active.by})`;
-      return;
-    }
-    const [inventory, environment] = await Promise.all([controller.send({ action: 'inventory' }), controller.send({ action: 'environment' })]);
+    const [inventory, environment, markers] = await Promise.all([
+      controller.send({ action: 'inventory' }),
+      controller.send({ action: 'environment' }),
+      this.markers(state),
+    ]);
     if (!inventory.ok) throw new Error(inventory.error ?? 'inventory refused');
     if (!environment.ok) throw new Error(environment.error ?? 'environment refused');
-    const reading: Reading = { state, inventory, environment, active, last, now: Date.now() };
+    const batch = controller.events?.read?.(this.cursor, null, { limit: 128 }) ?? { events: [], cursor: this.cursor };
+    this.cursor = batch.cursor;
+    const reading: Reading = {
+      state,
+      inventory,
+      environment,
+      active,
+      last,
+      events: batch.events,
+      markers,
+      ground: state.motion?.swimming ? this.dryGround(state) : null,
+      now: Date.now(),
+    };
     if (this.brain.wants) controller.wants = this.brain.wants(reading, this.memory);
     const decision = this.brain.decide(reading, this.memory);
     if ('wait' in decision) {
@@ -161,7 +182,6 @@ export class BrainLoop<Memory> {
       if (active) await controller.stop(`brain: ${decision.stop}`);
       return;
     }
-    if (active) return;
     if ('act' in decision) {
       this.note(`act ${decision.act.map(a => a.action).join(', ')}: ${decision.why}`);
       for (const step of decision.act) {
@@ -170,37 +190,39 @@ export class BrainLoop<Memory> {
       }
       return;
     }
+    if (active) {
+      this.note(`cannot start ${decision.start} while ${active.kind} runs; stop it first`);
+      return;
+    }
     this.note(`${decision.start} ${JSON.stringify(decision.args)}: ${decision.why}`);
     const started = await controller.request({ action: decision.start, ...decision.args }, { by: 'brain' });
     if (!started.ok) throw new Error(`${decision.start} refused: ${started.error}`);
     this.goal = { id: started.goal.id, kind: decision.start };
   }
-  // Swim toward the nearest known dry ground with the jump key held (in water it keeps the head up),
-  // one bounded stroke per tick; with no dry ground remembered, keep the current heading.
-  private async surface(state: any) {
-    const p = state.position;
-    let yaw = state.orientation?.yawDegrees ?? 0,
+  // The player's own map markers, when the mod reports them; a refusal reads as none.
+  private async markers(state: any) {
+    if (!state.capabilities?.includes?.('map_waypoints')) return [];
+    const read = await this.controller.send({ action: 'map_waypoints' }).catch(() => null);
+    return read?.ok ? (read.waypoints ?? []).map(w => ({ guid: w.guid, title: w.title, icon: w.icon, position: w.position })) : [];
+  }
+  // The nearest remembered dry standing cell within 16 blocks, from terrain memory.
+  private dryGround(state: any) {
+    const p = state.position,
+      map = this.controller.map;
+    if (!map) return null;
+    let best = Infinity,
       target: any = null;
-    const map = this.controller.map;
-    if (map) {
-      let best = Infinity;
-      for (let dx = -16; dx <= 16; dx++)
-        for (let dz = -16; dz <= 16; dz++) {
-          const node = map.nodeAt(Math.floor(p.x) + dx, Math.floor(p.z) + dz, p.y, 2, 4);
-          if (!node || node.wet || node.swim) continue;
-          const far = Math.hypot(node.x - p.x, node.z - p.z);
-          if (far < best) {
-            best = far;
-            target = node;
-          }
+    for (let dx = -16; dx <= 16; dx++)
+      for (let dz = -16; dz <= 16; dz++) {
+        const node = map.nodeAt(Math.floor(p.x) + dx, Math.floor(p.z) + dz, p.y, 2, 4);
+        if (!node || node.wet || node.swim) continue;
+        const far = Math.hypot(node.x - p.x, node.z - p.z);
+        if (far < best) {
+          best = far;
+          target = node;
         }
-      if (target) yaw = ((Math.atan2(target.x - p.x, target.z - p.z) * 180) / Math.PI + 360) % 360;
-    }
-    this.note(
-      `surfacing: swimming ${target ? `toward ${Math.round(target.x)},${Math.round(target.z)}` : 'ahead'}, oxygen ${Math.round(((state.vitals?.oxygen?.current ?? 0) / (state.vitals?.oxygen?.max || 1)) * 100)}%`,
-    );
-    await this.controller.send({ action: 'look', yawDegrees: yaw, pitchDegrees: 0 });
-    await this.controller.send({ action: 'move', durationMs: 1500, direction: 'forward', jump: true, sprint: false, sneak: false });
+      }
+    return target ? { x: target.x, y: target.y, z: target.z } : null;
   }
   private note(text: string) {
     if (text === this.lastDecision) return;

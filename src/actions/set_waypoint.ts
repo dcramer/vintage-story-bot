@@ -13,6 +13,7 @@ export default defineAction({
     })
     .strict()
     .refine(a => [a.x, a.y, a.z].every(v => v === undefined) || [a.x, a.y, a.z].every(v => v !== undefined), 'Supply all of x/y/z or none'),
+  concurrent: true,
   description:
     'Remember a named point (default: current position) in controller memory for travel {waypoint}. Session-scoped, at most 64, ' +
     'lost on controller restart; no game map marker.',

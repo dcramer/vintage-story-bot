@@ -12,6 +12,7 @@ export default defineAction({
   action: 'map_waypoint_remove',
   schema,
   destructive: true,
+  concurrent: true,
   description:
     "Delete one of the player's own map markers the way the map screen does (the game's remove command). " +
     'Server-validated; verify by reading map_waypoints until the guid is gone. Never retry blindly.',

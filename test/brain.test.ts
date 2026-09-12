@@ -26,11 +26,23 @@ const state = (extra = {}) => ({
 });
 const day = { calendar: { daylight: 1 } },
   _night = { calendar: { daylight: 0.1 } };
-const reading = (extra = {}) => ({ state: state(), inventory: inventory(), environment: day, active: null, last: null, now: 1000, ...extra });
+const reading = (extra = {}) => ({
+  state: state(),
+  inventory: inventory(),
+  environment: day,
+  active: null,
+  last: null,
+  events: [],
+  markers: [],
+  ground: null,
+  now: 1000,
+  ...extra,
+});
 const situation = (extra = {}) => ({
   burrowed: false,
   dangerHere: false,
   threat: false,
+  hurt: false,
   storm: false,
   hunger: 0.8,
   reserve: 0,
@@ -71,9 +83,14 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ torches: 0, grass: 2 })), 'torches');
   assert.equal(pickJob(situation({ logs: 1 })), 'logs');
   assert.equal(pickJob(situation()), 'explore');
+  assert.equal(
+    pickJob(situation({ sticks: 3, knife: false, stone: true }), new Set(['sticks'] as any)),
+    'tools',
+    'a job that failed around here is skipped, not waited on',
+  );
 });
 
-test('brain: a threat interrupts its own goal, a failed job cools down, a finished shelter becomes home', () => {
+test('brain: a threat interrupts its own goal, a failed job is set aside, a finished shelter becomes home', () => {
   const memory = fresh();
   memory.home = { x: 0, y: 100, z: 0 };
   const first = decide(reading({ inventory: inventory(slot('game:stick', 2)) }), memory);
@@ -86,7 +103,7 @@ test('brain: a threat interrupts its own goal, a failed job cools down, a finish
     reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'g1', kind: 'gather', ok: false, reason: 'blocked' }, now: 2000 }),
     memory,
   );
-  assert.equal(failed.wait, 'sticks cooling down');
+  assert.equal(failed.args?.match, 'leavesbranchy', 'no loose sticks: branchy leaves next, at once');
   const fled = decide(reading({ state: wolf }), memory);
   assert.equal(fled.start, 'travel');
   const again = decide(reading({ state: wolf, last: { id: 'g2', kind: 'travel', ok: false, reason: 'interrupted' }, now: 3000 }), memory);
@@ -105,6 +122,37 @@ test('brain: a threat interrupts its own goal, a failed job cools down, a finish
   const home = { x: 3.5, y: 100, z: 0.5 };
   decide(reading({ inventory: dirt, last: { id: 's1', kind: 'shelter', ok: true, result: { home } } }), shelterMemory);
   assert.deepEqual(shelterMemory.home, home);
+});
+
+test('brain: a hit from nowhere is danger, and copper seen in passing is marked once and told', () => {
+  const memory = fresh();
+  const hurt = [{ id: 1, at: 1, type: 'hurt', health: 10 }];
+  const running = { id: 'o1', kind: 'travel', state: 'running', by: 'operator' };
+  assert.deepEqual(decide(reading({ events: hurt, active: running }), memory), { stop: 'hurt' }, "danger stops anyone's goal");
+  const flight = decide(reading({ events: hurt, state: state({ orientation: { yawDegrees: 0 } }) }), memory);
+  assert.equal(flight.start, 'travel');
+  assert.ok(flight.args.z > 20, 'runs straight ahead when there is no home to run to');
+  const nugget = {
+    id: 2,
+    at: 1,
+    type: 'sighted',
+    kind: 'block',
+    key: 'block:0:10:100:5:game:looseores-nativecopper-granite',
+    code: 'game:looseores-nativecopper-granite',
+    point: { x: 10.5, y: 100, z: 5.5 },
+  };
+  const mark = decide(reading({ events: [nugget], active: running }), memory);
+  assert.deepEqual(
+    mark.act.map(a => a.action),
+    ['add_map_waypoint', 'chat'],
+    'marks and tells without stopping the walk',
+  );
+  assert.deepEqual([mark.act[0].title, mark.act[0].x, mark.act[0].z], ['Copper', 10, 5]);
+  const again = decide(reading({ events: [nugget], active: running }), memory);
+  assert.ok('wait' in again, 'the same nugget is not marked twice');
+  const marked = [{ guid: 'g', title: 'Copper', icon: 'rocks', position: { x: 20, y: 100, z: 5 } }];
+  const near = decide(reading({ events: [{ ...nugget, key: 'k2' }], markers: marked }), fresh());
+  assert.ok(!('act' in near), 'a marker already nearby means no new one');
 });
 
 test('brain: kit reads tools by class and dirt by code', () => {
@@ -134,6 +182,10 @@ test('brain loop: respawns when dead, waits behind an operator goal, starts and 
     },
     request: async (request, options) => {
       calls.push({ ...request, by: options?.by });
+      if (request.action === 'respawn') {
+        dead = false;
+        return { ok: true };
+      }
       controller.active = { id: 'b1', kind: request.action, state: 'running', by: 'brain' };
       return { ok: true, goal: { id: 'b1' } };
     },
@@ -157,7 +209,7 @@ test('brain loop: respawns when dead, waits behind an operator goal, starts and 
     'starts the first kit job (sticks, which every tool needs)',
   );
   assert.deepEqual(goal, { id: 'b1', kind: 'gather' });
-  assert.match(decision, /waiting for travel/);
+  assert.match(decision, /letting travel finish \(operator\)/);
   assert.equal(controller.active.by, 'operator', 'an operator goal is never cancelled by the brain');
 });
 
@@ -180,10 +232,14 @@ test('brain loop: a swimming bot with no goal swims for the nearest dry ground, 
             orientation: { yawDegrees: 180 },
             vitals: { hunger: { current: 500, max: 1500 }, oxygen: { current: 10000, max: 40000 } },
           })
-        : { ok: true };
+        : request.action === 'inventory'
+          ? inventory()
+          : { ok: true, ...day };
     },
-    request: async () => {
-      throw new Error('no goal should start while swimming');
+    request: async request => {
+      calls.push(request);
+      if (!['look', 'move'].includes(request.action)) throw new Error('no goal should start while swimming');
+      return { ok: true };
     },
     stop: async () => {},
     goalView: () => null,
@@ -283,7 +339,17 @@ test('brain: three scares around the same spot make it move on; a failed stick s
     reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'g', kind: 'gather', ok: false, reason: 'none_found' }, now: 4000 }),
     noSticks,
   );
-  assert.equal(next.wait, 'sticks cooling down');
-  noSticks.cool.clear();
-  assert.equal(decide(reading({ inventory: inventory(slot('game:stick', 2)), now: 5000 }), noSticks).args.match, 'leaves');
+  assert.equal(next.args.match, 'leavesbranchy');
+  const leavesFailed = decide(
+    reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'h', kind: 'harvest', ok: false, reason: 'none_found' }, now: 5000 }),
+    noSticks,
+  );
+  assert.notEqual(noSticks.job, 'sticks', 'sticks are set aside around here; the ladder goes on');
+  assert.ok(leavesFailed.start, 'something else is started instead of idling');
+  const elsewhere = { ...state(), position: { x: 40, y: 100, z: 0 } };
+  assert.equal(
+    decide(reading({ state: elsewhere, inventory: inventory(slot('game:stick', 2)), now: 6000 }), noSticks).start,
+    'gather',
+    'sticks are looked for again away from where they failed',
+  );
 });
