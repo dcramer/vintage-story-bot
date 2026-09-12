@@ -135,30 +135,32 @@ Blocks day 4 (storage vessel, crock) until firepit/vessel specifics land; the da
 - [ ] **P2 · `route {x,y,z}`** — plan only: the checkpoints `findRoute` would take from memory and its status (`success|partial|noPath`) without moving; pathfinder `getPathTo`. The offline capture-and-reproduce workflow below already calls the planner; this exposes it to an agent deciding whether a target is worth walking to (`ctl`, `nav`).
 - [ ] **P0 · `GoalGetToBlock` / interact-range arrival** — `move_to {target:blockKey}` stops when the cell is within the player's native `pickingrange` and visible, not at a coordinate (`nav`, `ctl`). Every block goal re-implements this today.
 - [ ] **P1 · `GoalFollow` / `follow {target:entity,range}`** — track a moving entity, re-plan on movement (`nav`, `goal`). Hunting, co-op.
-- [~] **P0 · wading and swimming** — `travel` wades shallow water and the planner treats deep water as a costly move (dry ground wins when there is any); not live-verified. Still to do: oxygen and current as limits, `collect_item` in ponds (was `no_safe_pickup_position` 2026-09-11), and whether a per-goal `allowSwim` knob is needed at all (`nav`, `support`, `ctl`).
+- [~] **P0 · wading and swimming** — `travel` wades shallow water (wet nodes) and swims deep water by default (swim nodes: the body floats half a block under the surface cell's floor, a one-block bank is climbed with jump held, a fall of up to three blocks into deep water is allowed; `swim: false` forbids); the follower holds jump while the feet are wet and never sneaks there; with no goal running the core loop swims a floating bot to the nearest remembered dry ground. Wading live-verified 2026-09-12; swimming, oxygen and current still to verify live (`nav`, `skill`).
 - [ ] **P1 · movement policy flags** — `allowJumpGap`, `allowDoors`, `allowDig` per goal; default all off (`nav`, `ctl`). pathfinder `Movements`.
 - [ ] **P1 · `path_update` reasons on `goal_status`** — `noPath|timeout|stuck|replanned` phases with counts (`ctl`).
 - [ ] **P1 · `home` shortcut** — `travel {waypoint:'home'}` convention plus `return_home` before sunset check (`support`).
 - [~] terrain memory persistence — terrain, surface and remembered blocks per save identifier in `.runtime/knowledge`, week-long, invalidated by reported block changes. Not live-verified across a restart.
 - [ ] **P2 · climbable blocks** — VS `Climbable` (ladders, some vines) as a movement primitive; VS auto-steps sub-block heights via `stepHeight`, full blocks still need jump (`mod`, `nav`).
 
-### Known navigation problems (live, containers save, 2026-09-11)
+### Known navigation problems (live, 2026-09-11/12)
 
+- Fixed: a leaf (or any solid) inside a water-logged cell was reported as water, so a bot standing on a leaf at a pond's edge had no standable cell under its feet and every route failed; cells now carry traits (water, lava, fire, leaves, plant, climbable, shape, tierN) and only a cell with no solid in it is water.
+- Fixed: the stuck-recovery nudge (a blind sneak-walk) is gone; it crouched the bot under water.
 - Fixed: every drop beside water was refused, so a stream bank with a one-block step trapped the bot for twenty minutes (short partial route, frontier marked visited, then `no_observed_route` while probing hopped in place). Reproduced offline from `.runtime/knowledge/<save>.json` with `TerrainMemory` + `findRoute`; that is the way to work on the planner: capture, reproduce, fix, test, then walk it live.
 - Open: rough-route legs end in `deadline` and `exploration_exhausted` on hillsides with 2–3 block cliffs and dense bushes (the leg deadline is 3 s/block; recovery wanders instead of climbing). Legs toward water-side targets fail with `no_observed_route` because cattails stand in water (see wading/swimming).
 - Open: `harvest` walked 1343 blocks for 8 cattail tops; its search explores by heading with visit penalties and used to read only the current view. `lookAround` is a first step; a legible find loop is still to do (§2).
-- Open: a 0.05 hp step-down ends any goal (`Fieldwork.guard` on `lastDamageAt`); see the interrupt policy item.
+- Fixed: being hurt is an event (`hurt` in goal progress and the navigation view), not a stop; storms and life alerts likewise; the mod no longer releases control on damage or alerts.
 - Open: the terrain view reports `observed` columns whose seenAt is days old on a save created the same day (`age` in `terrain` output); check the stamp source before trusting age-based forgetting.
 
 ## 11. Survival and time
 
 - [x] Food priority inside tasks (`manageFood`), attrition classification, low-vital interrupts.
 - [x] `respawn`, `chat`.
-- [ ] **P0 · interrupt policy** — damage, low food, threats and storms become goal events (`goal_status.events`, `events` stream) and the goal re-acquires control and carries on; hard stops stay for death, session loss, a per-goal health floor and missing preconditions (no pickaxe to mine, no knife where the guide requires one) which fail fast with the reason (`support`, `ctl`). Today `Fieldwork.guard` ends the goal on any health loss.
+- [x] interrupt policy — damage, alerts and storms are events on the goal (`events` in progress) and the walk carries on; hard stops are death, lost controls, a changed player or world, deep water when a route forbids swimming. A pit ends `travel` with reason `pit` and `dig_out` is the brain's answer. Missing preconditions fail fast (`harvest` without its tool).
 - [ ] **P0 · `wait {untilHour|ms}`** — idle goal that holds position, keeps observing, stops on damage or a threat sighting, and ends at the hour; nights indoors, kiln firing, storms (`goal`). The default brain's `wait` job runs no goal at all today, so nothing watches while it waits.
 - [ ] **P1 · `shelter {item?}`** — the emergency dirt hut around the player (walls, roof, seal the door) as a goal any brain or agent can ask for; today the cell layout and phases (`shelterCells`, walls → seal) are hardcoded in `src/brain/default.ts` and drive `build` piecewise (`goal`).
 - [ ] **P1 · torch cycle** — pick up and re-place torches each morning (`support`): `dig_block` torch → `place_block`.
-- [ ] **P1 · day plan goal** — composite `day1` goal chaining knap → cattails → chest → house, with per-step `goal_status` progress (`goal`). Decide whether composites live in Node or stay LLM-orchestrated.
+- [~] day plan — the default brain (`src/brain/default.ts`, [brain](docs/brain.md)) walks days 1–2 on its own: danger, storm, hunger, night, shelter, then sticks, stone, tools, torches, logs; live on the multiplayer server 2026-09-12 (respawns, flees, forages). Not yet: shelter phases live, pottery, the full house.
 - [ ] **P2 · sit** — VS sitting reduces hunger drain; useful during `wait` indoors (`mod`, `goal`).
 
 ## 11b. Vintage Story only (no Mineflayer analogue)
