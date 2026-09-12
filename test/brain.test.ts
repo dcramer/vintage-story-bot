@@ -554,6 +554,14 @@ test('brain: a fresh controller recovers a sealed burrow from observed terrain',
   assert.deepEqual(memory.burrow, { x: 0, y: 102, z: 0 });
   assert.equal(next.start, 'dig_area');
   assert.deepEqual(next.args.cells, [memory.burrow]);
+
+  memory.burrow = null;
+  decide(reading({ state: state({ position: { x: 20.5, y: 100, z: 20.5 } }), terrain, now: 2000 }), memory);
+  assert.equal(memory.burrow, null, 'similar terrain encountered later cannot invent a burrow');
+
+  const wet = fresh();
+  decide(reading({ state: state({ position: { x: 0.5, y: 100, z: 0.5 }, motion: { feetInLiquid: true } }), terrain }), wet);
+  assert.equal(wet.burrow, null, 'shallow water terrain is not a burrow');
 });
 
 test('brain: three scares around the same spot make it move on; a failed stick search is set aside around here', () => {

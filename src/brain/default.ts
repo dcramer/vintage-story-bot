@@ -85,6 +85,8 @@ export type Memory = {
   pit: { x: number; z: number } | null;
   // The pocket the bot dug in for the night: its mouth cell, to dig open again at dawn.
   burrow: { x: number; y: number; z: number } | null;
+  // Physical burrow recovery is only valid before this controller has moved.
+  startupChecked: boolean;
   done: Record<string, number>;
   // Where and when the bot had to run; a cluster of these around it means this is a bad place to be.
   scares: { x: number; z: number; at: number }[];
@@ -294,13 +296,16 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // completed burrow is durable world state. Recover its mouth from the
   // observed shaft before choosing work, and treat an already-open shaft as
   // a pit to climb out of in safe daylight.
-  const bx = Math.floor(state.position.x),
-    by = Math.floor(state.position.y),
-    bz = Math.floor(state.position.z),
-    observedShaft = !state.motion?.swimming && reading.terrain ? dugInState(reading.terrain, bx, by, bz) : null;
-  if (!memory.burrow && observedShaft === 'sealed') memory.burrow = { x: bx, y: by + 2, z: bz };
-  if (!memory.pit && observedShaft === 'open' && !isNight(environment) && !temporalStormUnsafe(state))
-    memory.pit = { x: state.position.x + 8, z: state.position.z };
+  if (!memory.startupChecked) {
+    memory.startupChecked = true;
+    const bx = Math.floor(state.position.x),
+      by = Math.floor(state.position.y),
+      bz = Math.floor(state.position.z),
+      observedShaft = !state.motion?.swimming && !state.motion?.feetInLiquid && reading.terrain ? dugInState(reading.terrain, bx, by, bz) : null;
+    if (observedShaft === 'sealed') memory.burrow = { x: bx, y: by + 2, z: bz };
+    if (observedShaft === 'open' && !isNight(environment) && !temporalStormUnsafe(state))
+      memory.pit = { x: state.position.x + 8, z: state.position.z };
+  }
   const threat = nearestThreat(state);
   if (threat) memory.lastThreat = { point: threat.point, code: threat.code, at: now };
   // A predator can leave the observation radius while its cancellation is
@@ -534,6 +539,7 @@ export function fresh(): Memory {
     job: null,
     pit: null,
     burrow: null,
+    startupChecked: false,
     done: {},
     scares: [],
     lastThreat: null,
