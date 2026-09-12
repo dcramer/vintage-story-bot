@@ -115,6 +115,19 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       reason = 'cannot_cut';
       break;
     }
+    // A cut cell is forgotten on change and known again only once the eye has seen it; look at
+    // the opening until the map holds every cell, then the step is an ordinary jump up.
+    const seen = () => plan.dig.every(cell => map.get(cell.x, cell.y, cell.z));
+    for (let looks = 0; looks < 6 && !seen(); looks++) {
+      const eye = { ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight };
+      await field.aim(lookAt(eye, { x: plan.step.x + 0.5, y: plan.dig[0].y + 0.5, z: plan.step.z + 0.5 }));
+      await field.wait(400);
+      await field.observe(true);
+    }
+    if (!seen()) {
+      reason = 'cut_not_seen';
+      break;
+    }
     const up = await field.walk({ x: plan.step.x + 0.5, y: origin.y + 1, z: plan.step.z + 0.5, arrivalRadius: 0.3 });
     if (!['arrived', 'paused'].includes(up.state) || horizontal(field.latest.position, plan.step) > 0.8) {
       reason = 'cannot_climb';
