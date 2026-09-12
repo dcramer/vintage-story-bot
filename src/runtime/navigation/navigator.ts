@@ -7,6 +7,12 @@ import { angle, horizontal, JUMP_HEIGHT, key, lookAt, MAX_DROP, STEP_HEIGHT } fr
 // cell, keep walking through bends while the head turns, jump when the next
 // cell is a block up, walk off a drop, and re-plan only when the next cell
 // stops being a place to stand or no progress is made for a while.
+// A run of checkpoints is merged into one up to this far ahead.
+export const MERGE_RUN = 8;
+// Satiety from which a walk sprints where there is room; running costs more per minute, so not on a low bar.
+export const SPRINT_FOOD = 0.35;
+// How often a partial route is re-planned from the body's position while walking, once the far view has filled in.
+export const REPLAN_AHEAD_MS = 700;
 const sameCell = (a, b) => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01 && Math.abs(a.z - b.z) < 0.01;
 
 export class Navigation {
@@ -49,6 +55,8 @@ export class Navigation {
   jumpAt = 0;
   airborne = false;
   nextPlanAt = 0;
+  // What the map held when the route in hand was planned; more cells since mean the far view filled in ahead.
+  plannedCells = 0;
   steeringYaw = null;
   steeringAt = 0;
   evading = false;
@@ -89,6 +97,26 @@ export class Navigation {
       threats: this.threats,
       events: this.events ?? [],
     };
+  }
+  // Whether a route's last cell satisfies the destination (a full route) or is only the nearest frontier.
+  reaches(end) {
+    return (
+      !!end &&
+      horizontal(end, this.target) <= Math.max(this.target.arrivalRadius ?? 0.3, 0.5) + 0.01 &&
+      (this.target.horizontalOnly || Math.abs(end.y - this.target.y) < 0.6)
+    );
+  }
+  // Take a route in hand from where the body stands, walking or not.
+  adopt(planned, p, now) {
+    this.route = planned;
+    this.index = 0;
+    this.state = 'moving';
+    this.routeReaches = this.reaches(planned.at(-1));
+    this.plannedCells = this.map.cells.size;
+    this.edgeStart = p;
+    this.bestNear = undefined;
+    this.mergedFrom = null;
+    this.progressAt = now;
   }
   finish(state, reason) {
     this.state = state;
@@ -186,19 +214,20 @@ export class Navigation {
         this.diagnostics = { missing: [...map.views(p).values()].slice(0, 24), standing: map.standingOn(p) };
         return this.finish('blocked', 'no_observed_route');
       }
-      this.route = planned;
-      this.index = 0;
-      this.state = 'moving';
-      // Whether this route's last cell satisfies the destination (a full route) or is only the nearest frontier.
-      const end = planned.at(-1);
-      this.routeReaches =
-        !!end &&
-        horizontal(end, this.target) <= Math.max(this.target.arrivalRadius ?? 0.3, 0.5) + 0.01 &&
-        (this.target.horizontalOnly || Math.abs(end.y - this.target.y) < 0.6);
+      this.adopt(planned, p, now);
       this.lookingAt = null;
-      this.edgeStart = p;
-      this.bestNear = undefined;
-      this.progressAt = now;
+    }
+    // Planning ahead while walking: a partial route ends where the eye had seen to when it was planned,
+    // and the far view keeps filling in as the body moves. When it has, plan again from where the body
+    // is and take the new route in stride if it gets farther, so the walk changes course without a
+    // stop at the old frontier and the survey there never happens.
+    if (grounded && !this.routeReaches && now >= this.nextPlanAt && map.cells.size !== this.plannedCells) {
+      this.nextPlanAt = now + REPLAN_AHEAD_MS;
+      const planned = findRoute(map, from, this.target, w, h, this);
+      const end = planned?.at(-1),
+        old = this.route.at(-1);
+      if (end && old && (this.reaches(end) || horizontal(end, this.target) + 1.5 < horizontal(old, this.target))) this.adopt(planned, p, now);
+      else this.plannedCells = map.cells.size;
     }
     // Advance past checkpoints the body has reached: close by, or crossed
     // along the segment between slow samples.
@@ -239,18 +268,13 @@ export class Navigation {
       this.survey(now);
       return null;
     }
-    // Merge a straight, level run of checkpoints into one so bends are only
-    // where the route really turns.
+    // Merge a run of checkpoints the body can walk without a turn into one, gentle slopes
+    // included, so bends are only where the route really turns: a route on a grid zigzags a
+    // cell at a time, and a turn at every cell is a stop at every cell.
     if (grounded)
       for (let ahead = this.index + 1; ahead < this.route.length; ahead++) {
         const node = this.route[ahead];
-        if (
-          node.move !== 'walk' ||
-          horizontal(p, node) > 4 ||
-          Math.abs(node.y - p.y) > 0.05 ||
-          !map.lineWalkable({ x: p.x, y: node.y, z: p.z }, node)
-        )
-          break;
+        if (node.move !== 'walk' || horizontal(p, node) > MERGE_RUN || !map.runWalkable(p, node)) break;
         // The merge is undone if the body drifts off the line it was made from (below).
         if (this.mergedFrom === null) this.mergedFrom = this.index;
         this.index = ahead;
@@ -319,16 +343,18 @@ export class Navigation {
     }
     const food = state.vitals?.hunger;
     const emergency = this.evading || this.target.emergency;
-    // Running from something is done at a sprint whatever the stomach says; otherwise only well fed.
-    // A player runs when there is room and the stomach allows; a goal may forbid it (sprint: false).
+    // Running from something is done at a sprint whatever the stomach says; otherwise when the stomach
+    // allows and there is a run ahead worth it. A goal may forbid it (sprint: false).
     const sprint =
-      this.target.sprint !== false && next.move === 'walk' && near > 2 && (emergency || (food?.max > 0 && food.current / food.max >= 0.5));
+      this.target.sprint !== false && next.move === 'walk' && near > 2 && (emergency || (food?.max > 0 && food.current / food.max >= SPRINT_FOOD));
     const last = this.index >= this.route.length - 1;
     // The cell after this one is handed over as well, so the mod rolls straight on to it when this
     // one is reached instead of pausing for a frame from here.
     const after = this.route[this.index + 1];
+    // A step down of a block is walked off in stride too; only a real drop waits for the landing.
+    const rollOn = after && (['walk', 'jump', 'step', undefined].includes(after.move) || (after.move === 'drop' && next.y - after.y <= 1.05));
     const next2 =
-      after && ['walk', 'jump', 'step', undefined].includes(after.move) && horizontal(p, after) <= 7.4 && Math.abs(after.y - p.y) <= 3
+      rollOn && horizontal(p, after) <= 7.4 && Math.abs(after.y - p.y) <= 3
         ? { x: after.x, y: after.y, z: after.z, hop: after.move === 'jump' || after.y - next.y > STEP_HEIGHT }
         : undefined;
     return {

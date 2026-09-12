@@ -110,6 +110,9 @@ export function planRoughRoute(surface, start, goal, { budget = 4096, penalty = 
   open.push({ p: origin, score: remaining(origin) });
   let best = null,
     bestScore = Infinity;
+  // Columns reached only down a drop the body could not climb back: a partial route never ends there.
+  const committed = new Set();
+  const floorY = Math.min(origin.y, Number.isFinite(goal.y) ? goal.y : origin.y);
   const path = end => {
     const list = [end];
     while (previous.has(end)) {
@@ -125,7 +128,7 @@ export function planRoughRoute(surface, start, goal, { budget = 4096, penalty = 
     if (goalReached(column) || (target && column === target))
       return { status: 'success', checkpoints: simplify(path(column)), cost: costs.get(column), explored: closed.size };
     const progress = remaining(origin) - remaining(column);
-    if (progress >= minimumProgress) {
+    if (progress >= minimumProgress && !(committed.has(column) && column.y < floorY - 1.06)) {
       const score = remaining(column) + costs.get(column) * 0.15;
       if (score < bestScore) {
         bestScore = score;
@@ -139,6 +142,8 @@ export function planRoughRoute(surface, start, goal, { budget = 4096, penalty = 
       if ((costs.get(next) ?? Infinity) <= cost) continue;
       costs.set(next, cost);
       previous.set(next, column);
+      if (committed.has(column) || column.y - next.y > 1.06) committed.add(next);
+      else committed.delete(next);
       open.push({ p: next, score: cost + remaining(next) });
     }
   }

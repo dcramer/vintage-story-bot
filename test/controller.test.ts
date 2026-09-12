@@ -205,6 +205,53 @@ test('planner routes around a wall, jumps a hole only as a last resort, and ends
   assert.ok(deadline === null || Array.isArray(deadline), 'a spent deadline still returns cleanly');
 });
 
+test('a partial route never ends down a drop the body cannot climb back, unless the goal itself lies low', () => {
+  // A plateau two blocks high on the west, a valley floor east of it, nothing known beyond x = 6.
+  const plateau = world(
+    8,
+    (x, y, z) => x <= 2 && (y === 0 || y === 1),
+    () => false,
+    (x, _y, _z) => x > 6,
+  );
+  const along = findRoute(plateau, at(0, 0, 2), { x: 30.5, y: 2, z: 0.5, horizontalOnly: true }, 0.3, 1.85);
+  assert.ok(!along || along.at(-1).y >= 2, 'a goal at plateau height: the frontier down in the valley is no frontier');
+  const down = findRoute(plateau, at(0, 0, 2), { x: 30.5, y: 0, z: 0.5 }, 0.3, 1.85);
+  assert.ok(down?.length && down.at(-1).y === 0 && Math.floor(down.at(-1).x) >= 3, 'a goal down in the valley: the descent is the way');
+});
+
+test('a run over gentle ground merges; a block up does not', () => {
+  const flat = world(6);
+  assert.equal(flat.runWalkable(at(0, 0), at(5, 0)), true);
+  const stepUp = world(6, (x, y, _z) => x >= 3 && y === 0);
+  assert.equal(stepUp.runWalkable(at(0, 0), at(5, 0, 1)), false, 'a full block needs a jump, not a stride');
+});
+
+test('navigation plans ahead while walking: a route extended by the far view is taken in stride', () => {
+  const map = world(
+    3,
+    () => false,
+    () => false,
+    (x, _y, _z) => x > 3,
+  );
+  const body = { halfWidth: 0.3, height: 1.85, eyeHeight: 1.7 },
+    vitals = { hunger: { current: 1000, max: 1500 } };
+  const state = { position: at(-2, 0), body, motion: { onGround: true }, orientation: { yawDegrees: 90 }, vitals, nearbyEntities: [] };
+  const nav = new Navigation(map, state, { x: 20.5, y: 0, z: 0.5, horizontalOnly: true, timeoutMs: 20000 }, 0);
+  nav.tick(state, 0);
+  assert.equal(nav.state, 'moving');
+  assert.equal(nav.routeReaches, false, 'the goal is beyond what was seen: a partial route');
+  const before = Math.floor(nav.route.at(-1).x);
+  const cells = [];
+  for (let x = 4; x <= 12; x++)
+    for (let z = -3; z <= 3; z++) for (let y = -6; y <= 4; y++) cells.push([x, y, z, 0, false, y === -1 ? [[0, 0, 0, 1, 1, 1]] : []]);
+  map.apply({ session: 'world', reset: false, cursor: 2, more: false, clock: 0, cells });
+  const walking = { ...state, position: { x: 0.5, y: 0, z: 0.5 } };
+  const frame = nav.tick(walking, 1000);
+  assert.equal(nav.state, 'moving', 'no survey stop at the old frontier');
+  assert.ok(Math.floor(nav.route.at(-1).x) > before, 'the route now runs on over the ground that came into view');
+  assert.ok(frame?.toward, 'and the body keeps walking');
+});
+
 test('navigation hands the mod one point per step, hops for a block up, and takes its arrival', () => {
   const map = world(6, (x, y, z) => x === 3 && z === 0 && y === 0);
   const body = { halfWidth: 0.3, height: 1.85, eyeHeight: 1.7 },

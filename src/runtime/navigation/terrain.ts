@@ -336,6 +336,21 @@ export class TerrainMemory {
   }
   // Straight walk between two level nodes over standable cells only, for
   // merging checkpoints into one segment.
+  // A straight run the body walks without a turn, gentle slopes included: every half block along the
+  // line has a standing cell within a step of the ground the line expects there, never beside water.
+  runWalkable(from, to, step = STEP_HEIGHT) {
+    const steps = Math.max(1, Math.ceil(horizontal(from, to) * 2));
+    let y = from.y;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps,
+        x = from.x + (to.x - from.x) * t,
+        z = from.z + (to.z - from.z) * t;
+      const node = this.nodeAt(Math.floor(x), Math.floor(z), y, step, step);
+      if (!node || Math.abs(node.y - y) > step || this.shore(node)) return false;
+      y = node.y;
+    }
+    return Math.abs(y - to.y) <= step;
+  }
   lineWalkable(from, to) {
     if (Math.abs(from.y - to.y) > 0.05) return false;
     const steps = Math.ceil(horizontal(from, to) * 2);

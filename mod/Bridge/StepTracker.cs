@@ -7,6 +7,10 @@ namespace VintageStoryAI;
 public sealed class StepTracker
 {
     public const double AlignDegrees = 20;
+    // Farther than a block from the point the body walks while it turns, the way a player rounds a bend;
+    // only the last block, and a hop, wait for the head to point at it.
+    public const double WideAlignDegrees = 60;
+    public const double WideAlignDistance = 1.0;
     public const double BlockedMs = 700;
     public const double HopDistance = 1.1;
     public const double PassedLateral = 0.6;
@@ -76,7 +80,7 @@ public sealed class StepTracker
             State = "arrived"; return (false, wet, wantYaw);
         }
         double error = Math.Abs(SceneGeometry.Normalize(wantYaw - yawDegrees + 180) - 180);
-        bool aligned = error < AlignDegrees;
+        bool aligned = error < (Distance > WideAlignDistance && !Hop ? WideAlignDegrees : AlignDegrees);
         if (now - startedAt > MaxMs) { State = "blocked"; return (false, wet, wantYaw); }
         if (Distance < bestDistance - 0.03) { bestDistance = Distance; progressAt = now; }
         // Turning and falling are not being stuck; walking without getting closer is.

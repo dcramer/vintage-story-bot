@@ -1,4 +1,4 @@
-import { horizontal, key } from './terrain.ts';
+import { horizontal, JUMP_HEIGHT, key } from './terrain.ts';
 
 // A* over standing cells, in the shape of mineflayer-pathfinder: moves come
 // from the terrain grid with their costs, a goal is a predicate, and when the
@@ -44,7 +44,12 @@ export function findRoute(
   if (!origin) return null;
   const costs = new Map([[key(origin), 0]]),
     previous = new Map(),
-    closed = new Set();
+    closed = new Set(),
+    // Cells reached only through a drop the body could not climb back. A full route may take
+    // one; a partial route never ends beyond one, or the walk commits to a hole for a frontier
+    // that merely looked nearer to the goal from below.
+    committed = new Set(),
+    floorY = Math.min(start.y, Number.isFinite(goal.y) ? goal.y : start.y);
   const open = new Heap();
   open.push({ p: origin, score: remaining(origin) });
   let frontier = null,
@@ -79,7 +84,8 @@ export function findRoute(
       if (!stepped.has(dir)) moves.push(m);
     }
     // A frontier in deep water is not progress: the far bank is what counts, and only a full route reaches it.
-    if (partial && horizontal(start, at) >= 1 && !at.swim && !visits.has(id) && missing.size) {
+    const hole = committed.has(id) && at.y < floorY - JUMP_HEIGHT;
+    if (partial && horizontal(start, at) >= 1 && !at.swim && !visits.has(id) && !hole && missing.size) {
       // A frontier down a hole is not worth walking into: what looks closer
       // to the goal from below may have no way back up. Prefer frontiers at
       // the start's level or above.
@@ -96,6 +102,8 @@ export function findRoute(
       if ((costs.get(nextId) ?? Infinity) <= cost) continue;
       costs.set(nextId, cost);
       previous.set(nextId, at);
+      if (committed.has(id) || at.y - node.y > JUMP_HEIGHT) committed.add(nextId);
+      else committed.delete(nextId);
       open.push({ p: node, score: cost + remaining(node) });
     }
   }

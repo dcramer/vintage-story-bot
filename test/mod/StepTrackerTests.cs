@@ -11,8 +11,13 @@ static class StepTrackerTests
         var turn = step.Update(new Point3(0.5, 100, 0.5), 270, true, false, 0);
         Check(!turn.Forward && Math.Abs(turn.Yaw - 90) < 1e-9, "turn before walking");
         Check(step.Update(new Point3(0.5, 100, 0.5), 270, true, false, 2000).Forward == false && step.State == "walking", "turning is not blocked");
+        // Roughly facing it and still two blocks off: walk while the head comes round, as a player rounds a bend.
+        Check(step.Update(new Point3(0.5, 100, 0.5), 130, true, false, 2050).Forward, "walk while turning when the point is off");
         // Facing it: walk.
         Check(step.Update(new Point3(0.5, 100, 0.5), 85, true, false, 2100).Forward, "walk once facing");
+        // The last block wants the head on the point.
+        var close = new StepTracker(toward, new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
+        Check(!close.Update(new Point3(1.8, 100, 0.5), 130, true, false, 0).Forward, "the last block waits for the head");
         // On it: arrived, nothing held.
         var done = step.Update(new Point3(2.3, 100, 0.5), 90, true, false, 2500);
         Check(step.State == "arrived" && !done.Forward, "arrived within reach");
