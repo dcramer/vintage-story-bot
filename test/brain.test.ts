@@ -387,6 +387,17 @@ test('brain: a fall is not mistaken for an unseen attacker', () => {
   );
 });
 
+test('brain: poison from emergency food is not mistaken for an unseen attacker', () => {
+  const poison = [
+    { id: 1, at: 1, type: 'hurt', health: 10 },
+    { id: 2, at: 2, type: 'message', text: 'Lost 1 hp through poison', kind: 'Notification' },
+  ];
+  const memory = fresh();
+  memory.job = 'eat';
+  const running = { id: 'f1', kind: 'forage', state: 'running', by: 'brain' };
+  assert.deepEqual(decide(reading({ events: poison, active: running }), memory), { wait: 'letting forage finish' });
+});
+
 test('brain: full-health drift is not mistaken for damage', () => {
   const memory = fresh();
   memory.job = 'sticks';
@@ -760,6 +771,20 @@ test('brain: opening a morning burrow is followed by digging steps to the surfac
   assert.equal(memory.burrow, null);
   assert.equal(outside.start, 'dig_out');
   assert.deepEqual([outside.args.x, outside.args.z], [8.5, 0.5]);
+});
+
+test('brain: hunger, not morning, explains opening a burrow at night', () => {
+  const memory = fresh();
+  memory.burrow = { x: 0, y: 102, z: 0 };
+  const next = decide(
+    reading({
+      environment: night,
+      state: state({ vitals: { hunger: { current: 299, max: 1500 } } }),
+    }),
+    memory,
+  );
+  assert.equal(next.start, 'dig_area');
+  assert.equal(next.why, 'hungry, opening the burrow');
 });
 
 test('brain: a fresh controller recovers a sealed burrow from observed terrain', () => {
