@@ -15,7 +15,7 @@ import { nearestThreat, threatClearDistance } from './threats.ts';
 
 // How far a search heads when nothing is in sight. The walk rough-routes
 // there in legs and looks again from each viewpoint.
-export const FRONTIER_DISTANCE = 96;
+export const FRONTIER_DISTANCE = 160;
 // Within this of the frontier the search has arrived and chooses the next one.
 export const FRONTIER_REACHED = 8;
 // A near target with no route gets short local exploration legs toward it.
@@ -235,7 +235,11 @@ export class Search {
       // pass all around before calling the thing gone.
       const nearby = result.state === 'arrived' && target.visible === false ? await this.look(8) : [];
       if (exhaustedLead(target, result, nearby)) {
+        // Blocks are remembered for days; one that is not there when its cell
+        // is looked at from beside it is forgotten, not walked to again.
         field.skip(target, 120000);
+        field.seen.delete(target.key);
+        field.env.sightings?.forget?.(target.key);
         field.report('lead_unseen', { target: target.key });
       } else if (result.state === 'paused' && result.reason === 'route_threatened') {
         this.avoidThreat(target);

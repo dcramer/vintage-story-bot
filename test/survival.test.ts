@@ -162,11 +162,11 @@ test('a search with nothing in sight heads a hundred blocks the least-walked way
   const dry = chooseFrontier(at, 0, { places: new Places(() => 1000), surface: water });
   assert.notEqual(dry.heading, 0, 'a line of water is walked around');
   const columns = new Map([
-    ['30,-30', { x: 30, z: -30, y: 101, kind: 'ground' }],
-    ['31,-30', { x: 31, z: -30, y: 101, kind: 'canopy' }],
+    ['80,-80', { x: 80, z: -80, y: 101, kind: 'ground' }],
+    ['81,-80', { x: 81, z: -80, y: 101, kind: 'canopy' }],
   ]);
   const edge = chooseFrontier(at, 135, { places: new Places(() => 1000), surface: { columns, get: () => null }, habitats: ['edge'] });
-  assert.deepEqual([edge.x, edge.z], [30.5, -29.5], 'a seen forest edge the right way is the frontier');
+  assert.deepEqual([edge.x, edge.z], [80.5, -79.5], 'a seen forest edge the right way is the frontier');
 });
 
 test('a lead with a threatened route is briefly set aside instead of retried immediately', () => {

@@ -21,7 +21,7 @@ import { Search } from './search.ts';
 import { nearestThreat } from './threats.ts';
 
 // How far back a remembered bush or patch is worth walking to when nothing is in sight.
-export const foodMemoryRange = 128;
+export const foodMemoryRange = 256;
 const breaks = (object, tolerance = 0) => foodYield(object, undefined, tolerance)?.how === 'break';
 // Worth walking to: yields food now and the server lets this player take it.
 export const accessibleForage = object => {
