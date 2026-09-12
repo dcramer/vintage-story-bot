@@ -865,6 +865,11 @@ test('brain: a fresh controller recovers a sealed burrow from observed terrain',
     wait: 'inspecting surroundings after startup',
   });
   assert.equal(memory.startupChecked, false, 'an empty first terrain delta cannot trigger a second burrow');
+  const stalled = fresh();
+  decide(reading({ terrain, now: 1000 }), stalled);
+  const resumed = decide(reading({ terrain, now: 11001 }), stalled);
+  assert.equal(stalled.startupChecked, true, 'missing terrain cannot hold the brain at startup forever');
+  assert.equal(resumed.start, 'gather');
   ready = true;
   const next = decide(reading({ state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain }), memory);
   assert.deepEqual(memory.burrow, { x: 0, y: 102, z: 0 });

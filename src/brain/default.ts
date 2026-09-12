@@ -182,6 +182,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     memory.burrow = null;
     memory.pit = null;
     memory.startupChecked = false;
+    memory.startupAt = null;
     memory.pendingHurtAt = null;
     if (active) return { stop: 'dead' };
     if (temporalStormUnsafe(state)) return { wait: 'dead, waiting out temporal storm' };
@@ -326,6 +327,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
     pit: null,
     burrow: null,
     startupChecked: false,
+    startupAt: null,
     done: {},
     scares: [],
     lastThreat: null,

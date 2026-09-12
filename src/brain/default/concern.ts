@@ -68,6 +68,7 @@ export type Memory = {
   burrow: Cell | null;
   // Physical burrow recovery is only valid before this controller has moved.
   startupChecked: boolean;
+  startupAt: number | null;
   done: Record<string, number>;
   // Where and when the bot had to run; a cluster of these around it means this is a bad place to be.
   scares: { x: number; z: number; at: number }[];
