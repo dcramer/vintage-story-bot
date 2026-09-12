@@ -15,6 +15,7 @@ import {
   FRONTIER_DISTANCE,
   leadGuarded,
   Search,
+  STALLED_APPROACHES,
   samePatch,
   stuckLeg,
   unproductiveApproach,
@@ -240,6 +241,28 @@ test('a lead with a threatened route is briefly set aside instead of retried imm
   assert.deepEqual(reports, [
     { phase: 'route_threatened', detail: { target: 'cranberry', threat: 'game:wolf-eurasian-adult-male', skipped: ['cranberry'] } },
   ]);
+});
+
+test('a patch of leads with no seen way to them is left behind after a few stalled approaches', async () => {
+  const places = new Places(() => 1000);
+  places.setFrontier('food', { x: 96.5, y: 100, z: 0.5 });
+  const field = new Fieldwork({ places }, { now: () => 1000 });
+  field.latest = { position: { x: 0.5, y: 111, z: 0.5 }, orientation: { yawDegrees: 0 }, nearbyEntities: [], body: { halfWidth: 0.3, height: 1.8 } };
+  for (let i = 0; i < 3; i++) field.seen.set(`bush${i}`, { key: `bush${i}`, kind: 'block', point: { x: 10 + i, y: 123, z: 0 }, visible: false });
+  field.approach = () => ({ x: 8.5, y: 111, z: 0.5, arrivalRadius: 0.35 });
+  field.walk = async () => ({ state: 'blocked', reason: 'no_observed_route' });
+  field.report = () => {};
+  // Leaf clearing after a stuck leg looks first and needs the block_actions feature; without it, nothing is cut.
+  field.observe = async () => field.latest;
+  const search = new Search(field, { kind: 'food', match: [], wanted: () => true, take: async () => false });
+  for (let i = 0; i < STALLED_APPROACHES; i++) {
+    assert.equal(search.rangeIfStalled(), false, 'not yet');
+    await search.approach(field.seen.get(`bush${i}`), null);
+  }
+  assert.equal(search.stalls, STALLED_APPROACHES);
+  assert.equal(search.rangeIfStalled(), true, 'three approaches that went nowhere: leave this patch');
+  assert.equal(search.targets().length, 0, 'everything known here is set aside');
+  assert.equal(places.frontier('food'), null, 'and the frontier is chosen afresh, away from here');
 });
 
 test('the frontier is shared across goals and forgotten near a predator', async () => {

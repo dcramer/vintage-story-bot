@@ -106,11 +106,19 @@ export type SearchOptions = {
   pauseWhen?: ((state: any) => string | null) | null;
 };
 
+// Approaches that ended without getting nearer, in a row. After a few, everything
+// known around here is set aside for a while and the search ranges: a patch of
+// leads with no seen way to them (a bush up a cliff) is left behind, not circled
+// block by block until dark.
+export const STALLED_APPROACHES = 3;
+export const STALL_SKIP_MS = 5 * 60 * 1000;
+
 export class Search {
   field: any;
   options: SearchOptions;
   lastView: any = null;
   stuck = 0;
+  stalls = 0;
   lastSeenCheck = 0;
   constructor(field, options: SearchOptions) {
     this.field = field;
@@ -199,6 +207,7 @@ export class Search {
       this.lastView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
     }
     if (!this.targets().length) await this.options.learn?.(field.recall(memoryRange, this.match, 'all'));
+    this.rangeIfStalled();
     const target = this.targets()[0];
     if (target) {
       await this.approach(target, approachExclude?.(target) ?? null);
@@ -225,12 +234,24 @@ export class Search {
     if (['arrived', 'paused'].includes(result.state) || horizontal(p, field.latest.position) > 2) this.lastView = null;
     return 'ranged';
   }
+  // After a few approaches that got nowhere, everything known is set aside and the
+  // frontier dropped, so the next step ranges instead of trying the next block of the same patch.
+  rangeIfStalled() {
+    if (this.stalls < STALLED_APPROACHES) return false;
+    const stale = this.targets();
+    for (const object of stale) this.field.skip(object, STALL_SKIP_MS);
+    this.field.places.clearFrontier(this.options.kind);
+    this.stalls = 0;
+    this.field.report('stalled', { skipped: stale.length });
+    return true;
+  }
   async approach(target, exclude) {
     const field = this.field;
     const before = { ...field.latest.position };
     const destination = field.approach(target, exclude);
     if (destination) {
       const result = await field.walk(destination, this.pause);
+      this.stalls = result.state === 'arrived' ? 0 : this.stalls + 1;
       // The far eye is directional: reaching an old lead, read the surroundings
       // all around before calling the thing gone.
       const nearby = result.state === 'arrived' && target.visible === false ? await this.look(8) : [];
@@ -256,6 +277,7 @@ export class Search {
     const detour = elevationDetour(Math.abs(field.latest.position.y - target.point.y));
     if (horizontal(field.latest.position, target.point) > 6 || detour) {
       const result = await field.walk(field.explore(target.point, APPROACH_LEG, detour), this.pause);
+      this.stalls = result.state === 'arrived' || horizontal(field.latest.position, before) > 2 ? 0 : this.stalls + 1;
       if (result.state === 'paused' && result.reason === 'route_threatened') this.avoidThreat(target);
       else if (stuckLeg(result, before, field.latest.position)) {
         const elevated = Math.abs((target.point.y ?? before.y) - before.y) > 2;
