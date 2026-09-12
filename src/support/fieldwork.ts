@@ -418,7 +418,11 @@ export class Fieldwork {
     // Software-rendered remote clients commonly need about three seconds per
     // block over uneven ground. Preserve a hard two-minute ceiling, but do not
     // abort a visibly progressing local food leg just before its next viewpoint.
-    const timeoutMs = Math.min(120000, Math.max(20000, Math.ceil(horizontal(before.position, target) * 3000)));
+    // Three seconds a block, three more per block of climb, half a minute at least: a slow renderer hops slowly.
+    const timeoutMs = Math.min(
+      120000,
+      Math.max(30000, Math.ceil(horizontal(before.position, target) * 3000 + Math.abs((target.y ?? before.position.y) - before.position.y) * 3000)),
+    );
     const food = before.vitals?.hunger;
     const emergencyFoodSearch = this.recoveringFood && food?.max > 0 && food.current / food.max < 0.2 && food.current / food.max >= 0.1;
     const result = await this.env.navigate(

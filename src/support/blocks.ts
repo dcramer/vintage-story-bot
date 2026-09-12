@@ -112,7 +112,8 @@ export async function aimAtObject(field, object) {
   } catch {
     cell = null;
   }
-  if (cell) return selectCell(field, cell);
+  // Grass or a flower in front of a loose thing is broken first, as a player would.
+  if (cell) return selectCell(field, cell, { clearPlants: true });
   const p = field.latest.position;
   await field.aim(lookAt({ ...p, y: p.y + (field.latest.body?.eyeHeight ?? 1.6) }, object.point));
   const aimed = await field.observe();
