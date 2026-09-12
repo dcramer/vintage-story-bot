@@ -14,6 +14,14 @@ namespace VintageStoryAI;
 // Movement and aiming under a control hold, through the normal keyboard/mouse state; manual input or danger releases it.
 public sealed partial class AiBridgeMod
 {
+    private enum LockKind { None, Block, Entity, Point }
+    private LockKind lockKind = LockKind.None;
+    private BlockPos? lockCell;
+    private string? lockCode;
+    private long lockEntityId;
+    private Point3 lockPoint;
+    private string? lockName;
+
     private EntityControls? movingControls;
     private int[] movingKeys = [];
     private string moveDirection = "forward";
@@ -194,6 +202,7 @@ public sealed partial class AiBridgeMod
         if (!entity.Alive || api.IsGamePaused)
             return new { ok = false, error = "Cannot look while dead or paused." };
         StopHandAction();
+        ClearTargetLock();
         api.Input.MouseYaw = entity.Pos.Yaw = (float)(NormalizeDegrees(yaw) * Math.PI / 180);
         api.Input.MousePitch = entity.Pos.Pitch = (float)(Math.PI + pitch * Math.PI / 180);
         return new { ok = true, status = "looking", yawDegrees = NormalizeDegrees(yaw), pitchDegrees = pitch };
@@ -222,24 +231,7 @@ public sealed partial class AiBridgeMod
                 // Voxel top-centre, for aiming at knapping/clay surface voxels.
                 aimTarget = new Point3(ax + (v[0] + 0.5) / 16.0, ay + (v[1] + 0.95) / 16.0, az + (v[2] + 0.5) / 16.0);
             }
-            else
-            {
-                // Aim at the centre of the requested face of the block's actual selection box, so the ray lands on it.
-                var aimBlock = api.World.BlockAccessor.GetBlock(cellPos);
-                var aimBoxes = aimBlock.GetSelectionBoxes(api.World.BlockAccessor, cellPos);
-                var box = aimBoxes is { Length: > 0 } ? aimBoxes[0] : new Cuboidf(0, 0, 0, 1, 1, 1);
-                double mx = (box.X1 + box.X2) / 2, my = (box.Y1 + box.Y2) / 2, mz = (box.Z1 + box.Z2) / 2;
-                aimTarget = aimFace switch
-                {
-                    "up" => new Point3(ax + mx, ay + box.Y2 - 0.02, az + mz),
-                    "down" => new Point3(ax + mx, ay + box.Y1 + 0.02, az + mz),
-                    "north" => new Point3(ax + mx, ay + my, az + box.Z1 + 0.02),
-                    "south" => new Point3(ax + mx, ay + my, az + box.Z2 - 0.02),
-                    "west" => new Point3(ax + box.X1 + 0.02, ay + my, az + mz),
-                    "east" => new Point3(ax + box.X2 - 0.02, ay + my, az + mz),
-                    _ => new Point3(ax + mx, ay + my, az + mz),
-                };
-            }
+            else aimTarget = BlockAimPoint(api.World.BlockAccessor, api.World.BlockAccessor.GetBlock(cellPos), cellPos, aimFace);
             var (aimYaw, aimPitch) = SceneGeometry.LookAt(aimEye, aimTarget);
             aimPitch = Math.Clamp(aimPitch, -89, 89);
             StopHandAction();
@@ -247,6 +239,111 @@ public sealed partial class AiBridgeMod
             api.Input.MousePitch = entity.Pos.Pitch = (float)(Math.PI + aimPitch * Math.PI / 180);
             return new { ok = true, status = "aiming", yawDegrees = SceneGeometry.Normalize(aimYaw), pitchDegrees = aimPitch,
                 target = new { x = aimTarget.X, y = aimTarget.Y, z = aimTarget.Z } };
+    }
+
+    // A target lock is one continuous look: Node names the target, the mod
+    // eases the camera onto it every tick and follows it if it moves. It owns
+    // the camera while engaged, so movement frames should echo observed yaw.
+    private object LookAt(JsonElement request)
+    {
+        var entity = api.World!.Player.Entity;
+        if (!entity.Alive || api.IsGamePaused)
+            return new { ok = false, error = "Cannot aim while dead or paused." };
+        if (!CanControl())
+            return new { ok = false, error = "Close menus and enter the world before aiming." };
+        string? key = null;
+        if (request.TryGetProperty("entity", out var entityField) && entityField.ValueKind == JsonValueKind.String)
+            key = entityField.GetString()!;
+        else if (request.TryGetProperty("target", out var targetField) && targetField.ValueKind == JsonValueKind.String)
+            key = targetField.GetString()!;
+        LockKind kind = LockKind.None;
+        BlockPos? cell = null;
+        string? code = null;
+        long entityId = 0;
+        Point3 point = default;
+        if (key != null)
+        {
+            var parts = key.Split(':');
+            if (parts.Length >= 6 && parts[0] == "block" && int.TryParse(parts[1], out int dim) &&
+                int.TryParse(parts[2], out int x) && int.TryParse(parts[3], out int y) && int.TryParse(parts[4], out int z))
+            {
+                cell = new BlockPos(x, y, z, dim);
+                if (api.World.BlockAccessor.GetChunkAtBlockPos(cell) == null)
+                    return new { ok = false, error = "Target cell unloaded." };
+                code = string.Join(":", parts[5..]);
+                kind = LockKind.Block;
+            }
+            else if (parts.Length == 2 && parts[0] == "entity" && long.TryParse(parts[1], out entityId) &&
+                api.World.GetEntityById(entityId) != null)
+            {
+                kind = LockKind.Entity;
+            }
+            else return new { ok = false, error = "Unknown target; use an observed block key or sighted entity id." };
+        }
+        else if (request.TryGetProperty("x", out _) || request.TryGetProperty("y", out _) || request.TryGetProperty("z", out _))
+        {
+            if (!TryNumber(request, "x", out double px) || !TryNumber(request, "y", out double py) || !TryNumber(request, "z", out double pz))
+                return new { ok = false, error = "Supply finite x, y, z." };
+            point = new Point3(px, py, pz);
+            key = $"point:{px}:{py}:{pz}";
+            kind = LockKind.Point;
+        }
+        else return new { ok = false, error = "Supply target, entity, or x/y/z." };
+        StopHandAction();
+        lockKind = kind; lockCell = cell; lockCode = code; lockEntityId = entityId; lockPoint = point; lockName = key;
+        UpdateTargetLock();
+        return new { ok = true, status = "tracking", target = lockName };
+    }
+
+    private static Point3 BlockAimPoint(IBlockAccessor accessor, Block block, BlockPos pos, string? face)
+    {
+        // Aim at the centre of the requested face of the block's actual selection box, so the ray lands on it.
+        var boxes = block.GetSelectionBoxes(accessor, pos);
+        var box = boxes is { Length: > 0 } ? boxes[0] : new Cuboidf(0, 0, 0, 1, 1, 1);
+        double mx = (box.X1 + box.X2) / 2, my = (box.Y1 + box.Y2) / 2, mz = (box.Z1 + box.Z2) / 2;
+        return face switch
+        {
+            "up" => new Point3(pos.X + mx, pos.Y + box.Y2 - 0.02, pos.Z + mz),
+            "down" => new Point3(pos.X + mx, pos.Y + box.Y1 + 0.02, pos.Z + mz),
+            "north" => new Point3(pos.X + mx, pos.Y + my, pos.Z + box.Z1 + 0.02),
+            "south" => new Point3(pos.X + mx, pos.Y + my, pos.Z + box.Z2 - 0.02),
+            "west" => new Point3(pos.X + box.X1 + 0.02, pos.Y + my, pos.Z + mz),
+            "east" => new Point3(pos.X + box.X2 - 0.02, pos.Y + my, pos.Z + mz),
+            _ => new Point3(pos.X + mx, pos.Y + my, pos.Z + mz),
+        };
+    }
+
+    private void UpdateTargetLock()
+    {
+        if (lockKind == LockKind.None) return;
+        var entity = api.World!.Player.Entity;
+        Point3? aim = null;
+        if (lockKind == LockKind.Point) aim = lockPoint;
+        else if (lockKind == LockKind.Entity)
+        {
+            var target = api.World.GetEntityById(lockEntityId);
+            if (target == null) { ClearTargetLock(); return; }
+            var box = target.SelectionBox;
+            var p = target.Pos.XYZ;
+            aim = box == null ? new Point3(p.X, p.Y + 0.5, p.Z)
+                : new Point3(p.X + (box.X1 + box.X2) / 2, p.Y + (box.Y1 + box.Y2) / 2, p.Z + (box.Z1 + box.Z2) / 2);
+        }
+        else if (lockCell != null)
+        {
+            if (api.World.BlockAccessor.GetChunkAtBlockPos(lockCell) == null ||
+                api.World.BlockAccessor.GetBlock(lockCell).Code.ToString() != lockCode) { ClearTargetLock(); return; }
+            aim = BlockAimPoint(api.World.BlockAccessor, api.World.BlockAccessor.GetBlock(lockCell), lockCell, null);
+        }
+        if (!aim.HasValue) { ClearTargetLock(); return; }
+        var eyeVec = entity.Pos.XYZ.Add(entity.LocalEyePos);
+        var (yaw, pitch) = SceneGeometry.LookAt(new Point3(eyeVec.X, eyeVec.Y, eyeVec.Z), aim.Value);
+        controlYaw = SceneGeometry.Normalize(yaw);
+        controlPitch = Math.Clamp(pitch, -89, 89);
+    }
+
+    private void ClearTargetLock()
+    {
+        lockKind = LockKind.None; lockCell = null; lockCode = null; lockEntityId = 0; lockName = null;
     }
 
     private void RetainOwnedMovement(EnumEntityAction action, bool on, ref EnumHandling handling)

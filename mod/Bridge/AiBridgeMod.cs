@@ -183,7 +183,8 @@ public sealed partial class AiBridgeMod : ModSystem
                 terrainSensor.Sample(now, sensorPriority);
                 // Far view vision streams only while a controller is reading it.
                 if (now - lastSenseAt < 5000) vision.Sample(now);
-                if (control.Active) ApplyCamera(dt);
+                UpdateTargetLock();
+                if (control.Active || lockKind != LockKind.None) ApplyCamera(dt);
             }
             catch (Exception exception)
             {
@@ -192,7 +193,11 @@ public sealed partial class AiBridgeMod : ModSystem
                 api.Logger.Error($"AI navigation failed: {exception}");
             }
         }
-        else if (control.Active) ReleaseControl("control_unavailable");
+        else
+        {
+            if (control.Active) ReleaseControl("control_unavailable");
+            ClearTargetLock();
+        }
         blockActions.Tick(CanControl() && !ManualInput() && !NavigationDanger(blockActions.StarvingRecovery) &&
             api.World.Player.Entity.OnGround && !api.World.Player.Entity.FeetInLiquid);
         if (handAction != null)
@@ -306,6 +311,7 @@ public sealed partial class AiBridgeMod : ModSystem
             case "map_waypoint_remove": return MapWaypointRemove(request);
             case "map_view": return MapView();
             case "look": return Look(request);
+            case "look_at": return LookAt(request);
             case "aim_cell": return AimCell(request);
             case "move": return Move(request);
             case "control_begin": return ControlBegin(request);
@@ -315,6 +321,7 @@ public sealed partial class AiBridgeMod : ModSystem
             case "stop":
                 StopMovement();
                 StopHandAction();
+                ClearTargetLock();
                 return new { ok = true, status = "stopped" };
             default:
                 return new { ok = false, error = "Unknown action. Use observe, events, respawn, scan, look, select, move, interact, attack, or stop." };
@@ -322,7 +329,7 @@ public sealed partial class AiBridgeMod : ModSystem
     }
 
     // Wire actions refused while a control hold owns the inputs; stop releases it first.
-    private static readonly HashSet<string> Mutations = ["move_to", "move", "look", "aim_cell", "select", "interact", "attack", "stop", "respawn", "craft", "inventory_move", "drop", "open_container", "container_move", "close_container", "block_action_begin", "block_action_continue", "select_recipe", "ui_activate"];
+    private static readonly HashSet<string> Mutations = ["move_to", "move", "look", "aim_cell", "select", "interact", "attack", "stop", "respawn", "craft", "inventory_move", "drop", "open_container", "container_move", "close_container", "look_at", "block_action_begin", "block_action_continue", "select_recipe", "ui_activate"];
     private bool CanControl() => api.World?.Player?.Entity?.Alive == true && !api.IsGamePaused &&
         !api.Gui.OpenedGuis.Any(dialog => dialog.IsOpened() && DialogAdapter.BlocksControl(dialog));
 

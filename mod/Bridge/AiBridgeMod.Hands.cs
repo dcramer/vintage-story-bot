@@ -62,8 +62,9 @@ public sealed partial class AiBridgeMod
              !expectedItem.TryGetProperty("code", out var itemCode) || itemCode.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) ||
              itemCode.GetString() != api.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible.Code.ToString()))
             return new { ok = false, error = "Held item changed; inspect before interacting." };
-        if (action == "attack" && api.World!.Player.CurrentBlockSelection == null)
-            return new { ok = false, error = "Aim at a block before attacking; entity combat is not supported yet." };
+        if (action == "attack" && api.World!.Player.CurrentBlockSelection == null &&
+            api.World!.Player.CurrentEntitySelection == null)
+            return new { ok = false, error = "Aim at a block or entity before attacking." };
         bool sneakHand = false;
         if (request.TryGetProperty("sneak", out var handSneakField))
         {
