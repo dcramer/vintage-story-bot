@@ -159,3 +159,31 @@ test('open water permits diagonal swimming while solid bank corners remain block
     for (let y = 0; y <= 2; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [[x, y, z, x + 1, y + 1, z + 1]] });
   assert.equal(diagonal(), false);
 });
+
+test('a merged run over gentle steps keeps sprint until the final approach', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x <= 5; x++) {
+    column(map, x, 0);
+    if (x > 0) map.put({ x, y: 0, z: 0, seenAt: Date.now(), traits: [], boxes: [[x, 0, 0, x + 1, 0.25, 1]] });
+  }
+  const state = { ...stateAt({ x: 0.5, y: 0, z: 0.5 }), vitals: { hunger: { current: 750, max: 1500 } } };
+  const end = { x: 4.5, y: 0.25, z: 0.5, move: 'step' };
+  const nav = new Navigation(map, state, { ...end, sprint: true }, 0);
+  nav.adopt([{ x: 1.5, y: 0.25, z: 0.5, move: 'step' }, end], state.position, 0);
+  assert.equal(nav.tick(state, 0).sprint, true);
+  state.position = { x: 3.5, y: 0.25, z: 0.5 };
+  assert.equal(nav.tick(state, 1000).sprint, false);
+});
+
+test('sprint continues through an intermediate point but slows for a sharp turn', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x <= 8; x++) for (let z = 0; z <= 3; z++) column(map, x, z);
+  for (const turn of [false, true]) {
+    const state = { ...stateAt({ x: 3, y: 0, z: 0.5 }), vitals: { hunger: { current: 750, max: 1500 } } };
+    const after = { x: turn ? 4.5 : 6.5, y: 0, z: turn ? 2.5 : 0.5, move: 'walk' };
+    const nav = new Navigation(map, state, { ...after, sprint: true }, 0);
+    nav.adopt([{ x: 4.5, y: 0, z: 0.5, move: 'walk' }, after], state.position, 0);
+    nav.mergeRefused = true;
+    assert.equal(nav.tick(state, 0).sprint, !turn);
+  }
+});

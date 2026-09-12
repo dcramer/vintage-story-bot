@@ -389,12 +389,6 @@ export class Navigation {
       }
       this.guardHolds = 0;
     }
-    const food = state.vitals?.hunger;
-    const emergency = this.evading || this.target.emergency;
-    // Running from something is done at a sprint whatever the stomach says; otherwise when the stomach
-    // allows and there is a run ahead worth it. A goal may forbid it (sprint: false).
-    const sprint =
-      this.target.sprint !== false && next.move === 'walk' && near > 2 && (emergency || (food?.max > 0 && food.current / food.max >= SPRINT_FOOD));
     const last = this.index >= this.route.length - 1;
     // The cell after this one is handed over as well, so the mod rolls straight on to it when this
     // one is reached instead of pausing for a frame from here.
@@ -406,6 +400,20 @@ export class Navigation {
       rollOn && horizontal(p, after) <= 7.4 && Math.abs(after.y - p.y) <= 3
         ? { x: after.x, y: after.y, z: after.z, hop: after.move === 'jump' || after.y - next.y > STEP_HEIGHT }
         : undefined;
+    const food = state.vitals?.hunger;
+    const emergency = this.evading || this.target.emergency;
+    // A queued straight continuation is still a run, even near its intermediate point.
+    const continuesRun =
+      !!next2 &&
+      ['walk', 'step'].includes(after.move) &&
+      horizontal(p, after) > 2 &&
+      Math.abs(after.y - next.y) <= STEP_HEIGHT &&
+      Math.abs(angle(lookAt(next, after).yawDegrees, desiredYaw)) < 20;
+    const sprint =
+      this.target.sprint !== false &&
+      ['walk', 'step'].includes(next.move) &&
+      (near > 2 || continuesRun) &&
+      (emergency || (food?.max > 0 && food.current / food.max >= SPRINT_FOOD));
     return {
       ...(next2 ? { next: next2 } : {}),
       toward: { x: next.x, y: next.y, z: next.z },

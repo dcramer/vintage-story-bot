@@ -53,12 +53,13 @@ public sealed class StepTracker
     // What to hold this tick, and where to look. Forward only while facing the point and
     // supported or continuing a hop/shallow descent along queued points; jump held
     // in water to keep the head up, or to hop once close.
-    public (bool Forward, bool Jump, double Yaw) Update(Point3 position, double yawDegrees, bool onGround, bool wet, long now)
+    public (bool Forward, bool Jump, double Yaw) Update(Point3 position, double yawDegrees, bool onGround, bool wet, long now, bool swimming = false)
     {
+        bool buoyant = wet && swimming;
         double dx = Toward.X - position.X, dz = Toward.Z - position.Z;
         Distance = Math.Sqrt(dx * dx + dz * dz);
         double wantYaw = SceneGeometry.Normalize(Math.Atan2(dx, dz) * 180 / Math.PI);
-        if (State != "walking") return (false, wet, wantYaw);
+        if (State != "walking") return (false, buoyant, wantYaw);
         double dy = Toward.Y - position.Y;
         bool level = Math.Abs(dy) <= ReachY;
         // On the point, or past it: the plane through the point across the step has been crossed.
@@ -90,21 +91,21 @@ public sealed class StepTracker
                 level = Math.Abs(dy) <= ReachY;
                 passed = false;
             }
-            else { State = "arrived"; return (false, wet, wantYaw); }
+            else { State = "arrived"; return (false, buoyant, wantYaw); }
         }
         double error = Math.Abs(SceneGeometry.Normalize(wantYaw - yawDegrees + 180) - 180);
         // A point with another queued behind it is passed through, not stopped on: the wide gate all the way.
         bool aligned = error < ((Distance > WideAlignDistance || Next is Point3) && !Hop ? WideAlignDegrees : AlignDegrees);
-        if (now - startedAt > MaxMs) { State = "blocked"; return (false, wet, wantYaw); }
+        if (now - startedAt > MaxMs) { State = "blocked"; return (false, buoyant, wantYaw); }
         if (Distance < bestDistance - 0.03) { bestDistance = Distance; progressAt = now; }
         // Turning and falling are not being stuck; walking without getting closer is.
         else if (!aligned || (!onGround && !wet)) progressAt = now;
-        else if (now - progressAt > BlockedMs) { State = "blocked"; return (false, wet, wantYaw); }
+        else if (now - progressAt > BlockedMs) { State = "blocked"; return (false, buoyant, wantYaw); }
         // Past the point but not yet down on it (the landing of a hop): let the body land rather than
         // run on through the arc. A hop fires only while the point is still above the feet: a body that
         // stepped up onto its level already must not be launched over it.
         bool forward = aligned && (onGround || wet || Hop || carry || airborneCarry) && !(passed && !level && !carry);
-        bool jump = wet || (Hop && aligned && Distance < HopDistance && dy > ReachY);
+        bool jump = buoyant || (Hop && aligned && Distance < HopDistance && dy > ReachY);
         return (forward, jump, wantYaw);
     }
 

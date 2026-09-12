@@ -54,8 +54,13 @@ static class StepTrackerTests
         Check(!down.Update(new Point3(1.1, 99.6, 0.5), 90, false, false, 100).Forward, "no forward while falling");
         // Water: jump held to keep the head up; arrival tolerates the float.
         var swim = new StepTracker(new Point3(1.5, 99.5, 0.5), new Point3(0.5, 99.5, 0.5), 0.35, 1.5, false, 0);
-        var stroke = swim.Update(new Point3(0.5, 98.6, 0.5), 90, false, true, 0);
+        var stroke = swim.Update(new Point3(0.5, 98.6, 0.5), 90, false, true, 0, swimming: true);
         Check(stroke.Forward && stroke.Jump, "swimming holds jump");
+        var wade = new StepTracker(new Point3(2.5, 100, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, false, 0);
+        var shallow = wade.Update(new Point3(0.5, 100, 0.5), 90, true, true, 0);
+        Check(shallow.Forward && !shallow.Jump, "wading on the bottom does not hop");
+        var bank = new StepTracker(new Point3(1.5, 101, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
+        Check(bank.Update(new Point3(.5, 100, .5), 90, true, true, 0).Jump, "wading still jumps onto a raised bank");
         // A step still going after 2.5 s is stuck, even while the distance wobbles about.
         var bounce = new StepTracker(toward, new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
         for (long t = 0; t <= 2600; t += 100) bounce.Update(new Point3(1.0 + (t % 300) / 300.0, 100 + (t % 200) / 100.0, 0.5), 90, t % 200 == 0, false, t);

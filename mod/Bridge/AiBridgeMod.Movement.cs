@@ -476,7 +476,7 @@ public sealed partial class AiBridgeMod
         var entity = api.World!.Player.Entity;
         var at = new Point3(entity.Pos.X, entity.Pos.Y, entity.Pos.Z);
         var (forward, jump, yaw) = step.Update(at, SceneGeometry.Normalize(entity.Pos.Yaw * 180 / Math.PI), entity.OnGround,
-            entity.FeetInLiquid || entity.Swimming, now);
+            entity.FeetInLiquid || entity.Swimming, now, entity.Swimming);
         controlYaw = yaw;
         if (step.State != "walking") { StopMovement(); return; }
         Press("walkforward", forward); movingControls.Forward = forward;
