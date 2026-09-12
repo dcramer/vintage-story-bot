@@ -18,8 +18,11 @@ export function findRoute(
   // A hostile is kept clear of, not by refusing every cell nearer than the body is now (a notch in a hill
   // would trap the bot), but by charging for closeness: cells inside the kept distance cost extra by how
   // far inside they are, and only cells within striking range are refused outright.
-  const safe = p => avoid.every(item => horizontal(p, item.point) >= Math.min(3, item.minimumDistance));
-  const dread = p => avoid.reduce((sum, item) => sum + Math.max(0, item.minimumDistance - horizontal(p, item.point)) * 4, 0);
+  const relevant = (p, item) => item.verticalRange === undefined || Math.abs(p.y - item.point.y) <= item.verticalRange;
+  const safe = p =>
+    avoid.every(item => !relevant(p, item) || horizontal(p, item.point) >= (item.strict ? item.minimumDistance : Math.min(3, item.minimumDistance)));
+  const dread = p =>
+    avoid.reduce((sum, item) => sum + (relevant(p, item) ? Math.max(0, item.minimumDistance - horizontal(p, item.point)) * 4 : 0), 0);
   const reached = p => {
     if (goal.arrivalRadius && horizontal(p, goal) < goal.arrivalRadius && (goal.horizontalOnly || Math.abs(p.y - goal.y) < 0.6)) return true;
     return Math.abs(p.x - goal.x) < 0.51 && Math.abs(p.z - goal.z) < 0.51 && (goal.horizontalOnly || Math.abs(p.y - goal.y) < 0.6);

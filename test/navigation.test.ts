@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Navigation, NO_PROGRESS_MS } from '../src/runtime/navigation/navigator.ts';
-import { distance, TerrainMemory } from '../src/runtime/navigation/terrain.ts';
+import { findRoute } from '../src/runtime/navigation/planner.ts';
+import { distance, horizontal, TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 
 const stateAt = position => ({
   position,
@@ -13,6 +14,35 @@ const stateAt = position => ({
 function column(map, x, z, floor = true) {
   for (let y = -1; y < 4; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: y === -1 && floor ? [[x, y, z, x + 1, y + 1, z + 1]] : [] });
 }
+
+test('resuming after a bear escape routes around its remembered position instead of reentering it', () => {
+  const map = new TerrainMemory();
+  for (let x = -40; x <= 45; x++) for (let z = -27; z <= 27; z++) column(map, x, z);
+  const bear = { key: 'bear', code: 'game:bear-black-adult-female', point: { x: 0.5, y: 0, z: 0.5 }, ageMs: 0 };
+  const state = { ...stateAt({ x: -19.5, y: 0, z: 0.5 }), nearbyEntities: [bear] };
+  const target = { x: 40.5, y: 0, z: 0.5, timeoutMs: 120000 };
+  const nav = new Navigation(map, state, target, 0);
+  nav.tick(state, 0);
+  assert.equal(nav.evading, true);
+  state.position = { x: -30.5, y: 0, z: 0.5 };
+  state.nearbyEntities = [];
+  nav.tick(state, 1000);
+  assert.equal(nav.evading, false);
+  const route = findRoute(map, state.position, target, 0, 0, { avoid: nav.avoid, partial: false, budget: 8192 });
+  assert.ok(route, 'the original destination remains reachable around the bear');
+  assert.ok(
+    route.every(p => horizontal(p, bear.point) >= 24),
+    'clearing the threat cannot discard its position',
+  );
+  state.position = { x: -33.5, y: 0, z: 0.5 };
+  nav.survey(61000);
+  nav.tick(state, 61000);
+  const expired = findRoute(map, state.position, target, 0, 0, { avoid: nav.avoid, partial: false, budget: 8192 });
+  assert.ok(
+    expired.some(p => horizontal(p, bear.point) < 3),
+    'an old sighting cannot block the route forever',
+  );
+});
 
 test('swimmers and waders can climb a clear bank without treating their water as a ceiling', () => {
   for (const deep of [false, true]) {

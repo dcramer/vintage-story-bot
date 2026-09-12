@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { fleeTarget, nearbyThreats, nearbyUnclearedThreats } from '../../support/threats.ts';
+import { fleeTarget, hostileEntity, nearbyThreats, nearbyUnclearedThreats, threatStartDistance, threatVerticalRange } from '../../support/threats.ts';
 import { findRoute } from './planner.ts';
 import { angle, distance, horizontal, JUMP_HEADROOM, JUMP_HEIGHT, key, lookAt, MAX_DROP, STEP_HEIGHT } from './terrain.ts';
 
@@ -66,6 +66,9 @@ export class Navigation {
   threat = null;
   threats = [];
   avoid = [];
+  // Keep the last observed threat position briefly after escaping its immediate perimeter.
+  // Otherwise resuming the destination sends the body straight back into the same threat.
+  rememberedThreats = new Map<string, any>();
   constructor(map, state, goal, now = Date.now()) {
     this.map = map;
     this.primaryTarget = this.target = goal;
@@ -198,7 +201,29 @@ export class Navigation {
       this.threat = nearby;
       this.threats = threats;
     }
-    this.avoid = threats.map(entity => ({ point: entity.point, minimumDistance: Math.max(0, horizontal(p, entity.point) - 0.5) }));
+    for (const entity of state.nearbyEntities ?? []) {
+      if (!hostileEntity(entity)) continue;
+      const until = now + 60000 - (entity.ageMs ?? 0);
+      if (until > now)
+        this.rememberedThreats.set(entity.key, {
+          point: { ...entity.point },
+          minimumDistance: threatStartDistance(entity.code) + 2,
+          verticalRange: threatVerticalRange(entity.code),
+          until,
+        });
+    }
+    for (const [id, entity] of this.rememberedThreats) if (entity.until <= now) this.rememberedThreats.delete(id);
+    const activeKeys = new Set(threats.map(entity => entity.key));
+    const activeAvoid = threats.map(entity => ({ point: entity.point, minimumDistance: Math.max(0, horizontal(p, entity.point) - 0.5) }));
+    this.avoid = [
+      ...activeAvoid,
+      ...[...this.rememberedThreats.entries()]
+        .filter(([id]) => !activeKeys.has(id))
+        .map(([, entity]) => ({
+          ...entity,
+          strict: horizontal(p, entity.point) >= entity.minimumDistance,
+        })),
+    ];
     if (
       grounded &&
       // A step ends on its point or just past it (within about half a block); the destination is met the same way.
@@ -349,10 +374,17 @@ export class Navigation {
     this.nextCheckpoint = next;
     // A route that leads back toward a threat is replanned like any other failure, so the
     // replan cap ends the walk instead of the same route being refused every tick.
-    if (this.evading && !this.avoid.every(item => horizontal(next, item.point) >= item.minimumDistance)) {
+    if (this.evading && !activeAvoid.every(item => horizontal(next, item.point) >= item.minimumDistance)) {
       this.target = fleeTarget(p, threats);
       return this.replan(p, now, 'route_toward_threat');
     }
+    if (
+      !this.evading &&
+      this.avoid.some(
+        item => item.strict && Math.abs(next.y - item.point.y) <= item.verticalRange && horizontal(next, item.point) < item.minimumDistance,
+      )
+    )
+      return this.replanNow(state, p, now, 'route_toward_threat');
     // The next cell must still be a place to stand.
     // A swim node sits half a block under the surface; a dry one is exact.
     const still = map.nodeAt(Math.floor(next.x), Math.floor(next.z), next.y, next.swim ? 1 : 0.1, next.swim ? 1 : 0.1);
