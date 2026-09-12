@@ -70,9 +70,9 @@ export async function burrow(field, survival) {
   const state = await field.observe(true);
   const inventory = await field.send({ action: 'inventory' });
   const seal = sealStone(inventory);
-  if (!seal) return { ok: false, goal: 'burrow', reason: 'nothing_to_seal_with' };
-  const site = burrowSite(map, state.position);
-  if (!site) return digIn(field, seal, inventory);
+  const site = seal ? burrowSite(map, state.position) : null;
+  // With nothing to seal a bank pocket with, or no bank about, a hole where it stands: what it digs seals it.
+  if (!site) return digIn(field, inventory);
   field.report('walking_to_bank', { stand: site.stand, mouth: site.mouth });
   if (horizontal(state.position, site.stand) > 0.6) {
     const walked = await field.walk({ ...site.stand, arrivalRadius: 0.4 }, survival?.pauseWhen);
@@ -117,7 +117,7 @@ export async function burrow(field, survival) {
 
 // No bank about: a hole where it stands, two blocks straight down, the cell above the head closed
 // with the seal stone placed against a rim block's inner face. Drifters do not climb into holes.
-async function digIn(field, seal, inventory) {
+async function digIn(field, inventory) {
   const map = field.env.map;
   const start = field.latest.position;
   const x = Math.floor(start.x),
@@ -141,9 +141,12 @@ async function digIn(field, seal, inventory) {
     y = Math.floor(field.latest.position.y);
   }
   if (y > Math.floor(start.y) - 2) return { ok: false, goal: 'burrow', reason: 'hole_too_shallow', depth: Math.floor(start.y) - y };
+  const mouth = { x, y: y + 2, z };
+  // Two blocks down is out of a drifter's reach even open; the cell above is closed when a block is in hand.
+  const seal = sealStone(await field.send({ action: 'inventory' }));
+  if (!seal) return { ok: true, goal: 'burrow', mouth, inside: { x, y, z }, sealed: null, dugIn: true, verification: 'client_observed' };
   const slot = (await equip(field, { item: seal.code })).slot;
   const eye = { ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight };
-  const mouth = { x, y: y + 2, z };
   for (const [ax, az, face] of [
     [1, 0, 'west'],
     [-1, 0, 'east'],
@@ -160,7 +163,8 @@ async function digIn(field, seal, inventory) {
     const placed = await changeBlock(field, 'place', { target: support.key, face, slot, expectedItem: seal.code });
     if (placed.ok) return { ok: true, goal: 'burrow', mouth, inside: { x, y, z }, sealed: seal.code, dugIn: true, verification: 'client_observed' };
   }
-  return { ok: false, goal: 'burrow', reason: 'seal_failed', inside: true, mouth };
+  // Unsealed, but dug in: still the best place to be at night.
+  return { ok: true, goal: 'burrow', mouth, inside: { x, y, z }, sealed: null, dugIn: true, verification: 'client_observed' };
 }
 
 export default defineGoal({
@@ -175,7 +179,7 @@ export default defineGoal({
     'Dig into the nearest bank of plain earth two blocks deep at foot and head height, step in, and seal the mouth ' +
     'with a block from the pack: a one-by-two pocket for the night. With no bank about, a hole where it stands: two ' +
     'blocks straight down, the cell above closed with the block. Ends with the mouth cell to dig out of in the ' +
-    'morning (dig_area, then dig_out of the hole), or a reason: nothing_to_seal_with, cannot_dig, cannot_enter, seal_failed.',
+    'morning (dig_area, then dig_out of the hole); the hole is dug even with nothing to seal it. Reasons: cannot_dig, cannot_enter, hole_too_shallow.',
   announce: () => 'Digging in for the night.',
   run: (env, options) => runField(env, options, ['inventory', 'block_actions'], (field, survival) => burrow(field, survival)),
 });

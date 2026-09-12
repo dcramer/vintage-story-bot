@@ -47,7 +47,7 @@ export const DANGER_RADIUS = 48;
 export const DANGER_MS = 15 * 60 * 1000;
 export const RELOCATE_DISTANCE = 96;
 // Jobs that cut a lesser running job short when the ladder turns to them.
-const URGENT: Job[] = ['hide', 'go_home', 'wait', 'eat', 'relocate', 'burrow', 'seal'];
+const URGENT: Job[] = ['hide', 'go_home', 'wait', 'eat', 'relocate', 'burrow'];
 // A flight ends when no threat has shown for this long and the scare is this far behind.
 export const SAFE_MS = 20000;
 export const SAFE_DISTANCE = 16;
@@ -69,7 +69,6 @@ export type Job =
   | 'dig_out'
   | 'burrow'
   | 'unburrow'
-  | 'seal'
   | 'relocate'
   | 'recover';
 type Cell = { x: number; y: number; z: number };
@@ -188,10 +187,8 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   if (s.night) {
     if (s.home) return s.atHome ? 'wait' : 'go_home';
     if (s.burrowed) return 'wait';
-    // Dig in with a block to seal; with none, two dirt come first; a dig-in that failed here is not tried again at once.
-    if (s.dirt > 0 && !tried.has('burrow')) return 'burrow';
-    if (s.dirt <= 0 && !tried.has('seal')) return 'seal';
-    return 'wait';
+    // Dig in where it stands; what it digs seals the hole. A dig-in that failed here is not tried again at once.
+    return tried.has('burrow') ? 'wait' : 'burrow';
   }
   if (s.burrowed) return 'unburrow';
   if (s.hunger !== null && (s.hunger < HUNGRY || (s.hunger < PECKISH && s.reserve <= 0))) return 'eat';
@@ -309,7 +306,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // danger first, then a storm, night, a bad place, or food in hand when hungry.
   if (active) {
     // A flight is never interrupted, and neither is digging out: there is no running from a hole.
-    if ((threat || hurt) && !['hide', 'dig_out'].includes(memory.job ?? '')) return { stop: threat ? 'threat' : 'hurt' };
+    // Nor is digging in at night: two blocks down is the safest place from whatever is coming.
+    if ((threat || hurt) && !['hide', 'dig_out', 'burrow'].includes(memory.job ?? '')) return { stop: threat ? 'threat' : 'hurt' };
     // A flight is over once nothing has been seen or heard for a while and the scare is well behind.
     const scare = memory.scares.at(-1);
     if (memory.job === 'hide' && !threat && !hurt && scare && now - scare.at > SAFE_MS && horizontal(state.position, scare) >= SAFE_DISTANCE)
@@ -371,8 +369,6 @@ export function decide(reading: Reading, memory: Memory): Decision {
         { match: 'soil-', item: 'soil-', count: Math.max(1, SHELTER_DIRT - k.dirt), tool: 'Shovel', timeoutMs: 900000 },
         `${k.dirt}/${SHELTER_DIRT} dirt for a shelter`,
       );
-    case 'seal':
-      return start('harvest', { match: 'soil-', item: 'soil-', count: 2, timeoutMs: 300000 }, 'a block to seal a burrow with');
     case 'shelter':
       return start('shelter', { item: k.dirtCode ?? 'soil-', timeoutMs: 1800000 }, `${k.dirt} dirt, putting up a shelter`);
     case 'sticks':

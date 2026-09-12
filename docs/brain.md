@@ -35,7 +35,9 @@ fights; it runs or hides.
 | dead | `respawn` | Dead with a respawn offered |
 | swim | `look` and `move` with jump held | In deep water with no goal running |
 | go_home | `travel` home | Storm or night, away from home |
-| wait | none | Storm at home, or night with nowhere to go |
+| burrow | `burrow` | Night with no home: a pocket in a bank of earth when a block to seal it is carried, else a hole two blocks straight down where it stands, sealed with what it digs; never cut short by a threat |
+| unburrow | `dig_area` on the mouth | Morning, dug in |
+| wait | none | Storm at home, night at home, or dug in for the night |
 
 Wants (what every walk stops for within six blocks): berries on a bush always; loose sticks while short of ten; loose flint and stones while a tool head is wanted and nothing knappable is carried.
 | eat | `eat`, else `forage` | Satiety below 20% (or 40% with nothing carried); the pack any time, foraging by day |
@@ -49,8 +51,12 @@ Wants (what every walk stops for within six blocks): berries on a bush always; l
 | logs | `fell_tree` | Fewer than 8 logs |
 | explore | `explore` | Fed, safe, daylight, kit done |
 
-Order of concern: danger, storm, hunger, night, then the day-1 list, then
-exploring. The list (`TASKS` in the brain) is a task tracker: each task says
+Order of concern, and the interrupt rule for a running job: danger (a hostile
+near, or a hit), a storm, food in hand when hungry, a place that keeps scaring,
+night (dig in, or go home), then the day-1 list, then exploring. A running job
+is cut short only when the ladder itself would rather do one of the pressing
+things above the list; a flight, a dig-out and a night dig-in are never cut
+short by a threat. The list (`TASKS` in the brain) is a task tracker: each task says
 when the kit shows it done, the order carries the dependencies (a tool needs a
 stick and a head, dirt needs a shovel, a shelter needs dirt, torches need a home
 to light), and the first task not done is the one worked on. `brain` status
