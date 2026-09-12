@@ -106,3 +106,14 @@ test('a burrow site is a standable cell beside two blocks of plain earth two dee
   shallow.apply({ session: 'w', reset: false, cursor: 2, more: false, clock: 0, cells: [[0, 2, 0, 0, null, [[0, 0, 0, 1, 1, 1]]]] });
   assert.equal(dugInState(shallow, 0, 0, 0), 'sealed', 'a shallow rim supporting a seal is still the completed burrow');
 });
+
+test('a sealed pit clears takeoff headroom before cutting the stair wall', () => {
+  const pit = world(4, (x, y, z) => y >= 0 && y <= 3 && (x !== 0 || z !== 0 || y === 2));
+  const origin = { x: 0.5, y: 0, z: 0.5 };
+  const plan = stairStep(pit, origin, { x: 5, y: 0, z: 0.5 });
+  assert.deepEqual(plan.dig[0], { x: 0, y: 2, z: 0 });
+  for (const c of plan.dig) pit.put({ x: c.x, y: c.y, z: c.z, seenAt: Date.now(), traits: [], boxes: [] });
+  assert.ok(pit.moves(origin).some(({ node }) => node.x === 1.5 && node.z === 0.5 && node.move === 'jump'));
+  pit.put({ x: 0, y: 2, z: 0, seenAt: Date.now(), traits: ['water'], boxes: [] });
+  assert.equal(stairStep(pit, origin, { x: 5, y: 0, z: 0.5 }), null, 'do not open an overhead hazard');
+});

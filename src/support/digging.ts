@@ -43,6 +43,11 @@ export function stairStep(map, node, toward) {
   const x = Math.floor(node.x),
     z = Math.floor(node.z),
     h = Math.floor(node.y);
+  // Clear the takeoff headroom before reaching past it into the wall.
+  // A sealed shaft otherwise hides the upper cuts and prevents the jump.
+  const roof = map.get(x, h + 2, z);
+  if (!roof || roof.hazard) return null;
+  const ceiling = solid(map, x, h + 2, z) ? [{ x, y: h + 2, z }] : [];
   const heading = lookAt(node, toward).yawDegrees;
   const directions = cardinals
     .map(([dx, dz]) => ({ dx, dz, off: Math.abs(angle(lookAt(node, { x: node.x + dx, z: node.z + dz }).yawDegrees, heading)) }))
@@ -58,7 +63,7 @@ export function stairStep(map, node, toward) {
     if (!above.every(y => known(map, wx, y, wz)) || above.some(y => map.get(wx, y, wz).hazard)) continue;
     const dig = above.filter(y => solid(map, wx, y, wz)).map(y => ({ x: wx, y, z: wz }));
     if (!dig.length) continue;
-    return { step: { x: wx, y: h, z: wz }, dig, direction: { dx, dz } };
+    return { step: { x: wx, y: h, z: wz }, dig: [...ceiling, ...dig], direction: { dx, dz } };
   }
   return null;
 }
