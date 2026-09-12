@@ -84,6 +84,13 @@ function bounded(data, limit) {
   const text = JSON.stringify(data);
   return text === undefined || text.length <= limit ? data : { truncated: true, bytes: text.length };
 }
+// A death followed by a quick respawn can share one oversized batch with many
+// ordinary events. Run entries are boundaries, not debug history: keep them
+// when reducing that batch or the latest alive snapshot erases the death.
+function compactLog(log, tail = 10, runLimit = 8) {
+  const keep = new Set([...log.filter(entry => entry.topic === 'run').slice(-runLimit), ...log.slice(-tail)]);
+  return log.filter(entry => keep.has(entry));
+}
 export class Reporter {
   timer: any;
   latest = new Map();
@@ -165,7 +172,15 @@ export class Reporter {
     };
     let text = JSON.stringify(body);
     if (text.length > this.maxBytes) {
-      body.log = log.slice(-10);
+      body.log = compactLog(log);
+      text = JSON.stringify(body);
+    }
+    if (text.length > this.maxBytes) {
+      body.log = log.filter(entry => entry.topic === 'run').slice(-8);
+      text = JSON.stringify(body);
+    }
+    if (text.length > this.maxBytes) {
+      body.log = log.filter(entry => entry.topic === 'run').slice(-2);
       text = JSON.stringify(body);
     }
     if (text.length > this.maxBytes) {

@@ -69,6 +69,53 @@ function foldFalseArchives(bot, runs) {
   }
 }
 
+// The movement trail already records a verified respawn discontinuity. Use it
+// as a backstop when an oversized reporter batch lost the brief dead sample:
+// a controller segment that began between the samples on either side belongs
+// to the revived life, not to the run that reached the earlier point.
+function recoverMissedRespawn(bot, runs, segmentStartedAt) {
+  if (!runs.current || runs.current.endedAt != null || !Array.isArray(bot.trail)) return false;
+  for (let index = bot.trail.length - 1; index > 0; index--) {
+    const after = bot.trail[index], before = bot.trail[index - 1];
+    if (after?.discontinuity !== 'respawn') continue;
+    const beforeAt = number(before?.at, NaN), afterAt = number(after?.at, NaN);
+    if (!Number.isFinite(beforeAt) || !Number.isFinite(afterAt)) return false;
+    if (runs.current.startedAt > beforeAt || segmentStartedAt <= beforeAt || segmentStartedAt > afterAt) return false;
+    const oldSegments = Object.fromEntries(
+      Object.entries(bot.runSegments ?? {}).filter(([, segment]) => segment.startedAt <= beforeAt),
+    );
+    if (!Object.keys(oldSegments).length) return false;
+    bot.runSegments = oldSegments;
+    const current = runs.current, segments = Object.values(oldSegments);
+    current.distance = rounded(segments.reduce((sum, segment) => sum + segment.distance, 0));
+    current.movementSamples = segments.reduce((sum, segment) => sum + segment.movementSamples, 0);
+    current.estimatedSteps = Math.round(current.distance / 0.75);
+    current.discontinuities = segments.reduce((sum, segment) => sum + segment.discontinuities, 0);
+    current.controllerSegments = segments.length;
+    current.items = publicItems(oldSegments);
+    current.position = point(before) ?? current.position;
+    current.observedAt = segmentStartedAt;
+    current.endedAt = segmentStartedAt;
+    current.alive = false;
+    current.maxFromSpawn = rounded(
+      Math.max(
+        0,
+        ...bot.trail
+          .filter(sample => number(sample?.at, 0) >= current.startedAt && number(sample?.at, Infinity) <= beforeAt)
+          .map(sample => point(sample))
+          .filter(Boolean)
+          .map(sample => horizontal(current.spawn, sample)),
+      ),
+    );
+    current.durationMs = Math.max(0, current.endedAt - current.startedAt);
+    archive(runs);
+    runs.current = null;
+    bot.runSegments = {};
+    return true;
+  }
+  return false;
+}
+
 // Join cumulative controller-segment measurements into one durable survival
 // run. Game/mod session ids can change on a client restart and remain stable
 // across a respawn, so only dead -> alive is a run boundary.
@@ -85,8 +132,8 @@ export function mergeRunMetric(bot, value) {
   if (!idRe.test(lifeId ?? '') || !idRe.test(segmentId ?? '') || !origin || !position || !Number.isFinite(observedAt) || !Number.isFinite(segmentStartedAt))
     return { changed: false, transition: false };
   const runs = (bot.runs ??= { current: null, recent: [] });
-  let transition = false;
   foldFalseArchives(bot, runs);
+  let transition = recoverMissedRespawn(bot, runs, segmentStartedAt);
   const priorDeath = runs.recent
     .slice()
     .reverse()

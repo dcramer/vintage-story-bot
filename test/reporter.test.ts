@@ -71,3 +71,42 @@ test('fleet reporter keeps cumulative run metrics and transition records', async
   assert.deepEqual(report.topics.run.data, run);
   assert.deepEqual(report.log, [{ topic: 'run', at: report.log[0].at, data: run }]);
 });
+
+test('fleet reporter preserves death and revival boundaries when an event flood is trimmed', async () => {
+  let report;
+  const reporter = new Reporter({
+    url: 'https://fleet.test',
+    token: 'token',
+    id: 'Kiln',
+    intervalMs: 60000,
+    maxBytes: 4096,
+    fetch: async (_url, request) => {
+      report = JSON.parse(request.body as string);
+      return new Response(null, { status: 204 });
+    },
+  });
+  const run = (segmentId, observedAt, alive) => ({
+    segmentId,
+    lifeId: 'life-1',
+    segmentStartedAt: alive ? observedAt : 1000,
+    observedAt,
+    endedAt: alive ? null : observedAt,
+    alive,
+    origin: { x: 0, y: 100, z: 0, dimension: 0 },
+    position: { x: 1, y: 100, z: 0, dimension: 0 },
+    items: { byCode: [] },
+  });
+  reporter.publish('run', run('before', 2000, false));
+  reporter.publish('run', run('after', 3000, true));
+  for (let index = 0; index < 30; index++) reporter.publish('event', { type: 'message', text: 'x'.repeat(512), index });
+  await reporter.flush();
+  reporter.close();
+  assert.equal(JSON.stringify(report).length <= 4096, true);
+  assert.deepEqual(
+    report.log.filter(entry => entry.topic === 'run').map(entry => [entry.data.segmentId, entry.data.alive]),
+    [
+      ['before', false],
+      ['after', true],
+    ],
+  );
+});

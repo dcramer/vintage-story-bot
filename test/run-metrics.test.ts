@@ -210,6 +210,44 @@ test('fleet metrics archive a death when the same game session respawns', () => 
   assert.equal(bot.runs.current.distance, 0);
 });
 
+test('fleet metrics recover a missed dead sample from the respawn trail marker', () => {
+  const bot: any = {
+    trail: [{ at: 2000, x: 5, y: 100, z: 0, dimension: 0 }],
+  };
+  const metric = (segmentId, startedAt, observedAt, distance, x) => ({
+    segmentId,
+    lifeId: 'stable-game-session',
+    segmentStartedAt: startedAt,
+    observedAt,
+    endedAt: null,
+    alive: true,
+    origin: { x, y: 100, z: 0, dimension: 0 },
+    position: { x: x + distance, y: 100, z: 0, dimension: 0 },
+    distance,
+    movementSamples: distance,
+    maxFromOrigin: distance,
+    discontinuities: 0,
+    items: { byCode: [] },
+  });
+
+  mergeRunMetric(bot, metric('before', 1000, 2000, 5, 0));
+  const revived = metric('after', 3000, 4000, 2, 20);
+  mergeRunMetric(bot, revived);
+  assert.equal(bot.runs.recent.length, 0);
+  bot.trail.push({ at: 3200, x: 20, y: 100, z: 20, dimension: 0, discontinuity: 'respawn' });
+
+  const healed = mergeRunMetric(bot, { ...revived, observedAt: 5000, distance: 3 });
+  assert.equal(healed.transition, true);
+  assert.equal(bot.runs.recent.length, 1);
+  assert.equal(bot.runs.recent[0].alive, false);
+  assert.equal(bot.runs.recent[0].endedAt, 3000);
+  assert.equal(bot.runs.recent[0].distance, 5);
+  assert.deepEqual(bot.runs.recent[0].position, { x: 5, y: 100, z: 0, dimension: 0 });
+  assert.equal(bot.runs.current.startedAt, 3000);
+  assert.equal(bot.runs.current.distance, 3);
+  assert.equal(bot.runs.current.controllerSegments, 1);
+});
+
 test('fleet metrics heal a revived run polluted by a pre-death segment', () => {
   const bot: any = {
     runs: {
