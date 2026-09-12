@@ -62,7 +62,7 @@ test('a drop that is never picked up ends the goal after a bounded number of app
   };
   const result = await collectItem(field, { target: 'entity:9', expectedItem: 'game:stick' });
   assert.equal(result.ok, false);
-  assert.equal(result.reason, 'pickup_failed');
+  assert.equal('reason' in result ? result.reason : null, 'pickup_failed');
   assert.equal(field.calls.walks, 6);
   assert.ok(field.looks < 200, `looked ${field.looks} times`);
 });

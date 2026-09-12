@@ -29,9 +29,11 @@ export function dugInState(map, x, y, z): 'open' | 'sealed' | null {
   // neighbouring ground while the cell above that ground is open air. It is
   // still the emergency shaft digIn deliberately accepts when no seal is
   // available; recognize it after a controller restart instead of digging
-  // another two blocks down.
+  // another two blocks down. The same shallow rim may support the seal over
+  // the shaft; that is the completed form, not unrelated solid ground.
   const lowerRim = cardinals.filter(([ax, az]) => solid(map, x + ax, y + 1, z + az)).length;
-  return lowerRim >= 3 && !solid(map, x, y + 2, z) ? 'open' : null;
+  if (lowerRim >= 3) return solid(map, x, y + 2, z) ? 'sealed' : 'open';
+  return null;
 }
 // A blocking item the pack holds: dirt, sand, gravel, stone, logs, anything the game places as a block.
 export const sealStone = inventory =>

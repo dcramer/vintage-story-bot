@@ -91,4 +91,18 @@ test('a burrow site is a standable cell beside two blocks of plain earth two dee
   assert.equal(dugInState(shaft, 0, 0, 0), 'open');
   shaft.apply({ session: 'w', reset: false, cursor: 2, more: false, clock: 0, cells: [[0, 2, 0, 0, null, [[0, 0, 0, 1, 1, 1]]]] });
   assert.equal(dugInState(shaft, 0, 0, 0), 'sealed', 'a restarted controller recognizes the block sealing its shelter');
+
+  const shallow = world(
+    3,
+    (x, y, z) =>
+      y === 1 &&
+      [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+      ].some(([ax, az]) => x === ax && z === az),
+  );
+  assert.equal(dugInState(shallow, 0, 0, 0), 'open');
+  shallow.apply({ session: 'w', reset: false, cursor: 2, more: false, clock: 0, cells: [[0, 2, 0, 0, null, [[0, 0, 0, 1, 1, 1]]]] });
+  assert.equal(dugInState(shallow, 0, 0, 0), 'sealed', 'a shallow rim supporting a seal is still the completed burrow');
 });
