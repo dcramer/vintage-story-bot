@@ -76,8 +76,6 @@ export type Memory = {
   done: Record<string, number>;
   // Where and when the bot had to run; a cluster of these around it means this is a bad place to be.
   scares: { x: number; z: number; at: number }[];
-  // Loose sticks ran out here: break leaves for them next time.
-  sticksFromLeaves: boolean;
   resting: boolean;
   // Sighting keys already marked on the map, so one nugget is announced once.
   marked: Set<string>;
@@ -189,12 +187,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (last) {
     if (last.ok) memory.done[last.kind] = (memory.done[last.kind] ?? 0) + 1;
     // A walk that ended in a hole is not a failed job: the hole is dealt with first.
-    // A stick search that found none loose goes straight on to breaking branchy leaves; only that failing too rests.
-    const sticksFromLeaves = memory.job === 'sticks' && !memory.sticksFromLeaves && !last.ok && last.reason !== 'pit';
     if (last.reason === 'pit' && last.result?.position) memory.pit = { x: last.result.position.x + 8, z: last.result.position.z };
     // Running away is tried again at once, and a job the surroundings refused before it began (water, lost
     // controls) is not the job's fault; every other failed job is set aside around here for a while.
-    else if (!last.ok && memory.job && !['hide', 'dig_out'].includes(memory.job) && !/interruption/.test(last.reason ?? '') && !sticksFromLeaves)
+    else if (!last.ok && memory.job && !['hide', 'dig_out'].includes(memory.job) && !/interruption/.test(last.reason ?? ''))
       memory.tried[memory.job] = { x: state.position.x, z: state.position.z, at: now };
     if (memory.job === 'dig_out') memory.pit = null;
     // A finished shelter is home.
@@ -203,7 +199,6 @@ export function decide(reading: Reading, memory: Memory): Decision {
     if (memory.job === 'unburrow' && last.ok) memory.burrow = null;
     // Whatever the trip's outcome, this place has been judged; judge the new one afresh.
     if (memory.job === 'relocate') memory.scares = [];
-    if (memory.job === 'sticks') memory.sticksFromLeaves = sticksFromLeaves;
     memory.job = null;
   }
   if (memory.resting) return { wait: 'resting after too many scares' };
@@ -336,12 +331,6 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'shelter':
       return start('shelter', { item: k.dirtCode ?? 'soil-', timeoutMs: 1800000 }, `${k.dirt} dirt, putting up a shelter`);
     case 'sticks':
-      if (memory.sticksFromLeaves)
-        return start(
-          'harvest',
-          { match: 'leavesbranchy', item: 'game:stick', count: STICK_MIN - k.sticks, timeoutMs: 600000 },
-          'no loose sticks about; breaking branchy leaves for them',
-        );
       return start(
         'gather',
         { match: 'stick', item: 'game:stick', count: STICK_MIN - k.sticks, timeoutMs: 600000 },
@@ -397,7 +386,6 @@ export function fresh(): Memory {
     burrow: null,
     done: {},
     scares: [],
-    sticksFromLeaves: false,
     resting: false,
   };
 }

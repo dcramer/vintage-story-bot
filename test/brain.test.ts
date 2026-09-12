@@ -103,7 +103,7 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
     reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'g1', kind: 'gather', ok: false, reason: 'blocked' }, now: 2000 }),
     memory,
   );
-  assert.equal(failed.args?.match, 'leavesbranchy', 'no loose sticks: branchy leaves next, at once');
+  assert.notEqual(memory.job, 'sticks', 'a failed stick search is set aside around here');
   const fled = decide(reading({ state: wolf }), memory);
   assert.equal(fled.start, 'travel');
   const again = decide(reading({ state: wolf, last: { id: 'g2', kind: 'travel', ok: false, reason: 'interrupted' }, now: 3000 }), memory);
@@ -320,7 +320,7 @@ test('brain: digging out of a hole is never interrupted by a threat', () => {
   assert.equal(during.wait, 'letting dig_out finish');
 });
 
-test('brain: three scares around the same spot make it move on; a failed stick search breaks leaves next', () => {
+test('brain: three scares around the same spot make it move on; a failed stick search is set aside around here', () => {
   const memory = fresh();
   const wolf = state({ nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }] });
   for (let scare = 0; scare < 3; scare++) {
@@ -339,13 +339,8 @@ test('brain: three scares around the same spot make it move on; a failed stick s
     reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'g', kind: 'gather', ok: false, reason: 'none_found' }, now: 4000 }),
     noSticks,
   );
-  assert.equal(next.args.match, 'leavesbranchy');
-  const leavesFailed = decide(
-    reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'h', kind: 'harvest', ok: false, reason: 'none_found' }, now: 5000 }),
-    noSticks,
-  );
   assert.notEqual(noSticks.job, 'sticks', 'sticks are set aside around here; the ladder goes on');
-  assert.ok(leavesFailed.start, 'something else is started instead of idling');
+  assert.ok(next.start, 'something else is started instead of idling');
   const elsewhere = { ...state(), position: { x: 40, y: 100, z: 0 } };
   assert.equal(
     decide(reading({ state: elsewhere, inventory: inventory(slot('game:stick', 2)), now: 6000 }), noSticks).start,

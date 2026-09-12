@@ -38,7 +38,7 @@ fights; it runs or hides.
 | eat | `eat`, else `forage` | Satiety below 20% |
 | dirt | `harvest soil-` | No home and fewer than 28 dirt |
 | shelter | `shelter` | Enough dirt (by day, or at night with nowhere else) |
-| sticks | `gather stick` | Fewer than 10 sticks |
+| sticks | `gather stick` (loose sticks, then branchy leaves in reach) | Fewer than 10 sticks |
 | stone | `harvest loosestone` | No knife or axe and nothing knappable |
 | tools | `knap` a flint blade, `craft_item` the tool | Missing the knife or the axe |
 | grass | `harvest tallgrass` | Wants torches, no dry grass or cattail tops |
@@ -47,7 +47,9 @@ fights; it runs or hides.
 | explore | `explore` | Fed, safe, daylight, kit done |
 
 Order of concern: danger, storm, hunger, night, shelter, then the kit in that
-order, then exploring. A failed job is left alone for ten minutes. Chests,
+order, then exploring. A failed job is set aside while the bot stays within 24
+blocks of where it failed, for five minutes at most; the next job in the ladder
+runs meanwhile, so a failure never leaves it standing about. Chests,
 `store_items`/`take_items` and body pickup are not used yet: it carries everything.
 
 ### Tiny shelter
