@@ -92,6 +92,24 @@ test('run metrics start a fresh segment when the game life id changes', () => {
   assert.equal(next.data.items.gained, 0);
 });
 
+test('run metrics start a fresh run when the same game session respawns', () => {
+  const metrics = new RunMetrics('controller-1');
+  metrics.observeState(state('game-session', 1000, 0, 0));
+  metrics.observeState(state('game-session', 2000, 3, 4));
+  metrics.observeInventory(inventory([]));
+  metrics.observeInventory(inventory([['game:stick', 2]]), 'gather');
+  metrics.observeState(state('game-session', 3000, 3, 4, false));
+
+  const revived = metrics.observeState(state('game-session', 4000, 20, 20, true));
+  assert.equal(revived.transition, true);
+  assert.equal(revived.data.lifeId, 'game-session');
+  assert.equal(revived.data.segmentStartedAt, 4000);
+  assert.equal(revived.data.endedAt, null);
+  assert.equal(revived.data.alive, true);
+  assert.equal(revived.data.distance, 0);
+  assert.equal(revived.data.items.gained, 0);
+});
+
 test('fleet metrics join controller segments idempotently and archive completed lives', () => {
   const bot: any = {};
   const metric = (segmentId, distance, gathered, observedAt = 2000, alive = true, lifeId = 'life-1') => ({
@@ -126,6 +144,36 @@ test('fleet metrics join controller segments idempotently and archive completed 
   assert.equal(bot.runs.recent.length, 1);
   assert.equal(bot.runs.recent[0].lifeId, 'life-1');
   assert.equal(bot.runs.current.lifeId, 'life-2');
+});
+
+test('fleet metrics archive a death when the same game session respawns', () => {
+  const bot: any = {};
+  const metric = (observedAt, alive) => ({
+    segmentId: 'controller-1',
+    lifeId: 'stable-game-session',
+    segmentStartedAt: alive ? observedAt : 1000,
+    observedAt,
+    endedAt: alive ? null : observedAt,
+    alive,
+    origin: { x: 0, y: 100, z: 0, dimension: 0 },
+    position: { x: alive ? 10 : 5, y: 100, z: 0, dimension: 0 },
+    distance: alive ? 0 : 5,
+    movementSamples: alive ? 0 : 5,
+    maxFromOrigin: alive ? 0 : 5,
+    discontinuities: 0,
+    items: { byCode: [] },
+  });
+
+  mergeRunMetric(bot, metric(2000, false));
+  const revived = mergeRunMetric(bot, metric(3000, true));
+  assert.equal(revived.transition, true);
+  assert.equal(bot.runs.recent.length, 1);
+  assert.equal(bot.runs.recent[0].alive, false);
+  assert.equal(bot.runs.recent[0].durationMs, 1000);
+  assert.equal(bot.runs.current.alive, true);
+  assert.equal(bot.runs.current.endedAt, null);
+  assert.equal(bot.runs.current.startedAt, 3000);
+  assert.equal(bot.runs.current.distance, 0);
 });
 
 test('fleet metrics consume transition logs and latest snapshots only once', () => {

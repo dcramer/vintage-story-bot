@@ -39,29 +39,35 @@ export class RunMetrics {
   constructor(segmentId: string) {
     this.segmentId = segmentId;
   }
+  start(lifeId, point, at, alive) {
+    this.life = {
+      id: lifeId,
+      startedAt: at,
+      endedAt: alive ? null : at,
+      alive,
+      origin: { ...point },
+      position: { ...point },
+      farthest: { ...point },
+      maxFromOrigin: 0,
+      distance: 0,
+      movementSamples: 0,
+      discontinuities: 0,
+      last: { at, point: { ...point } },
+      items: new Map(),
+    };
+    this.inventory = null;
+  }
   observeState(state, wall = Date.now()) {
     const lifeId = state?.life?.session,
       point = state?.position,
-      at = Number.isFinite(state?.observedAt) ? state.observedAt : wall;
+      at = Number.isFinite(state?.observedAt) ? state.observedAt : wall,
+      alive = state.alive !== false;
     if (typeof lifeId !== 'string' || !lifeId || !finitePoint(point)) return null;
     let transition = false;
-    if (!this.life || this.life.id !== lifeId) {
-      this.life = {
-        id: lifeId,
-        startedAt: at,
-        endedAt: state.alive === false ? at : null,
-        alive: state.alive !== false,
-        origin: { ...point },
-        position: { ...point },
-        farthest: { ...point },
-        maxFromOrigin: 0,
-        distance: 0,
-        movementSamples: 0,
-        discontinuities: 0,
-        last: { at, point: { ...point } },
-        items: new Map(),
-      };
-      this.inventory = null;
+    // The game session id remains stable across respawns. An observed revival,
+    // not a changed session id, is the boundary between survival runs.
+    if (!this.life || this.life.id !== lifeId || (!this.life.alive && alive)) {
+      this.start(lifeId, point, at, alive);
       transition = true;
     } else if (at >= this.life.last.at) {
       const prior = this.life.last.point;
@@ -81,7 +87,6 @@ export class RunMetrics {
       }
       this.life.position = { ...point };
       this.life.last = { at, point: { ...point } };
-      const alive = state.alive !== false;
       if (alive !== this.life.alive) transition = true;
       this.life.alive = alive;
       if (!alive) this.life.endedAt ??= at;

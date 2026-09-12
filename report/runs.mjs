@@ -60,7 +60,12 @@ export function mergeRunMetric(bot, value) {
     return { changed: false, transition: false };
   const runs = (bot.runs ??= { current: null, recent: [] });
   let transition = false;
-  if (runs.current?.lifeId !== lifeId) {
+  // Vintage Story keeps the same game session id after respawn. A newer alive
+  // segment following a recorded death therefore starts a new survival run
+  // even though lifeId is unchanged.
+  const revived =
+    runs.current?.endedAt != null && value.alive !== false && observedAt > runs.current.observedAt;
+  if (runs.current?.lifeId !== lifeId || revived) {
     // Reporter requests are serialized, but a retried stale batch must never
     // roll the durable record back to a life that has already ended.
     if (runs.current && observedAt < runs.current.observedAt) return { changed: false, transition: false };
