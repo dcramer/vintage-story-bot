@@ -48,6 +48,9 @@ const URGENT: Job[] = ['hide', 'go_home', 'eat', 'relocate', 'burrow'];
 // A flight ends when no threat has shown for this long and the scare is this far behind.
 export const SAFE_MS = 20000;
 export const SAFE_DISTANCE = 16;
+// Hurt arrives before the server notification that identifies its cause. Give
+// gravity a fraction of a second to identify itself before abandoning useful work.
+export const HURT_CLASSIFY_MS = 750;
 
 export type Job =
   | 'hide'
@@ -85,6 +88,8 @@ export type Memory = {
   // Where and when the bot had to run; a cluster of these around it means this is a bad place to be.
   scares: { x: number; z: number; at: number }[];
   resting: boolean;
+  // A raw hit waiting briefly for the server's cause notification.
+  pendingHurtAt: number | null;
   // Sighting keys already marked on the map, so one nugget is announced once.
   marked: Set<string>;
 };
@@ -274,10 +279,17 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // The event cursor advances when the running goal is stopped. Carry the
   // stop reason into this decision so a one-tick hit actually starts a flight
   // instead of cancelling work and immediately restarting the same job.
-  const hurt = (events.some(e => e.type === 'hurt') || last?.reason === 'brain: hurt') && !environmentalHurt(events);
+  const gravity = environmentalHurt(events);
+  const rawHurt = events.some(e => e.type === 'hurt');
+  if (gravity || threat) memory.pendingHurtAt = null;
+  else if (rawHurt && memory.pendingHurtAt === null) memory.pendingHurtAt = now;
+  const pendingHurt = memory.pendingHurtAt !== null && now - memory.pendingHurtAt >= HURT_CLASSIFY_MS;
+  const hurt = !gravity && (last?.reason === 'brain: hurt' || pendingHurt);
+  const classifyingHurt = !gravity && !threat && memory.pendingHurtAt !== null && !pendingHurt;
+  if (pendingHurt) memory.pendingHurtAt = null;
   // Copper seen in passing: a marker and a word to the others, once per nugget, unless one is already marked nearby.
   const copper = events.find(e => e.type === 'sighted' && e.kind === 'block' && COPPER.test(e.code ?? '') && !memory.marked.has(e.key));
-  if (copper && !threat && !hurt) {
+  if (copper && !threat && !hurt && !classifyingHurt) {
     memory.marked.add(copper.key);
     const x = Math.floor(copper.point.x),
       y = Math.floor(copper.point.y),
@@ -343,6 +355,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // A flight is never interrupted, and neither is digging out: there is no running from a hole.
     // Nor is digging in at night: two blocks down is the safest place from whatever is coming.
     if ((threat || hurt) && !['hide', 'dig_out', 'burrow'].includes(memory.job ?? '')) return { stop: threat ? 'threat' : 'hurt' };
+    if (classifyingHurt) return { wait: 'identifying damage source' };
     // Damage chat can trail the life event by one brain tick. If gravity is
     // identified only after the reflex already launched a flight, end that
     // mistaken flight and return to the interrupted survival job.
@@ -359,6 +372,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     if (pressing && (job !== 'eat' || (satiety !== null && satiety < HUNGRY))) return { stop: job };
     return { wait: `letting ${active.kind} finish` };
   }
+  if (classifyingHurt) return { wait: 'identifying damage source' };
   // Deep water with nothing running: swim for shore before anything else.
   if (state.motion?.swimming) return surfacing(state, ground);
   if (memory.pit) {
@@ -485,6 +499,7 @@ export function fresh(): Memory {
     done: {},
     scares: [],
     resting: false,
+    pendingHurtAt: null,
   };
 }
 

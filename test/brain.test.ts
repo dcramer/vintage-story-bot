@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import brain, { decide as decision, environmentalHurt, fresh, kit, pickJob, SHELTER_DIRT, STICK_MIN } from '../src/brain/default.ts';
+import brain, {
+  decide as decision,
+  environmentalHurt,
+  fresh,
+  HURT_CLASSIFY_MS,
+  kit,
+  pickJob,
+  SHELTER_DIRT,
+  STICK_MIN,
+} from '../src/brain/default.ts';
 import { shelter as shelterCells } from '../src/support/structures.ts';
 
 const decide = (reading, memory): any => decision(reading, memory);
@@ -211,10 +220,12 @@ test('brain: a hit from nowhere is danger, and copper seen in passing is marked 
   const memory = fresh();
   const hurt = [{ id: 1, at: 1, type: 'hurt', health: 10 }];
   const running = { id: 'o1', kind: 'travel', state: 'running', by: 'operator' };
-  assert.deepEqual(decide(reading({ events: hurt, active: running }), memory), { stop: 'hurt' }, "danger stops anyone's goal");
-  const flight = decide(reading({ events: hurt, state: state({ orientation: { yawDegrees: 0 } }) }), memory);
-  assert.equal(flight.start, 'travel');
-  assert.ok(flight.args.z > 20, 'runs straight ahead when there is no home to run to');
+  assert.deepEqual(decide(reading({ events: hurt, active: running, now: 1000 }), memory), { wait: 'identifying damage source' });
+  assert.deepEqual(
+    decide(reading({ active: running, now: 1000 + HURT_CLASSIFY_MS + 1 }), memory),
+    { stop: 'hurt' },
+    "unexplained damage stops anyone's goal after the cause grace period",
+  );
   const interrupted = fresh();
   interrupted.job = 'sticks';
   const afterStop = decide(
@@ -222,6 +233,7 @@ test('brain: a hit from nowhere is danger, and copper seen in passing is marked 
     interrupted,
   );
   assert.equal(afterStop.start, 'travel', 'the stop reason survives the event cursor and produces a flight');
+  assert.ok(afterStop.args.z > 20, 'runs straight ahead when there is no home to run to');
   const nugget = {
     id: 2,
     at: 1,
@@ -255,6 +267,19 @@ test('brain: a fall is not mistaken for an unseen attacker', () => {
   memory.job = 'sticks';
   const running = { id: 'g1', kind: 'gather', state: 'running', by: 'brain' };
   assert.deepEqual(decide(reading({ events: fall, active: running }), memory), { wait: 'letting gather finish' });
+  const delayed = fresh();
+  delayed.job = 'sticks';
+  assert.deepEqual(decide(reading({ events: fall.slice(0, 1), active: running, now: 1000 }), delayed), { wait: 'identifying damage source' });
+  assert.deepEqual(
+    decide(reading({ events: fall.slice(1), active: running, now: 1500 }), delayed),
+    { wait: 'letting gather finish' },
+    'a gravity notification arriving after the raw hit preserves the running goal',
+  );
+  assert.deepEqual(
+    decide(reading({ active: running, now: 1000 + HURT_CLASSIFY_MS + 1000 }), delayed),
+    { wait: 'letting gather finish' },
+    'clearing the pending hit prevents a later phantom flight',
+  );
   memory.job = 'sticks';
   const afterPrematureStop = decide(reading({ events: fall.slice(1), last: { id: 'g1', kind: 'gather', ok: false, reason: 'brain: hurt' } }), memory);
   assert.notEqual(afterPrematureStop.start, 'travel', 'a delayed gravity message also cancels the carried flight');
@@ -433,17 +458,23 @@ test('brain: forage keeps its own threat evasion instead of being cancelled', ()
   assert.deepEqual(decide(reading({ state: wolf, active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' } }), memory), {
     wait: 'letting forage evade threat',
   });
+  const food = { id: 'food', kind: 'forage', state: 'running', by: 'brain' };
   assert.deepEqual(
     decide(
       reading({
         state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
-        active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' },
+        active: food,
         events: [{ id: 1, at: 1, type: 'hurt', health: 10 }],
+        now: 1000,
       }),
       memory,
     ),
+    { wait: 'identifying damage source' },
+  );
+  assert.deepEqual(
+    decide(reading({ state: state({ vitals: { hunger: { current: 100, max: 1500 } } }), active: food, now: 1000 + HURT_CLASSIFY_MS + 1 }), memory),
     { stop: 'hurt' },
-    'damage still interrupts food recovery',
+    'unexplained damage still interrupts food recovery',
   );
 });
 
