@@ -23,7 +23,7 @@ public sealed partial class AiBridgeMod
         return new
         {
             ok = true,
-            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "map_waypoints", "map_view", "drop", "containers", "look_at" },
+            capabilities = new[] { "target_guard", "directional_move", "scan", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "background_control", "control_frames", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "sneak", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "map_waypoints", "map_view", "drop", "containers", "look_at", "players" },
             observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
             world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString(),
@@ -127,6 +127,57 @@ public sealed partial class AiBridgeMod
             terrain = terrain.Read(cursor, terrainSession, lastSenseAt),
             surface = vision.Surface(lastSenseAt), sightings = vision.Sightings(lastSenseAt) };
     }
+
+    // Other players on this server, from the same server-filtered feed the map
+    // renders plus locally loaded player entities (a map-hidden player standing
+    // here is still seen). Positions are exact when the entity is loaded,
+    // tracking x/z at own height otherwise. Visible means inside the camera's
+    // view cone within 64 blocks: directional only, not occlusion- or
+    // light-tested. Solo servers return an empty list.
+    private object Players()
+    {
+        var self = api.World.Player;
+        var eye = self.Entity.Pos.XYZ.Add(self.Entity.LocalEyePos);
+        var origin = new Point3(eye.X, eye.Y, eye.Z);
+        double yaw = NormalizeDegrees(self.Entity.Pos.Yaw * 180 / Math.PI);
+        double pitch = (self.Entity.Pos.Pitch - Math.PI) * 180 / Math.PI;
+        var loaded = new Dictionary<string, Point3>();
+        api.World.GetEntitiesAround(new Vec3d(origin.X, origin.Y, origin.Z), 64, 64, entity =>
+        {
+            if (entity is EntityPlayer player && player.PlayerUID != self.PlayerUID)
+            {
+                var p = player.Pos.XYZ;
+                loaded[player.PlayerUID] = new Point3(p.X, p.Y, p.Z);
+            }
+            return true;
+        });
+        var seen = new HashSet<string>();
+        var rows = new List<object>();
+        var tracking = api.ModLoader.GetModSystem<SystemRemotePlayerTracking>();
+        foreach (var packet in tracking?.GetAllTrackedPlayerPositions() ?? [])
+        {
+            if (packet.PlayerUid == self.PlayerUID || !seen.Add(packet.PlayerUid)) continue;
+            var player = packet.AssociatedPlayer ?? api.World.PlayerByUid(packet.PlayerUid);
+            var pos = loaded.TryGetValue(packet.PlayerUid, out var exact)
+                ? exact : new Point3(packet.PosX, origin.Y, packet.PosZ);
+            rows.Add(PlayerRow(player?.PlayerName ?? "Unknown player", packet.PlayerUid, pos, origin, yaw, pitch,
+                loaded.ContainsKey(packet.PlayerUid)));
+        }
+        foreach (var (uid, pos) in loaded)
+        {
+            if (!seen.Add(uid)) continue;
+            var player = api.World.PlayerByUid(uid);
+            rows.Add(PlayerRow(player?.PlayerName ?? "Unknown player", uid, pos, origin, yaw, pitch, true));
+        }
+        return new { ok = true, players = rows.ToArray() };
+    }
+
+    private static object PlayerRow(string name, string uid, Point3 pos, Point3 origin, double yaw, double pitch, bool exact) => new
+    {
+        name, uid, x = pos.X, y = pos.Y, z = pos.Z,
+        distance = Math.Round(SceneGeometry.Distance(origin, pos), 2),
+        visible = exact && SceneGeometry.InCone(origin, pos, yaw, pitch, 64),
+    };
 
     private object[] NearbyEntities(int limit = 24)
     {
