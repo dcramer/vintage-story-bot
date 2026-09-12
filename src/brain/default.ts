@@ -459,7 +459,14 @@ export function decide(reading: Reading, memory: Memory): Decision {
     case 'eat':
       return k.reserve > 0
         ? start('eat', {}, `satiety ${Math.round((satiety ?? 0) * 100)}%`)
-        : start('forage', { until: 0.5, keep: 160, timeoutMs: 1800000 }, `satiety ${Math.round((satiety ?? 0) * 100)}%, nothing carried`);
+        : start(
+            'forage',
+            // Food recovery may finish once one meal lands within 20 points
+            // of its target. Aim that margin above the brain's own threshold
+            // so one forage run clears the condition that started it.
+            { until: PECKISH + 0.2, keep: 160, timeoutMs: 1800000 },
+            `satiety ${Math.round((satiety ?? 0) * 100)}%, nothing carried`,
+          );
     case 'dirt':
       return start(
         'harvest',
