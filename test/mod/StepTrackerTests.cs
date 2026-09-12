@@ -33,6 +33,12 @@ static class StepTrackerTests
         var up = new StepTracker(new Point3(1.5, 101, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
         var far = up.Update(new Point3(0.2, 100, 0.5), 90, true, false, 0);
         Check(far.Forward && !far.Jump, "no jump from afar");
+        // Already up at the point's level (a thin layer auto-stepped): no hop over it.
+        var level = new StepTracker(new Point3(1.5, 101, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
+        Check(!level.Update(new Point3(0.9, 100.9, 0.5), 90, true, false, 0).Jump, "no hop when already at the point's height");
+        // In the air past the point: land, do not run on.
+        var over = new StepTracker(new Point3(1.5, 101, 0.5), new Point3(0.5, 100, 0.5), 0.35, 0.6, true, 0);
+        Check(!over.Update(new Point3(1.7, 102.0, 0.5), 90, false, false, 300).Forward, "airborne past the point: no forward");
         var near = up.Update(new Point3(0.6, 100, 0.5), 90, true, false, 100);
         Check(near.Forward && near.Jump, "jump close and facing");
         var air = up.Update(new Point3(1.4, 100.6, 0.5), 90, false, false, 200);

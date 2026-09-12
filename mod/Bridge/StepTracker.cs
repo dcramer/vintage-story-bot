@@ -86,8 +86,11 @@ public sealed class StepTracker
         // Turning and falling are not being stuck; walking without getting closer is.
         else if (!aligned || (!onGround && !wet)) progressAt = now;
         else if (now - progressAt > BlockedMs) { State = "blocked"; return (false, wet, wantYaw); }
-        bool forward = aligned && (onGround || wet || Hop);
-        bool jump = wet || (Hop && aligned && Distance < HopDistance);
+        // Past the point but not yet down on it (the landing of a hop): let the body land rather than
+        // run on through the arc. A hop fires only while the point is still above the feet: a body that
+        // stepped up onto its level already must not be launched over it.
+        bool forward = aligned && (onGround || wet || Hop) && !(passed && !level);
+        bool jump = wet || (Hop && aligned && Distance < HopDistance && dy > ReachY);
         return (forward, jump, wantYaw);
     }
 
