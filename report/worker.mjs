@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { markRespawnBreaks } from './trail.mjs';
+import { markRespawnBreaks, trimTrail } from './trail.mjs';
 
 // Fleet state service. Bots POST /api/report batches `{bot:{id,...},topics:{[topic]:{at,data}},log:[{topic,at,data}]}`;
 // the single SeraphFleet object keeps the latest value per bot/topic plus a bounded log, evicts bots unseen for RETENTION_HOURS,
@@ -7,7 +7,7 @@ import { markRespawnBreaks } from './trail.mjs';
 // only its `nativeMap` summary). Reads (API and the static SPA in dist/, see app/) are open; writes require REPORT_TOKEN.
 const topicRe = /^[a-z][a-z0-9_]{0,63}$/, idRe = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const maxBody = 131072, maxMapImage = 92160, maxNativeBatch = 18, maxNativeChunks = 16384;
-const maxLog = 200, maxTrail = 540;
+const maxLog = 200;
 const maxMeta = 128, persistMs = 30000, sweepMs = 900000;
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -23,8 +23,9 @@ const finitePoint = point => point && Number.isFinite(point.x) && Number.isFinit
 // what the player's client observed; this merely retains successive own
 // positions so the dashboard can show movement and goal context over time.
 function appendTrail(bot, stateEntry, now) {
+  const trail = bot.trail ??= [], trimmed = trimTrail(trail, now);
   const position = stateEntry?.data?.position;
-  if (!finitePoint(position)) return false;
+  if (!finitePoint(position)) return trimmed;
   const goal = bot.topics.goal?.data, progress = goal?.progress;
   const sample = {
     at: number(stateEntry.at, now), x: position.x, y: Number.isFinite(position.y) ? position.y : null,
@@ -35,11 +36,11 @@ function appendTrail(bot, stateEntry, now) {
     subgoal: typeof progress?.subgoal?.kind === 'string' ? progress.subgoal.kind.slice(0, 64) : null,
     phase: typeof progress?.phase === 'string' ? progress.phase.slice(0, 64) : null,
   };
-  const trail = bot.trail ??= [], last = trail.at(-1);
+  const last = trail.at(-1);
   const moved = last ? Math.hypot(sample.x - last.x, sample.z - last.z) : Infinity;
-  if (last && sample.dimension === last.dimension && sample.goal === last.goal && moved < .5 && sample.at - last.at < 60000) return false;
+  if (last && sample.dimension === last.dimension && sample.goal === last.goal && moved < .5 && sample.at - last.at < 60000) return trimmed;
   trail.push(sample);
-  while (trail.length > maxTrail) trail.shift();
+  trimTrail(trail, now);
   return true;
 }
 

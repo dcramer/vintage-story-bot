@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { contiguousTrails, markRespawnBreaks } from '../report/trail.mjs';
+import { contiguousTrails, markRespawnBreaks, recentTrail, trimTrail } from '../report/trail.mjs';
 
 test('map trails break at respawn without splitting ordinary mission changes', () => {
   const points = [
@@ -20,4 +20,24 @@ test('map trails break at respawn without splitting ordinary mission changes', (
     contiguousTrails(points).map(trail => trail.length),
     [2, 2],
   );
+});
+
+test('map trails keep only a bounded recent window', () => {
+  const points = [
+    { at: 100, x: 0, z: 0 },
+    { at: 700, x: 1, z: 0 },
+    { at: 800, x: 2, z: 0 },
+    { at: 900, x: 3, z: 0 },
+  ];
+  assert.deepEqual(
+    recentTrail(points, 1000, 300, 2).map(point => point.at),
+    [800, 900],
+  );
+  assert.equal(points.length, 4);
+  assert.equal(trimTrail(points, 1000, 300, 2), true);
+  assert.deepEqual(
+    points.map(point => point.at),
+    [800, 900],
+  );
+  assert.equal(trimTrail(points, 1000, 300, 2), false);
 });

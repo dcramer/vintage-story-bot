@@ -4,6 +4,8 @@ import { contiguousTrails } from '../trail.mjs';
 
 const finitePoint = point => point && Number.isFinite(point.x) && Number.isFinite(point.z);
 const stateOf = bot => bot.topics.state?.data ?? {};
+const worldOf = bot => stateOf(bot).world?.identifier ?? bot.nativeMap?.world;
+const playerName = bot => stateOf(bot).player?.name ?? bot.id;
 const goalOf = bot => bot.topics.goal?.data;
 const navOf = bot => bot.topics.navigation?.data;
 const targetOf = bot => finitePoint(goalOf(bot)?.args) ? goalOf(bot).args : finitePoint(navOf(bot)?.target) ? navOf(bot).target : null;
@@ -161,9 +163,9 @@ function GlobalMap({ bots, world, bot, detailed }) {
     const rows = new Map();
     for (const source of bots.filter(item => isLive(item) && item.nativeMap?.world === world).sort((a, b) => a.nativeMap.at - b.nativeMap.at))
       for (const player of source.nativeMap.players ?? []) rows.set(player.name, player);
-    return [...rows.values()].filter(player => !bots.some(item => item.id.toLowerCase() === player.name.toLowerCase()));
+    return [...rows.values()].filter(player => !bots.some(item => playerName(item).toLowerCase() === player.name.toLowerCase()));
   }, [bots, world]);
-  const agents = useMemo(() => bots.filter(item => isLive(item) && item.nativeMap?.world === world).map((item, index) => {
+  const agents = useMemo(() => bots.filter(item => isLive(item) && worldOf(item) === world).map((item, index) => {
     const state = stateOf(item), current = state.position, target = targetOf(item), dimension = current?.dimension ?? 0;
     return finitePoint(current) && dimension === 0 ? { bot: item, index, state, current: screenPoint(current, camera, size), target: screenPoint(target, camera, size),
       trails: contiguousTrails(positionHistory(item).filter(point => (point.dimension ?? 0) === dimension), item.log)
@@ -185,7 +187,7 @@ function GlobalMap({ bots, world, bot, detailed }) {
         {shown(current, size) && shown(target, size) && <><line x1={current.x} y1={current.y} x2={target.x} y2={target.y} class="target-line" />
           <g transform={`translate(${target.x} ${target.y})`} class="target-marker"><circle r="5" /><path d="M-9 0H9M0-9V9" /></g></>}
         {shown(current, size) && <a href={`/bots/${encodeURIComponent(item.id)}`}><g transform={`translate(${current.x} ${current.y}) rotate(${state.orientation?.yawDegrees ?? 0})`} class="agent-marker">
-          <circle r="9" /><path d="M0 -13 L6 3 L0 1 L-6 3 Z" /></g><text x={current.x + 13} y={current.y - 10} class="map-label">{item.id}</text></a>}
+          <circle r="9" /><path d="M0 -13 L6 3 L0 1 L-6 3 Z" /></g><text x={current.x + 13} y={current.y - 10} class="map-label">{playerName(item)}</text></a>}
       </g>)}
       {players.map(player => { const point = screenPoint(player, camera, size); return shown(point, size) && <g key={player.name} class="world-player" transform={`translate(${point.x} ${point.y})`}>
         <circle r="7" /><path d="M0 -10 L5 3 L0 1 L-5 3 Z" transform={`rotate(${player.yawDegrees ?? 0})`} /><text x="11" y="-8">{player.name}</text></g>; })}

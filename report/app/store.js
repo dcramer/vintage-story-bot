@@ -1,4 +1,5 @@
 import { signal, computed } from '@preact/signals';
+import { recentTrail } from '../trail.mjs';
 
 // Fleet state mirrored from the Worker: snapshots seed, /api/ws streams `snapshot|bot|nativemap|gone`. Vital history is
 // client-side only, accumulated while the page is open.
@@ -14,7 +15,7 @@ export const list = computed(() => Object.values(bots.value).sort((a, b) => b.se
 export const isLive = bot => now.value - bot.seenAt < liveMs;
 export const vitalHistory = id => history.get(id) ?? [];
 export const positionHistory = bot => {
-  if (bot?.trail?.length) return bot.trail;
+  if (bot?.trail?.length) return recentTrail(bot.trail, now.value);
   const state = bot?.topics?.state;
   return state?.data?.position ? [{ at: state.at, ...state.data.position }] : [];
 };
