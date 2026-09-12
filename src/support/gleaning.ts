@@ -1,5 +1,6 @@
 import { horizontal, lookAt } from '../runtime/navigation/terrain.ts';
 import { ownedSlots } from './inventory.ts';
+import { nearestThreat } from './threats.ts';
 
 // Picking up what the bot wants as it passes: loose sticks, stones and flints
 // on the ground (a right-click), and dropped items (walked over). Wants are
@@ -32,7 +33,8 @@ export class Gleaner {
       .filter(o => this.wanted(o) && horizontal(o.point, position) <= gleanRadius)
       .sort((a, b) => horizontal(a.point, position) - horizontal(b.point, position));
   }
-  pauseWhen = state => (!this.pending && this.near(state.position).length ? 'want_in_reach' : null);
+  // Nothing is worth stopping for with a hostile about: a flight is never paused for a stick.
+  pauseWhen = state => (!this.pending && !nearestThreat(state) && this.near(state.position).length ? 'want_in_reach' : null);
   // Pick up what is near, a few things at most, then hand the walk back.
   async tend(limit = 3) {
     const field = this.field;
@@ -74,7 +76,7 @@ export class Gleaner {
       const walked = await field.leg(destination);
       if (!['arrived', 'paused'].includes(walked.state)) return false;
     }
-    await field.aim(lookAt(eye(), object.point));
+    await field.aim(object.look ?? lookAt(eye(), object.point));
     const aimed = await field.observe();
     if (aimed.target?.key !== object.key) return false;
     const before = carried(await field.send({ action: 'inventory' }));

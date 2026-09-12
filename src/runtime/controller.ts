@@ -393,6 +393,8 @@ export class Controller {
       }
       let state = initial,
         terrainMore = false;
+      let input: any = null,
+        pagingSince = Date.now();
       while (nav.active) {
         const pausing = pauseWhen?.(state);
         // Pause only on supported ground; a food task must not take over mid-jump.
@@ -400,18 +402,30 @@ export class Controller {
           nav.finish('paused', pausing);
           break;
         }
+        // While terrain pages are still streaming the map is half updated, so the route is not
+        // re-checked; the last vetted frame carries on for up to a second, then the body waits.
+        // The commanded yaw is always the follower's own: echoing the observed yaw back, which
+        // lags the camera by a frame, rocks the head from side to side.
         const frame = terrainMore ? null : nav.tick(state);
-        const input = {
-          yawDegrees: frame?.yawDegrees ?? state.orientation.yawDegrees,
+        const carryOn = terrainMore && !!input?.forward && !input.jump && Date.now() - pagingSince < 1000;
+        if (!terrainMore) pagingSince = Date.now();
+        input = {
+          yawDegrees: frame?.yawDegrees ?? input?.yawDegrees ?? state.orientation.yawDegrees,
           pitchDegrees: frame?.pitchDegrees ?? 15,
-          forward: frame?.forward ?? false,
+          forward: frame?.forward ?? carryOn,
           jump: frame?.jump ?? false,
-          sprint: frame?.sprint ?? false,
+          sprint: frame?.sprint ?? (carryOn && input.sprint),
           sneak: frame?.sneak ?? false,
           focus: frame?.focus ?? null,
-          durationMs: frame?.durationMs ?? 500,
+          durationMs: frame?.durationMs ?? 250,
         };
         this.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
+        if (process.env.SERAPH_TRACE_NAV)
+          console.error(
+            `${new Date().toISOString().slice(11, 23)} nav yaw=${state.orientation.yawDegrees.toFixed(0)} -> ${input.yawDegrees.toFixed(0)} ` +
+              `want=${nav.desiredYaw?.toFixed?.(0)} err=${nav.yawError?.toFixed?.(0)} fwd=${input.forward ? 1 : 0} jump=${input.jump ? 1 : 0} ` +
+              `ms=${input.durationMs} i=${nav.index}/${nav.route?.length ?? 0} re=${nav.replans}${nav.lastReplan ? `(${nav.lastReplan})` : ''} at=${state.position.x.toFixed(1)},${state.position.y.toFixed(1)},${state.position.z.toFixed(1)}`,
+          );
         // A refused frame means the hold is gone (expired, revoked, manual
         // input): the walk is cancelled, never blocked terrain.
         let batch;
@@ -455,7 +469,7 @@ export class Controller {
           await control.frame(
             batch.terrain.reset
               ? {
-                  yawDegrees: state.orientation.yawDegrees,
+                  yawDegrees: input.yawDegrees,
                   pitchDegrees: 15,
                   forward: false,
                   jump: false,

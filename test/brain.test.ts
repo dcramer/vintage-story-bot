@@ -41,6 +41,7 @@ const reading = (extra = {}) => ({
 const situation = (extra = {}) => ({
   burrowed: false,
   dangerHere: false,
+  body: false,
   threat: false,
   hurt: false,
   storm: false,
@@ -83,6 +84,9 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ torches: 0, grass: 2 })), 'torches');
   assert.equal(pickJob(situation({ logs: 1 })), 'logs');
   assert.equal(pickJob(situation()), 'explore');
+  assert.equal(pickJob(situation({ body: true, sticks: 0 })), 'recover', 'the body comes before the kit');
+  assert.equal(pickJob(situation({ body: true, night: true })), 'wait', 'but not at night');
+  assert.equal(pickJob(situation({ body: true, sticks: 0 }), new Set(['recover'] as any)), 'sticks', 'a failed recovery is set aside');
   assert.equal(
     pickJob(situation({ sticks: 3, knife: false, stone: true }), new Set(['sticks'] as any)),
     'tools',
@@ -99,11 +103,14 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
   assert.deepEqual(decide(reading({ state: wolf, active: { id: 'g1', kind: 'gather', state: 'running', by: 'brain' } }), memory), {
     stop: 'threat',
   });
-  const failed = decide(
+  decide(
     reading({ inventory: inventory(slot('game:stick', 2)), last: { id: 'g1', kind: 'gather', ok: false, reason: 'blocked' }, now: 2000 }),
     memory,
   );
   assert.notEqual(memory.job, 'sticks', 'a failed stick search is set aside around here');
+  const grave = [{ guid: 'g', title: 'You died here', icon: 'gravestone', position: { x: 30, y: 100, z: 0 } }];
+  assert.equal(decide(reading({ markers: grave, now: 2500 }), memory).start, 'retrieve_body', 'a death marker sends it back for its things');
+  memory.job = null;
   const fled = decide(reading({ state: wolf }), memory);
   assert.equal(fled.start, 'travel');
   const again = decide(reading({ state: wolf, last: { id: 'g2', kind: 'travel', ok: false, reason: 'interrupted' }, now: 3000 }), memory);

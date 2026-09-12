@@ -30,6 +30,7 @@ fights; it runs or hides.
 | Job | Goal | When |
 | --- | --- | --- |
 | hide | `travel` away from the threat, or home / straight ahead | Monster seen or heard near, or hurt by something unseen |
+| recover | `retrieve_body` | A death marker is on the map, by day; before any of the kit |
 | copper | `add_map_waypoint` Copper and a `chat` line, alongside whatever runs | A copper nugget sighted with no Copper marker within 32 blocks |
 | dead | `respawn` | Dead with a respawn offered |
 | swim | `look` and `move` with jump held | In deep water with no goal running |

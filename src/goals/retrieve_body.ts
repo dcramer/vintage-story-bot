@@ -27,6 +27,16 @@ export async function retrieveBody(field, survival, { guid, radius = 12, arrival
   const body = marker.position;
   field.report('travelling_to_body', { marker: marker.guid, body });
   const trip = await travel(field, survival, { x: body.x, z: body.z, arrivalRadius });
+  if (!trip.ok)
+    return {
+      ok: false,
+      goal: 'retrieve_body',
+      reason: (trip as any).reason ?? 'trip_failed',
+      marker: marker.guid,
+      body,
+      moved: +field.moved.toFixed(1),
+      legs: trip.legs,
+    };
   const collected = [],
     skipped = [];
   const done = new Set();

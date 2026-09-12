@@ -376,8 +376,10 @@ public sealed partial class AiBridgeMod
     private void ApplyCamera(float dt)
     {
         var entity = api.World.Player.Entity;
-        double elapsed = Math.Clamp(dt, 0, .05);
-        double turn = 180 * elapsed, blend = 1 - Math.Exp(-12 * elapsed);
+        // A mouse turn is as fast as the hand: up to 360 degrees a second, eased in near the target, and
+        // not slower on a slow renderer (a long frame turns further, never less).
+        double elapsed = Math.Clamp(dt, 0, .25);
+        double turn = 360 * elapsed, blend = 1 - Math.Exp(-16 * elapsed);
         double yaw = entity.Pos.Yaw * 180 / Math.PI, pitch = (entity.Pos.Pitch - Math.PI) * 180 / Math.PI;
         double delta = SceneGeometry.Normalize(controlYaw - yaw + 180) - 180;
         api.Input.MouseYaw = entity.Pos.Yaw = (float)((yaw + Math.Clamp(delta * blend, -turn, turn)) * Math.PI / 180);

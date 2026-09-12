@@ -4,6 +4,8 @@
 // through the day-1 kit and a tiny dirt shelter in order. No pottery, hunting
 // or trading. Pure: decide() reads one Reading and its own memory and returns
 // one Decision; the loop in src/runtime/brain.ts does the talking to the game.
+
+import { isDeathMarker } from '../goals/retrieve_body.ts';
 import type { Brain, Decision, Reading } from '../runtime/brain.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { temporalStormUnsafe } from '../support/fieldwork.ts';
@@ -62,7 +64,8 @@ export type Job =
   | 'burrow'
   | 'unburrow'
   | 'seal'
-  | 'relocate';
+  | 'relocate'
+  | 'recover';
 type Cell = { x: number; y: number; z: number };
 export type Memory = {
   home: Cell | null;
@@ -119,6 +122,8 @@ export type Situation = {
   atHome: boolean;
   burrowed: boolean;
   dangerHere: boolean;
+  // A death marker is on the map: the body's things lie there.
+  body: boolean;
   sticks: number;
   knife: boolean;
   axe: boolean;
@@ -142,8 +147,10 @@ export function pickJob(s: Situation, tried: Set<Job> = new Set()): Job {
   if (s.dangerHere && !s.burrowed) return 'relocate';
   if (s.night) return s.home ? (s.atHome ? 'wait' : 'go_home') : s.burrowed ? 'wait' : s.dirt > 0 ? 'burrow' : 'seal';
   if (s.burrowed) return 'unburrow';
-  // A kit job that failed around here is skipped for now; the rest of the ladder goes on.
+  // A job that failed around here is skipped for now; the rest of the ladder goes on.
   const open = (job: Job) => !tried.has(job);
+  // What the last life carried comes before gathering it all again.
+  if (s.body && open('recover')) return 'recover';
   if (s.sticks < STICK_MIN && open('sticks')) return 'sticks';
   if (!s.knife || !s.axe || !s.shovel) {
     const job: Job = s.stone ? 'tools' : 'stone';
@@ -270,6 +277,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       atHome: !!home && horizontal(state.position, home) < 8,
       burrowed: !!memory.burrow,
       dangerHere: memory.scares.filter(scare => horizontal(state.position, scare) <= DANGER_RADIUS).length >= DANGER_SCARES,
+      body: markers.some(isDeathMarker),
       sticks: k.sticks,
       knife: k.knife,
       axe: k.axe,
@@ -360,6 +368,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
       );
     case 'logs':
       return start('fell_tree', { count: Math.max(1, LOG_MIN - k.logs), timeoutMs: 1200000 }, `${k.logs}/${LOG_MIN} logs`);
+    case 'recover':
+      return start('retrieve_body', { manageFood: true, timeoutMs: 900000 }, 'going back for my things');
     case 'explore':
       return start('explore', { legs: 2, timeoutMs: 600000 }, 'kit done, looking around');
     default:

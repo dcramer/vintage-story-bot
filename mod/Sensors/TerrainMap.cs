@@ -57,11 +57,14 @@ public sealed class TerrainMap(int capacity = 16384, long ttlMs = 120000, int ra
             if (value.Boxes != null && (now - value.At > ttlMs || Math.Abs(cell.X - center.X) > radius ||
                 Math.Abs(cell.Z - center.Z) > radius || loaded?.Invoke(cell) == false)) Invalidate(cell, "forgot");
     }
+    // A walk adds a wall of about 300 cells per block moved; pages must drain faster than that at a few
+    // steps per second, or the feed falls behind and the follower waits on it.
+    public const int PageSize = 1024;
     public object Read(long after, string? session, long now)
     {
         bool reset = session != Session || after < lostThrough || after > sequence;
         if (reset) after = 0;
-        var batch = cells.Where(p => p.Value.Sequence > after).OrderBy(p => p.Value.Sequence).Take(128).ToArray();
+        var batch = cells.Where(p => p.Value.Sequence > after).OrderBy(p => p.Value.Sequence).Take(PageSize).ToArray();
         long cursor = batch.Length == 0 ? sequence : batch[^1].Value.Sequence;
         return new { session = Session, reset, cursor, more = cursor < sequence, clock = now,
             cells = batch.Select(p => p.Value.Boxes == null

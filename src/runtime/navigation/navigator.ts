@@ -174,6 +174,11 @@ export class Navigation {
       this.route = planned;
       this.index = 0;
       this.state = 'moving';
+      if (process.env.SERAPH_TRACE_NAV)
+        console.error(
+          `${new Date().toISOString().slice(11, 23)} nav route #${this.replans} from ${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}: ` +
+            planned.map(n => `${n.x.toFixed(1)},${n.y},${n.z.toFixed(1)}${n.move && n.move !== 'walk' ? `(${n.move})` : ''}`).join(' > '),
+        );
       this.lookingAt = null;
       this.edgeStart = p;
       this.bestNear = undefined;
@@ -255,8 +260,10 @@ export class Navigation {
     this.yawError = angle(desiredYaw, state.orientation.yawDegrees);
     const yawMagnitude = Math.abs(this.yawError);
     if (now - this.progressAt > 3000) return this.replan(p, now, 'stalled');
-    // Steering: snap large turns, ease small ones, and sample often while turning.
-    if (this.steeringYaw === null || now - this.steeringAt > 300) this.steeringYaw = state.orientation.yawDegrees;
+    // Steering: snap large turns, ease small ones, and sample often while turning. The eased yaw
+    // continues from the last command, never from the observed yaw, which lags the camera by a
+    // frame: steering from it turns the head back toward where it just was.
+    if (this.steeringYaw === null) this.steeringYaw = state.orientation.yawDegrees;
     const delta = angle(desiredYaw, this.steeringYaw),
       dt = Math.min(0.15, Math.max(0.01, (now - this.steeringAt) / 1000));
     if (yawMagnitude > 30) this.steeringYaw = desiredYaw;
@@ -271,7 +278,9 @@ export class Navigation {
     const rise = next.y - p.y;
     const jumpMove = next.move === 'gap' || rise > STEP_HEIGHT;
     const dropping = rise < -STEP_HEIGHT;
-    const tight = near < 2 && (jumpMove || dropping || turn > 60);
+    // The last checkpoint is approached in short steps so the body stops on it instead of past it.
+    const last = this.index >= this.route.length - 1;
+    const tight = near < 2 && (jumpMove || dropping || turn > 60 || last);
     const durationMs = dropping && near < 1.2 ? 120 : tight || yawMagnitude > 30 ? 180 : 500;
     // Jumps go straight at the cell from close by; everything else keeps
     // walking through the bend while the head comes round.
