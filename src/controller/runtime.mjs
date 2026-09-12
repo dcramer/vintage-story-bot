@@ -43,7 +43,7 @@ export class Controller {
     if (action === 'scan' && result.ok) { this.telemetry.publish('scan', { match: args.match, kind: args.kind, radius: args.radius, objects: result.objects }, { coalesce: true }); return; }
     this.telemetry.publish('action', { action, args, ok: result.ok, error: result.error, code: result.code });
   }
-  track(record, coalesce = false) { this.telemetry?.publish('goal', this.goalView(record), { coalesce }); }
+  track(record, coalesce = false) { this.telemetry?.publish('goal', this.goalView(record), { coalesce }); logGoal(record); }
   get map() { return this.game.map; }
   get surface() { return this.game.surface; }
   get sightings() { return this.game.sightings; }
@@ -282,6 +282,23 @@ export class Controller {
       return { ok: true, goal: 'goal_script', intent: args.intent, steps: results };
     }, args, record, started);
   }
+}
+
+// One readable line per change of phase, target or state, so a goal's behavior can be followed from
+// the controller's log (stderr: stdout is protocol-only under MCP).
+const brief = value => value == null ? '' : typeof value === 'object'
+  ? 'x' in value && 'z' in value ? `${Math.round(value.x)},${value.y == null ? '' : `${Math.round(value.y)},`}${Math.round(value.z)}`
+    : Object.entries(value).filter(([, v]) => v != null && typeof v !== 'object').map(([k, v]) => `${k}=${v}`).join(' ')
+  : String(value);
+function logGoal(record) {
+  const p = record.progress ?? {};
+  const fields = Object.entries(p).filter(([key, value]) => key !== 'phase' && value != null && !(typeof value === 'object' && !('x' in value)))
+    .map(([key, value]) => `${key}=${brief(value)}`).join(' ');
+  const line = `${record.kind}#${record.id.slice(0, 4)} ${record.state}${p.phase ? ` ${p.phase}` : ''}${fields ? ` ${fields}` : ''}` +
+    `${record.reason ? ` reason=${record.reason}` : ''}${record.result && record.state !== 'running' ? ` result=${brief(record.result)}` : ''}`;
+  if (line === record.logged) return;
+  record.logged = line;
+  console.error(`${new Date().toISOString().slice(11, 19)} ${line}`);
 }
 
 // Short, human-sounding description of a starting goal for server chat.

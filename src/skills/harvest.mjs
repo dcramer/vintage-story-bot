@@ -66,7 +66,8 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
       else field.report('dig_failed', { target: ready.key, reason: result.reason });
       continue;
     }
-    if (!field.targets(blocks).length) await field.scan(sightRange, match.slice(0, 64), 'blocks');
+    // Nothing known nearby: look all around before walking anywhere.
+    if (!field.targets(blocks).length) await field.lookAround(match.slice(0, 64));
     const target = field.targets(blocks)[0];
     if (target) {
       const destination = field.approach(target, q => Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z));

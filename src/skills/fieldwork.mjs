@@ -157,6 +157,21 @@ export class Fieldwork {
     this.prune();
     return objects;
   }
+  // Turn through a full circle from where the bot stands, letting the vision
+  // feed take in every direction before choosing where to go, the way a
+  // player looks around from a rise. Then read what is now remembered.
+  async lookAround(match, kind = 'blocks', radius = sightRange) {
+    if (!this.seeing || !this.attentive) return this.scan(radius, match, kind);
+    this.env.watch?.(Array.isArray(match) ? match : match ? [match] : []);
+    const p = this.latest.position, start = this.latest.orientation.yawDegrees;
+    for (const offset of [60, 120, 180, 240, 300, 0]) {
+      await this.aim({ yawDegrees: normalize(start + offset), pitchDegrees: -10 });
+      await this.settle();
+      if (horizontal(p, this.latest.position) > 1) break;
+    }
+    this.report('looking_around');
+    return this.scan(radius, match, kind);
+  }
   async scanView(radius, match, kind = 'all') {
     let cursor;
     const objects = [];
