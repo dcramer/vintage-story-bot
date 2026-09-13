@@ -1,5 +1,5 @@
-// Food. Hungry (under 20%) is pressing whatever runs. Dug in with food in the
-// pack, eat one bite where it sits; otherwise forage to half, keeping two bites.
+// Food recovery starts below 20% and continues to half. Eat carried food
+// first, then forage or prepare roots using the current recovery strategy.
 
 import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import { HUNGRY } from '../../../support/food.ts';
@@ -14,12 +14,11 @@ export const hungry = (s: Situation) => s.hunger !== null && s.hunger < HUNGRY;
 export const eat: Concern = {
   id: 'eat',
   // Peckish is not an interruption; hungry is.
-  cuts: ({ s }) => hungry(s),
+  cuts: ({ s }) => hungry(s) || !!s.foodRecovery,
   run: ctx => {
-    const { s, k, satiety } = ctx;
+    const { k, satiety } = ctx;
     const percent = Math.round((satiety ?? 0) * 100);
-    // Sealed in for the night: one bite from the pack, no searching.
-    if ((s.burrowed || s.atHome) && k.reserve > 0) return { start: 'eat', args: {}, why: `satiety ${percent}%, dug in` };
+    if (k.reserve > 0) return { start: 'eat', args: {}, why: `satiety ${percent}%, eat carried food` };
     return food(ctx, 160);
   },
   ended: foodEnded,

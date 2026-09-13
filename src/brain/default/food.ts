@@ -143,6 +143,7 @@ export const foodEnded: Concern['ended'] = (last, memory, reading) => {
     memory.notes.firepit = null;
   }
   if (last.kind === 'cook') {
+    if (last.ok && (last.result?.moved ?? 0) > 0) memory.notes.cookUntil = reading.now + COOK_MS;
     const remaining = (memory.notes.cooking?.count ?? 0) - (last.result?.moved ?? 0);
     if (last.ok || remaining <= 0) memory.notes.cooking = null;
     else {

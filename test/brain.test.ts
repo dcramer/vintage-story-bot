@@ -804,7 +804,7 @@ test('brain: night waits for forage to finish food already in hand', () => {
   );
 });
 
-test('brain: carried food enters one complete recovery run', () => {
+test('brain: carried food is eaten first and recovery persists to half satiety across restarts', () => {
   const memory = fresh();
   const berries = inventory(
     slot('game:fruit-blackberry', 3, {
@@ -819,10 +819,14 @@ test('brain: carried food enters one complete recovery run', () => {
     }),
     memory,
   );
-  assert.equal(choice.start, 'forage');
-  assert.ok(Math.abs(choice.args.until - 0.5) < 1e-9);
-  assert.equal(choice.args.keep, 160);
-  assert.match(choice.why, /240 carried/);
+  assert.equal(choice.start, 'eat');
+  const resumed = fresh(brain.notes!(memory));
+  resumed.startupChecked = true;
+  const continueEating = decide(reading({ inventory: kitted(), state: state({ vitals: { hunger: { current: 400, max: 1500 } } }) }), resumed);
+  assert.equal(continueEating.start, 'forage', 'crossing 20% does not resume building before food recovers');
+  assert.equal(continueEating.args.until, 0.5);
+  decide(reading({ inventory: kitted(), state: state({ vitals: { hunger: { current: 750, max: 1500 } } }) }), resumed);
+  assert.equal(resumed.notes.foodRecovery, undefined);
 });
 
 test('brain: failed forage prepares cooking and resumes roots left in an owned firepit', () => {

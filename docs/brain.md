@@ -34,7 +34,7 @@ Follows the food, flint-tool, shelter, house and shared-material baseline in
 [getting-started](getting-started.md). `TASKS` in the default brain owns task
 order; each concern owns quantities, dependencies, and completion predicates.
 Danger and survival conditions preempt ordinary work. Food recovery eats to
-half; a separate daytime task builds a carried night reserve. Return time
+half, eating carried food before choosing the next preparation step; this recovery persists across goals and restarts. Successful cooking retains the cooking fallback while raw forage remains scarce. A separate daytime task builds a carried night reserve. Return time
 accounts for distance from home, and dawn light never permits leaving before
 05:00. At night only crafting with carried ingredients and shelter lighting
 may replace the indoor wait; no sleeping.

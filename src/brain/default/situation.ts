@@ -104,6 +104,7 @@ export type Situation = {
   hurt: boolean;
   storm: boolean;
   hunger: number | null;
+  foodRecovery?: boolean;
   reserve: number;
   night: boolean;
   home: boolean;

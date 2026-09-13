@@ -118,7 +118,7 @@ export const LADDER: Rung[] = [
   { job: 'wait', when: s => s.burrowed && s.threat && !s.hurt },
   { job: 'hide', when: (s, tried) => s.hurt || (s.threat && !tried.has('hide')) },
   { job: 'unburrow', when: s => hungry(s) && s.burrowed && s.reserve <= 0 },
-  { job: 'eat', when: s => hungry(s) },
+  { job: 'eat', when: s => hungry(s) || !!s.foodRecovery },
   { job: 'repair_home', when: (s, tried) => s.atHome && !!s.homeDamaged && !tried.has('repair_home') },
   { job: 'lighting', when: s => s.atHome && s.lit === false && s.torches > 0 },
   { job: 'go_home', when: (s, tried) => s.storm && s.home && !s.atHome && !tried.has('go_home') },
@@ -229,6 +229,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
   }
   const storm = temporalStormUnsafe(state);
   const k = kit(inventory);
+  if (satiety !== null && satiety < 0.2) memory.notes.foodRecovery = true;
+  else if (satiety !== null && satiety >= 0.5) delete memory.notes.foodRecovery;
   const home = memory.notes.home;
   const tried = triedNow(memory, state.position, now);
   const dwelling = memory.notes.dwelling;
@@ -249,6 +251,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     hurt,
     storm,
     hunger: satiety,
+    foodRecovery: memory.notes.foodRecovery,
     reserve: k.reserve,
     night:
       isNight(environment) ||
@@ -404,6 +407,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
         ? { cooking: { count: kept!.cooking!.count, ...(kept?.cooking?.needsFuel === true ? { needsFuel: true } : {}) } }
         : {}),
       ...(Number.isFinite(kept?.cookUntil) ? { cookUntil: kept!.cookUntil } : {}),
+      ...(kept?.foodRecovery === true ? { foodRecovery: true } : {}),
       ...(cell(kept?.house) ? { house: cell(kept?.house) } : {}),
       ...(cell(kept?.construction?.origin) && ['walls', 'floor', 'enter'].includes(kept?.construction?.phase ?? '')
         ? { construction: { origin: cell(kept!.construction!.origin)!, phase: kept!.construction!.phase } }
