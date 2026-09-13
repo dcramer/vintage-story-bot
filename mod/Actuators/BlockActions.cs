@@ -74,10 +74,12 @@ internal sealed class BlockActions(ICoreClientAPI api)
             // block under the feet is footing, anything from the feet up to the head is the body.
             // A flower or grass the body stands in has no collision box and may be broken like any other.
             var boxes = block.GetCollisionBoxes(api.World.BlockAccessor, destination);
-            if (boxes != null && boxes.Length > 0 &&
-                destination.X + 1 > p.X + body.X1 && destination.X < p.X + body.X2 &&
-                destination.Z + 1 > p.Z + body.Z1 && destination.Z < p.Z + body.Z2 &&
-                destination.Y + 1 > p.Y + .35 && destination.Y < p.Y + body.Y2)
+            var bodyMin = new Point3(p.X + body.X1, p.Y + .35, p.Z + body.Z1);
+            var bodyMax = new Point3(p.X + body.X2, p.Y + body.Y2, p.Z + body.Z2);
+            if (boxes?.Any(box => SceneGeometry.Overlaps(
+                new(destination.X + box.X1, destination.Y + box.Y1, destination.Z + box.Z1),
+                new(destination.X + box.X2, destination.Y + box.Y2, destination.Z + box.Z2),
+                bodyMin, bodyMax)) == true)
                 return Error("Refusing to dig a solid cell the player's body is in.");
             if (block.GetRequiredMiningTier(api.World, destination) > (stack?.Collectible.ToolTier ?? 0))
                 return Error("Selected tool mining tier is insufficient.");

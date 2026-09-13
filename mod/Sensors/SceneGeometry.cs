@@ -4,6 +4,11 @@ public readonly record struct Point3(double X, double Y, double Z);
 
 public static class SceneGeometry
 {
+    public static bool Overlaps(Point3 aMin, Point3 aMax, Point3 bMin, Point3 bMax) =>
+        aMax.X > bMin.X && aMin.X < bMax.X &&
+        aMax.Y > bMin.Y && aMin.Y < bMax.Y &&
+        aMax.Z > bMin.Z && aMin.Z < bMax.Z;
+
     public static IEnumerable<Point3> BoxSamples(Point3 min, Point3 max)
     {
         yield return new((min.X + max.X) / 2, (min.Y + max.Y) / 2, (min.Z + max.Z) / 2);
