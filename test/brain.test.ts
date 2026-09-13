@@ -843,11 +843,12 @@ test('brain: failed forage prepares cooking and resumes roots left in an owned f
   assert.equal(memory.tried.eat, undefined, 'failed raw forage immediately permits the cooking fallback');
   memory.notes.firepit = { x: 2, y: 100, z: 0 };
   const supplies = kitted();
-  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 8), slot('game:cattailroot', 2));
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 4), slot('game:cattailroot', 2));
   const terrain = { get: (x, y, z) => (x === 2 && y === 100 && z === 0 ? { code: 'game:firepit-cold' } : null) };
   const cooking = decide(reading({ state: hungry, inventory: supplies, terrain, now: 2000 }), memory);
   assert.equal(cooking.start, 'cook');
   assert.equal(cooking.args.count, 2);
+  assert.equal(cooking.args.fuel, 4, 'two carried roots do not require gathering fuel for four');
   const resumed = fresh(brain.notes!(memory));
   resumed.startupChecked = true;
   const retry = decide(reading({ state: hungry, inventory: kitted(), terrain, now: 3000 }), resumed);

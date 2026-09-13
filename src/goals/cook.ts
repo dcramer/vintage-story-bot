@@ -18,6 +18,22 @@ export async function cook(field, { target, item, count, fuel }) {
   const output = page?.combustible?.smeltsInto;
   if (!output || page.combustible.smeltedRatio !== 1 || !edible((await learn(field, output))?.nutrition))
     return summary({ ok: false, reason: 'no_edible_cooking_output' });
+  await field.observe();
+  const overlaps = point =>
+    Math.abs(point.x - cell.x - 0.5) < 0.5 + field.latest.body.halfWidth + 0.15 &&
+    Math.abs(point.z - cell.z - 0.5) < 0.5 + field.latest.body.halfWidth + 0.15;
+  if (overlaps(field.latest.position)) {
+    // A cold firepit can be walked through. Step clear before lighting it;
+    // leave room for the navigator's arrival tolerance around the body.
+    const stand = field.approach(
+      { kind: 'block', point: { x: cell.x + 0.5, y: cell.y, z: cell.z + 0.5 } },
+      point => Math.abs(point.x - cell.x - 0.5) < 1.5 && Math.abs(point.z - cell.z - 0.5) < 1.5,
+    );
+    if (!stand) return summary({ ok: false, reason: 'no_safe_cooking_position' });
+    await field.walk(stand);
+    await field.observe();
+    if (overlaps(field.latest.position)) return summary({ ok: false, reason: 'no_safe_cooking_position' });
+  }
   let opened = false;
   let moved = 0;
   const open = async () => {

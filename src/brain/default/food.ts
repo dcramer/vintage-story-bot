@@ -26,6 +26,7 @@ export function food(ctx: Context, keep: number): Decision {
 
   const pit = memory.notes.firepit;
   const pending = memory.notes.cooking;
+  const fuel = 2 * (pending?.count ?? Math.min(roots || BATCH, BATCH));
   if (!pending) {
     if (!k.knife) return makeTool(k, 'knife', 'knifeblade', k.knifeBlade, 'game:knife-generic');
     if (k.emptyBagSlot && (k.bagItem || (k.free < 2 && (k.cattailtops > 0 || k.free > 0)))) {
@@ -50,7 +51,7 @@ export function food(ctx: Context, keep: number): Decision {
         };
       return { start: 'craft_item', args: { output: 'game:firestarter', count: 1, timeoutMs: 120000 }, why: 'a firestarter for cooking' };
     }
-    const wood = (pit ? 8 : 12) - count('game:firewood');
+    const wood = fuel + (pit ? 0 : 4) - count('game:firewood');
     if (wood > 0) {
       if (!k.logs) return { start: 'fell_tree', args: { count: 3, timeoutMs: 300000 }, why: 'logs for cooking fuel' };
       return {
@@ -101,7 +102,7 @@ export function food(ctx: Context, keep: number): Decision {
       target: `block:${state.position.dimension ?? 0}:${pit.x}:${pit.y}:${pit.z}:${block.code}`,
       item: ROOT,
       count: memory.notes.cooking.count,
-      fuel: 8,
+      fuel,
       timeoutMs: COOK_MS,
     },
     why: 'cook roots and retrieve any food left in the firepit',
