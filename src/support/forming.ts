@@ -1,8 +1,9 @@
 import { useOnBlock } from '../goals/use_block.ts';
 import { lookAt, normalize } from '../runtime/navigation/terrain.ts';
-import { parseBlockKey, replaceablePlant, selectCell } from './blocks.ts';
+import { changeBlock, parseBlockKey, replaceablePlant, selectCell } from './blocks.ts';
 import { equip, itemCount, ownedSlots } from './inventory.ts';
 import { clearLeafPath, leafBlock } from './leaf-clearing.ts';
+import { supportedFloor, surfaceCover } from './sites.ts';
 import { has } from './traits.ts';
 
 export const kinds = {
@@ -49,38 +50,49 @@ export async function inspectKnownFormingSurface(field, cell, surfaceCode, inspe
 
 // Find a solid ground cell with an exposed top face to place a forming surface on, aiming by cell id
 // (the mod aims at the block's real selection box) rather than caller-computed angles. Forest floor is
-// uneven, so several nearby cells are tried; grass above the cell is replaced by the surface on placement.
+// uneven, so nearby cells at the current floor and one block above/below are tried.
+// Every candidate still needs a native-selectable top face and observed free space above.
 async function aimGround(field) {
   const state = await field.observe();
   const p = state.position;
   const tried = new Set();
   let covered = null;
   for (const offset of [0, 25, -25, 50, -50, 90, -90, 135, -135, 180])
-    for (const dist of [1.3, 1.0, 1.7]) {
-      const radians = (normalize(state.orientation.yawDegrees + offset) * Math.PI) / 180;
-      const x = Math.floor(p.x + Math.sin(radians) * dist),
-        z = Math.floor(p.z + Math.cos(radians) * dist),
-        y = Math.floor(p.y) - 1;
-      const id = `${x},${y},${z}`;
-      if (tried.has(id) || (Math.floor(p.x) === x && Math.floor(p.z) === z)) continue;
-      tried.add(id);
-      const sel = await selectCell(field, { x, y, z }, { face: 'up', clearPlants: true });
-      if (!sel) continue;
-      // Loose stones have a selectable top face but are resources sitting on the
-      // ground, not the solid ground a forming surface can replace.
-      if (!formingGround(sel)) continue;
-      const hit = parseBlockKey(sel.key);
-      if (hit.x !== x || hit.y !== y || hit.z !== z) continue; // occluded or grazed a neighbour
-      const above = field.env.map.get(hit.x, hit.y + 1, hit.z);
-      if (!above || above.hazard || above.boxes.length) continue; // unknown or occupied is not a free surface
-      // Clear sky for two more blocks is preferred: leaves over a surface catch the aim at its voxels and
-      // every click then takes minutes. Under a canopy or a roof the best covered cell still serves.
-      if ([2, 3].some(dy => field.env.map.get(hit.x, hit.y + dy, hit.z)?.boxes.length)) {
-        covered ??= sel;
-        continue;
+    for (const dist of [1.3, 1.0, 1.7])
+      for (const dy of [0, 1, -1]) {
+        const radians = (normalize(state.orientation.yawDegrees + offset) * Math.PI) / 180;
+        const x = Math.floor(p.x + Math.sin(radians) * dist),
+          z = Math.floor(p.z + Math.cos(radians) * dist),
+          y = Math.floor(p.y) - 1 + dy;
+        const id = `${x},${y},${z}`;
+        if (tried.has(id) || (Math.floor(p.x) === x && Math.floor(p.z) === z)) continue;
+        tried.add(id);
+        const ground = field.env.map.get(x, y, z);
+        if (!supportedFloor(ground, y + 1)) continue;
+        const cover = field.env.map.get(x, y + 1, z);
+        if (surfaceCover(cover)) {
+          const selected = await selectCell(field, { x, y: y + 1, z });
+          if (!selected || selected.code !== cover.code) continue;
+          const cleared = await changeBlock(field, 'dig', { target: selected.key });
+          if (!cleared.ok) continue;
+        }
+        const sel = await selectCell(field, { x, y, z }, { face: 'up', clearPlants: true });
+        if (!sel) continue;
+        // Loose stones have a selectable top face but are resources sitting on the
+        // ground, not the solid ground a forming surface can replace.
+        if (!formingGround(sel)) continue;
+        const hit = parseBlockKey(sel.key);
+        if (hit.x !== x || hit.y !== y || hit.z !== z) continue; // occluded or grazed a neighbour
+        const above = field.env.map.get(hit.x, hit.y + 1, hit.z);
+        if (!above || above.hazard || above.boxes.length) continue; // unknown or occupied is not a free surface
+        // Clear sky for two more blocks is preferred: leaves over a surface catch the aim at its voxels and
+        // every click then takes minutes. Under a canopy or a roof the best covered cell still serves.
+        if ([2, 3].some(dy => field.env.map.get(hit.x, hit.y + dy, hit.z)?.boxes.length)) {
+          covered ??= sel;
+          continue;
+        }
+        return sel;
       }
-      return sel;
-    }
   return covered;
 }
 
