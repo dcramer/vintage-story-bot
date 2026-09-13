@@ -10,32 +10,44 @@ import { travel } from './travel.ts';
 
 // A complete dry footprint and a walkable doorway; unknown cells cannot support a home.
 export function shelterSite(map, position) {
+  const fits = origin => {
+    for (let x = 0; x < SHELTER_SIZE; x++)
+      for (let z = 0; z < SHELTER_SIZE; z++) {
+        const floor = map.get(origin.x + x, origin.y - 1, origin.z + z);
+        if (!supportedFloor(floor, origin.y)) return false;
+        for (let h = 0; h <= 2; h++) {
+          const cell = map.get(origin.x + x, origin.y + h, origin.z + z);
+          if (!cell || cell.hazard || (cell.boxes.length && !(h === 0 && surfaceCover(cell)))) return false;
+        }
+      }
+    return !!map.nodeAt(origin.x + 2, origin.z + SHELTER_SIZE, origin.y, 0.6, 0.1);
+  };
+  const distance = origin => Math.hypot(origin.x + 2.5 - position.x, (origin.y - position.y) * 2, origin.z + 2.5 - position.z);
   const candidates = [];
   for (const y of [0, 1, -1, 2, -2].map(dy => Math.floor(position.y) + dy))
     for (let dx = -5; dx <= 5; dx++)
       for (let dz = -5; dz <= 5; dz++) {
         const origin = { x: Math.floor(position.x) + dx, y, z: Math.floor(position.z) + dz };
-        let fits = true;
-        for (let x = 0; x < SHELTER_SIZE && fits; x++)
-          for (let z = 0; z < SHELTER_SIZE && fits; z++) {
-            const floor = map.get(origin.x + x, y - 1, origin.z + z);
-            if (!supportedFloor(floor, y)) {
-              fits = false;
-              break;
-            }
-            for (let h = 0; h <= 2; h++) {
-              const cell = map.get(origin.x + x, y + h, origin.z + z);
-              if (!cell || cell.hazard || (cell.boxes.length && !(h === 0 && surfaceCover(cell)))) fits = false;
-            }
-          }
-        if (fits && map.nodeAt(origin.x + 2, origin.z + SHELTER_SIZE, y, 0.6, 0.1)) candidates.push(origin);
+        if (fits(origin)) candidates.push(origin);
       }
+  if (candidates.length) return candidates.sort((a, b) => distance(a) - distance(b))[0];
+
+  // Revisit a fully observed nearby footprint before another blind exploration
+  // leg. This is terrain memory, never a world query; unknown clearance still
+  // rejects the site. Bound the expensive footprint checks to 256 candidates.
+  const remembered = [];
+  for (const cell of map.cells?.values?.() ?? []) {
+    if (Math.hypot(cell.x + 2.5 - position.x, cell.z + 2.5 - position.z) > 64 || Math.abs(cell.y + 1 - position.y) > 32) continue;
+    if (!supportedFloor(cell, cell.y + 1)) continue;
+    const above = map.get(cell.x, cell.y + 1, cell.z);
+    if (!above || above.hazard || (above.boxes.length && !surfaceCover(above))) continue;
+    remembered.push({ x: cell.x, y: cell.y + 1, z: cell.z });
+  }
   return (
-    candidates.sort(
-      (a, b) =>
-        Math.hypot(a.x + 2.5 - position.x, (a.y - position.y) * 2, a.z + 2.5 - position.z) -
-        Math.hypot(b.x + 2.5 - position.x, (b.y - position.y) * 2, b.z + 2.5 - position.z),
-    )[0] ?? null
+    remembered
+      .sort((a, b) => distance(a) - distance(b))
+      .slice(0, 256)
+      .find(fits) ?? null
   );
 }
 

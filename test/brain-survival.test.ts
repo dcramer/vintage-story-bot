@@ -149,6 +149,17 @@ test('shelter can use a fully observed footprint around the player', () => {
   assert.deepEqual(shelterSite(terrain, { x: 2.5, y: 100, z: 2.5 }), { x: 0, y: 100, z: 0 });
 });
 
+test('shelter revisits a fully observed nearby footprint before more exploration', () => {
+  const cells = new Map();
+  for (let x = 20; x < 25; x++)
+    for (let z = 0; z < 5; z++)
+      for (let y = 99; y <= 102; y++) cells.set(`${x}:${y}:${z}`, { x, y, z, boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [], hazard: null });
+  const map = { cells, get: (x, y, z) => cells.get(`${x}:${y}:${z}`), nodeAt: (x, z, y) => (x === 22 && z === 5 && y === 100 ? { y: 100 } : null) };
+  assert.deepEqual(shelterSite(map, { x: 0.5, y: 110, z: 0.5 }), { x: 20, y: 100, z: 0 });
+  cells.delete('24:102:4');
+  assert.equal(shelterSite(map, { x: 0.5, y: 110, z: 0.5 }), null, 'unknown roof clearance is not a remembered building site');
+});
+
 test('partial shelter resumes its owned site after a controller restart', () => {
   const origin = { x: 10, y: 100, z: 20 };
   const shell = new Set(
@@ -165,6 +176,12 @@ test('partial shelter resumes its owned site after a controller restart', () => 
       },
     },
   };
+  const shellBlock = ctx.reading.terrain.get;
+  ctx.reading.terrain.get = (x, y, z) => {
+    if (x === 11 && y === 100 && z === 21) return { code: 'game:stationarybasket-east', boxes: [{}] };
+    if (x === 12 && y === 100 && z === 21) return { code: 'game:torch-basic-lit-up', boxes: [] };
+    return shellBlock(x, y, z);
+  };
   const work: any = shelter.run(ctx);
   assert.equal(work.start, 'shelter');
   assert.deepEqual(work.args.origin, origin);
@@ -172,7 +189,7 @@ test('partial shelter resumes its owned site after a controller restart', () => 
   assert.deepEqual(memory.notes.shelter, origin, 'a failed roof cannot discard the already placed walls');
 });
 
-test('a remembered shelter footprint is abandoned when storage occupies it', () => {
+test('a remembered shelter footprint is abandoned when storage blocks the aisle', () => {
   const origin = { x: 10, y: 100, z: 20 };
   const memory = fresh({ shelter: origin });
   const work: any = shelter.run({
@@ -181,7 +198,7 @@ test('a remembered shelter footprint is abandoned when storage occupies it', () 
     k: kit(inventory({ 'game:rammed-light-plain': 60, 'game:torch-basic-extinct-up': 1, 'game:firestarter': 1 })),
     reading: {
       terrain: {
-        get: (x, y, z) => (x === 11 && y === 100 && z === 21 ? { code: 'game:stationarybasket-east', boxes: [{}] } : undefined),
+        get: (x, y, z) => (x === 12 && y === 100 && z === 22 ? { code: 'game:stationarybasket-east', boxes: [{}] } : undefined),
       },
     },
   } as any);

@@ -3,7 +3,7 @@
 
 import { shelterSite } from '../../../goals/shelter.ts';
 import { surfaceCover } from '../../../support/sites.ts';
-import { shelter as blueprint, SHELTER_MATERIAL, shelterDoor } from '../../../support/structures.ts';
+import { shelter as blueprint, SHELTER_MATERIAL, shelterDoor, shelterStorage, shelterTorches } from '../../../support/structures.ts';
 import type { Concern } from '../concern.ts';
 import { goTo, setHome } from '../concern.ts';
 import { lightingDay, prepareFirestarter } from './lighting.ts';
@@ -16,12 +16,18 @@ function obstructedShelter(map, origin) {
   const shell = new Set(
     [...blueprint(origin, SHELTER_MATERIAL), ...shelterDoor(origin, SHELTER_MATERIAL)].map(cell => `${cell.x}:${cell.y}:${cell.z}`),
   );
+  const storage = new Set(shelterStorage(origin).map(cell => `${cell.x}:${cell.y}:${cell.z}`));
+  const torches = new Set(shelterTorches(origin).map(cell => `${cell.x}:${cell.y}:${cell.z}`));
   for (let x = origin.x; x < origin.x + 5; x++)
     for (let z = origin.z; z < origin.z + 5; z++)
       for (let y = origin.y; y <= origin.y + 2; y++) {
         const block = map?.get(x, y, z);
         if (!block || block.code === 'game:air' || block.code == null) continue;
         if (y === origin.y && surfaceCover(block)) continue;
+        const key = `${x}:${y}:${z}`;
+        if (storage.has(key) && /^game:(stationarybasket|chest)-/.test(block.code)) continue;
+        if (torches.has(key) && block.code.startsWith('game:torch-basic-')) continue;
+
         if (shell.has(`${x}:${y}:${z}`) && block.code.includes(SHELTER_MATERIAL)) continue;
         return true;
       }
@@ -35,7 +41,7 @@ export const shelter: Concern = {
   after: ['dirt', 'torches'],
   run: ctx => {
     let pending = ctx.memory.notes.shelter;
-    // Storage or another player can occupy a remembered footprint between a
+    // A foreign block can occupy the shell or aisle between a
     // partial build and its resume. Explicitly observed foreign blocks make
     // this site unusable; forget it and survey a fresh footprint instead of
     // repeatedly trying to clear or build through the obstruction.
@@ -90,6 +96,8 @@ export const shelter: Concern = {
     const origin = pending ?? shelterSite(ctx.reading.terrain, ctx.state.position);
     if (!origin) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'looking for supported shelter ground' };
     ctx.memory.notes.shelter = origin;
+    const approach = goTo(ctx, { x: origin.x + 2.5, y: origin.y, z: origin.z + 5.5 }, 'returning to observed shelter ground', 5, 2);
+    if (approach) return approach;
     return { start: 'shelter', args: { origin, item: SHELTER_MATERIAL, timeoutMs: 1800000 }, why: `${rammed} rammed earth, finishing the shelter` };
   },
   // A finished shelter is home.
