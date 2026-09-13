@@ -159,6 +159,11 @@ test('shelter revisits observed level ground beyond hundreds of nearer unusable 
       for (let y = 99; y <= 102; y++) cells.set(`${x}:${y}:${z}`, { x, y, z, boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [], hazard: null });
   const map = { cells, get: (x, y, z) => cells.get(`${x}:${y}:${z}`), nodeAt: (x, z, y) => (x === 152 && z === 5 && y === 100 ? { y: 100 } : null) };
   assert.deepEqual(shelterSite(map, { x: 0.5, y: 110, z: 0.5 }), { x: 150, y: 100, z: 0 });
+  const roof = cells.get('154:102:4');
+  cells.set('154:102:4', { ...roof, code: 'game:leaves-grown5-birch', traits: ['leaves'] });
+  assert.deepEqual(shelterSite(map, { x: 0.5, y: 110, z: 0.5 }), { x: 150, y: 100, z: 0 }, 'observed leaves can be cleared for the roof');
+  cells.set('154:102:4', { ...roof, code: 'game:torch-basic-lit-up' });
+  assert.equal(shelterSite(map, { x: 0.5, y: 110, z: 0.5 }), null, 'a non-colliding foreign block is not empty building space');
   cells.delete('154:102:4');
   assert.equal(shelterSite(map, { x: 0.5, y: 110, z: 0.5 }), null, 'unknown roof clearance is not a remembered building site');
 });
@@ -181,6 +186,7 @@ test('partial shelter resumes its owned site after a controller restart', () => 
   };
   const shellBlock = ctx.reading.terrain.get;
   ctx.reading.terrain.get = (x, y, z) => {
+    if (x === 12 && y === 101 && z === 22) return { code: 'game:leaves-grown5-birch', traits: ['leaves'], boxes: [] };
     if (x === 11 && y === 100 && z === 21) return { code: 'game:stationarybasket-east', boxes: [{}] };
     if (x === 12 && y === 100 && z === 21) return { code: 'game:torch-basic-lit-up', boxes: [] };
     return shellBlock(x, y, z);

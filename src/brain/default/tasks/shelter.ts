@@ -2,7 +2,7 @@
 // A verified entry and seal make the spot home.
 
 import { shelterSite } from '../../../goals/shelter.ts';
-import { surfaceCover } from '../../../support/sites.ts';
+import { shelterCover } from '../../../support/sites.ts';
 import { shelter as blueprint, SHELTER_MATERIAL, shelterDoor, shelterStorage, shelterTorches } from '../../../support/structures.ts';
 import type { Concern } from '../concern.ts';
 import { goTo, setHome } from '../concern.ts';
@@ -23,7 +23,7 @@ function obstructedShelter(map, origin) {
       for (let y = origin.y; y <= origin.y + 2; y++) {
         const block = map?.get(x, y, z);
         if (!block || block.code === 'game:air' || block.code == null) continue;
-        if (y === origin.y && surfaceCover(block)) continue;
+        if (shelterCover(block, y - origin.y)) continue;
         const key = `${x}:${y}:${z}`;
         if (storage.has(key) && /^game:(stationarybasket|chest)-/.test(block.code)) continue;
         if (torches.has(key) && block.code.startsWith('game:torch-basic-')) continue;

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { ownedSlots } from '../support/inventory.ts';
-import { supportedFloor, surfaceCover } from '../support/sites.ts';
+import { shelterCover, supportedFloor, surfaceCover } from '../support/sites.ts';
 import { SHELTER_MATERIAL, SHELTER_SIZE, shelter as shelterCells, shelterCenter, shelterDoor, shelterTorches } from '../support/structures.ts';
 import { cleanName, runField } from '../support/task.ts';
 import { build, digArea } from './build.ts';
@@ -17,7 +17,7 @@ export function shelterSite(map, position) {
         if (!supportedFloor(floor, origin.y)) return false;
         for (let h = 0; h <= 2; h++) {
           const cell = map.get(origin.x + x, origin.y + h, origin.z + z);
-          if (!cell || cell.hazard || (cell.boxes.length && !(h === 0 && surfaceCover(cell)))) return false;
+          if (!cell || cell.hazard || ((cell.boxes.length || (cell.code && cell.code !== 'game:air')) && !shelterCover(cell, h))) return false;
         }
       }
     return !!map.nodeAt(origin.x + 2, origin.z + SHELTER_SIZE, origin.y, 0.6, 0.1);
@@ -40,7 +40,7 @@ export function shelterSite(map, position) {
     if (Math.hypot(cell.x + 2.5 - position.x, cell.z + 2.5 - position.z) > 256 || Math.abs(cell.y + 1 - position.y) > 32) continue;
     if (!supportedFloor(cell, cell.y + 1)) continue;
     const above = map.get(cell.x, cell.y + 1, cell.z);
-    if (!above || above.hazard || (above.boxes.length && !surfaceCover(above))) continue;
+    if (!above || above.hazard || ((above.boxes.length || (above.code && above.code !== 'game:air')) && !shelterCover(above, 0))) continue;
     const origin = { x: cell.x, y: cell.y + 1, z: cell.z };
     const near = distance(origin);
     if (near >= nearest || !fits(origin)) continue;
@@ -102,10 +102,11 @@ export default defineGoal({
       const home = { x: center.x, y: origin.y, z: center.z };
       const cover = [];
       for (let x = 0; x < SHELTER_SIZE; x++)
-        for (let z = 0; z < SHELTER_SIZE; z++) {
-          const cell = { x: origin.x + x, y: origin.y, z: origin.z + z };
-          if (surfaceCover(field.env.map.get(cell.x, cell.y, cell.z))) cover.push(cell);
-        }
+        for (let z = 0; z < SHELTER_SIZE; z++)
+          for (let h = 0; h <= 2; h++) {
+            const cell = { x: origin.x + x, y: origin.y + h, z: origin.z + z };
+            if (shelterCover(field.env.map.get(cell.x, cell.y, cell.z), h)) cover.push(cell);
+          }
       const outside = { x: origin.x + 2, y: origin.y, z: origin.z + SHELTER_SIZE };
       if (surfaceCover(field.env.map.get(outside.x, outside.y, outside.z))) cover.push(outside);
       if (cover.length) {
