@@ -283,10 +283,14 @@ export class Search {
       this.lastView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
     }
     if (!this.targets().length) {
-      await this.options.learn?.(await field.lookAround(this.match, 'all'));
+      const viewed = await field.lookAround(this.match, 'all');
+      await this.options.learn?.(viewed);
       this.lastView = { position: { ...field.latest.position }, yawDegrees: field.latest.orientation.yawDegrees };
     }
-    if (!this.targets().length) await this.options.learn?.(field.recall(memoryRange, this.match, 'all'));
+    if (!this.targets().length) {
+      const remembered = field.recall(memoryRange, this.match, 'all');
+      await this.options.learn?.(remembered);
+    }
     const target = this.targets()[0];
     if (target) {
       await this.approach(target, approachExclude?.(target) ?? null);

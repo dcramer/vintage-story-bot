@@ -49,6 +49,7 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
   };
   const search = new Search(field, {
     kind: match,
+    memoryRange: 256,
     candidates: () => terrainTargets(field, [match]),
     match: [match.slice(0, 64), item.slice(0, 64)],
     wanted: o => blocks(o) || drops(o),
