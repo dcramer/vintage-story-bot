@@ -161,16 +161,25 @@ export class Navigation {
     this.lookingAt = null;
     this.nextPlanAt = 0;
   }
+  restoreMerge(p) {
+    if (this.mergedFrom === null) return;
+    // A merged run can be extended as the body advances, leaving its original
+    // first checkpoint far behind. Resume at the closest original checkpoint
+    // covered by the shortcut, not blindly at that stale first checkpoint.
+    let restore = this.mergedFrom;
+    for (let i = restore + 1; i <= this.index; i++) if (distance(p, this.route[i]) < distance(p, this.route[restore])) restore = i;
+    this.index = restore;
+    this.mergedFrom = null;
+    this.mergeRefused = true;
+    this.edgeStart = p;
+    this.bestNear = undefined;
+  }
   replan(p, now, reason) {
     this.lastReplan = reason;
     if (['stalled', 'jump_failed'].includes(reason) && this.mergedFrom !== null) {
       // The failed input followed a shortcut, not the original route edge.
       // Restore the detour before excluding any of its untried steps.
-      this.index = this.mergedFrom;
-      this.mergedFrom = null;
-      this.mergeRefused = true;
-      this.edgeStart = p;
-      this.bestNear = undefined;
+      this.restoreMerge(p);
       this.progressAt = now;
       this.lastReplan = 'shortcut_stalled';
       return null;
@@ -366,11 +375,7 @@ export class Navigation {
     // Momentum can carry the body away from a merged point while turning. Keep the current
     // point inside input range too, not just the point when it was first selected.
     if (this.mergedFrom !== null && distance(p, this.route[this.index]) > MERGE_RUN) {
-      this.index = this.mergedFrom;
-      this.mergedFrom = null;
-      this.mergeRefused = true;
-      this.edgeStart = p;
-      this.bestNear = undefined;
+      this.restoreMerge(p);
     }
     if (grounded && !this.mergeRefused)
       for (let ahead = this.index + 1; ahead < this.route.length; ahead++) {
@@ -476,11 +481,7 @@ export class Navigation {
         if (this.mergedFrom !== null && this.mergedFrom < this.index) {
           // Back to the route's own cells; the progress clock keeps running, so a guard that
           // trips every tick still ends in a replan instead of a body standing for minutes.
-          this.mergeRefused = true;
-          this.index = this.mergedFrom;
-          this.mergedFrom = null;
-          this.edgeStart = p;
-          this.bestNear = undefined;
+          this.restoreMerge(p);
           this.guardHolds = 0;
           return this.tick(state, now, step);
         }

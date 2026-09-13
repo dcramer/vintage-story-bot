@@ -235,6 +235,23 @@ test('a merged run keeps input reach margin and falls back when the body drifts 
   assert.equal(turning.toward.x, 1.5, 'return to the original nearby checkpoint');
 });
 
+test('a stalled extended merge resumes near the body instead of rewinding out of control range', () => {
+  const map = new TerrainMemory();
+  for (let x = -1; x <= 16; x++) for (let z = -1; z <= 1; z++) column(map, x, z);
+  const state = stateAt({ x: 0.5, y: 0, z: 0.5 });
+  const route = Array.from({ length: 14 }, (_, i) => ({ x: i + 1.5, y: 0, z: 0.5, move: 'walk' }));
+  const nav = new Navigation(map, state, route.at(-1), 0);
+  nav.adopt(route, state.position, 0);
+  nav.index = 13;
+  nav.mergedFrom = 0;
+  state.position = { x: 13.3, y: 0, z: 0.5 };
+
+  assert.equal(nav.tick(state, 100, { state: 'blocked', toward: route[13], distance: 1.2 }), null);
+  const recovered = nav.tick(state, 200);
+  assert.ok(distance(state.position, recovered.toward) <= 7, 'the recovered checkpoint must remain a valid control input');
+  assert.notEqual(recovered.toward.x, route[0].x, 'do not walk back to the stale start of the merged run');
+});
+
 test('an uphill takeoff starts before the riser only with a clear earlier jump arc', () => {
   for (const [ceiling, sprinting] of [
     [false, false],
