@@ -109,8 +109,10 @@ export async function clearLeaf(field, toward) {
       field.skip(target, 300000);
       return true;
     }
-  } catch {
-    /* A changed/occluded leaf is simply not a verified clearing. */
+    field.report('clearing_failed', { target: target.key, reason: result.reason });
+  } catch (error) {
+    if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
+    field.report('clearing_failed', { target: target.key, reason: error.message });
   }
   field.skip(target, 120000);
   return false;
