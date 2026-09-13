@@ -105,7 +105,10 @@ export class Controller {
     });
     this.telemetry = telemetry;
     this.metrics = new RunMetrics(this.session);
-    this.knowledge = this.game.knowledge = new Knowledge(process.env.VINTAGE_STORY_KNOWLEDGE_DIR ?? '.runtime/knowledge', this.game);
+    this.knowledge = this.game.knowledge = new Knowledge(process.env.VINTAGE_STORY_KNOWLEDGE_DIR ?? '.runtime/knowledge', this.game, error => {
+      this.telemetry?.publish('action', { action: 'knowledge_save', ok: false, error: error.message });
+      this.log.info('controller', 'knowledge_save_failed', { error: error.message });
+    });
     const raw = this.game.send;
     this.game.send = (request, options) => {
       const since = performance.now();
@@ -320,11 +323,9 @@ export class Controller {
         }
       }
       try {
-        // Writing the map is a synchronous stall of a few hundred milliseconds: never while walking.
-        if (!this.active?.nav?.active) this.knowledge.save();
-      } catch (error) {
-        this.telemetry?.publish('action', { action: 'knowledge_save', ok: false, error: error.message });
-        this.log.info('controller', 'knowledge_save_failed', { error: error.message });
+        if (!this.active?.nav?.active) await this.knowledge.save();
+      } catch {
+        // Knowledge reports failures and stays dirty for the next attempt.
       }
       if (!this.closing) this.eyeTimer = setTimeout(tick, delay);
     };
@@ -361,7 +362,7 @@ export class Controller {
     await this.brain?.stop().catch(() => {});
     await this.stop('controller_shutdown');
     try {
-      this.knowledge.save(true);
+      await this.knowledge.save(true);
     } catch {
       /* nothing to keep, or nowhere to keep it */
     }

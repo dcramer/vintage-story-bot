@@ -176,8 +176,8 @@ export class SightingsMemory {
       .sort((a, b) => a.distance - b.distance);
   }
   // Persistence: remembered blocks only.
-  export() {
-    return this.remembered('block').map(r => [r.key, r.code, r.point.x, r.point.y, r.point.z, r.extra, r.seenAt]);
+  export(records = this.remembered('block')) {
+    return records.map(r => [r.key, r.code, r.point.x, r.point.y, r.point.z, r.extra, r.seenAt]);
   }
   restore(rows) {
     this.records.clear();

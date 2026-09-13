@@ -108,8 +108,8 @@ export class TerrainMemory {
     else this.hazards.delete(id);
   }
   // Persistence: relative boxes and wall-clock stamps; the delta cursor is not part of memory.
-  export() {
-    return [...this.cells.values()].map(c => [
+  export(cells: Iterable<any> = this.cells.values()) {
+    return [...cells].map(c => [
       c.x,
       c.y,
       c.z,

@@ -36,8 +36,8 @@ export class SurfaceMemory {
     return snapshot.columns?.length ?? 0;
   }
   // Persistence: columns with wall-clock stamps.
-  export() {
-    return [...this.columns.values()].map(c => [c.x, c.z, c.y, c.kind, c.step, c.code, c.seenAt]);
+  export(columns: Iterable<any> = this.columns.values()) {
+    return [...columns].map(c => [c.x, c.z, c.y, c.kind, c.step, c.code, c.seenAt]);
   }
   restore(rows) {
     this.columns.clear();

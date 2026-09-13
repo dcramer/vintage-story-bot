@@ -558,7 +558,7 @@ test('knowledge survives a round trip through disk and is keyed by world', async
     1000,
   );
   knowledge.touch();
-  assert.equal(knowledge.save(true), true);
+  assert.equal(await knowledge.save(true), true);
   const fresh = { map: new TerrainMemory(), surface: new SurfaceMemory(), sightings: new SightingsMemory() };
   const again = new Knowledge(dir, fresh);
   again.enter('world-a');
@@ -569,4 +569,5 @@ test('knowledge survives a round trip through disk and is keyed by world', async
   assert.equal(fresh.sightings.remembered('entity').length, 0, 'entities do not');
   again.enter('world-b');
   assert.equal(fresh.map.cells.size, 0, 'another world starts empty');
+  await again.save(true);
 });
