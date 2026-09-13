@@ -24,7 +24,7 @@ export const recover: Concern = {
   running: ({ s }) => (s.body ? null : { stop: 'recovery budget exhausted' }),
   run: ({ memory, now }) => ({
     start: 'retrieve_body',
-    args: { guid: memory.notes.recovery?.guid, manageFood: true, timeoutMs: Math.max(1000, (memory.notes.recovery?.until ?? now + 600000) - now) },
+    args: { guid: memory.notes.recovery?.guid, manageFood: false, timeoutMs: Math.max(1000, (memory.notes.recovery?.until ?? now + 600000) - now) },
     why: 'going back for my things',
   }),
 };

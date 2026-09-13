@@ -17,7 +17,7 @@ export const spareKnife: Concern = {
     return (
       goTo(ctx, note, 'a spare knife for the chest') ?? {
         start: 'store_items',
-        args: { target: note.key, items: [{ item: 'knife-', count: 1 }], manageFood: true, timeoutMs: 600000 },
+        args: { target: note.key, items: [{ item: 'knife-', count: 1 }], manageFood: false, timeoutMs: 600000 },
         why: 'a spare knife into the chest',
       }
     );

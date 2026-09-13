@@ -68,7 +68,7 @@ export const stash: Concern = {
     return (
       goTo(ctx, note, 'pack full, going home to put things away') ?? {
         start: 'store_items',
-        args: { target: note.key, items, manageFood: true, timeoutMs: 600000 },
+        args: { target: note.key, items, manageFood: false, timeoutMs: 600000 },
         why: `pack full, ${items.reduce((n, i) => n + i.count, 0)} things to put away`,
       }
     );

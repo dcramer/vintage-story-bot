@@ -26,7 +26,7 @@ export const relocate: Concern = {
     );
     return {
       start: 'travel',
-      args: { x: away.x, z: away.z, arrivalRadius: 8, manageFood: true, timeoutMs: 900000 },
+      args: { x: away.x, z: away.z, arrivalRadius: 8, manageFood: false, timeoutMs: 900000 },
       why: `${memory.scares.length} scares around here; moving on`,
     };
   },

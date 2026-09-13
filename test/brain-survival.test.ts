@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { goTo } from '../src/brain/default/concern.ts';
 import { recoverBurrow } from '../src/brain/default/reflexes/burrow.ts';
 import { goHome } from '../src/brain/default/reflexes/go_home.ts';
 import { makeBag } from '../src/brain/default/tasks/bags.ts';
 import { house, houseSite } from '../src/brain/default/tasks/house.ts';
 import { lightingDay, shelterLight } from '../src/brain/default/tasks/lighting.ts';
-import { recoverableBody } from '../src/brain/default/tasks/recover.ts';
+import { recover, recoverableBody } from '../src/brain/default/tasks/recover.ts';
 import { homeDamage, repairHome } from '../src/brain/default/tasks/repair_home.ts';
 import { shelter } from '../src/brain/default/tasks/shelter.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
@@ -136,6 +137,13 @@ const chest = {
   code: 'game:stationarybasket-east',
   seen: { at: 1000, items: {} },
 };
+
+test('ordinary errands and body recovery do not turn into food searches', () => {
+  const trip: any = goTo({ state: { position: { x: 0, y: 100, z: 0 } } } as any, { x: 100, y: 100, z: 0 }, 'durable work');
+  assert.equal(trip.args.manageFood, false);
+  const body: any = recover.run({ memory: fresh({ recovery: { guid: 'death-one', until: 601000 } }), now: 1000 } as any);
+  assert.equal(body.args.manageFood, false);
+});
 
 test('an old death marker cannot renew recovery after a controller restart', () => {
   const marker = { guid: 'death-one', icon: 'gravestone' };

@@ -241,7 +241,7 @@ export function goTo(ctx: Context, place: { x: number; y?: number; z: number }, 
   if (far <= radius && (place.y === undefined || Math.abs(place.y - ctx.state.position.y) < 1.5)) return null;
   return {
     start: 'travel',
-    args: { x: place.x, ...(place.y === undefined ? {} : { y: place.y }), z: place.z, arrivalRadius: arrival, manageFood: true, timeoutMs: 900000 },
+    args: { x: place.x, ...(place.y === undefined ? {} : { y: place.y }), z: place.z, arrivalRadius: arrival, manageFood: false, timeoutMs: 900000 },
     why: `${why}, ${Math.round(far)} blocks away`,
   };
 }

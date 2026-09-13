@@ -36,7 +36,7 @@ export const resupply: Concern = {
     return (
       goTo(ctx, note, 'going home for what the chest holds') ?? {
         start: 'take_items',
-        args: { target: note.key, items, manageFood: true, timeoutMs: 600000 },
+        args: { target: note.key, items, manageFood: false, timeoutMs: 600000 },
         why: `the chest holds ${items.map(i => `${i.count} ${i.item.replace(/^game:/, '')}`).join(', ')}`,
       }
     );
