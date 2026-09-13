@@ -38,13 +38,19 @@ export function allocate(recipe) {
   for (const ingredient of recipe.ingredients ?? []) {
     if (!ingredient) continue;
     let needed = ingredient.quantity;
-    for (const match of ingredient.matches ?? []) {
+    const inPlace = match => match.inventory === 'craftinggrid' && match.slot === ingredient.slot;
+    for (const match of [...(ingredient.matches ?? [])].sort((a, b) => Number(inPlace(b)) - Number(inPlace(a)))) {
       const id = `${match.inventory}:${match.slot}`;
       const available = remaining.get(id) ?? match.quantity;
       if (available <= 0 || needed <= 0) continue;
       const take = Math.min(available, needed);
       remaining.set(id, available - take);
-      plan.push({ from: { inventory: match.inventory, slot: match.slot }, to: { inventory: 'craftinggrid', slot: ingredient.slot }, quantity: take });
+      if (!inPlace(match))
+        plan.push({
+          from: { inventory: match.inventory, slot: match.slot },
+          to: { inventory: 'craftinggrid', slot: ingredient.slot },
+          quantity: take,
+        });
       needed -= take;
     }
     if (needed > 0) return null;
