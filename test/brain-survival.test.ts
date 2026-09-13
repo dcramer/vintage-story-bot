@@ -68,8 +68,17 @@ test('house: partial material batches resume the same site without claiming a ho
 test('house: unknown terrain and hazards never qualify as a building site', () => {
   const p = { x: 0.5, y: 100, z: 0.5 };
   assert.equal(houseSite({ get: () => undefined }, p), null);
-  const terrain = { get: (_x: number, y: number) => ({ boxes: y === 99 ? [{}] : [], hazard: null }) };
+  const terrain = { get: (x: number, y: number, z: number) => ({ boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [], hazard: null }) };
   assert.ok(houseSite(terrain, p));
+  assert.ok(
+    houseSite(
+      {
+        get: (x, y, z) =>
+          y === 100 ? { code: 'game:snowlayer-3', boxes: [[x, y, z, x + 1, y + 0.375, z + 1]], hazard: null } : terrain.get(x, y, z),
+      },
+      p,
+    ),
+  );
   assert.equal(houseSite({ get: () => ({ boxes: [{}], hazard: 'water' }) }, p), null);
 });
 

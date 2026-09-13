@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
+import { surfaceCover } from '../support/sites.ts';
 import { house as houseCells } from '../support/structures.ts';
 import { runField } from '../support/task.ts';
 import { build, digArea } from './build.ts';
@@ -24,6 +25,16 @@ export default defineGoal({
       const approach = await travel(field, survival, { x: origin.x + 4.5, y: origin.y, z: origin.z + 7.5, arrivalRadius: 0.6 });
       if (!approach.ok) return { ...approach, goal: 'house', phase, origin };
       if (phase === 'walls') {
+        const cover = [];
+        for (let x = 0; x < 10; x++)
+          for (let z = 0; z < 7; z++) {
+            const cell = { x: origin.x + x, y: origin.y, z: origin.z + z };
+            if (surfaceCover(field.env.map.get(cell.x, cell.y, cell.z))) cover.push(cell);
+          }
+        if (cover.length) {
+          const cleared = await digArea(field, survival, { cells: cover, tool: undefined });
+          if (!cleared.ok) return { ...cleared, goal: 'house', phase: 'site', origin };
+        }
         const result = await build(field, survival, { cells: houseCells(origin, 'game:rammed-light-plain'), verifyExisting: true });
         return { ...result, goal: 'house', phase, origin };
       }

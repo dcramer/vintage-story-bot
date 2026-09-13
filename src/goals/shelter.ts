@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { ownedSlots } from '../support/inventory.ts';
+import { supportedFloor, surfaceCover } from '../support/sites.ts';
 import { shelter as shelterCells, shelterCenter, shelterDoor } from '../support/structures.ts';
 import { cleanName, runField } from '../support/task.ts';
 import { build, digArea } from './build.ts';
 import { travel } from './travel.ts';
 
 // A complete dry footprint and a walkable doorway; unknown cells cannot support a home.
-const surfaceCover = cell => /^game:(tallgrass-|snowlayer-)/.test(cell?.code ?? '');
 export function shelterSite(map, position) {
   const candidates = [];
   for (const y of [0, 1, -1, 2, -2].map(dy => Math.floor(position.y) + dy))
@@ -19,7 +19,7 @@ export function shelterSite(map, position) {
         for (let x = 0; x < 3 && fits; x++)
           for (let z = 0; z < 3 && fits; z++) {
             const floor = map.get(origin.x + x, y - 1, origin.z + z);
-            if (!floor || floor.hazard || !floor.boxes.some(b => b[4] >= y && b[3] - b[0] >= 0.99 && b[5] - b[2] >= 0.99)) {
+            if (!supportedFloor(floor, y)) {
               fits = false;
               break;
             }

@@ -1,3 +1,4 @@
+import { supportedFloor, surfaceCover } from '../../../support/sites.ts';
 import { house as blueprint } from '../../../support/structures.ts';
 import type { Cell, Concern } from '../concern.ts';
 import { failedOnItsOwn, goTo, setHome } from '../concern.ts';
@@ -10,28 +11,28 @@ export const HOUSE_BLOCKS = blueprint({ x: 0, y: 0, z: 0 }, RAMMED).length;
 // Choose only a level footprint the surroundings actually show, with a dry margin.
 export function houseSite(terrain: any, position: Cell): Cell | null {
   if (!terrain) return null;
-  const y = Math.floor(position.y);
-  for (const dx of [0, -2, 2])
-    for (const dz of [0, -2, 2]) {
-      const origin = { x: Math.floor(position.x) - 4 + dx, y, z: Math.floor(position.z) - 3 + dz };
-      let fits = true;
-      for (let x = -1; x <= 10 && fits; x++)
-        for (let z = -1; z <= 7 && fits; z++) {
-          const ground = terrain.get(origin.x + x, y - 1, origin.z + z);
-          if (!ground || ground.hazard || !ground.boxes.length) {
-            fits = false;
-            break;
-          }
-          for (let h = 0; h <= 4; h++) {
-            const air = terrain.get(origin.x + x, y + h, origin.z + z);
-            if (!air || air.hazard || air.boxes.length) {
+  for (const y of [0, 1, -1, 2, -2].map(dy => Math.floor(position.y) + dy))
+    for (const dx of [0, -2, 2])
+      for (const dz of [0, -2, 2]) {
+        const origin = { x: Math.floor(position.x) - 4 + dx, y, z: Math.floor(position.z) - 3 + dz };
+        let fits = true;
+        for (let x = -1; x <= 10 && fits; x++)
+          for (let z = -1; z <= 7 && fits; z++) {
+            const ground = terrain.get(origin.x + x, y - 1, origin.z + z);
+            if (!supportedFloor(ground, y)) {
               fits = false;
               break;
             }
+            for (let h = 0; h <= 4; h++) {
+              const air = terrain.get(origin.x + x, y + h, origin.z + z);
+              if (!air || air.hazard || (air.boxes.length && !(h === 0 && surfaceCover(air)))) {
+                fits = false;
+                break;
+              }
+            }
           }
-        }
-      if (fits) return origin;
-    }
+        if (fits) return origin;
+      }
   return null;
 }
 
