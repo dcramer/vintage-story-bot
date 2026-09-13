@@ -19,7 +19,7 @@ export interface ControllerLike {
   events?: any;
   knowledge?: { dir?: string };
   send(request: object): Promise<any>;
-  request(request: object, options?: { by?: string }): Promise<any>;
+  request(request: object, options?: { by?: string; signal?: AbortSignal }): Promise<any>;
   stop(reason?: string): Promise<void>;
   goalView(record?: any): any;
 }
@@ -127,6 +127,7 @@ export class BrainLoop<Memory> {
   }
   // Sleep until the tick is due, an event lands, or the loop stops; a fault's back-off is not cut short.
   private rest(ms: number, signal: AbortSignal) {
+    if (signal.aborted) return Promise.resolve();
     return new Promise<void>(resolve => {
       const done = () => {
         clearTimeout(timer);
@@ -195,6 +196,7 @@ export class BrainLoop<Memory> {
     ]);
     if (!inventory.ok) throw new Error(inventory.error ?? 'inventory refused');
     if (!environment.ok) throw new Error(environment.error ?? 'environment refused');
+    if (this.stopping.signal.aborted) return;
     const batch = controller.events?.read?.(this.cursor, null, { limit: 128 }) ?? { events: [], cursor: this.cursor };
     this.cursor = batch.cursor;
     const reading: Reading = {
@@ -237,7 +239,7 @@ export class BrainLoop<Memory> {
       this.note('act', { actions: decision.act.map(a => a.action), why: decision.why, ...saw });
       this.lastDecision = `act ${decision.act.map(a => a.action).join(', ')}: ${decision.why}`;
       for (const step of decision.act) {
-        const done = await controller.request(step, { by: 'brain' });
+        const done = await controller.request(step, { by: 'brain', signal: this.stopping.signal });
         if (!done.ok) throw new Error(`${step.action} refused: ${done.error}`);
       }
       return;
@@ -249,7 +251,7 @@ export class BrainLoop<Memory> {
     }
     this.note('start', { start: decision.start, args: decision.args, why: decision.why, ...saw });
     this.lastDecision = `${decision.start} ${JSON.stringify(decision.args)}: ${decision.why}`;
-    const started = await controller.request({ action: decision.start, ...decision.args }, { by: 'brain' });
+    const started = await controller.request({ action: decision.start, ...decision.args }, { by: 'brain', signal: this.stopping.signal });
     if (!started.ok) throw new Error(`${decision.start} refused: ${started.error}`);
     this.goal = { id: started.goal.id, kind: decision.start };
   }

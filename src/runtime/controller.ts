@@ -82,6 +82,7 @@ export class Controller {
   history = new Map();
   waypoints = new Map();
   lock = Promise.resolve();
+  brainLock = Promise.resolve();
   events = new EventLog();
   budget: Budget;
   chatCursor = { after: 0, session: undefined as string | undefined };
@@ -350,6 +351,7 @@ export class Controller {
     this.closing = true;
     clearTimeout(this.eyeTimer);
     this.budget.close();
+    await this.brainLock;
     await this.brain?.stop().catch(() => {});
     await this.stop('controller_shutdown');
     try {
@@ -360,15 +362,16 @@ export class Controller {
   }
   // One request at a time past the control-plane reads, so a goal cannot start
   // while another mutation is still being judged.
-  withLock(work) {
-    const run = this.lock.then(work, work);
-    this.lock = run.then(
+  withLock(work, lock: 'lock' | 'brainLock' = 'lock') {
+    const run = this[lock].then(work, work);
+    this[lock] = run.then(
       () => {},
       () => {},
     );
     return run;
   }
-  request(request, { by }: { by?: string } = {}) {
+  request(request, { by, signal }: { by?: string; signal?: AbortSignal } = {}) {
+    if (signal?.aborted) return Promise.reject(new Error('Request cancelled'));
     if (!request || typeof request !== 'object' || Array.isArray(request)) return Promise.reject(new Error('Expected an action object'));
     // Control-plane reads never wait for a game request or an in-flight goal startup.
     if (request.action === 'api' || request.action === 'goal_status' || request.action === 'events') {
@@ -402,27 +405,33 @@ export class Controller {
       const hadGoal = !!this.active;
       return this.stop().then(() => (hadGoal ? { ok: true, status: 'stopped' } : this.send({ action: 'stop' })));
     }
-    return this.withLock(async () => {
-      if (this.closing) throw new Error('Controller shutting down');
-      const tool = findTool(request.action);
-      if (!tool) throw new Error('Unknown controller action; screenshots/UI and raw control frames are not exposed.');
-      const { action, ...args } = request;
-      const parsed = tool.schema.parse(args);
-      // A tool that needs the body waits for the goal; one that only talks (chat, map markers, memory) runs alongside it.
-      if (this.active && !tool.readOnly && !tool.concurrent) throw new Error('Goal active; stop it before another mutation.');
-      if (!polling.has(action)) this.log.debug('tool', action, { by, args: parsed });
-      if (tool.launch) return this.launch(tool.name, parsed, (record, started, signal) => tool.launch(this, parsed, record, started, signal), by);
-      if (tool.run) return this.launch(tool.name, parsed, (record, started, signal) => this.runTask(tool.run, parsed, record, started, signal), by);
-      if (tool.local) return tool.local(this, parsed);
-      const result = await this.send({ action: tool.action ?? tool.name, ...parsed });
-      if (tool.name === 'observe' && result.ok) {
-        result.navigation = this.view();
-        result.goal = this.goalView();
-        result.controller = this.info();
-        if (!result.capabilities.includes('move_to')) result.capabilities.push('move_to');
-      }
-      return result;
-    }).catch(error => {
+    // Replacing a brain waits for its loop, which may itself be awaiting a
+    // normal request. Serialize replacements separately to avoid a lock cycle.
+    return this.withLock(
+      async () => {
+        if (signal?.aborted) throw new Error('Request cancelled');
+        if (this.closing) throw new Error('Controller shutting down');
+        const tool = findTool(request.action);
+        if (!tool) throw new Error('Unknown controller action; screenshots/UI and raw control frames are not exposed.');
+        const { action, ...args } = request;
+        const parsed = tool.schema.parse(args);
+        // A tool that needs the body waits for the goal; one that only talks (chat, map markers, memory) runs alongside it.
+        if (this.active && !tool.readOnly && !tool.concurrent) throw new Error('Goal active; stop it before another mutation.');
+        if (!polling.has(action)) this.log.debug('tool', action, { by, args: parsed });
+        if (tool.launch) return this.launch(tool.name, parsed, (record, started, signal) => tool.launch(this, parsed, record, started, signal), by);
+        if (tool.run) return this.launch(tool.name, parsed, (record, started, signal) => this.runTask(tool.run, parsed, record, started, signal), by);
+        if (tool.local) return tool.local(this, parsed);
+        const result = await this.send({ action: tool.action ?? tool.name, ...parsed });
+        if (tool.name === 'observe' && result.ok) {
+          result.navigation = this.view();
+          result.goal = this.goalView();
+          result.controller = this.info();
+          if (!result.capabilities.includes('move_to')) result.capabilities.push('move_to');
+        }
+        return result;
+      },
+      request.action === 'brain' ? 'brainLock' : 'lock',
+    ).catch(error => {
       this.log.info('tool', 'refused', { action: request.action, by, error: message(error) });
       throw error;
     });
@@ -762,7 +771,7 @@ export class Controller {
       record.log?.info('goal', 'contract', { missing: 'reason', result });
       record.result = { ...result, reason: 'unspecified' };
     } else record.result = result;
-    record.state = record.result.ok ? 'arrived' : 'blocked';
+    if (!signal.aborted) record.state = record.result.ok ? 'arrived' : 'blocked';
   }
   runGoalScript(args, record, started, signal) {
     return this.runTask(
