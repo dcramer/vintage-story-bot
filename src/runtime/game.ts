@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { learned, remember } from '../support/facts.ts';
 import { decorate, traitsOf } from '../support/traits.ts';
 import { requestBridge } from './bridge.ts';
+import { GoalError } from './failure.ts';
 import { SightingsMemory } from './navigation/sightings.ts';
 import { SurfaceMemory } from './navigation/surface.ts';
 import { TerrainMemory } from './navigation/terrain.ts';
@@ -38,7 +39,7 @@ export class GameClient {
   // A request whose refusal is an error; a cancelled signal rejects before it is sent.
   async io(request: object, signal?: AbortSignal): Promise<any> {
     const result = await this.send(request, { signal });
-    if (!result.ok) throw new Error(result.error ?? 'Game refused action');
+    if (!result.ok) throw new GoalError(result.code ?? 'game_refused', result.error ?? 'Game refused action');
     return result;
   }
   // One request carries the surroundings deltas, a snapshot of the surface the

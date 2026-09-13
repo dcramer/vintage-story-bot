@@ -1,4 +1,5 @@
 import net from 'node:net';
+import { GoalError } from './failure.ts';
 
 export function bridgePort(value = process.env.VINTAGE_STORY_BRIDGE_PORT ?? '42157') {
   if (!/^\d+$/.test(String(value)) || Number(value) < 1 || Number(value) > 65535) {
@@ -14,14 +15,17 @@ export function requestBridge(
   { port = bridgePort(), timeoutMs = 4000, requestMaxBytes = 1024, maxBytes = 262144, signal }: BridgeOptions = {},
 ): Promise<any> {
   return new Promise<any>((resolve, reject) => {
-    if (signal?.aborted) return reject(new Error('Bridge request cancelled; inspect before retrying.'));
+    if (signal?.aborted) return reject(new GoalError('cancelled', 'Bridge request cancelled; inspect before retrying.'));
     const line = JSON.stringify(request) + '\n';
     if (Buffer.byteLength(line) > requestMaxBytes) return reject(new Error(`Request exceeds ${requestMaxBytes - 1} bytes.`));
     const socket = net.createConnection({ host: '127.0.0.1', port });
     let response = '';
     let bytes = 0;
     let settled = false;
-    const timer = setTimeout(() => finish(new Error('Bridge timed out. Unpause the world; do not blindly retry a game action.')), timeoutMs);
+    const timer = setTimeout(
+      () => finish(new GoalError('bridge_timeout', 'Bridge timed out. Unpause the world; do not blindly retry a game action.')),
+      timeoutMs,
+    );
     function finish(error: Error | null, result?: any) {
       if (settled) return;
       settled = true;
@@ -31,7 +35,7 @@ export function requestBridge(
       if (error) reject(error);
       else resolve(result);
     }
-    const abort = () => finish(new Error('Bridge request cancelled; inspect before retrying.'));
+    const abort = () => finish(new GoalError('cancelled', 'Bridge request cancelled; inspect before retrying.'));
     signal?.addEventListener('abort', abort, { once: true });
     socket.setEncoding('utf8');
     socket.on('connect', () => socket.write(line));
@@ -53,12 +57,15 @@ export function requestBridge(
     });
     socket.on('error', (error: NodeJS.ErrnoException) =>
       finish(
-        new Error(
+        new GoalError(
+          'bridge_unavailable',
           `Cannot reach Vintage Story bridge (${error.code ?? error.message}). Launch the bot and load a world (pnpm game start); the mod listens once the world is ready. Run MCP on the same OS as the bot.`,
         ),
       ),
     );
-    socket.on('close', () => finish(new Error('Bridge closed without a complete response. The world may be paused or unloaded.')));
+    socket.on('close', () =>
+      finish(new GoalError('bridge_closed', 'Bridge closed without a complete response. The world may be paused or unloaded.')),
+    );
   });
 }
 
@@ -90,7 +97,7 @@ export class BridgeClient {
   }
   request = (request: object, { timeoutMs = this.timeoutMs, signal }: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<any> => {
     return new Promise<any>((resolve, reject) => {
-      if (signal?.aborted) return reject(new Error('Bridge request cancelled; inspect before retrying.'));
+      if (signal?.aborted) return reject(new GoalError('cancelled', 'Bridge request cancelled; inspect before retrying.'));
       const id = ++this.next;
       const line = JSON.stringify({ ...request, requestId: id }) + '\n';
       if (Buffer.byteLength(line) > this.requestMaxBytes) return reject(new Error(`Request exceeds ${this.requestMaxBytes - 1} bytes.`));
@@ -98,8 +105,11 @@ export class BridgeClient {
         resolve,
         reject,
         signal,
-        timer: setTimeout(() => this.settle(id, new Error('Bridge timed out. Unpause the world; do not blindly retry a game action.')), timeoutMs),
-        abort: () => this.settle(id, new Error('Bridge request cancelled; inspect before retrying.')),
+        timer: setTimeout(
+          () => this.settle(id, new GoalError('bridge_timeout', 'Bridge timed out. Unpause the world; do not blindly retry a game action.')),
+          timeoutMs,
+        ),
+        abort: () => this.settle(id, new GoalError('cancelled', 'Bridge request cancelled; inspect before retrying.')),
       };
       this.pending.set(id, entry);
       signal?.addEventListener('abort', entry.abort, { once: true });
@@ -126,7 +136,8 @@ export class BridgeClient {
         resolve();
       });
       socket.on('error', (error: NodeJS.ErrnoException) => {
-        const failure = new Error(
+        const failure = new GoalError(
+          connected ? 'bridge_closed' : 'bridge_unavailable',
           connected
             ? 'Bridge closed without a complete response. The world may be paused or unloaded.'
             : `Cannot reach Vintage Story bridge (${error.code ?? error.message}). Launch the bot and load a world (pnpm game start); the mod listens once the world is ready. Run MCP on the same OS as the bot.`,
@@ -135,7 +146,7 @@ export class BridgeClient {
         this.drop(socket, failure);
       });
       socket.on('close', () => {
-        const failure = new Error('Bridge closed without a complete response. The world may be paused or unloaded.');
+        const failure = new GoalError('bridge_closed', 'Bridge closed without a complete response. The world may be paused or unloaded.');
         reject(failure);
         this.drop(socket, failure);
       });
@@ -195,6 +206,6 @@ export class BridgeClient {
   }
   close() {
     const socket = this.socket;
-    if (socket) this.drop(socket, new Error('Bridge client closed.'));
+    if (socket) this.drop(socket, new GoalError('bridge_closed', 'Bridge client closed.'));
   }
 }

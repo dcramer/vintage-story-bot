@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { Places } from '../support/places.ts';
 import { Budget } from './budget.ts';
 import { EventLog } from './events.ts';
+import { failureOutcome, GoalError } from './failure.ts';
 import { GameClient } from './game.ts';
+import type { GoalEnvironment, GoalPolicy, GoalRecord, GoalStarted, Outcome } from './goal.ts';
 import { compileGoalScript, runGoalPlan } from './goal-script.ts';
 import { type Log, noLog } from './log.ts';
 import { Knowledge } from './navigation/knowledge.ts';
@@ -30,25 +32,28 @@ const defer = () => {
   };
 };
 const message = error => (error instanceof Error ? error.message : String(error));
+
 // What a goal's end means to whoever asked for it, in one word, so a brain has one rule for
 // setting a job aside instead of a pattern per job: done; interrupted (stopped from outside);
 // refused (the world would not let it begin: controls, water, a lost bridge); no_progress (it
 // tried and could not get on); failed (anything else the goal itself reported).
-export type Outcome = 'done' | 'interrupted' | 'refused' | 'no_progress' | 'failed';
-export function outcomeOf(record: { state?: string; reason?: string; result?: any; progress?: any }): Outcome {
+export type { Outcome } from './goal.ts';
+export function outcomeOf(record: {
+  state?: string;
+  reason?: string;
+  code?: string;
+  outcome?: Outcome;
+  result?: any;
+  progress?: any;
+  nav?: { reason?: string };
+}): Outcome {
   if (record.state === 'arrived') return 'done';
   if (record.state === 'cancelled') return 'interrupted';
-  const reason = String(record.reason ?? record.result?.reason ?? '');
-  if (/interruption|Start grounded|Cannot reach|Bridge (timed out|closed|request cancelled)|Controls unavailable|controls not ready/i.test(reason))
-    return 'refused';
-  if (!record.progress && /refused|unavailable|Update mod/i.test(reason)) return 'refused';
-  if (
-    /no_progress|deadline|exploration_exhausted|no_observed_route|no_visible_route|route_blocked|no_route|no_rough_route|lost_support|replan/i.test(
-      reason,
-    )
-  )
-    return 'no_progress';
-  return 'failed';
+  return (
+    record.outcome ??
+    record.result?.outcome ??
+    failureOutcome(record.code ?? record.result?.code ?? record.reason ?? record.result?.reason ?? record.nav?.reason)
+  );
 }
 // Reads that run in loops: logged only when refused.
 const polling = new Set(['sense', 'observe', 'inventory', 'environment', 'messages', 'events', 'target', 'dialogs', 'recipes', 'map_waypoints']);
@@ -63,14 +68,14 @@ const ANNOUNCE_GRACE_MS = 2000,
 export class Controller {
   eyeTimer: any;
   lifeLogged: string | undefined;
-  game: any;
-  knowledge: any;
-  send: any;
+  game: GameClient;
+  knowledge: Knowledge;
+  send: GameClient['send'];
   telemetry: any;
   metrics: RunMetrics;
   log: Log;
-  active = null;
-  last = null;
+  active: GoalRecord | null = null;
+  last: GoalRecord | null = null;
   closing = false;
   brain = null;
   wants = [];
@@ -210,7 +215,7 @@ export class Controller {
   io(request: object, signal?: AbortSignal) {
     return this.game.io(request, signal);
   }
-  view() {
+  view(): Partial<ReturnType<Navigation['observe']>> & { state: string } {
     return this.last?.nav?.observe() ?? { state: 'idle' };
   }
   info() {
@@ -237,6 +242,7 @@ export class Controller {
       finishedAt: record.finishedAt,
       intent: record.intent,
       reason: record.reason ?? (record.kind === 'move_to' ? record.nav?.reason : undefined),
+      code: record.code ?? record.result?.code,
       progress: record.progress,
       result: record.result,
       cleanupError: record.cleanupError,
@@ -463,7 +469,7 @@ export class Controller {
   launch(kind, args, work, by = 'operator') {
     const started = defer(),
       abort = new AbortController();
-    const record: any = {
+    const record: GoalRecord = {
       id: randomUUID(),
       kind,
       title: findTool(kind)?.title?.(args),
@@ -492,8 +498,12 @@ export class Controller {
           record.nav?.finish('blocked', reason);
           record.state = 'blocked';
           record.reason = reason;
+          if (error instanceof GoalError) {
+            record.code = error.code;
+            record.outcome = error.outcome;
+          }
           // A goal that died of a bug, not of the game: where it was, for the log.
-          if (!/interruption|cancelled|deadline|refused|Cannot reach/i.test(reason))
+          if (!(error instanceof GoalError))
             record.log?.info('goal', 'crashed', { error: reason, stack: (error as Error)?.stack?.split('\n').slice(1, 8) });
         }
         this.track(record);
@@ -512,6 +522,7 @@ export class Controller {
           state: record.state,
           ok: record.state === 'arrived',
           reason: record.reason ?? record.result?.reason ?? null,
+          code: record.code ?? record.result?.code,
           outcome: record.outcome,
         });
         this.track(record);
@@ -520,7 +531,7 @@ export class Controller {
     })();
     return started.promise.then((result: any) => ({ ...result, goal: this.goalView(record), controller: this.info() }));
   }
-  snapshot(signal) {
+  snapshot(signal?: AbortSignal) {
     return this.game.snapshot(signal);
   }
   async aim(angles, record, safety?, signal?: AbortSignal) {
@@ -539,21 +550,22 @@ export class Controller {
       for (let i = 0; i < 60; i++) {
         const batch = await control.step({ ...angles, forward: false, jump: false });
         const state = batch.state;
-        if (state.control.owner !== control.owner) throw new Error('Aiming interrupted');
+        if (state.control.owner !== control.owner) throw new GoalError('control_lost', 'Aiming interrupted');
         const yawError = Math.abs(((angles.yawDegrees - state.orientation.yawDegrees + 540) % 360) - 180);
         if (yawError < 2 && Math.abs(angles.pitchDegrees - state.orientation.pitchDegrees) < 2) {
           await sleep(100);
           return;
         }
       }
-      throw new Error('Camera did not settle');
+      throw new GoalError('no_progress', 'Camera did not settle');
     } finally {
       await control.release();
     }
   }
   async navigate(goal, record, started?, pauseWhen?, { allowStarvingRecovery = false } = {}, signal?: AbortSignal) {
     const initial = await this.snapshot(signal);
-    if (goal.sprint && !initial.capabilities.includes('background_sprint')) throw new Error('Update mod: background_sprint required');
+    if (goal.sprint && !initial.capabilities.includes('background_sprint'))
+      throw new GoalError('capability_missing', 'Update mod: background_sprint required');
     this.map.swim = goal.swim !== false;
     // A swimming stroke can lift the feet briefly above the surface between goals.
     // Admit that observed water landing; Navigation still waits for physical support.
@@ -569,8 +581,11 @@ export class Controller {
       Math.abs(goal.z - initial.position.z) > 128 ||
       Math.abs(goal.y - initial.position.y) > 32
     )
-      throw new Error('Navigation needs supported/ready player and destination within 128 horizontal/32 vertical blocks.');
-    if (signal?.aborted) throw new Error('Goal cancelled');
+      throw new GoalError(
+        'navigation_unavailable',
+        'Navigation needs supported/ready player and destination within 128 horizontal/32 vertical blocks.',
+      );
+    if (signal?.aborted) throw new GoalError('cancelled', 'Goal cancelled');
     const control = await this.game.control(
       initial,
       error => {
@@ -735,16 +750,16 @@ export class Controller {
   }
   // A goal written as plain async code over a small environment. Cancellation
   // aborts the signal; the policy's own cleanup runs before the goal is over.
-  async runTask(policy, args, record, started, signal) {
+  async runTask(policy: GoalPolicy<any>, args, record: GoalRecord, started: GoalStarted, signal: AbortSignal) {
     record.state = 'running';
     this.track(record);
     started.resolve({ ok: true, status: 'started', goal: { id: record.id, kind: record.kind } });
     const send = request => {
       // After cancellation only the acts that put things back go through: letting go and closing what was opened.
-      if (signal.aborted && !cleanupActions.has(request.action)) return Promise.reject(new Error('Goal cancelled'));
+      if (signal.aborted && !cleanupActions.has(request.action)) return Promise.reject(new GoalError('cancelled', 'Goal cancelled'));
       return this.send(request);
     };
-    const env = {
+    const env: GoalEnvironment = {
       send,
       map: this.map,
       surface: this.surface,

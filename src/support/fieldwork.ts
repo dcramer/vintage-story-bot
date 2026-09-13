@@ -1,3 +1,4 @@
+import { GoalError } from '../runtime/failure.ts';
 import { type Log, noLog } from '../runtime/log.ts';
 import { findRoute } from '../runtime/navigation/planner.ts';
 import { nextLeg, planRoughRoute } from '../runtime/navigation/surface.ts';
@@ -115,8 +116,8 @@ export class Fieldwork {
     this.started = now();
   }
   check() {
-    if (this.signal?.aborted) throw Error('Goal cancelled');
-    if (this.timeoutMs !== undefined && this.now() - this.started >= this.timeoutMs) throw Error('Requested deadline reached');
+    if (this.signal?.aborted) throw new GoalError('cancelled', 'Goal cancelled');
+    if (this.timeoutMs !== undefined && this.now() - this.started >= this.timeoutMs) throw new GoalError('deadline', 'Requested deadline reached');
   }
   alertsSafe(state) {
     if (!this.recoveringFood) this.foodRecoveryAuthorized = false;
@@ -126,7 +127,7 @@ export class Fieldwork {
   async send(request) {
     this.check();
     const result = await this.env.send(request);
-    if (!result.ok) throw Error(result.error ?? 'Game action refused');
+    if (!result.ok) throw new GoalError(result.code ?? 'game_refused', result.error ?? 'Game action refused');
     return result;
   }
   // What ends a goal outright: death, lost controls, a life alert, deep water
@@ -136,7 +137,7 @@ export class Fieldwork {
   assess(state, { controls = true } = {}) {
     this.check();
     if (!state.ok || !state.alive || (controls && !state.controlReady) || (state.motion.swimming && !this.swim) || state.mounted)
-      throw Error('Gameplay interruption: life, controls or liquid');
+      throw new GoalError('gameplay_interruption', 'Gameplay interruption: life, controls or liquid');
     const initial = this.initial;
     if (
       initial &&
@@ -144,7 +145,7 @@ export class Fieldwork {
         state.life.session !== initial.life.session ||
         state.position.dimension !== initial.position.dimension)
     )
-      throw Error('Gameplay interruption: session changed');
+      throw new GoalError('gameplay_interruption', 'Gameplay interruption: session changed');
     const alerts = (state.life?.alerts ?? []).join(',');
     if (initial && alerts !== this.alertsAt) {
       this.alertsAt = alerts;
@@ -158,7 +159,7 @@ export class Fieldwork {
     if (initial && state.life.lastDamageAt !== this.hurtAt) {
       this.hurtAt = state.life.lastDamageAt;
       this.event('hurt', { health: state.vitals?.health?.current ?? null });
-      if (this.stopWhenHurt) throw Error('Gameplay interruption: hurt');
+      if (this.stopWhenHurt) throw new GoalError('gameplay_interruption', 'Gameplay interruption: hurt');
     }
     this.latest = state;
     return state;
@@ -186,9 +187,9 @@ export class Fieldwork {
     this.alertsAt = (this.initial.life?.alerts ?? []).join(',');
     this.stormAt = this.initial.condition?.temporalStorm?.phase ?? 'clear';
     this.guard(this.initial);
-    if (!this.initial.motion.onGround) throw Error('Start grounded');
+    if (!this.initial.motion.onGround) throw new GoalError('start_unsupported', 'Start grounded');
     for (const feature of ['nearby_awareness', ...features])
-      if (!this.initial.capabilities.includes(feature)) throw Error(`Update mod: ${feature} required`);
+      if (!this.initial.capabilities.includes(feature)) throw new GoalError('capability_missing', `Update mod: ${feature} required`);
     this.heading = this.initial.orientation.yawDegrees;
     this.places.walk(this.initial.position);
   }
@@ -261,7 +262,7 @@ export class Fieldwork {
   async scan(radius, match?, kind = 'all') {
     const matches = Array.isArray(match) ? match : match ? [match] : [];
     await this.observe();
-    if (!this.attentive) throw new Error('The mod does not report block sightings; update the mod.');
+    if (!this.attentive) throw new GoalError('capability_missing', 'The mod does not report block sightings; update the mod.');
     await this.settle();
     const p = this.latest.position,
       eye = { ...p, y: p.y + (this.latest.body?.eyeHeight ?? 1.6) };
@@ -471,7 +472,7 @@ export class Fieldwork {
         await this.observe();
         return { ...result, state: 'paused', reason: 'released' };
       }
-      throw Error(`Navigation interrupted: ${result.reason}`);
+      throw new GoalError('gameplay_interruption', `Navigation interrupted: ${result.reason}`);
     }
     if (result.state !== 'arrived' && result.state !== 'paused') this.report('rerouting', { reason: result.reason });
     if (horizontal(before.position, after.position) > 1) this.heading = lookAt(before.position, after.position).yawDegrees;

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
+import { GoalError } from '../runtime/failure.ts';
 import { destinationName } from '../support/task.ts';
 
 export const schema = z
@@ -33,7 +34,8 @@ export default defineGoal({
   announce: () => 'Heading over to take a look.',
   compose: async (_runtime, env, args) => {
     const navigation = await env.navigate(args);
-    if (navigation.state !== 'arrived') throw Error(navigation.reason ?? `Navigation ${navigation.state}`);
+    if (navigation.state !== 'arrived')
+      throw new GoalError(navigation.reason ?? 'navigation_failed', navigation.reason ?? `Navigation ${navigation.state}`);
     return { ok: true, goal: 'move_to', navigation };
   },
   // Pure navigation holds control directly instead of a Fieldwork task.

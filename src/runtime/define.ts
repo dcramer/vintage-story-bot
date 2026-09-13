@@ -1,32 +1,33 @@
-/**
- * @typedef {object} ActionDefinition One public query/command; file `src/actions/<name>.ts`, default export.
- * @property {string} name Public RPC/MCP name; must equal the file basename.
- * @property {import('zod').ZodType} schema Input validation.
- * @property {string} description
- * @property {string} [action] Mod wire action when it differs from name.
- * @property {boolean} [readOnly]
- * @property {boolean} [idempotent]
- * @property {boolean} [destructive]
- * @property {boolean} [concurrent] Talks without holding the body (chat, map markers, memory): allowed while a goal runs.
- * @property {(runtime: object, args: object) => Promise<object>} [local] Controller-local handler; otherwise forwarded to the mod.
- */
-export const defineAction = definition => definition;
+import type { z } from 'zod';
+import type { Controller } from './controller.ts';
+import type { GoalEnvironment, GoalPolicy, GoalRecord, GoalResult, GoalStarted } from './goal.ts';
 
-/**
- * @typedef {object} GoalDefinition One long-running goal; file `src/goals/<name>.ts`, default export.
- * @property {string} name Public RPC/MCP name; must equal the file basename.
- * @property {(args: object) => string} title Stable operator-facing outcome from validated arguments; distinct from chat and progress.
- * @property {import('zod').ZodType} schema Input validation.
- * @property {string} description
- * @property {boolean} [destructive]
- * @property {(args: object) => string} [announce] Server-chat line posted when the goal starts.
- * @property {(env: object, args: object) => Promise<object>} [run] Task policy run under runtime.runTask.
- * @property {(runtime: object, env: object, args: object, record: object) => Promise<object>} [compose]
- *   Optional task policy for goal_script; run is used when omitted.
- * @property {(runtime: object, args: object, record: object, started: object) => import('effect').Effect.Effect<any>} [launch]
- *   Custom Effect launcher for goals that bypass runTask (move_to).
- */
-export const defineGoal = definition => {
+interface Definition<S extends z.ZodType> {
+  name: string;
+  schema: S;
+  description: string;
+  destructive?: boolean;
+  readOnly?: boolean;
+  idempotent?: boolean;
+  concurrent?: boolean;
+}
+
+export interface ActionDefinition<S extends z.ZodType = z.ZodType<any>> extends Definition<S> {
+  action?: string;
+  local?: (runtime: Controller, args: z.output<S>) => Promise<object>;
+}
+
+export interface GoalDefinition<S extends z.ZodType = z.ZodType<any>> extends Definition<S> {
+  title: (args: z.output<S>) => string;
+  announce?: (args: z.output<S>) => string | null;
+  run?: GoalPolicy<z.output<S>>;
+  compose?: (runtime: Controller, env: GoalEnvironment, args: z.output<S> & { signal: AbortSignal }, record: GoalRecord) => Promise<GoalResult>;
+  launch?: (runtime: Controller, args: z.output<S>, record: GoalRecord, started: GoalStarted, signal: AbortSignal) => Promise<unknown>;
+}
+
+export const defineAction = <S extends z.ZodType>(definition: ActionDefinition<S>): ActionDefinition<S> => definition;
+
+export const defineGoal = <S extends z.ZodType>(definition: GoalDefinition<S>): GoalDefinition<S> => {
   if (typeof definition.title !== 'function') throw new Error(`Goal ${definition.name} requires a title`);
   return {
     ...definition,

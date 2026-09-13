@@ -1,3 +1,5 @@
+import { GoalError } from './failure.ts';
+
 const maxSteps = 16,
   maxDepth = 8,
   maxValues = 256;
@@ -233,11 +235,18 @@ export async function runGoalPlan(
     report({ phase: 'running_goal', ...base });
     try {
       const result = await invoke(step, progress => report({ phase: 'running_goal', ...base, subgoal: { ...base.subgoal, progress } }));
-      if (result?.ok !== true) throw new Error(result?.error ?? result?.reason ?? 'goal did not report success');
+      if (result?.ok !== true)
+        throw new GoalError(
+          result?.code ?? result?.reason ?? 'goal_failed',
+          result?.error ?? result?.reason ?? 'goal did not report success',
+          result?.outcome,
+        );
       results.push({ kind: step.goal.name, result });
       report({ phase: 'goal_completed', ...base, completed: index + 1 });
     } catch (error) {
-      throw new Error(`Goal ${index + 1}/${plan.length} (${step.goal.name}) failed: ${error instanceof Error ? error.message : String(error)}`);
+      const message = `Goal ${index + 1}/${plan.length} (${step.goal.name}) failed: ${error instanceof Error ? error.message : String(error)}`;
+      if (error instanceof GoalError) throw new GoalError(error.code, message, error.outcome, { cause: error });
+      throw new Error(message, { cause: error });
     }
   }
   return results;

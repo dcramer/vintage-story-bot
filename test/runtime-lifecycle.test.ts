@@ -1,9 +1,38 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BrainLoop } from '../src/runtime/brain.ts';
-import { Controller } from '../src/runtime/controller.ts';
+import { Controller, outcomeOf } from '../src/runtime/controller.ts';
+import { GoalError } from '../src/runtime/failure.ts';
+import { runGoalPlan } from '../src/runtime/goal-script.ts';
 
 const turn = () => new Promise<void>(resolve => setImmediate(resolve));
+
+test('failure outcomes survive message changes and composed goal context', async () => {
+  for (const message of ['Start grounded', 'The player needs solid footing']) {
+    const controller = new Controller(async () => ({ ok: true }));
+    await controller.launch('wait', {}, (record, started, signal) =>
+      controller.runTask(
+        async () => {
+          await runGoalPlan([{ goal: { name: 'wait' }, args: {} }], async () => {
+            throw new GoalError('start_unsupported', message);
+          });
+          return { ok: true };
+        },
+        {},
+        record,
+        started,
+        signal,
+      ),
+    );
+    await controller.last.done;
+    assert.equal(controller.goalView().outcome, 'refused');
+    assert.equal(controller.goalView().code, 'start_unsupported');
+    assert.match(controller.goalView().reason, /Goal 1\/1 \(wait\) failed:/);
+    await controller.close();
+  }
+  assert.equal(outcomeOf({ state: 'blocked', nav: { reason: 'no_observed_route' } }), 'no_progress');
+  assert.equal(outcomeOf({ state: 'blocked', reason: 'deadline appears in an unrelated error' }), 'failed');
+});
 
 test('removing a brain during a reading does not deadlock or execute its decision', { timeout: 2000 }, async () => {
   const observation = Promise.withResolvers<any>();

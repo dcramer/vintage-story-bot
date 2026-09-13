@@ -133,7 +133,7 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
 }
 
 const task = (env, options) => runField(env, { manageFood: false, ...options }, [], travel);
-const resolve = (runtime, { waypoint, ...args }) => {
+const resolve = (runtime, { waypoint = undefined, ...args }) => {
   const point = waypoint === undefined ? args : runtime.waypoints.get(waypoint);
   if (!point) throw Error('Unknown waypoint; see waypoints');
   return { ...args, x: point.x, y: point.y, z: point.z };
