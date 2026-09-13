@@ -26,7 +26,13 @@ export const farm: Concern = {
       const site = farmSite(reading.terrain, ctx.home ?? ctx.state.position);
       if (!site) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'observed level shoreline for an irrigated fenced farm' };
       const carriedWood = k.slots.map(s => s.code?.match(/^game:log-(?:grown|placed)-([a-z]+)-/)?.[1]).find(w => woods.has(w));
-      plan = memory.notes.farm = { ...site, soil: 'game:soil-medium-none', wood: carriedWood ?? 'pine', rotation: 0, prepared: false, checkedAt: 0 };
+      if (!carriedWood)
+        return {
+          start: 'fell_tree',
+          args: { count: 8, timeoutMs: 600000 },
+          why: 'choose the farm enclosure wood from locally gathered logs',
+        };
+      plan = memory.notes.farm = { ...site, soil: 'game:soil-medium-none', wood: carriedWood, rotation: 0, prepared: false, checkedAt: 0 };
     }
     const count = code => k.slots.filter(s => s.code?.includes(code)).reduce((n, s) => n + s.quantity, 0);
     const ground = p => reading.terrain?.get(p.x, p.y, p.z)?.code ?? '';
