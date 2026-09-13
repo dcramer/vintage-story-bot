@@ -39,6 +39,11 @@ accounts for distance from home, and dawn light never permits leaving before
 05:00. At night only crafting with carried ingredients and shelter lighting
 may replace the indoor wait; no sleeping.
 
+Below 10% satiety, cooking prepares one root per batch. A carried log ends
+urgent fuel gathering; an empty firepit more than 48 blocks away is replaced
+locally instead of spending the remaining health returning to it. Pending
+food in an owned firepit is still retrieved.
+
 The starter shelter is a freestanding, above-ground building, never an emergency burrow. Its natural floor stays at ground level. A 5×5 rammed-earth starter shelter follows the [template](getting-started.md#starter-shelter-template) while the full rammed-earth house
 is built. A house site requires observed level ground and clear space; unknown
 terrain is rejected. Construction keeps its chosen origin and phase across

@@ -1,8 +1,10 @@
 // Food. Hungry (under 20%) is pressing whatever runs. Dug in with food in the
 // pack, eat one bite where it sits; otherwise forage to half, keeping two bites.
+
+import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import { HUNGRY } from '../../../support/food.ts';
 import type { Concern } from '../concern.ts';
-import { food, foodEnded, foodSetAside } from '../food.ts';
+import { food, foodEnded, foodSetAside, LOCAL_COOKING_DISTANCE } from '../food.ts';
 import type { Situation } from '../situation.ts';
 
 // Hungry is the goals' own line (support/food.ts), so the brain interrupts work where forage would stomach poor food.
@@ -22,7 +24,20 @@ export const eat: Concern = {
   },
   ended: foodEnded,
   setAside: foodSetAside,
-  running: ({ active, danger, hurt, classifyingHurt, s }) => {
+  running: ({ active, danger, hurt, classifyingHurt, s, k, memory, state }) => {
+    if (
+      active?.kind === 'travel' &&
+      s.hunger !== null &&
+      s.hunger < 0.1 &&
+      !memory.notes.cooking &&
+      memory.notes.firepit &&
+      horizontal(state.position, memory.notes.firepit) > LOCAL_COOKING_DISTANCE &&
+      !danger &&
+      !hurt
+    )
+      return { stop: 'prepare a local cooking fire while starving' };
+    if (active?.kind === 'fell_tree' && s.hunger !== null && s.hunger < 0.1 && k.logs > 0 && !danger && !hurt)
+      return { stop: 'prepare cooking fuel from the log already carried' };
     if (active?.kind === 'cook' && danger && !hurt && !classifyingHurt && !s.threatNear)
       return { wait: 'finishing critical cooking while the threat stays at a distance' };
     if (active?.kind !== 'forage') return null;

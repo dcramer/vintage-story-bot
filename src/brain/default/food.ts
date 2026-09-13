@@ -10,6 +10,7 @@ const ROOT = 'game:cattailroot';
 const BATCH = 4;
 const FORAGE_MS = 180000;
 const COOK_MS = 600000;
+export const LOCAL_COOKING_DISTANCE = 48;
 
 // Food preparation belongs to the brain: each goal still has one outcome.
 // Remember the owned firepit and food left in it across interrupted cooking.
@@ -17,6 +18,7 @@ export function food(ctx: Context, keep: number): Decision {
   const { k, memory, now, state, reading } = ctx;
   const count = (item: string) => k.slots.reduce((n, slot) => n + (slot.code === item ? slot.quantity : 0), 0);
   const roots = count(ROOT);
+  const batch = ctx.s.hunger !== null && ctx.s.hunger < 0.1 ? 1 : BATCH;
   if (k.reserve > 0 || ctx.tried.has(ctx.job) || (!roots && !memory.notes.cooking && now >= (memory.notes.cookUntil ?? 0)))
     return {
       start: 'forage',
@@ -24,9 +26,13 @@ export function food(ctx: Context, keep: number): Decision {
       why: `${k.reserve} carried; eat to half and look for edible forage before preparing roots`,
     };
 
+  // While starving, an empty distant firepit is not worth a return trip.
+  // Food already left cooking there still needs retrieval.
+  if (batch === 1 && !memory.notes.cooking && memory.notes.firepit && horizontal(state.position, memory.notes.firepit) > LOCAL_COOKING_DISTANCE)
+    memory.notes.firepit = null;
   const pit = memory.notes.firepit;
   const pending = memory.notes.cooking;
-  const fuel = 2 * (pending?.count ?? Math.min(roots || BATCH, BATCH));
+  const fuel = 2 * (pending?.count ?? Math.min(roots || batch, batch));
   if (!pending) {
     if (!k.knife) return makeTool(k, 'knife', 'knifeblade', k.knifeBlade, 'game:knife-generic');
     if (k.emptyBagSlot && (k.bagItem || (k.free < 2 && (k.cattailtops > 0 || k.free > 0)))) {
@@ -53,7 +59,7 @@ export function food(ctx: Context, keep: number): Decision {
     }
     const wood = fuel + (pit ? 0 : 4) - count('game:firewood');
     if (wood > 0) {
-      if (!k.logs) return { start: 'fell_tree', args: { count: 3, timeoutMs: 300000 }, why: 'logs for cooking fuel' };
+      if (!k.logs) return { start: 'fell_tree', args: { count: Math.ceil(wood / 4), timeoutMs: 300000 }, why: 'logs for cooking fuel' };
       return {
         start: 'craft_item',
         args: { output: 'game:firewood', count: Math.min(wood, k.logs * 4), timeoutMs: 120000 },
@@ -69,7 +75,7 @@ export function food(ctx: Context, keep: number): Decision {
     if (!roots)
       return {
         start: 'harvest',
-        args: { match: 'coopersreed', item: ROOT, count: BATCH, tool: 'Knife', timeoutMs: 600000 },
+        args: { match: 'coopersreed', item: ROOT, count: batch, tool: 'Knife', timeoutMs: 600000 },
         why: 'cattail roots when raw forage is scarce',
       };
   }
@@ -95,7 +101,7 @@ export function food(ctx: Context, keep: number): Decision {
   const block = reading.terrain?.get(pit.x, pit.y, pit.z);
   if (!/^game:firepit-(cold|extinct|lit)$/.test(block?.code ?? ''))
     return { start: 'firepit', args: pit, why: 'finish the owned firepit before cooking' };
-  memory.notes.cooking ??= { count: Math.min(roots, BATCH) };
+  memory.notes.cooking ??= { count: Math.min(roots, batch) };
   return {
     start: 'cook',
     args: {

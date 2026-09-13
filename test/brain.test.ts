@@ -827,7 +827,7 @@ test('brain: carried food enters one complete recovery run', () => {
 
 test('brain: failed forage prepares cooking and resumes roots left in an owned firepit', () => {
   const memory = fresh();
-  const hungry = state({ vitals: { hunger: { current: 100, max: 1500 } } });
+  const hungry = state({ vitals: { hunger: { current: 180, max: 1500 } } });
   assert.equal(decide(reading({ state: hungry, inventory: kitted() }), memory).start, 'forage');
   const prepare = decide(
     reading({
@@ -854,6 +854,28 @@ test('brain: failed forage prepares cooking and resumes roots left in an owned f
   const retry = decide(reading({ state: hungry, inventory: kitted(), terrain, now: 3000 }), resumed);
   assert.equal(retry.start, 'cook', 'raw input already in the firepit does not trigger another harvest');
   assert.equal(retry.args.count, 2);
+});
+
+test('brain: starvation prepares one root locally instead of returning to a distant empty firepit', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.notes.firepit = { x: 100, y: 100, z: 0 };
+  memory.notes.cookUntil = 10000;
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 4), slot('game:log-placed-oak-ud'), slot('game:cattailroot', 4));
+  const starving = state({ vitals: { hunger: { current: 0, max: 1500 } } });
+  const fuel = decide(reading({ state: starving, inventory: supplies, now: 2000 }), memory);
+  assert.equal(memory.notes.firepit, null);
+  assert.equal(fuel.start, 'craft_item');
+  assert.equal(fuel.args.count, 2, 'only the missing fuel for a one-root batch plus firepit construction');
+  memory.notes.firepit = { x: 2, y: 100, z: 0 };
+  const cooking = decide(
+    reading({ state: starving, inventory: supplies, now: 3000, terrain: { get: () => ({ code: 'game:firepit-cold' }) } }),
+    memory,
+  );
+  assert.equal(cooking.start, 'cook');
+  assert.equal(cooking.args.count, 1);
+  assert.equal(cooking.args.fuel, 2);
 });
 
 test('brain: failed travel abandons an unreachable firepit and prepares a local replacement', () => {
