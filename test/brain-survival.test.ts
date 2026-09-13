@@ -141,6 +141,14 @@ test('shelter refuses unknown ground, unsupported floors and blocked interiors',
   assert.equal(shelterSite({ ...terrain, get: (x, y, z) => ({ boxes: [[x, y, z, x + 1, y + 1, z + 1]], hazard: null }) }, position), null);
 });
 
+test('shelter can use a fully observed footprint around the player', () => {
+  const terrain = {
+    get: (x, y, z) => (x >= 0 && x < 5 && z >= 0 && z < 5 ? { boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [], hazard: null } : undefined),
+    nodeAt: (x, z, y) => (x === 2 && z === 5 && y === 100 ? { y: 100 } : null),
+  };
+  assert.deepEqual(shelterSite(terrain, { x: 2.5, y: 100, z: 2.5 }), { x: 0, y: 100, z: 0 });
+});
+
 test('partial shelter resumes its owned site after a controller restart', () => {
   const origin = { x: 10, y: 100, z: 20 };
   const shell = new Set(

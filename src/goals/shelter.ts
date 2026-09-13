@@ -15,8 +15,6 @@ export function shelterSite(map, position) {
     for (let dx = -5; dx <= 5; dx++)
       for (let dz = -5; dz <= 5; dz++) {
         const origin = { x: Math.floor(position.x) + dx, y, z: Math.floor(position.z) + dz };
-        if (position.x >= origin.x && position.x < origin.x + SHELTER_SIZE && position.z >= origin.z && position.z < origin.z + SHELTER_SIZE)
-          continue;
         let fits = true;
         for (let x = 0; x < SHELTER_SIZE && fits; x++)
           for (let z = 0; z < SHELTER_SIZE && fits; z++) {
