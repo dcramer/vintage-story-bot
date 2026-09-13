@@ -133,7 +133,10 @@ export function food(ctx: Context, keep: number): Decision {
       return {
         start: 'harvest',
         args: { match: 'coopersreed', item: ROOT, count: batch, tool: 'Knife', timeoutMs: 600000 },
-        why: 'one emergency cattail root after raw forage failed below 10% satiety',
+        why:
+          batch === 1
+            ? 'one emergency cattail root after raw forage failed below 10% satiety'
+            : 'a cattail root batch after raw forage failed below 20% satiety',
       };
   }
 
