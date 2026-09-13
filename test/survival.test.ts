@@ -904,3 +904,22 @@ test('leaf clearing selects only a reachable body-level leaf toward the goal', (
   assert.equal(threatAllowsLeafClearing(state, { point: { x: 12.5, z: 0.5 } }), true);
   assert.equal(threatAllowsLeafClearing(state, { point: { x: 12.49, z: 0.5 } }), false);
 });
+
+test('a nearby elevated material lead keeps its observed height when no full approach is known', async () => {
+  const field = new Fieldwork({ places: new Places(() => 1000) }, { now: () => 1000 });
+  field.latest = { position: { x: 10.5, y: 123, z: 21.5 }, orientation: { yawDegrees: 0 }, nearbyEntities: [] };
+  field.approach = () => undefined;
+  field.report = () => {};
+  field.explore = () => {
+    throw Error('must not replace the known elevation with a horizontal detour');
+  };
+  let walked;
+  field.walk = async target => {
+    walked = target;
+    return { state: 'paused', reason: 'new_lead' };
+  };
+  const search = new Search(field, { kind: 'coopersreed', match: ['coopersreed'], wanted: () => true, take: async () => false });
+  await search.approach({ key: 'reed', point: { x: 11.5, y: 118.5, z: 11.5 } }, null);
+  assert.deepEqual(walked, { x: 11.5, y: 118.5, z: 11.5, arrivalRadius: 2 });
+  assert.equal(stuckLeg({ state: 'blocked' }, { x: 0, y: 123, z: 0 }, { x: 0, y: 119, z: 0 }), false, 'a real descent is progress');
+});

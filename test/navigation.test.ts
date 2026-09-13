@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { failEdge, failedEdges } from '../src/runtime/navigation/failed-edges.ts';
 import { Navigation, NO_PROGRESS_MS } from '../src/runtime/navigation/navigator.ts';
 import { findRoute } from '../src/runtime/navigation/planner.ts';
 import { distance, horizontal, TerrainMemory } from '../src/runtime/navigation/terrain.ts';
@@ -317,4 +318,22 @@ test('sprint continues through an intermediate point but slows for a sharp turn'
     nav.mergeRefused = true;
     assert.equal(nav.tick(state, 0).sprint, !turn);
   }
+});
+
+test('failed steps remain excluded in a new navigation leg and expire', () => {
+  const map = new TerrainMemory();
+  column(map, 0, 0);
+  column(map, 1, 0);
+  const state = stateAt({ x: 0.5, y: 0, z: 0.5 });
+  const nav = new Navigation(map, state, { x: 1.5, y: 0, z: 0.5 }, 1000);
+  nav.tick(state, 1000);
+  nav.replan(state.position, 1100, 'stalled');
+  const edge = '0,0,0>1,0,0';
+  assert.ok(failedEdges(map, 1101).has(edge));
+  const next = new Navigation(map, state, { x: 1.5, y: 0, z: 0.5 }, 1200);
+  assert.ok(next.blocked.has(edge), 'a new target cannot retry the same failed step immediately');
+  assert.equal(failedEdges(new TerrainMemory(), 1200).size, 0, 'another bot map is isolated');
+  assert.equal(failedEdges(map, 61100).size, 0);
+  failEdge(map, edge, Date.now());
+  assert.equal(findRoute(map, state.position, { x: 1.5, y: 0, z: 0.5 }, 0.3, 1.85, { partial: false }), null);
 });

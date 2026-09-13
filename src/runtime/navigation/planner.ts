@@ -1,3 +1,4 @@
+import { failedEdges } from './failed-edges.ts';
 import { BODY_HEIGHT, horizontal, JUMP_HEIGHT, key } from './terrain.ts';
 
 // A* over standing cells, in the shape of mineflayer-pathfinder: moves come
@@ -11,7 +12,7 @@ export function findRoute(
   goal,
   _w,
   _h,
-  { blocked = new Set(), visits = new Map(), partial = true, budget = 1024, avoid = [], deadlineMs = 600, startSupported = false } = {},
+  { blocked = failedEdges(map), visits = new Map(), partial = true, budget = 1024, avoid = [], deadlineMs = 600, startSupported = false } = {},
 ) {
   const deadline = performance.now() + deadlineMs;
   const remaining = p => (goal.horizontalOnly ? horizontal(p, goal) : Math.hypot(p.x - goal.x, (p.y - goal.y) * 0.5, p.z - goal.z));

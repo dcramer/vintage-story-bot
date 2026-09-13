@@ -1,4 +1,4 @@
-import { horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
+import { distance, horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
 import { pitLimit, reachable } from './digging.ts';
 import { sightRange } from './fieldwork.ts';
 import { type Habitat, habitatTargets } from './habitat.ts';
@@ -30,9 +30,10 @@ export const samePatch = (target, candidate) =>
   horizontal(target.point, candidate.point) <= 8 && Math.abs((target.point.y ?? 0) - (candidate.point.y ?? 0)) <= 3;
 export const viewChanged = (view, state) =>
   !view || horizontal(view.position, state.position) > 2 || Math.abs(normalize(state.orientation.yawDegrees - view.yawDegrees + 180) - 180) > 15;
-export const stuckLeg = (result, before, after) => !['arrived', 'paused'].includes(result.state) && horizontal(before, after) <= 2;
+const progressDistance = (a, b) => (typeof a.y === 'number' && typeof b.y === 'number' ? distance(a, b) : horizontal(a, b));
+export const stuckLeg = (result, before, after) => !['arrived', 'paused'].includes(result.state) && progressDistance(before, after) <= 2;
 export const unproductiveApproach = (target, result, before, after) =>
-  !['arrived', 'paused'].includes(result.state) && horizontal(after, target.point) + 2 >= horizontal(before, target.point);
+  !['arrived', 'paused'].includes(result.state) && progressDistance(after, target.point) + 2 >= progressDistance(before, target.point);
 // A remembered thing whose approach cell was reached without seeing it again is gone or hidden.
 export const exhaustedLead = (target, result, nearby = []) =>
   result.state === 'arrived' && target.visible === false && !nearby.some(object => object.key === target.key);
@@ -253,7 +254,7 @@ export class Search {
       this.budgetReason = null;
     }
     const fresh = this.targets().some(o => !known.has(o.key));
-    if (did === 'taken' || fresh || horizontal(before, this.field.latest.position) > PRODUCTIVE_DISTANCE) this.unproductive = 0;
+    if (did === 'taken' || fresh || progressDistance(before, this.field.latest.position) > PRODUCTIVE_DISTANCE) this.unproductive = 0;
     else this.unproductive++;
     if (did === 'taken' || fresh) this.emptyDistance = 0;
     else if (did === 'ranged') this.emptyDistance += horizontal(before, this.field.latest.position);
@@ -396,9 +397,16 @@ export class Search {
     }
     const detour = elevationDetour(Math.abs(field.latest.position.y - target.point.y));
     if (horizontal(field.latest.position, target.point) > 6 || detour) {
-      const result = await field.walk(field.explore(target.point, APPROACH_LEG, detour), this.pause);
+      // A nearby observed lead has a real elevation. Let partial fine routes
+      // reveal the descent/ascent toward it instead of discarding that height
+      // and repeatedly exploring the cliff top above the resource.
+      const leg =
+        detour && horizontal(field.latest.position, target.point) <= APPROACH_LEG
+          ? { ...target.point, arrivalRadius: 2 }
+          : field.explore(target.point, APPROACH_LEG, detour);
+      const result = await field.walk(leg, this.pause);
       if (this.inPit(result)) return;
-      const nearer = horizontal(field.latest.position, target.point) + 2 < horizontal(before, target.point);
+      const nearer = progressDistance(field.latest.position, target.point) + 2 < progressDistance(before, target.point);
       if (!['arrived', 'paused'].includes(result.state) && !nearer) field.places.fail(target.point);
       if (result.state === 'paused' && result.reason === 'route_threatened') this.avoidThreat(target);
       else if (stuckLeg(result, before, field.latest.position)) {

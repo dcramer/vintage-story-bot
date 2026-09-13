@@ -1,3 +1,4 @@
+import { failedEdges } from '../runtime/navigation/failed-edges.ts';
 import { angle, horizontal, key, lookAt } from '../runtime/navigation/terrain.ts';
 import { changeBlock, selectCell } from './blocks.ts';
 import { equip, ownedSlots } from './inventory.ts';
@@ -16,12 +17,14 @@ const cardinals = [
 
 // How many standing cells can be reached from a node before the search runs out, capped at limit.
 export function reachable(map, origin, limit = pitLimit) {
+  const blocked = failedEdges(map);
   const seen = new Set([key(origin)]),
     queue = [origin];
   while (queue.length && seen.size < limit) {
     const at = queue.shift();
     for (const { node } of [...map.moves(at), ...map.gapMoves(at)]) {
       const id = key(node);
+      if (blocked.has(`${key(at)}>${id}`)) continue;
       if (seen.has(id)) continue;
       seen.add(id);
       queue.push(node);

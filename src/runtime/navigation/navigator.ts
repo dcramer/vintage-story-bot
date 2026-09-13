@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { fleeTarget, hostileEntity, nearbyThreats, nearbyUnclearedThreats, threatStartDistance, threatVerticalRange } from '../../support/threats.ts';
+import { failEdge, failedEdges } from './failed-edges.ts';
 import { findRoute } from './planner.ts';
 import { angle, distance, horizontal, JUMP_HEADROOM, JUMP_HEIGHT, key, lookAt, MAX_DROP, STEP_HEIGHT } from './terrain.ts';
 
@@ -47,7 +48,7 @@ export class Navigation {
   index = 0;
   replans = 0;
   segments = 0;
-  blocked = new Set();
+  blocked = new Set<string>();
   visits = new Map();
   lookingAt = null;
   // The route index a straight-run merge started from, while one is in effect.
@@ -72,6 +73,7 @@ export class Navigation {
   rememberedThreats = new Map<string, any>();
   constructor(map, state, goal, now = Date.now()) {
     this.map = map;
+    this.blocked = failedEdges(map, now);
     this.primaryTarget = this.target = goal;
     this.width = state.body.halfWidth;
     this.height = state.body.height;
@@ -149,8 +151,11 @@ export class Navigation {
     this.lastReplan = reason;
     // The edge that failed is the one into the next checkpoint; after a merge edgeStart is the
     // body's own cell, several cells short of it, which names no planner edge at all.
-    if (['stalled', 'jump_failed'].includes(reason) && this.route[this.index])
-      this.blocked.add(`${key(this.route[this.index - 1] ?? this.edgeStart)}>${key(this.route[this.index])}`);
+    if (['stalled', 'jump_failed'].includes(reason) && this.route[this.index]) {
+      const edge = `${key(this.route[this.index - 1] ?? this.edgeStart)}>${key(this.route[this.index])}`;
+      this.blocked.add(edge);
+      failEdge(this.map, edge, now);
+    }
     if (++this.replans > 12) return this.finish('blocked', reason);
     this.survey(now);
     this.bestNear = undefined;
