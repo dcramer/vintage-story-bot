@@ -130,11 +130,11 @@ export const LADDER: Rung[] = [
   { job: 'shift', when: (s, tried) => s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow') },
   { job: 'burrow', when: s => s.storm },
   { job: 'relocate', when: s => s.dangerHere && !s.burrowed },
-  { job: 'go_home', when: (s, tried) => s.night && s.home && !s.atHome && !tried.has('go_home') },
-  { job: 'wait', when: s => s.night && ((s.home && s.atHome) || s.burrowed) },
+  { job: 'go_home', when: (s, tried) => s.night && !establishingHouse(s) && s.home && !s.atHome && !tried.has('go_home') },
+  { job: 'wait', when: s => s.night && !establishingHouse(s) && ((s.home && s.atHome) || s.burrowed) },
   // A burrow that failed here (rock, nothing to seal it): walk on and dig in elsewhere, never stand in the dark.
-  { job: 'shift', when: (s, tried) => s.night && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow') },
-  { job: 'burrow', when: s => s.night },
+  { job: 'shift', when: (s, tried) => s.night && !establishingHouse(s) && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow') },
+  { job: 'burrow', when: s => s.night && !establishingHouse(s) },
   { job: 'unburrow', when: (s, tried) => s.burrowed && !tried.has('unburrow') },
   { job: 'shelter', when: (s, tried) => !!s.shelterReady && !tried.has('shelter') },
 ];
@@ -151,6 +151,10 @@ export const THREAT_NEAR = 6;
 // Below this satiety a burrow is opened whatever stands outside.
 export const STARVING = 0.1;
 const starving = (s: Situation) => s.hunger !== null && s.hunger < STARVING;
+// The starter shelter is enough to recover from a failed night. Once it
+// exists, darkness alone should not consume half the run that could establish
+// the permanent house; threats and storms still keep their higher priority.
+const establishingHouse = (s: Situation) => !!s.rammedShelter && !s.house;
 // How long damage the job explained keeps explaining after the job ended.
 export const EXPLAINED_MS = 15000;
 export const DIALOG_CLOSE_MS = 10000;
