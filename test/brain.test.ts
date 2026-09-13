@@ -1296,6 +1296,32 @@ test('brain: failed travel defers cooking, prepares locally, and recovers food w
   assert.equal(restarted.notes.cooking, null, 'the opened empty container clears stale pending food');
 });
 
+test('brain: a predator-interrupted food trip abandons an empty firepit', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'eat';
+  memory.notes.cookUntil = 10_000;
+  memory.notes.firepit = { x: 20, y: 110, z: 20 };
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 12), slot('game:cattailroot'));
+
+  const choice = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+      inventory: supplies,
+      now: 2_000,
+      last: { id: 'walk', kind: 'travel', ok: false, outcome: 'interrupted', reason: 'brain: threat' },
+    }),
+    memory,
+  );
+
+  assert.equal(memory.notes.firepit, null);
+  assert.equal(memory.notes.cooking, null);
+  assert.equal(memory.tried.eat, undefined);
+  assert.equal(choice.start, 'harvest');
+  assert.match(choice.why, /grass to build a firepit/);
+});
+
 test('brain: successful travel preserves the owned firepit and starts cooking', () => {
   const memory = fresh();
   memory.startupChecked = true;

@@ -188,9 +188,11 @@ export function food(ctx: Context, keep: number): Decision {
 export const foodEnded: Concern['ended'] = (last, memory, reading) => {
   if (last.kind === 'forage' && !last.ok && last.outcome !== 'interrupted' && last.outcome !== 'refused')
     memory.notes.cookUntil = reading.now + COOK_MS;
-  // Keep ownership and pending food when a route fails, without retrying
-  // that unreachable destination instead of preparing food locally.
-  if (last.kind === 'travel' && !last.ok && failedOnItsOwn(last)) {
+  // Keep ownership and pending food when a route fails, without retrying an
+  // unreachable destination instead of preparing food locally. A predator
+  // interrupting the trip also makes an empty pit unsafe to revisit; preserve
+  // only food already left cooking there for a later return.
+  if (last.kind === 'travel' && !last.ok && (failedOnItsOwn(last) || last.reason === 'brain: threat')) {
     const pit = memory.notes.firepit;
     if (pit && memory.notes.cooking) {
       memory.notes.deferredCooking = [
