@@ -216,6 +216,11 @@ test('brain: danger and carried food come before progress, and the kit comes in 
     'house',
     'once the starter shelter exists, night does not block the permanent house',
   );
+  assert.equal(
+    pickJob(situation({ rammedShelter: true, house: false, sheltered: true, lit: false })),
+    'house',
+    'daily starter-shelter lighting waits for permanent construction',
+  );
   assert.equal(pickJob(situation({ hunger: 0.3 })), 'explore', 'food above 20% does not start a search');
   assert.equal(
     pickJob(situation({ hunger: 0.3 }), new Set(['eat'] as any)),

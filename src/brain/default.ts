@@ -80,8 +80,8 @@ export const TASKS: Concern[] = [
   grass,
   torches,
   shelter,
-  lighting,
   house,
+  lighting,
   hoe,
   farm,
   sticks,
@@ -113,7 +113,7 @@ const ALONGSIDE: Alongside[] = [copper, homeMarker, suppliesMarker];
 // tried again at once either. A completed burrow exit is always retried: it
 // was sealed with a block the bot itself carried, so an opening failure is transient.
 export const LADDER: Rung[] = [
-  { job: 'lighting', when: s => !!s.sheltered && s.lit === false && !s.hurt && !hungry(s) },
+  { job: 'lighting', when: s => !establishingHouse(s) && !!s.sheltered && s.lit === false && !s.hurt && !hungry(s) },
   { job: 'wait', when: s => !!s.sheltered && s.threat && !s.hurt && !hungry(s) },
   { job: 'unburrow', when: s => s.burrowed && s.hurt },
   { job: 'tunnel', when: (s, tried) => s.burrowed && s.threat && !s.hurt && s.besieged && !tried.has('tunnel') },
@@ -124,7 +124,7 @@ export const LADDER: Rung[] = [
   { job: 'hide', when: (s, tried) => s.hurt || (s.threat && !tried.has('hide')) },
   { job: 'eat', when: (s, tried) => (hungry(s) || !!s.foodRecovery) && s.reserve > 0 && !tried.has('eat') },
   { job: 'repair_home', when: (s, tried) => s.atHome && !!s.homeDamaged && !tried.has('repair_home') },
-  { job: 'lighting', when: s => s.atHome && s.lit === false && s.torches > 0 },
+  { job: 'lighting', when: s => !establishingHouse(s) && s.atHome && s.lit === false && s.torches > 0 },
   { job: 'go_home', when: (s, tried) => s.storm && s.home && !s.atHome && !tried.has('go_home') },
   { job: 'wait', when: s => s.storm && ((s.home && s.atHome) || s.burrowed) },
   { job: 'shift', when: (s, tried) => s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow') },
