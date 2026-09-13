@@ -18,7 +18,10 @@ test('forming retries a known surface after clearing a leaf obstruction', async 
     field,
     cell,
     'game:knappingsurface',
-    async () => (++inspections === 1 ? null : selected),
+    async () => {
+      inspections++;
+      return clearedAt ? selected : null;
+    },
     async (_field, point, limit) => {
       clearedAt = { point, limit };
       return 1;
@@ -26,8 +29,24 @@ test('forming retries a known surface after clearing a leaf obstruction', async 
   );
 
   assert.equal(result, selected);
-  assert.equal(inspections, 2);
+  assert.equal(inspections, 11);
   assert.deepEqual(clearedAt, { point: { x: 1.5, y: 2.05, z: 3.5 }, limit: 3 });
+});
+
+test('an occluded first selection box does not hide the rest of an observed knapping surface', async () => {
+  const cell = { x: 1, y: 100, z: 3 };
+  const field = { env: { map: { get: () => ({ code: 'game:knappingsurface' }) } } };
+  const selected = { forming: { recipe: { output: 'game:hoehead-flint' } } };
+  const result = await inspectKnownFormingSurface(
+    field,
+    cell,
+    'game:knappingsurface',
+    async (_field, _cell, point) => (point?.x === 1.5 && point?.z === 3.5 ? selected : null),
+    async () => {
+      assert.fail('the visible grid does not require cutting leaves');
+    },
+  );
+  assert.equal(result, selected);
 });
 
 test('forming does not clear around a surface that is no longer observed', async () => {

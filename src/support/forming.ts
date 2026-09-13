@@ -43,6 +43,14 @@ async function inspectSurface(field, cell, point?) {
 export async function inspectKnownFormingSurface(field, cell, surfaceCode, inspect = inspectSurface, clear = clearLeafPath) {
   let detail = await inspect(field, cell);
   if (detail?.forming || field.env.map.get(cell.x, cell.y, cell.z)?.code !== surfaceCode) return detail;
+  // aim_cell uses the first native selection box. On a voxel surface that
+  // corner can be hidden while the rest is visible; try other parts before
+  // treating a leaf behind that corner as an obstruction to the whole grid.
+  for (const x of [0.5, 0.25, 0.75])
+    for (const z of [0.5, 0.25, 0.75]) {
+      detail = await inspect(field, cell, { x: cell.x + x, y: cell.y + 0.03, z: cell.z + z });
+      if (detail?.forming) return detail;
+    }
   const point = { x: cell.x + 0.5, y: cell.y + 0.05, z: cell.z + 0.5 };
   if (await clear(field, point, 3)) detail = await inspect(field, cell);
   return detail;
