@@ -46,7 +46,16 @@ export const eat: Concern = {
     // as soon as satiety crosses it. The next decision can then prepare the
     // existing one-root fallback instead of spending the remaining margin on
     // the forage deadline.
-    if (s.hunger !== null && s.hunger < 0.1 && !memory.notes.deferredCooking?.length && !danger && !hurt && !classifyingHurt)
+    if (
+      s.hunger !== null &&
+      s.hunger < 0.1 &&
+      ctx.now < (memory.notes.cookUntil ?? 0) &&
+      !ctx.tried.has(ctx.job) &&
+      !memory.notes.deferredCooking?.length &&
+      !danger &&
+      !hurt &&
+      !classifyingHurt
+    )
       return { stop: 'prepare emergency roots' };
     // Forage owns a deterministic evade-and-resume loop. Cancelling it on the
     // same sighting throws away its food leads and starts a second flight on

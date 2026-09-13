@@ -1007,8 +1007,10 @@ test('brain: active recovery forage yields to emergency roots below ten percent'
   memory.startupChecked = true;
   memory.job = 'eat';
   memory.notes.foodRecovery = true;
-  memory.notes.cookUntil = 10_000;
   const starving = state({ vitals: { hunger: { current: 149, max: 1500 } } });
+  const running = reading({ state: starving, inventory: kitted(), active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' }, now: 2000 });
+  assert.deepEqual(decide(running, memory), { wait: 'letting forage finish' }, 'do not cancel forage before the fallback is available');
+  memory.notes.cookUntil = 10_000;
   assert.deepEqual(
     decide(
       reading({ state: starving, inventory: kitted(), active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' }, now: 2000 }),
