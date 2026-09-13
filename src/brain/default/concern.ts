@@ -61,6 +61,9 @@ export type Notes = {
   home: Cell | null;
   house?: Cell | null;
   lightingDay?: number | null;
+  firepit?: Cell | null;
+  cooking?: { count: number } | null;
+  cookUntil?: number;
   construction?: Construction | null;
   dwelling?: { door: Cell; item: string } | null;
   stash: Stash | null;

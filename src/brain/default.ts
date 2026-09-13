@@ -376,6 +376,11 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
       home: cell(kept?.home),
       ...(cell(kept?.shelter) ? { shelter: cell(kept?.shelter) } : {}),
       ...(Number.isFinite(kept?.lightingDay) ? { lightingDay: kept!.lightingDay } : {}),
+      ...(cell(kept?.firepit) ? { firepit: cell(kept?.firepit) } : {}),
+      ...(Number.isInteger(kept?.cooking?.count) && kept!.cooking!.count > 0 && kept!.cooking!.count <= 4
+        ? { cooking: { count: kept!.cooking!.count } }
+        : {}),
+      ...(Number.isFinite(kept?.cookUntil) ? { cookUntil: kept!.cookUntil } : {}),
       ...(cell(kept?.house) ? { house: cell(kept?.house) } : {}),
       ...(cell(kept?.construction?.origin) && ['walls', 'floor', 'enter'].includes(kept?.construction?.phase ?? '')
         ? { construction: { origin: cell(kept!.construction!.origin)!, phase: kept!.construction!.phase } }
@@ -430,6 +435,8 @@ const brain: Brain<Memory, Notes> = {
     house: memory.notes.house,
     construction: memory.notes.construction,
     lightingDay: memory.notes.lightingDay,
+    firepit: memory.notes.firepit,
+    cooking: memory.notes.cooking,
     burrow: memory.burrow,
     scares: memory.scares.length,
     job: memory.job,

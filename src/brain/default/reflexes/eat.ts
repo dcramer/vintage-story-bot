@@ -2,6 +2,7 @@
 // pack, eat one bite where it sits; otherwise forage to half, keeping two bites.
 import { HUNGRY } from '../../../support/food.ts';
 import type { Concern } from '../concern.ts';
+import { food, foodEnded, foodSetAside } from '../food.ts';
 import type { Situation } from '../situation.ts';
 
 // Hungry is the goals' own line (support/food.ts), so the brain interrupts work where forage would stomach poor food.
@@ -12,17 +13,15 @@ export const eat: Concern = {
   id: 'eat',
   // Peckish is not an interruption; hungry is.
   cuts: ({ s }) => hungry(s),
-  run: ({ s, k, satiety }) => {
+  run: ctx => {
+    const { s, k, satiety } = ctx;
     const percent = Math.round((satiety ?? 0) * 100);
     // Sealed in for the night: one bite from the pack, no searching.
     if ((s.burrowed || s.atHome) && k.reserve > 0) return { start: 'eat', args: {}, why: `satiety ${percent}%, dug in` };
-    return {
-      start: 'forage',
-      // Fed to half with two bites' worth kept in the pack.
-      args: { until: 0.5, keep: 160, timeoutMs: 1800000 },
-      why: `satiety ${percent}%, ${k.reserve > 0 ? `${k.reserve} carried` : 'nothing carried'}`,
-    };
+    return food(ctx, 160);
   },
+  ended: foodEnded,
+  setAside: foodSetAside,
   running: ({ active, danger, hurt, classifyingHurt }) => {
     if (active?.kind !== 'forage') return null;
     // Forage owns a deterministic evade-and-resume loop. Cancelling it on the

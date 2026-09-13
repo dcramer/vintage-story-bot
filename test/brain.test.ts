@@ -790,6 +790,36 @@ test('brain: carried food enters one complete recovery run', () => {
   assert.match(choice.why, /240 carried/);
 });
 
+test('brain: failed forage prepares cooking and resumes roots left in an owned firepit', () => {
+  const memory = fresh();
+  const hungry = state({ vitals: { hunger: { current: 100, max: 1500 } } });
+  assert.equal(decide(reading({ state: hungry, inventory: kitted() }), memory).start, 'forage');
+  const prepare = decide(
+    reading({
+      state: hungry,
+      inventory: kitted(),
+      now: 1000,
+      last: { id: 'food', kind: 'forage', ok: false, outcome: 'failed', reason: 'none_found' },
+    }),
+    memory,
+  );
+  assert.equal(prepare.start, 'gather');
+  assert.match(prepare.why, /firestarter/);
+  assert.equal(memory.tried.eat, undefined, 'failed raw forage immediately permits the cooking fallback');
+  memory.notes.firepit = { x: 2, y: 100, z: 0 };
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 8), slot('game:cattailroot', 2));
+  const terrain = { get: (x, y, z) => (x === 2 && y === 100 && z === 0 ? { code: 'game:firepit-cold' } : null) };
+  const cooking = decide(reading({ state: hungry, inventory: supplies, terrain, now: 2000 }), memory);
+  assert.equal(cooking.start, 'cook');
+  assert.equal(cooking.args.count, 2);
+  const resumed = fresh(brain.notes!(memory));
+  resumed.startupChecked = true;
+  const retry = decide(reading({ state: hungry, inventory: kitted(), terrain, now: 3000 }), resumed);
+  assert.equal(retry.start, 'cook', 'raw input already in the firepit does not trigger another harvest');
+  assert.equal(retry.args.count, 2);
+});
+
 test('brain: digging out of a hole is never interrupted by a threat', () => {
   const digging = fresh();
   digging.job = 'dig_out';
