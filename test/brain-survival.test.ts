@@ -77,6 +77,7 @@ test('a roof placement retry chooses a higher viewpoint instead of another spot 
   const field = {
     latest: state,
     observe: async () => state,
+    look: async () => {},
     approach: (_object, exclude) => [beneath, rooftop].find(q => !exclude(q)),
     walk: async q => {
       destination = q;
