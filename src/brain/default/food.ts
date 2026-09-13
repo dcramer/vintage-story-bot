@@ -11,6 +11,7 @@ const BATCH = 4;
 const FORAGE_MS = 180000;
 const COOK_MS = 600000;
 export const LOCAL_COOKING_DISTANCE = 48;
+const LOCAL_COOKING_HEIGHT = 2;
 
 // Failed routes defer food, never prove that it disappeared. Resume only
 // once back beside the observed firepit, after a short retry cooldown.
@@ -20,7 +21,7 @@ export const nearbyCooking = ({ memory, state, reading, now }: Context) =>
     p =>
       p.retryAfter <= now &&
       horizontal(state.position, p) <= 3 &&
-      Math.abs(state.position.y - p.y) <= 1 &&
+      Math.abs(state.position.y - p.y) <= LOCAL_COOKING_HEIGHT &&
       /^game:firepit-(cold|extinct|lit)$/.test(reading.terrain?.get(p.x, p.y, p.z)?.code ?? ''),
   );
 
@@ -138,7 +139,7 @@ export function food(ctx: Context, keep: number): Decision {
       }
     return { start: 'explore', args: { legs: 1, manageFood: false, timeoutMs: 120000 }, why: 'find supported ground for a cooking firepit' };
   }
-  if (horizontal(state.position, pit) > 3 || Math.abs(state.position.y - pit.y) > 1)
+  if (horizontal(state.position, pit) > 3 || Math.abs(state.position.y - pit.y) > LOCAL_COOKING_HEIGHT)
     return { start: 'travel', args: { ...pit, arrivalRadius: 2, manageFood: false, timeoutMs: 300000 }, why: 'return to the cooking firepit' };
   const block = reading.terrain?.get(pit.x, pit.y, pit.z);
   if (!/^game:firepit-(cold|extinct|lit)$/.test(block?.code ?? ''))

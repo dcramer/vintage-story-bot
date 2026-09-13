@@ -897,6 +897,25 @@ test('brain: failed forage prepares emergency cooking and resumes roots left in 
   assert.equal(retry.args.count, 2);
 });
 
+test('brain: snow-height footing within interaction reach does not churn travel beside a firepit', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'eat';
+  memory.notes.firepit = { x: 2, y: 100, z: 0 };
+  memory.notes.cooking = { count: 1 };
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 2));
+  const choice = decide(
+    reading({
+      state: state({ position: { x: 0.5, y: 101.125, z: 0.5 }, vitals: { hunger: { current: 0, max: 1500 } } }),
+      inventory: supplies,
+      terrain: { get: (x, y, z) => (x === 2 && y === 100 && z === 0 ? { code: 'game:firepit-lit' } : null) },
+    }),
+    memory,
+  );
+  assert.equal(choice.start, 'cook');
+});
+
 test('brain: partial provisions do not restart forage during its cooking fallback window', () => {
   const memory = fresh();
   memory.startupChecked = true;
