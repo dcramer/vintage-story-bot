@@ -363,6 +363,7 @@ export class Search {
     return true;
   }
   async approach(target, exclude) {
+    this.field.report('approaching', { target: target.key });
     const field = this.field;
     const before = { ...field.latest.position };
     const destination = field.approach(target, exclude);
