@@ -105,7 +105,7 @@ export async function form(field, { kind, output, material }) {
   for (const object of await field.scan(6, spec.surface, 'blocks')) {
     if (object.code !== surfaceCode || !object.withinPickingRange) continue;
     const candidate = parseBlockKey(object.key);
-    const detail = await inspectSurface(field, candidate);
+    const detail = await inspectKnownFormingSurface(field, candidate, surfaceCode);
     if (detail?.forming && detail.forming.material === material && (!detail.forming.recipe || detail.forming.recipe.output === output)) {
       cell = candidate;
       break;
