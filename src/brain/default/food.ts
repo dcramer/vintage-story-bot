@@ -19,7 +19,11 @@ export function food(ctx: Context, keep: number): Decision {
   const count = (item: string) => k.slots.reduce((n, slot) => n + (slot.code === item ? slot.quantity : 0), 0);
   const roots = count(ROOT);
   const batch = ctx.s.hunger !== null && ctx.s.hunger < 0.1 ? 1 : BATCH;
-  if (k.reserve > 0 || ctx.tried.has(ctx.job) || (!roots && !memory.notes.cooking && now >= (memory.notes.cookUntil ?? 0)))
+  // A partial ration normally makes raw forage worth trying first. Once that
+  // bounded search has failed, cookUntil records the fallback window: do not
+  // let the same carried bite restart another identical forage before roots
+  // can be prepared.
+  if (ctx.tried.has(ctx.job) || (now >= (memory.notes.cookUntil ?? 0) && (k.reserve > 0 || (!roots && !memory.notes.cooking))))
     return {
       start: 'forage',
       args: { until: 0.5, keep, timeoutMs: FORAGE_MS },

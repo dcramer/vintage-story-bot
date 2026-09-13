@@ -885,6 +885,31 @@ test('brain: failed forage prepares cooking and resumes roots left in an owned f
   assert.equal(retry.args.count, 2);
 });
 
+test('brain: partial provisions do not restart forage during its cooking fallback window', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'provisions';
+  memory.notes.stash = chestNote();
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(
+    slot('game:vegetable-cookedcattailroot', 1, {
+      nutrition: { saturation: 100, health: 0 },
+      freshness: { state: 'fresh', freshHoursLeft: 100 },
+    }),
+  );
+  const prepare = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 400, max: 1500 } } }),
+      inventory: supplies,
+      now: 1000,
+      last: { id: 'food', kind: 'forage', ok: false, outcome: 'no_progress', reason: 'Requested deadline reached' },
+    }),
+    memory,
+  );
+  assert.equal(prepare.start, 'gather');
+  assert.match(prepare.why, /firestarter/);
+});
+
 test('brain: an interrupted firepit load carries fuel before resuming', () => {
   const memory = fresh();
   memory.startupChecked = true;
