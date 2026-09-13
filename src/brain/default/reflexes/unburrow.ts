@@ -5,6 +5,9 @@ import type { Concern } from '../concern.ts';
 export const unburrow: Concern = {
   id: 'unburrow',
   uncuttable: true,
+  // A completed burrow was sealed with a block the bot carried. Failure to
+  // remove it is transient, not evidence that this physical exit is bad.
+  setAside: () => false,
   run: ({ memory, hurt, s }) => ({
     start: 'dig_area',
     args: { cells: [memory.burrow], timeoutMs: 120000 },

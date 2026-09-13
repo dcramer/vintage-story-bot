@@ -107,7 +107,8 @@ const ALONGSIDE: Alongside[] = [copper, homeMarker, suppliesMarker];
 // proves the shelter unsafe. Hungry and dug in with nothing carried, it must
 // dig out to look. A hostile that cannot be run from (across water, on a
 // ledge) is not run from again at once; a dig-in that failed here is not
-// tried again at once either, nor is opening a burrow that would not open.
+// tried again at once either. A completed burrow exit is always retried: it
+// was sealed with a block the bot itself carried, so an opening failure is transient.
 export const LADDER: Rung[] = [
   { job: 'wait', when: s => !!s.sheltered && s.threat && !s.hurt && !hungry(s) },
   { job: 'unburrow', when: s => s.burrowed && s.hurt },

@@ -1229,7 +1229,7 @@ test('brain: a failed burrow opening keeps the seal location for another attempt
   memory.job = 'unburrow';
   const retry = decide(
     reading({
-      state: state({ position: { x: 0.5, y: 0, z: 0.5 }, vitals: { hunger: { current: 299, max: 1500 } } }),
+      state: state({ position: { x: 0.5, y: 0, z: 0.5 } }),
       last: { id: 'mouth', kind: 'dig_area', ok: false, reason: 'cannot_dig' },
     }),
     memory,
