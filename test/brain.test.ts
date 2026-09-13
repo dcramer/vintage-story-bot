@@ -864,7 +864,7 @@ test('brain: cooking makes inventory room before felling fuel', () => {
 
   assert.equal(choice.start, 'craft_item');
   assert.equal(choice.args.output, 'game:basket-normal-reed');
-  assert.match(choice.why, /carry cooking fuel/);
+  assert.equal(choice.args.count, 1);
 });
 
 test('brain: digging out of a hole is never interrupted by a threat', () => {
