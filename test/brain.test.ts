@@ -1256,7 +1256,7 @@ test('brain: a shelter has to be entered and sealed, and opens before morning wo
     terrain: { get: () => ({ hazard: null, boxes: [{}] }) },
   });
   assert.ok('wait' in decide(inside, memory));
-  const opened = decide({ ...inside, environment: { calendar: { daylight: 1, hourOfDay: 5 } } }, memory);
+  const opened = decide({ ...inside, environment: { calendar: { daylight: 0.1, hourOfDay: 5 } } }, memory);
   assert.equal(opened.start, 'dig_area');
   assert.deepEqual(opened.args.cells, [dwelling.door, { ...dwelling.door, y: 101 }]);
   assert.deepEqual(fresh(brain.notes!(memory)).notes.dwelling, dwelling);

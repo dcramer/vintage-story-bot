@@ -15,7 +15,11 @@ export const NIGHT_LIGHT = 0.4;
 export const isNight = (environment: any) => {
   const calendar = environment?.calendar;
   const hour = calendar?.hourOfDay;
-  return (typeof hour === 'number' && (hour < 5 || hour >= 18)) || (typeof calendar?.daylight === 'number' && calendar.daylight < NIGHT_LIGHT);
+  if (typeof hour === 'number') {
+    if (hour < 5 || hour >= 18) return true;
+    if (hour < 12) return false;
+  }
+  return typeof calendar?.daylight === 'number' && calendar.daylight < NIGHT_LIGHT;
 };
 // The stones that knap, as the game names them.
 export const KNAPPABLE = ['chert', 'granite', 'andesite', 'basalt', 'obsidian', 'peridotite'];
