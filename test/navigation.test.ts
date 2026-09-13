@@ -362,6 +362,20 @@ test('swimming and wading queue the next checkpoint instead of stopping at every
   }
 });
 
+test('a queued checkpoint leaves room for movement before the mod receives it', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x <= 8; x++) column(map, x, 0);
+  const state = stateAt({ x: 0.5, y: 0, z: 0.5 });
+  const first = { x: 6.5, y: 0, z: 0.5, move: 'walk' };
+  const after = { x: 7.5, y: 0, z: 0.5, move: 'walk' };
+  const nav = new Navigation(map, state, after, 0);
+  nav.adopt([first, after], state.position, 0);
+  nav.mergeRefused = true;
+  const frame = nav.tick(state, 0);
+  assert.deepEqual(frame.toward, { x: first.x, y: first.y, z: first.z });
+  assert.equal(frame.next, undefined);
+});
+
 test('open water permits diagonal swimming while solid bank corners remain blocked', () => {
   const map = new TerrainMemory();
   for (let x = 0; x <= 2; x++)
