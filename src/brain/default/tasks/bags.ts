@@ -13,7 +13,43 @@ export function makeBag({ k }) {
       act: [{ action: 'move_item', from: k.bagItem, to: k.emptyBagSlot, quantity: 1, expectedState: k.state }],
       why: 'a hand basket into a bag slot',
     };
-  if (k.cattailtops >= BAG_TOPS) return { start: 'craft_item', args: { output: BAG, count: 1, timeoutMs: 300000 }, why: 'weaving a hand basket' };
+  if (k.cattailtops >= BAG_TOPS) {
+    const hotbarFree = k.slots.some(slot => slot.inventory === 'hotbar' && !slot.code);
+    if (!hotbarFree) {
+      const backpackFree = k.slots.find(slot => slot.inventory === 'backpack' && !slot.bag && !slot.code);
+      const hotbar = k.slots.filter(slot => slot.inventory === 'hotbar');
+      const spare =
+        hotbar.find(slot => slot.code?.startsWith('game:flower-')) ??
+        hotbar.find(slot => slot.code === 'game:rope') ??
+        (k.knife && k.axe && k.shovel ? hotbar.find(slot => slot.code === 'game:flint' || slot.code?.startsWith('game:stone-')) : undefined);
+      if (spare && backpackFree)
+        return {
+          act: [
+            {
+              action: 'move_item',
+              from: { inventory: spare.inventory, slot: spare.slot },
+              to: { inventory: backpackFree.inventory, slot: backpackFree.slot },
+              quantity: spare.quantity,
+              expectedState: k.state,
+            },
+          ],
+          why: 'set aside a spare stack so the woven basket has a hotbar slot',
+        };
+      if (spare)
+        return {
+          act: [
+            {
+              action: 'drop',
+              from: { inventory: spare.inventory, slot: spare.slot },
+              quantity: spare.quantity,
+              expectedState: k.state,
+            },
+          ],
+          why: 'make a hotbar slot for the woven basket',
+        };
+    }
+    return { start: 'craft_item', args: { output: BAG, count: 1, timeoutMs: 300000 }, why: 'weaving a hand basket' };
+  }
   const need = BAG_TOPS;
   return {
     start: 'harvest',
