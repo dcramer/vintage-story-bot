@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { house, houseSite } from '../src/brain/default/tasks/house.ts';
 import { recoverableBody } from '../src/brain/default/tasks/recover.ts';
+import { shelter } from '../src/brain/default/tasks/shelter.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { fresh, kit } from '../src/brain/default.ts';
 import craft from '../src/goals/craft_item.ts';
@@ -92,6 +93,17 @@ test('shelter refuses unknown ground, unsupported floors and blocked interiors',
   assert.equal(shelterSite({ ...terrain, get: () => undefined }, position), null);
   assert.equal(shelterSite({ ...terrain, get: () => ({ boxes: [], hazard: null }) }, position), null);
   assert.equal(shelterSite({ ...terrain, get: (x, y, z) => ({ boxes: [[x, y, z, x + 1, y + 1, z + 1]], hazard: null }) }, position), null);
+});
+
+test('partial shelter resumes its owned site after a controller restart', () => {
+  const origin = { x: 10, y: 100, z: 20 };
+  const memory = fresh(fresh({ shelter: origin }).notes);
+  const ctx: any = { memory, state: { position: { x: 11.5, y: 100, z: 23.5 } }, k: { dirt: 6 } };
+  const work: any = shelter.run(ctx);
+  assert.equal(work.start, 'shelter');
+  assert.deepEqual(work.args.origin, origin);
+  shelter.ended!({ ok: false } as any, memory, {} as any);
+  assert.deepEqual(memory.notes.shelter, origin, 'a failed roof cannot discard the already placed walls');
 });
 
 test('stockpile: keeps the carried kit and reopens stale shared storage', () => {

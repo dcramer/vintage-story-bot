@@ -45,6 +45,11 @@ export default defineGoal({
   name: 'shelter',
   schema: z
     .object({
+      origin: z
+        .object({ x: z.number().int(), y: z.number().int(), z: z.number().int() })
+        .strict()
+        .optional()
+        .describe('Resume an owned partial shelter at this origin.'),
       item: z.string().min(1).max(160).default('soil-').describe('Carried block item code substring for the walls.'),
       torch: z.boolean().default(true).describe('Place a carried torch on the floor once sealed in.'),
       manageFood: z.boolean().default(false),
@@ -58,25 +63,30 @@ export default defineGoal({
     'report which phase stopped. Result home is the spot to return to. Returns START; poll goal_status.',
   title: args => `Build a ${cleanName(args.item)} shelter`,
   announce: args => `Putting up a little ${cleanName(args.item)} shelter.`,
-  run: (env, { item, torch, ...options }) =>
+  run: (env, { origin: planned, item, torch, ...options }) =>
     runField(env, options, ['inventory', 'block_actions'], async (field, survival) => {
+      const origin = planned ?? shelterSite(field.env.map, field.latest.position);
+      if (!origin) return { ok: false, goal: 'shelter', reason: 'no_level_site' };
+      const existing = cell => {
+        const block = field.env.map.get(cell.x, cell.y, cell.z);
+        return block?.boxes.length && block.code?.includes(item) ? block.code : null;
+      };
       const slots = ownedSlots(await field.send({ action: 'inventory' })) as any[];
       // Every variant of the material counts, and each cell takes the variant with the most left.
       const stock = new Map<string, number>();
       for (const s of slots) if (s.code?.includes(item)) stock.set(s.code, (stock.get(s.code) ?? 0) + s.quantity);
       const have = [...stock.values()].reduce((n, q) => n + q, 0);
-      const need = 25;
-      if (have < need) return { ok: false, goal: 'shelter', reason: 'not_enough_material', item, have, need };
+      const need = [...shelterCells(origin, item), ...shelterDoor(origin, item)].filter(cell => !existing(cell)).length;
+      if (have < need) return { ok: false, goal: 'shelter', reason: 'not_enough_material', item, have, need, origin };
       const supply = [...stock.entries()].sort((a, b) => b[1] - a[1]);
       const assign = cells =>
         cells.map(cell => {
+          const code = existing(cell);
+          if (code) return { ...cell, item: code };
           while (supply.length > 1 && supply[0][1] <= 0) supply.shift();
           supply[0][1]--;
           return { ...cell, item: supply[0][0] };
         });
-      const p = field.latest.position;
-      const origin = shelterSite(field.env.map, p);
-      if (!origin) return { ok: false, goal: 'shelter', reason: 'no_level_site' };
       const center = shelterCenter(origin);
       const home = { x: center.x, y: origin.y, z: center.z };
       const cover = [];
@@ -91,7 +101,7 @@ export default defineGoal({
         if (!cleared.ok) return { ...cleared, goal: 'shelter', phase: 'site', origin };
       }
       field.report('walls', { origin });
-      const walls: any = await build(field, survival, { cells: assign(shelterCells(origin, item)) });
+      const walls: any = await build(field, survival, { cells: assign(shelterCells(origin, item)), verifyExisting: true });
       if (!walls.ok) return { ok: false, goal: 'shelter', reason: walls.reason ?? 'walls', phase: 'walls', origin, walls };
       field.report('entering', { origin });
       const entered = await travel(field, survival, { ...home, arrivalRadius: 0.35 });

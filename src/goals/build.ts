@@ -104,7 +104,7 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
     await field.observe(true);
     await survival?.tend();
     if (known(field, cell) === 'solid') {
-      if (verifyExisting) {
+      if (verifyExisting && field.env.map.get(cell.x, cell.y, cell.z)?.code !== cell.item) {
         if (!(await standNear(field, survival, cell))) {
           failed.push({ ...cell, reason: 'no_stand_position' });
           continue;

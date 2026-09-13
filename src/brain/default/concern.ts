@@ -56,6 +56,7 @@ export type Stash = {
 // What is kept between runs: the decisions made about this world, and what the bot itself last
 // left in its own chest (re-verified when it is opened); what the eye saw of the world is Knowledge.
 export type Notes = {
+  shelter?: Cell | null;
   recovery?: { guid: string; until: number } | null;
   home: Cell | null;
   house?: Cell | null;

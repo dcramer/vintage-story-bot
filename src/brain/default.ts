@@ -370,6 +370,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
         ? { recovery: { guid: kept.recovery.guid, until: kept.recovery.until } }
         : {}),
       home: cell(kept?.home),
+      ...(cell(kept?.shelter) ? { shelter: cell(kept?.shelter) } : {}),
       ...(Number.isFinite(kept?.lightingDay) ? { lightingDay: kept!.lightingDay } : {}),
       ...(cell(kept?.house) ? { house: cell(kept?.house) } : {}),
       ...(cell(kept?.construction?.origin) && ['walls', 'floor', 'enter'].includes(kept?.construction?.phase ?? '')
