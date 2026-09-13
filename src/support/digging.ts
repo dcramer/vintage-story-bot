@@ -167,12 +167,24 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       reason = 'no_step';
       break;
     }
-    const up = await field.walk({ x: plan.step.x + 0.5, y: origin.y + 1, z: plan.step.z + 0.5, arrivalRadius: 0.3 });
+    // Snow at the starting cell need not exist on the new step. Use the
+    // observed landing surface, not the starting height plus one block.
+    const landing = map.nodeAt(plan.step.x, plan.step.z, plan.step.y + 1, 0.6, 0.6);
+    if (!landing || landing.y <= origin.y) {
+      reason = 'no_landing';
+      break;
+    }
+    const up = await field.walk({ x: plan.step.x + 0.5, y: landing.y, z: plan.step.z + 0.5, arrivalRadius: 0.3 });
+    // Reaching the checkpoint can finish while the jump is still landing.
+    for (let i = 0; i < 6 && !field.latest.motion.onGround; i++) {
+      await field.wait(200);
+      await field.observe();
+    }
     const stepCenter = { x: plan.step.x + 0.5, z: plan.step.z + 0.5 };
     if (
       !['arrived', 'paused'].includes(up.state) ||
       horizontal(field.latest.position, stepCenter) > 0.8 ||
-      field.latest.position.y < origin.y + 0.9 ||
+      Math.abs(field.latest.position.y - landing.y) > 0.1 ||
       !field.latest.motion.onGround
     ) {
       reason = 'cannot_climb';

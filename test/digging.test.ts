@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
-import { diggingSlot, pitLimit, reachable, stairStep } from '../src/support/digging.ts';
+import { diggingSlot, digOut, pitLimit, reachable, stairStep } from '../src/support/digging.ts';
 
 // A block world: floor at y=-1, air above, plus solid cells from `solid`.
 function world(width, solid) {
@@ -13,6 +13,31 @@ function world(width, solid) {
   map.apply({ session: 'w', reset: true, cursor: 1, more: false, clock: 0, cells });
   return map;
 }
+
+test('pit recovery lands on the observed step when starting on thin snow', async () => {
+  const map = world(2, (x, y, z) => (x !== 0 || z !== 0) && y >= 0 && y <= 3);
+  map.put({ x: 0, y: 0, z: 0, seenAt: Date.now(), traits: [], boxes: [[0, 0, 0, 1, 0.125, 1]] });
+  for (const y of [1, 2, 3]) map.put({ x: 1, y, z: 0, seenAt: Date.now(), traits: [], boxes: [] });
+  const field = {
+    env: { map },
+    latest: { position: { x: 0.5, y: 0.125, z: 0.5 }, motion: { onGround: true } },
+    observe: async () => field.latest,
+    send: async () => ({ inventories: [{ name: 'hotbar', slots: [{ slot: 0, code: null, quantity: 0 }] }] }),
+    report: () => {},
+    wait: async () => {
+      field.latest.position.y = 1;
+      field.latest.motion.onGround = true;
+    },
+    walk: async destination => {
+      assert.equal(destination.y, 1, 'the starting snow height must not carry over to the landing');
+      field.latest.position = { x: destination.x, y: destination.y + 0.02, z: destination.z };
+      field.latest.motion.onGround = false;
+      return { state: 'arrived' };
+    },
+  };
+  const result = await digOut(field, { x: 5, z: 0.5 }, { steps: 1 });
+  assert.equal(result.climbed, 1);
+});
 
 test('a pit is a place the search runs out of; open ground is not', () => {
   const pit = world(6, (x, y, z) => (Math.abs(x) >= 1 || Math.abs(z) >= 1) && y >= 0 && y <= 3);
