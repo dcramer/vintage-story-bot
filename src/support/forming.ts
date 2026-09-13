@@ -99,7 +99,6 @@ export async function form(field, { kind, output, material }) {
   if (!material) throw Error('No owned base material for ' + kind);
   const summary = (extra = {}) => ({ kind, output, material, clicks, ...extra });
   let clicks = 0;
-  await equip(field, { item: material });
   // Reuse an unfinished own surface in reach, else sneak-place one on the ground ahead.
   let cell = null;
   for (const object of await field.scan(6, spec.surface, 'blocks')) {
@@ -112,6 +111,10 @@ export async function form(field, { kind, output, material }) {
     }
   }
   if (!cell) {
+    // Surface creation consumes one stone. Keep a second matching stone in the
+    // selected stack because native recipe selection requires the base
+    // material to remain held after the surface appears.
+    await equip(field, { item: material, quantity: kind === 'knapping' ? 2 : 1 });
     const groundDetail = await aimGround(field);
     if (!groundDetail) throw Error('No selectable flat ground ahead for a surface; move to level ground');
     const ground = parseBlockKey(groundDetail.key);
@@ -142,7 +145,7 @@ export async function form(field, { kind, output, material }) {
       });
       if (!started.ok) return { ok: false, reason: 'surface_not_created', ...summary(), detail: started };
     }
-  }
+  } else await equip(field, { item: material });
   const key = `block:0:${cell.x}:${cell.y}:${cell.z}:${surfaceCode}`;
   // The native recipe dialog blocks every control; a selection that fails must not leave it open.
   // Escape cancels it the way a player would (the game then removes the surface).

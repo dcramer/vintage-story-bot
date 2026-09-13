@@ -9,7 +9,10 @@ export const itemCount = (inventory, code) =>
 export const carriedCount = (state, code) =>
   [...state.hotbar.filter(s => s.slot < 10), ...state.backpack].filter(s => s.code === code).reduce((n, s) => n + s.quantity, 0);
 
-export async function equip(field, { item, tool, minTier = 0, slot }: { item?: any; tool?: string; minTier?: number; slot?: number }) {
+export async function equip(
+  field,
+  { item, tool, minTier = 0, slot, quantity = 1 }: { item?: any; tool?: string; minTier?: number; slot?: number; quantity?: number },
+) {
   await field.observe();
   let inventory = await field.send({ action: 'inventory' });
   const inventorySlot = (contents, address) => {
@@ -19,7 +22,7 @@ export async function equip(field, { item, tool, minTier = 0, slot }: { item?: a
   const slots = ownedSlots(inventory);
   const matches = s => (tool !== undefined ? s.code && s.tool === tool && s.toolTier >= minTier && s.durability > 0 : s.code === item);
   const source = slots
-    .filter(s => matches(s) && (s.code ? s.quantity > 0 : s.inventory === 'hotbar'))
+    .filter(s => matches(s) && (s.code ? s.quantity >= quantity : s.inventory === 'hotbar'))
     .sort(
       (a, b) =>
         (tool ? a.toolTier - b.toolTier : 0) ||
@@ -149,7 +152,7 @@ export async function equip(field, { item, tool, minTier = 0, slot }: { item?: a
       action: 'inventory_move',
       from,
       to: { inventory: 'hotbar', slot: destination.slot },
-      quantity: 1,
+      quantity,
       expectedState: inventory.state,
     });
     const transfer = await field.until(
@@ -159,9 +162,9 @@ export async function equip(field, { item, tool, minTier = 0, slot }: { item?: a
         const remaining = current.find(s => s.inventory === source.inventory && s.slot === source.slot);
         return (
           received?.code === source.code &&
-          received.quantity === 1 &&
+          received.quantity === quantity &&
           matches(received) &&
-          remaining?.quantity === source.quantity - 1 &&
+          remaining?.quantity === source.quantity - quantity &&
           (remaining.quantity === 0 || remaining.code === source.code) &&
           itemCount(contents, source.code) === itemCount(inventory, source.code)
         );
@@ -171,14 +174,14 @@ export async function equip(field, { item, tool, minTier = 0, slot }: { item?: a
     if (!transfer.met) throw Error('Equip transfer unverified; inspect inventory before another attempt');
     inventory = transfer.read;
     destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
-    moved = 1;
+    moved = quantity;
   }
   await field.observe();
   await field.send({ action: 'select', slot: destination.slot });
   const after = (await field.until(state => state.activeSlot === destination.slot, { timeoutMs: 400, everyMs: 100 })).state;
   inventory = await field.send({ action: 'inventory' });
   const held = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
-  if (after.activeSlot !== destination.slot || !held || !matches(held) || held.code !== source.code)
+  if (after.activeSlot !== destination.slot || !held || held.quantity < quantity || !matches(held) || held.code !== source.code)
     throw Error('Equipment selection unverified; inspect before another attempt');
   return {
     ok: true,

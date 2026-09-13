@@ -167,6 +167,44 @@ test('equipping makes verified hotbar room in worn-basket storage', async () => 
   assert.equal(inventories[1].slots[1].code, 'game:fern-eaglefern');
 });
 
+test('equipping can stage two base materials in one selected hotbar stack', async () => {
+  let packState = 0;
+  const inventories: any[] = [
+    { name: 'hotbar', slots: [{ slot: 0, code: null, quantity: 0 }] },
+    { name: 'backpack', slots: [{ slot: 0, code: 'game:flint', quantity: 3, bag: false }] },
+  ];
+  const contents = () => ({ state: `pack-${packState}`, inventories: structuredClone(inventories) });
+  const field: any = {
+    latest: { activeSlot: 1 },
+    report: () => {},
+    wait: async () => {},
+    observe: async () => field.latest,
+    send: async request => {
+      if (request.action === 'inventory') return contents();
+      if (request.action === 'inventory_move') {
+        const from = inventories.find(i => i.name === request.from.inventory).slots[request.from.slot];
+        const to = inventories.find(i => i.name === request.to.inventory).slots[request.to.slot];
+        Object.assign(to, { code: from.code, quantity: request.quantity, tool: from.tool ?? null });
+        from.quantity -= request.quantity;
+        packState++;
+        return { ok: true };
+      }
+      if (request.action === 'select') {
+        field.latest.activeSlot = request.slot;
+        return { ok: true };
+      }
+      return { ok: true };
+    },
+    until: (condition, options) => until(field, condition, options),
+  };
+
+  const result = await equip(field, { item: 'game:flint', quantity: 2 });
+
+  assert.equal(result.moved, 2);
+  assert.deepEqual(inventories[0].slots[0], { slot: 0, code: 'game:flint', quantity: 2, tool: null });
+  assert.equal(inventories[1].slots[0].quantity, 1);
+});
+
 test('equipping rotates a full inventory through the cursor without dropping anything', async () => {
   let activeSlot = 1;
   let packState = 0;
