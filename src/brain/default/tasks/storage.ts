@@ -57,7 +57,23 @@ export const storage: Concern = {
         if (walk) return walk;
       }
       const p = old ?? state.position;
-      const spot = { x: Math.floor(p.x) + 2, y: Math.floor(p.y), z: Math.floor(p.z) };
+      const x = Math.floor(p.x),
+        y = Math.floor(p.y),
+        z = Math.floor(p.z);
+      const spot = [
+        { x: x + 1, y, z },
+        { x: x - 1, y, z },
+        { x, y, z: z + 1 },
+        { x, y, z: z - 1 },
+        { x: x + 2, y, z },
+        { x: x - 2, y, z },
+        { x, y, z: z + 2 },
+        { x, y, z: z - 2 },
+      ].find(cell => {
+        const block = ctx.reading.terrain?.get(cell.x, cell.y, cell.z);
+        return block && !block.hazard && !block.boxes.length && (!block.code || block.code === 'game:air');
+      });
+      if (!spot) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'looking for open ground beside the supplies' };
       return {
         start: 'build',
         args: { cells: [{ ...spot, item: k.chest }], timeoutMs: 600000 },

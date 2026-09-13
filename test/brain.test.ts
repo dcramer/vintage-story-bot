@@ -1808,6 +1808,27 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
     { x: 4, y: 100, z: -1, item: 'game:stationarybasket-east' },
     'an occupied first slot does not trap a planned shelter chest retry',
   );
+  const besideSupplies = fresh();
+  besideSupplies.notes.stash = { ...chestNote(), full: true, seen: { at: 1000, items: {} } };
+  const avoidBuried = decide(
+    reading({
+      state: state({ position: { x: 4.5, y: 100, z: 2.5 } }),
+      inventory: inventory(slot('game:stationarybasket-east', 1), ...tools),
+      terrain: {
+        get: (x, y, z) => ({
+          hazard: null,
+          boxes: x === 5 && y === 100 && z === 2 ? [] : [{}],
+          code: x === 5 && y === 100 && z === 2 ? 'game:air' : 'game:soil-medium-normal',
+        }),
+      },
+    }),
+    besideSupplies,
+  );
+  assert.deepEqual(
+    avoidBuried.args.cells[0],
+    { x: 5, y: 100, z: 2, item: 'game:stationarybasket-east' },
+    'additional storage uses observed open ground instead of a fixed buried offset',
+  );
   const returning = fresh();
   returning.notes.shelter = { x: 100, y: 100, z: 100 };
   const returnToSite = decide(reading({ inventory: inventory(slot('game:stationarybasket-east', 1), ...tools) }), returning);
