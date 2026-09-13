@@ -264,6 +264,7 @@ export class Survival {
         field.recoveringFood = false;
         return {
           reason: search.pit ? 'pit' : 'none_found',
+          ...(search.pit ? { toward: search.pitToward } : {}),
           unproductive: search.unproductive,
           searchReason: search.budgetReason ?? 'no_progress',
           distanceWithoutTake: search.withoutTake,

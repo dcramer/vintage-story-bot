@@ -104,6 +104,7 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
           ok: false,
           goal: 'gather',
           reason: search.pit ? 'pit' : 'none_found',
+          ...(search.pit ? { toward: search.pitToward } : {}),
           position: field.latest.position,
           match,
           item,

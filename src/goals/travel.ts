@@ -116,6 +116,7 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
           ok: false,
           goal: 'travel',
           reason: 'pit',
+          toward: { x: goal.x, z: goal.z },
           ...summary(),
           remaining: +horizontal(field.latest.position, goal).toFixed(1),
           position: field.latest.position,

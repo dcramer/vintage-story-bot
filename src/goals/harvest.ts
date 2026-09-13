@@ -110,7 +110,14 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     if ((await refresh()) >= count) return { ok: true, goal: 'harvest', ...summary(), verification: 'inventory_delta' };
     await survival?.tend();
     if (search.pit || search.exhausted())
-      return { ok: false, goal: 'harvest', reason: search.pit ? 'pit' : 'none_found', position: field.latest.position, ...summary() };
+      return {
+        ok: false,
+        goal: 'harvest',
+        reason: search.pit ? 'pit' : 'none_found',
+        position: field.latest.position,
+        ...(search.pit ? { toward: search.pitToward } : {}),
+        ...summary(),
+      };
     field.report('searching');
     await search.step();
   }

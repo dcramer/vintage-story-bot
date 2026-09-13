@@ -1431,6 +1431,28 @@ test('brain: a goal that ended in a pit without saying where has the body dug ou
   assert.equal(memory.tried.recover, undefined, "a hole is not the job's fault");
 });
 
+test('brain: pit recovery follows the failed resource trip instead of always cutting east', () => {
+  const memory = fresh();
+  memory.job = 'bags';
+  const position = { x: 40.5, y: 115, z: 20.5 };
+  const toward = { x: 10.5, z: -20.5 };
+  const out = decide(
+    reading({
+      state: state({ position }),
+      last: {
+        id: 'reeds',
+        kind: 'harvest',
+        ok: false,
+        reason: 'pit',
+        result: { position, toward },
+      },
+    }),
+    memory,
+  );
+  assert.deepEqual([out.start, out.args.x, out.args.z], ['dig_out', toward.x, toward.z]);
+  assert.equal(memory.pit.y, position.y, 'recovery progress is measured from the body, not the resource elevation');
+});
+
 test('brain: a hand basket is woven from ten tops and worn by hand', () => {
   const memory = fresh();
   memory.notes.home = { x: 3.5, y: 100, z: 0.5 };

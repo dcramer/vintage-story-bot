@@ -176,7 +176,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // where the body stands, whether or not the goal's result says so (travel does, others do not).
     if (last.reason === 'pit') {
       const where = last.result?.position ?? state.position;
-      memory.pit = { x: where.x + 8, y: where.y, z: where.z };
+      const toward = last.result?.toward;
+      memory.pit = { x: toward?.x ?? where.x + 8, y: where.y, z: toward?.z ?? where.z };
     } else if (!last.ok && mine && (mine.setAside ?? failedOnItsOwn)(last, memory, reading))
       memory.tried[mine.id] = { x: state.position.x, z: state.position.z, at: now };
     mine?.ended?.(last, memory, reading);

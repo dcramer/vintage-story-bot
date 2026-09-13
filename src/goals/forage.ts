@@ -47,7 +47,13 @@ export default defineGoal({
         ok: !ended?.reason,
         goal: 'forage',
         ...(ended?.reason
-          ? { reason: ended.reason, position: ended.position, searchReason: ended.searchReason, distanceWithoutTake: ended.distanceWithoutTake }
+          ? {
+              reason: ended.reason,
+              position: ended.position,
+              ...(ended.toward ? { toward: ended.toward } : {}),
+              searchReason: ended.searchReason,
+              distanceWithoutTake: ended.distanceWithoutTake,
+            }
           : {}),
         eaten: survival.eaten,
         harvested: survival.harvested,
