@@ -77,11 +77,14 @@ test('resuming after a bear escape routes around its remembered position instead
   state.nearbyEntities = [];
   nav.tick(state, 1000);
   assert.equal(nav.evading, false);
-  const route = findRoute(map, state.position, target, 0, 0, { avoid: nav.avoid, partial: false, budget: 8192 });
+  const resumed = new Navigation(map, state, target, 1000);
+  resumed.tick(state, 1000);
+  assert.equal(new Navigation(new TerrainMemory(), state, target, 1000).rememberedThreats.size, 0, 'threat evidence belongs to one bot map');
+  const route = findRoute(map, state.position, target, 0, 0, { avoid: resumed.avoid, partial: false, budget: 8192 });
   assert.ok(route, 'the original destination remains reachable around the bear');
   assert.ok(
     route.every(p => horizontal(p, bear.point) >= 24),
-    'clearing the threat cannot discard its position',
+    'a new navigation leg after escape cannot discard the threat position',
   );
   state.position = { x: -33.5, y: 0, z: 0.5 };
   nav.survey(61000);

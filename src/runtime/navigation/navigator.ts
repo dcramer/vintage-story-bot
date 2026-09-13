@@ -27,6 +27,7 @@ export const REPLAN_AHEAD_MS = 700;
 export const NO_PROGRESS_MS = 15000;
 const progressCell = p => `${Math.floor(p.x / 2)},${Math.floor(p.y / 2)},${Math.floor(p.z / 2)}`;
 const sameCell = (a, b) => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01 && Math.abs(a.z - b.z) < 0.01;
+const threatMemories = new WeakMap<object, Map<string, any>>();
 
 export class Navigation {
   bestNear: any;
@@ -82,6 +83,8 @@ export class Navigation {
   rememberedThreats = new Map<string, any>();
   constructor(map, state, goal, now = Date.now()) {
     this.map = map;
+    this.rememberedThreats = threatMemories.get(map) ?? new Map();
+    threatMemories.set(map, this.rememberedThreats);
     this.blocked = failedEdges(map, now);
     this.visits = visitedFrontiers(map, now);
     this.primaryTarget = this.target = goal;
@@ -243,6 +246,7 @@ export class Navigation {
         });
     }
     for (const [id, entity] of this.rememberedThreats) if (entity.until <= now) this.rememberedThreats.delete(id);
+    while (this.rememberedThreats.size > 128) this.rememberedThreats.delete(this.rememberedThreats.keys().next().value!);
     const activeKeys = new Set(threats.map(entity => entity.key));
     const activeAvoid = threats.map(entity => ({ point: entity.point, minimumDistance: Math.max(0, horizontal(p, entity.point) - 0.5) }));
     this.avoid = [

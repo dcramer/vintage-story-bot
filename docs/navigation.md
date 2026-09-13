@@ -58,6 +58,8 @@ Visited frontier viewpoints also survive new legs for one minute (at most 256 pe
 
 Evasion routes seek any observed standing cell beyond every active hostile's clearance perimeter, not only the compass point directly away. The compass point guides looking; terrain determines the escape route. Reaching an escape route's end never reports the original travel destination reached.
 
+The last observed hostile perimeter survives new navigation legs for one minute, scoped to the bot's terrain memory and capped at 128 sightings. Returning home after a completed flight retains that avoidance evidence.
+
 ## Observability
 
 `goal_status` progress phases: `walking`, `rough_route` / `no_rough_route` (with rough route status and the chosen leg), `rerouting` (reason), `route_cleared`, `probing`, `recovering_route`, `evading`. The dashboard `navigation` topic carries the live navigator view: state, reason, next checkpoint, yaw error, last replan, diagnostics (missing cells, support, clearance), threats.
