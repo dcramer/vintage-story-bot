@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { allocate } from '../src/goals/craft_item.ts';
+import { allocate, craftDestination } from '../src/goals/craft_item.ts';
 
 test('a repeated craft stages consumables together without duplicating a retained tool', () => {
   const plan = allocate(
@@ -48,4 +48,18 @@ test('an ingredient already in place cannot be allocated a second time', () => {
     }),
     null,
   );
+});
+
+test('a wearable craft can go into an empty bag slot when the ordinary pack is full', () => {
+  const inventory = {
+    inventories: [
+      { name: 'hotbar', slots: [{ slot: 0, code: 'game:cattailtops', quantity: 1 }] },
+      { name: 'backpack', slots: [{ slot: 0, code: null, quantity: 0, bag: true }] },
+    ],
+  };
+  const destination = craftDestination(inventory, 'game:basket-normal-reed', 1, { bagSlots: 3, maxStackSize: 1 });
+  assert.equal(destination?.inventory, 'backpack');
+  assert.equal(destination?.slot, 0);
+  assert.equal(craftDestination(inventory, 'game:packeddirt', 6, { maxStackSize: 64 }), undefined);
+  assert.equal(craftDestination(inventory, 'game:basket-normal-reed', 2, { bagSlots: 3, maxStackSize: 1 }), undefined);
 });

@@ -7,6 +7,16 @@ import { cleanName, runField } from '../support/task.ts';
 const gridSlots = inventory => inventory.inventories.find(i => i.name === 'craftinggrid')?.slots.filter(s => s.slot < 9) ?? [];
 const emptyOwned = (inventory, exclude = new Set()) => ownedSlots(inventory).find(s => !s.bag && !s.code && !exclude.has(`${s.inventory}:${s.slot}`));
 
+// Native bag slots accept wearable outputs even when the ordinary pack is full.
+export function craftDestination(inventory, output, quantity, facts) {
+  const slots = ownedSlots(inventory);
+  return (
+    slots.find(s => !s.bag && s.code === output && s.quantity + quantity <= (facts?.maxStackSize ?? 1)) ??
+    emptyOwned(inventory) ??
+    (facts?.bagSlots > 0 && quantity === 1 ? slots.find(s => s.bag && !s.code) : undefined)
+  );
+}
+
 async function transfer(field, from, to, quantity) {
   await field.observe();
   const inventory = await field.send({ action: 'inventory' });
@@ -75,7 +85,7 @@ export async function craftItem(field, { output, count = 1 }) {
   await field.observe();
   if (!(await search()).length) throw Error('No known 3x3 grid recipe with that exact output code');
   let inventory = await clearGrid(field);
-  const maximum = (await learn(field, output))?.maxStackSize ?? 1;
+  const outputFacts = await learn(field, output);
   const initial = itemCount(inventory, output);
   const gained = () => itemCount(inventory, output) - initial;
   let crafts = 0;
@@ -112,8 +122,7 @@ export async function craftItem(field, { output, count = 1 }) {
         await clearGrid(field);
         return { ok: false, reason: 'grid_not_matching', output, recipe: recipe.id, gained: gained(), crafts };
       }
-      const destination =
-        ownedSlots(inventory).find(s => !s.bag && s.code === output && s.quantity + recipe.output.quantity <= maximum) ?? emptyOwned(inventory);
+      const destination = craftDestination(inventory, output, recipe.output.quantity, outputFacts);
       if (!destination) {
         await clearGrid(field);
         return { ok: false, reason: 'no_empty_slot_for_output', output, gained: gained(), crafts };
