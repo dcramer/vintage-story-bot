@@ -8,6 +8,7 @@ import { lightingDay, shelterLight } from '../src/brain/default/tasks/lighting.t
 import { recoverableBody } from '../src/brain/default/tasks/recover.ts';
 import { homeDamage, repairHome } from '../src/brain/default/tasks/repair_home.ts';
 import { shelter } from '../src/brain/default/tasks/shelter.ts';
+import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { fresh, kit } from '../src/brain/default.ts';
 import craft from '../src/goals/craft_item.ts';
@@ -148,6 +149,24 @@ test('house: partial material batches resume the same site without claiming a ho
   house.ended!({ kind: 'house', ok: true } as any, memory, {} as any);
   assert.equal(memory.notes.construction?.phase, 'floor');
   assert.equal(memory.notes.home, null, 'a roof alone is not a finished home');
+});
+
+test('finished construction offloads its surplus and the next house retrieves it before gathering', () => {
+  const k = kit(inventory({ 'game:packeddirt': 30, 'game:rammed-light-plain': 18, 'game:soil-low-none': 130 }));
+  const surplus = surplusOf(k, { home: true, torches: 1 });
+  assert.deepEqual(surplus, [
+    { item: 'game:soil-low-none', count: 126 },
+    { item: 'game:packeddirt', count: 30 },
+    { item: 'game:rammed-light-plain', count: 12 },
+  ]);
+  assert.ok(!surplusOf(k, { home: true, torches: 1, building: true }).some(s => s.item === 'game:packeddirt'));
+  const memory = fresh({
+    construction: { origin: { x: 50, y: 100, z: 50 }, phase: 'walls' },
+    stash: { ...chest, seen: { at: 0, items: { 'game:packeddirt': 30 } } },
+  });
+  const next = house.run({ memory, k: kit(inventory({})), state: { position: chest } } as any);
+  assert.ok('start' in next && next.start === 'take_items');
+  assert.deepEqual(next.args.items, [{ item: 'game:packeddirt', count: 28 }]);
 });
 
 test('house: unknown terrain and hazards never qualify as a building site', () => {

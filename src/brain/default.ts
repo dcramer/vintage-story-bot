@@ -289,7 +289,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     shelterReady:
       !starter &&
       !houseOrigin &&
-      ((!!memory.notes.shelter && k.rammed > 0) || (k.rammed >= 57 && k.torches > 0 && k.slots.some(s => s.code === 'game:firestarter'))),
+      ((!!memory.notes.shelter && k.rammed > 0) || (k.rammed >= 60 && k.torches > 0 && k.slots.some(s => s.code === 'game:firestarter'))),
 
     logs: k.logs,
     storage: !!memory.notes.stash,

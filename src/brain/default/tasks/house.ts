@@ -2,7 +2,7 @@ import { FARM_SOIL } from '../../../support/crops.ts';
 import { shelterCover, supportedFloor } from '../../../support/sites.ts';
 import { house as blueprint, houseScaffold } from '../../../support/structures.ts';
 import type { Cell, Concern } from '../concern.ts';
-import { failedOnItsOwn, goTo, setHome } from '../concern.ts';
+import { allStashes, failedOnItsOwn, goTo, noteContents, selectStash, setHome } from '../concern.ts';
 
 export type Construction = { origin: Cell; phase: 'walls' | 'floor' | 'enter' };
 export const RAMMED = 'game:rammed-light-plain';
@@ -61,6 +61,19 @@ export const house: Concern = {
     }
     const count = (item: string) => k.slots.reduce((n, s) => n + (s.code?.includes(item) ? s.quantity : 0), 0);
     if (plan.phase === 'walls' && count(RAMMED) < 6) {
+      for (const item of [RAMMED, 'game:packeddirt', 'game:soil-low-none', 'game:soil-verylow-none']) {
+        if (count(item) >= (item.includes('soil-') ? 10 : 6)) break;
+        const chest = allStashes(memory.notes).find(s => (s.seen?.items[item] ?? 0) > 0);
+        if (!chest) continue;
+        selectStash(memory, chest);
+        return (
+          goTo(ctx, chest, 'fetching stored house materials') ?? {
+            start: 'take_items',
+            args: { target: chest.key, items: [{ item, count: Math.min(28 - count(item), chest.seen.items[item]) }], timeoutMs: 300000 },
+            why: 'use stored construction supplies before digging more soil',
+          }
+        );
+      }
       // The handbook's packed-dirt recipe accepts one soil variant per batch;
       // high-fertility soil and mixed partial stacks cannot satisfy that batch.
       const soils = ['verylow', 'low'].map(grade => ({ grade, count: count(`game:soil-${grade}-none`) }));
@@ -124,7 +137,8 @@ export const house: Concern = {
     );
   },
   setAside: last => failedOnItsOwn(last) && last.reason !== 'out_of_material',
-  ended: (last, memory) => {
+  ended: (last, memory, { now }) => {
+    if (last.kind === 'take_items') noteContents(memory, last, now);
     const plan = memory.notes.construction;
     if (!plan || !last.ok) return;
     if (last.kind === 'house') plan.phase = plan.phase === 'walls' ? 'floor' : 'enter';

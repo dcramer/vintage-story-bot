@@ -10,7 +10,7 @@ import { goTo, setHome } from '../concern.ts';
 import { lightingDay, prepareFirestarter } from './lighting.ts';
 import { TORCH_MIN, torches } from './torches.ts';
 
-// 57 rammed-earth blocks; six-block crafting batches plus four soil kept for emergencies.
+// 57 shell blocks and three stairs; six-block batches plus four emergency soil.
 export const SHELTER_DIRT = 64;
 
 function obstructedShelter(map, origin) {

@@ -28,7 +28,10 @@ export function surplusOf(
     if (/^game:roughhewnfence(gate)?-/.test(code)) return farming ? Infinity : 0;
     if (/^game:seeds-/.test(code)) return farming ? 2 : 0;
     if (code.includes('soil-')) return home && !building ? 4 : SHELTER_DIRT;
-    if (/^game:(rammed-|packeddirt|hay-|basket-normal-)/.test(code)) return Infinity;
+    if (/^game:rammed-/.test(code)) return building ? Infinity : 6;
+    if (code === 'game:packeddirt') return building ? Infinity : 0;
+    if (/^game:hay-/.test(code)) return building ? Infinity : 2;
+    if (/^game:basket-normal-/.test(code)) return 0;
     if (code.includes('drygrass') || code.includes('cattailtops')) return torches < TORCH_MIN ? Infinity : 0;
     if (code === 'game:flint' || /^game:stone-/.test(code)) return k.knife && k.axe && k.shovel && k.hoe ? 0 : Infinity;
     return 0;
