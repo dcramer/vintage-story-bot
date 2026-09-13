@@ -11,7 +11,7 @@ import { shelter } from '../src/brain/default/tasks/shelter.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { fresh, kit } from '../src/brain/default.ts';
-import { standNear } from '../src/goals/build.ts';
+import { stablePlacementSupport, standNear } from '../src/goals/build.ts';
 import craft from '../src/goals/craft_item.ts';
 import buildHouse from '../src/goals/house.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
@@ -88,6 +88,13 @@ test('a roof placement retry chooses a higher viewpoint instead of another spot 
   assert.deepEqual(destination, rooftop);
   assert.equal(await standNear(field, null, { x: 4, y: 102, z: 2 }, true, false), true);
   assert.deepEqual(destination, beneath, 'digging an overhead block may still use its underside');
+});
+
+test('building never uses replaceable snow as a support face', () => {
+  const solid = { code: 'game:soil-low-none', boxes: [[0, 0, 0, 1, 1, 1]], hazard: null, traits: [] };
+  const snow = { code: 'game:snowlayer-3', boxes: [[0, 0, 0, 1, 0.375, 1]], hazard: null, traits: [] };
+  assert.equal(stablePlacementSupport(solid), true);
+  assert.equal(stablePlacementSupport(snow), false, 'code-derived traits cover terrain memories without semantic traits');
 });
 
 test('the larger house retains a legal route from the ground to its completed ridge', () => {

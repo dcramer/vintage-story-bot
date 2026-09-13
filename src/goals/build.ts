@@ -7,6 +7,7 @@ import { Gleaner, pickupBlock } from '../support/gleaning.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
 import { presets } from '../support/structures.ts';
 import { cleanName, runField } from '../support/task.ts';
+import { has } from '../support/traits.ts';
 
 const faces = { up: [0, 1, 0], north: [0, 0, -1], south: [0, 0, 1], east: [1, 0, 0], west: [-1, 0, 0], down: [0, -1, 0] };
 const center = c => ({ x: c.x + 0.5, y: c.y + 0.5, z: c.z + 0.5 });
@@ -56,6 +57,16 @@ function known(field, cell) {
   const entry = field.env.map.get(cell.x, cell.y, cell.z);
   return entry ? (entry.hazard ? 'hazard' : entry.boxes.length || (entry.code && entry.code !== 'game:air') ? 'solid' : 'air') : 'unknown';
 }
+
+// Native placement refuses blocks that the placed item would replace. Terrain
+// memory can carry only geometry and a code, so consult both its reported
+// traits and the handbook/prior traits derived from that code.
+export const stablePlacementSupport = cell =>
+  !!cell &&
+  !cell.hazard &&
+  (cell.boxes?.length > 0 || (!!cell.code && cell.code !== 'game:air')) &&
+  !has(cell, 'replaceable') &&
+  !has({ kind: 'block', code: cell.code }, 'replaceable');
 
 export async function digArea(field, survival, { cells, tool, minTier = 0 }) {
   const done = [],
@@ -200,7 +211,7 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
       }
       for (const [face, offset] of Object.entries(faces)) {
         const support = { x: cell.x - offset[0], y: cell.y - offset[1], z: cell.z - offset[2] };
-        if (known(field, support) !== 'solid') continue;
+        if (!stablePlacementSupport(field.env.map.get(support.x, support.y, support.z))) continue;
         let selected, point;
         for (const candidate of facePoints(support, offset)) {
           selected = await selectCell(field, support, { point: candidate, face, clearPlants: true });
