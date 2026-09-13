@@ -45,7 +45,6 @@ export function food(ctx: Context, keep: number): Decision {
       // for fuel preparation. Food must not wait for another reed expedition.
       if (k.free === 0 || bag.start !== 'harvest') return bag;
     }
-    if (!k.axe) return makeTool(k, 'axe', 'axehead', k.axeBlade, 'game:axe');
     if (!count('game:firestarter')) {
       if (k.sticks < 2)
         return {
@@ -65,6 +64,7 @@ export function food(ctx: Context, keep: number): Decision {
     // the whole retry; the cook goal's fresh container read loads only the gap.
     const wood = fuel + (pit ? 0 : 4) - count('game:firewood');
     if (wood > 0) {
+      if (!k.axe) return makeTool(k, 'axe', 'axehead', k.axeBlade, 'game:axe');
       if (!k.logs) return { start: 'fell_tree', args: { count: Math.ceil(wood / 4), timeoutMs: 300000 }, why: 'logs for cooking fuel' };
       return {
         start: 'craft_item',

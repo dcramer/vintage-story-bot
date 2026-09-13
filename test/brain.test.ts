@@ -998,6 +998,25 @@ test('brain: starvation prepares one root locally instead of returning to a dist
   assert.equal(cooking.args.fuel, 2);
 });
 
+test('brain: starvation uses carried firewood before replacing a broken axe', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.notes.cookUntil = 10_000;
+  memory.notes.firepit = { x: 2, y: 100, z: 0 };
+  const supplies = inventory(
+    slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }),
+    slot('game:shovel-flint', 1, { tool: 'Shovel', durability: 5 }),
+    slot('game:firestarter'),
+    slot('game:firewood', 2),
+  );
+
+  const choice = decide(reading({ state: state({ vitals: { hunger: { current: 0, max: 1500 } } }), inventory: supplies, now: 2000 }), memory);
+
+  assert.equal(choice.start, 'harvest');
+  assert.equal(choice.args.item, 'game:cattailroot');
+  assert.equal(choice.args.count, 1);
+});
+
 test('brain: failed travel abandons an unreachable firepit and prepares a local replacement', () => {
   const memory = fresh();
   memory.startupChecked = true;
