@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { house, houseSite } from '../src/brain/default/tasks/house.ts';
+import { recoverableBody } from '../src/brain/default/tasks/recover.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { fresh, kit } from '../src/brain/default.ts';
 import craft from '../src/goals/craft_item.ts';
@@ -17,6 +18,15 @@ const chest = {
   code: 'game:stationarybasket-east',
   seen: { at: 1000, items: {} },
 };
+
+test('an old death marker cannot renew recovery after a controller restart', () => {
+  const marker = { guid: 'death-one', icon: 'gravestone' };
+  const memory = fresh();
+  assert.equal(recoverableBody([marker], memory.notes, 1000), true);
+  const restarted = fresh(memory.notes);
+  assert.equal(recoverableBody([marker], restarted.notes, 601000), false);
+  assert.equal(recoverableBody([marker, { ...marker, guid: 'death-two' }], restarted.notes, 601000), true);
+});
 
 test('knapping requires two matching stones and prefers a usable stack over a lone flint', () => {
   const mixed = kit(inventory({ 'game:flint': 1, 'game:stone-peridotite': 1 }));

@@ -1,7 +1,6 @@
 // Early survival decisions over current readings and durable camp notes.
 // Concerns own their behavior; this file orders and interrupts them.
 
-import { isDeathMarker } from '../goals/retrieve_body.ts';
 import type { Brain, Decision, Reading } from '../runtime/brain.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { temporalStormUnsafe } from '../support/fieldwork.ts';
@@ -46,7 +45,7 @@ import { house } from './default/tasks/house.ts';
 import { lighting } from './default/tasks/lighting.ts';
 import { logs } from './default/tasks/logs.ts';
 import { provisions } from './default/tasks/provisions.ts';
-import { recover } from './default/tasks/recover.ts';
+import { recover, recoverableBody } from './default/tasks/recover.ts';
 import { resupply, resupplyOf } from './default/tasks/resupply.ts';
 import { shelter } from './default/tasks/shelter.ts';
 import { spareKnife } from './default/tasks/spare_knife.ts';
@@ -65,8 +64,8 @@ export type { Job, Memory, Notes, Situation };
 // Dependencies are checked against the current kit; interrupted work is re-derived.
 export const TASKS: Concern[] = [
   resupply,
-  recover,
   provisions,
+  recover,
   knife,
   axe,
   bags,
@@ -252,7 +251,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     burrowed: !!memory.burrow && horizontal(state.position, memory.burrow) <= 8,
     besieged: !isNight(environment) && memory.besiegedAt !== null && now - memory.besiegedAt >= SIEGE_MS,
     dangerHere: dangerHere(memory, state.position),
-    body: markers.some(isDeathMarker),
+    body: recoverableBody(markers, memory.notes, now),
     sticks: k.sticks,
     knife: k.knife,
     axe: k.axe,
@@ -367,6 +366,9 @@ export function notes(memory: Memory): Notes {
 export function fresh(kept?: Partial<Notes> | null): Memory {
   return {
     notes: {
+      ...(typeof kept?.recovery?.guid === 'string' && Number.isFinite(kept?.recovery?.until)
+        ? { recovery: { guid: kept.recovery.guid, until: kept.recovery.until } }
+        : {}),
       home: cell(kept?.home),
       ...(Number.isFinite(kept?.lightingDay) ? { lightingDay: kept!.lightingDay } : {}),
       ...(cell(kept?.house) ? { house: cell(kept?.house) } : {}),
