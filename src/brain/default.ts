@@ -200,6 +200,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
       ? { act: [{ action: 'respawn', deathId: state.life.deathId }], why: 'dead' }
       : { wait: 'dead, waiting for respawn' };
   }
+  // Death during multiplayer join can arrive before the client's Alive flag
+  // and dialog synchronize. Do not perform ghost actions or invent a respawn
+  // request; wait for the native life state to agree with the empty health bar.
+  if (state.vitals?.health?.current === 0)
+    return active ? { stop: 'zero health; waiting for life state to synchronize' } : { wait: 'zero health; waiting for life state to synchronize' };
   // A world still loading, a menu or a dialog: no goal can begin, and one refused
   // before it began would only be started again at once. Wait for the controls.
   if (state.controlReady === false) {

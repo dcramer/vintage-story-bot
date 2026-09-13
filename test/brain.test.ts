@@ -423,6 +423,13 @@ test('brain: death waits until the respawn dialog is ready', () => {
   assert.deepEqual(decide(reading({ state: dead }), fresh()), { wait: 'dead, waiting for respawn' });
 });
 
+test('brain: zero health with a stale alive flag waits for native death synchronization', () => {
+  const stale = state({ alive: true, vitals: { health: { current: 0, max: 15 } }, life: { canRespawn: false, deathId: null } });
+  const reason = 'zero health; waiting for life state to synchronize';
+  assert.deepEqual(decide(reading({ state: stale }), fresh()), { wait: reason });
+  assert.deepEqual(decide(reading({ state: stale, active: { id: 'ghost-work', kind: 'harvest', active: true } }), fresh()), { stop: reason });
+});
+
 test('brain: death forgets transient burrow and pit state before respawn', () => {
   const memory = fresh();
   memory.burrow = { x: 10, y: 100, z: 10 };
