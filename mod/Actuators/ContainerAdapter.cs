@@ -46,7 +46,9 @@ public sealed class ContainerAdapter(ICoreClientAPI api)
     private bool OwnInventory(IInventory inventory) =>
         Own.Select(name => Manager.GetOwnInventory(name)).Any(own => own != null && own == inventory);
 
-    private IInventory? Candidate() => Manager.OpenedInventories
+    private IInventory? Candidate() => api.Gui.OpenedGuis.OfType<GuiDialogBlockEntity>()
+        .Where(dialog => dialog.IsOpened())
+        .Select(dialog => dialog.Inventory)
         .Where(inventory => inventory != null && !OwnInventory(inventory) && inventory.HasOpened(api.World.Player))
         .FirstOrDefault();
 
