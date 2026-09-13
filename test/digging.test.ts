@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
-import { pitLimit, reachable, stairStep } from '../src/support/digging.ts';
+import { diggingSlot, pitLimit, reachable, stairStep } from '../src/support/digging.ts';
 
 // A block world: floor at y=-1, air above, plus solid cells from `solid`.
 function world(width, solid) {
@@ -116,4 +116,41 @@ test('a sealed pit clears takeoff headroom before cutting the stair wall', () =>
   assert.ok(pit.moves(origin).some(({ node }) => node.x === 1.5 && node.z === 0.5 && node.move === 'jump'));
   pit.put({ x: 0, y: 2, z: 0, seenAt: Date.now(), traits: ['water'], boxes: [] });
   assert.equal(stairStep(pit, origin, { x: 5, y: 0, z: 0.5 }), null, 'do not open an overhead hazard');
+});
+
+test('stairs avoid rock beyond the carried mining tier and reuse cleared steps', () => {
+  const pit = world(3, (x, y, z) => (x !== 0 || z !== 0) && y >= 0 && y <= 3);
+  const origin = { x: 0.5, y: 0, z: 0.5 };
+  const toward = { x: 5, z: 0.5 };
+  pit.get(1, 2, 0).traits = ['tier2'];
+  assert.notDeepEqual(stairStep(pit, origin, toward, 0)?.step, { x: 1, y: 0, z: 0 }, 'bare hands choose another wall');
+  assert.notDeepEqual(stairStep(pit, origin, toward, 1)?.step, { x: 1, y: 0, z: 0 }, 'an insufficient pickaxe cannot cut this wall');
+  assert.deepEqual(stairStep(pit, origin, toward, 2)?.step, { x: 1, y: 0, z: 0 });
+  for (const y of [1, 2, 3]) pit.put({ x: 1, y, z: 0, seenAt: Date.now(), traits: [], boxes: [] });
+  const ready = stairStep(pit, origin, toward, 0);
+  assert.deepEqual(ready.step, { x: 1, y: 0, z: 0 });
+  assert.deepEqual(ready.dig, [], 'a previously cleared stair needs only the climb');
+  pit.put({ x: 0, y: 2, z: 0, seenAt: Date.now(), traits: ['tier2'], boxes: [[0, 0, 0, 1, 1, 1]] });
+  assert.equal(stairStep(pit, origin, toward, 0), null, 'every direction still needs takeoff headroom');
+});
+
+test('burrow digging uses a carried shovel while respecting required mining tiers', async () => {
+  const inventory = {
+    inventories: [
+      {
+        name: 'hotbar',
+        slots: [
+          { slot: 0, code: null, quantity: 0 },
+          { slot: 1, code: 'game:shovel-copper', tool: 'Shovel', toolTier: 2, durability: 10, quantity: 1 },
+          { slot: 2, code: 'game:pickaxe-copper', tool: 'Pickaxe', toolTier: 2, durability: 10, quantity: 1 },
+        ],
+      },
+    ],
+  };
+  const field = { latest: { activeSlot: 0 } };
+  assert.equal(await diggingSlot(field, { material: 'Soil' }, inventory), 1);
+  assert.equal(await diggingSlot(field, { material: 'Stone', requiredMiningTier: 2 }, inventory), 2);
+  assert.equal(await diggingSlot(field, { material: 'Stone', requiredMiningTier: 3 }, inventory), null);
+  inventory.inventories[0].slots[1].durability = 0;
+  assert.equal(await diggingSlot(field, { material: 'Soil' }, inventory), 0, 'broken shovel falls back to the current slot');
 });

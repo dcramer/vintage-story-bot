@@ -39,7 +39,7 @@ export const known = (map, x, y, z) => !!map.get(x, y, z);
 // The first stair step toward a point: a cardinal neighbour whose cell at foot
 // level is a solid block (the step) with solid blocks above it (the wall to cut).
 // Returns the step cell and the cells to dig, in order, or null.
-export function stairStep(map, node, toward) {
+export function stairStep(map, node, toward, miningTier = Infinity) {
   const x = Math.floor(node.x),
     z = Math.floor(node.z),
     h = Math.floor(node.y);
@@ -48,6 +48,8 @@ export function stairStep(map, node, toward) {
   const roof = map.get(x, h + 2, z);
   if (!roof || roof.hazard) return null;
   const ceiling = solid(map, x, h + 2, z) ? [{ x, y: h + 2, z }] : [];
+  const canCut = cell => !map.get(cell.x, cell.y, cell.z).traits.some(trait => /^tier\d+$/.test(trait) && Number(trait.slice(4)) > miningTier);
+  if (!ceiling.every(canCut)) return null;
   const heading = lookAt(node, toward).yawDegrees;
   const directions = cardinals
     .map(([dx, dz]) => ({ dx, dz, off: Math.abs(angle(lookAt(node, { x: node.x + dx, z: node.z + dz }).yawDegrees, heading)) }))
@@ -62,7 +64,7 @@ export function stairStep(map, node, toward) {
     const above = [h + 1, h + 2, h + 3];
     if (!above.every(y => known(map, wx, y, wz)) || above.some(y => map.get(wx, y, wz).hazard)) continue;
     const dig = above.filter(y => solid(map, wx, y, wz)).map(y => ({ x: wx, y, z: wz }));
-    if (!dig.length) continue;
+    if (!dig.every(canCut)) continue;
     return { step: { x: wx, y: h, z: wz }, dig: [...ceiling, ...dig], direction: { dx, dz } };
   }
   return null;
@@ -71,10 +73,14 @@ export function stairStep(map, node, toward) {
 // Whether the selected block can be broken with what is carried; picks the tool slot when one is needed.
 export async function diggingSlot(field, selected, inventory) {
   const tier = selected.requiredMiningTier ?? 0;
-  if (!(tier > 0)) return field.latest.activeSlot;
-  const pick = ownedSlots(inventory).find(s => s.tool === 'Pickaxe' && s.toolTier >= tier && s.durability > 0);
-  if (!pick) return null;
-  return (await equip(field, { tool: 'Pickaxe', minTier: tier })).slot;
+  const tool = tier > 0 ? 'Pickaxe' : ['Soil', 'Sand', 'Gravel', 'Snow'].includes(selected.material) ? 'Shovel' : null;
+  if (!tool) return field.latest.activeSlot;
+  const slots = ownedSlots(inventory);
+  const usable = s => s.tool === tool && s.toolTier >= tier && s.durability > 0 && s.quantity > 0;
+  const held = slots.find(s => s.inventory === 'hotbar' && usable(s));
+  if (held) return held.slot;
+  if (!slots.some(usable) || !slots.some(s => s.inventory === 'hotbar' && !s.code)) return tier > 0 ? null : field.latest.activeSlot;
+  return (await equip(field, { tool, minTier: tier })).slot;
 }
 
 // Dig stairs toward a point until there is room to roam again.
@@ -93,7 +99,14 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       reason = null;
       break;
     }
-    let plan = stairStep(map, origin, toward);
+    const inventory = await field.send({ action: 'inventory' });
+    const slots = ownedSlots(inventory);
+    const canEquip = slots.some(s => s.inventory === 'hotbar' && !s.code);
+    const miningTier = Math.max(
+      0,
+      ...slots.filter(s => s.tool === 'Pickaxe' && s.durability > 0 && s.quantity > 0 && (s.inventory === 'hotbar' || canEquip)).map(s => s.toolTier),
+    );
+    let plan = stairStep(map, origin, toward, miningTier);
     if (!plan) {
       // A narrow shaft can hide its foot-level neighbours from the passive
       // terrain stream. Look directly at each wall once before concluding
@@ -106,14 +119,13 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
         const eye = { ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight };
         await field.aim(lookAt(eye, { x: x + dx + 0.5, y: h + 0.5, z: z + dz + 0.5 }));
       }
-      plan = stairStep(map, origin, toward);
+      plan = stairStep(map, origin, toward, miningTier);
     }
     if (!plan) {
       reason = 'no_wall_to_cut';
       break;
     }
     field.report('digging_out', { step: climbed + 1, cell: plan.step, cells: plan.dig.length });
-    const inventory = await field.send({ action: 'inventory' });
     let cut = true;
     for (const cell of plan.dig) {
       const selected = await selectCell(field, cell, { clearPlants: true });
@@ -143,7 +155,7 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
     const seen = () => map.get(plan.step.x, plan.step.y, plan.step.z) && plan.dig.every(cell => map.get(cell.x, cell.y, cell.z));
     for (let looks = 0; looks < 6 && !seen(); looks++) {
       const eye = { ...field.latest.position, y: field.latest.position.y + field.latest.body.eyeHeight };
-      await field.aim(lookAt(eye, { x: plan.step.x + 0.5, y: plan.dig[0].y + 0.5, z: plan.step.z + 0.5 }));
+      await field.aim(lookAt(eye, { x: plan.step.x + 0.5, y: origin.y + 1.5, z: plan.step.z + 0.5 }));
       await field.wait(400);
       await field.observe(true);
     }
@@ -157,7 +169,12 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
     }
     const up = await field.walk({ x: plan.step.x + 0.5, y: origin.y + 1, z: plan.step.z + 0.5, arrivalRadius: 0.3 });
     const stepCenter = { x: plan.step.x + 0.5, z: plan.step.z + 0.5 };
-    if (!['arrived', 'paused'].includes(up.state) || horizontal(field.latest.position, stepCenter) > 0.8) {
+    if (
+      !['arrived', 'paused'].includes(up.state) ||
+      horizontal(field.latest.position, stepCenter) > 0.8 ||
+      field.latest.position.y < origin.y + 0.9 ||
+      !field.latest.motion.onGround
+    ) {
       reason = 'cannot_climb';
       break;
     }
