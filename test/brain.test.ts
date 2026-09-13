@@ -736,6 +736,11 @@ test('brain: forage keeps its own threat evasion instead of being cancelled', ()
   assert.deepEqual(decide(reading({ state: wolf, active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' } }), memory), {
     wait: 'letting forage evade threat',
   });
+  const provisions = fresh();
+  provisions.job = 'provisions';
+  assert.deepEqual(decide(reading({ state: wolf, active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' } }), provisions), {
+    wait: 'letting forage evade threat',
+  });
   const food = { id: 'food', kind: 'forage', state: 'running', by: 'brain' };
   assert.deepEqual(
     decide(
