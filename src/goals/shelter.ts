@@ -60,6 +60,6 @@ export default defineGoal({
         field.report('lighting', { origin });
         lit = (await build(field, survival, { cells: [{ x: origin.x + 1, y: origin.y, z: origin.z + 1, item: torchCode }] })).ok;
       }
-      return { ok: true, goal: 'shelter', origin, home, placed: walls.placed + seal.placed, lit, verification: 'client_observed' };
+      return { ok: true, goal: 'shelter', origin, home, item, placed: walls.placed + seal.placed, lit, verification: 'client_observed' };
     }),
 });

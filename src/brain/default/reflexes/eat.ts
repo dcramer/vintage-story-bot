@@ -15,7 +15,7 @@ export const eat: Concern = {
   run: ({ s, k, satiety }) => {
     const percent = Math.round((satiety ?? 0) * 100);
     // Sealed in for the night: one bite from the pack, no searching.
-    if (s.burrowed && k.reserve > 0) return { start: 'eat', args: {}, why: `satiety ${percent}%, dug in` };
+    if ((s.burrowed || s.atHome) && k.reserve > 0) return { start: 'eat', args: {}, why: `satiety ${percent}%, dug in` };
     return {
       start: 'forage',
       // Fed to half with two bites' worth kept in the pack.

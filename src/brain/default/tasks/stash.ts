@@ -18,7 +18,7 @@ export function surplusOf(k: Kit, { home, torches }: { home: boolean; torches: n
   const keep = (code: string) => {
     if (code === 'game:stick') return STICK_MIN;
     if (code.includes('log-')) return LOG_MIN;
-    if (code.includes('soil-')) return home ? 0 : SHELTER_DIRT;
+    if (code.includes('soil-')) return home ? 4 : SHELTER_DIRT;
     if (code.includes('drygrass') || code.includes('cattailtops')) return torches < TORCH_MIN ? Infinity : 0;
     if (code === 'game:flint' || /^game:stone-/.test(code)) return k.knife && k.axe && k.shovel ? 0 : Infinity;
     return 0;

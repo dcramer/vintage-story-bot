@@ -993,7 +993,7 @@ test('brain: home is a note that outlives the process and is mirrored once on th
     (first.memory as any).notes.home = { x: 7, y: 100, z: 9 };
     await first.stop();
     const file = first.notes.status().file;
-    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).notes, { home: { x: 7, y: 100, z: 9 }, stash: null });
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).notes, { home: { x: 7, y: 100, z: 9 }, stash: null, dwelling: null });
     const second = new BrainLoop(controller as any, brain, 5);
     second.start();
     await new Promise(resolve => setTimeout(resolve, 30));
@@ -1224,4 +1224,27 @@ test('brain: a chest by the door is made in three steps, a full pack is put away
   assert.equal(carrying.notes.stash, null, 'a chest missed twice where its note says is forgotten');
   assert.deepEqual(fresh({ stash: { key, x: 4, y: 100, z: 2, code: 'game:stationarybasket-north', seen: null } }).notes.stash?.key, key);
   assert.equal(fresh({ stash: { key } } as any).notes.stash, null, 'a damaged note is not a chest');
+});
+
+test('brain: a shelter has to be entered and sealed, and opens before morning work', () => {
+  const home = { x: 0.5, y: 100, z: 0.5 };
+  const dwelling = { door: { x: 0, y: 100, z: 1 }, item: 'soil-' };
+  const kept = { home, dwelling, stash: chestNote() };
+  const inv = inventory(slot('game:soil-medium-none', 4));
+  const memory = fresh(kept);
+  memory.homeMarked = true;
+  memory.startupChecked = true;
+  const nearby = reading({ inventory: inv, environment: night, state: state({ position: { x: 4, y: 100, z: 1 } }) });
+  assert.equal(decide(nearby, memory).start, 'enter_shelter');
+  const inside = reading({
+    inventory: inv,
+    environment: { calendar: { daylight: 1, hourOfDay: 4 } },
+    state: state({ position: home }),
+    terrain: { get: () => ({ hazard: null, boxes: [{}] }) },
+  });
+  assert.ok('wait' in decide(inside, memory));
+  const opened = decide({ ...inside, environment: { calendar: { daylight: 1, hourOfDay: 5 } } }, memory);
+  assert.equal(opened.start, 'dig_area');
+  assert.deepEqual(opened.args.cells, [dwelling.door, { ...dwelling.door, y: 101 }]);
+  assert.deepEqual(fresh(brain.notes!(memory)).notes.dwelling, dwelling);
 });

@@ -12,7 +12,11 @@ import type { Cell, Memory } from './concern.ts';
 // sees little) to dawn; unknown light counts as day, since
 // without a reading the brain cannot call itself home.
 export const NIGHT_LIGHT = 0.4;
-export const isNight = (environment: any) => typeof environment?.calendar?.daylight === 'number' && environment.calendar.daylight < NIGHT_LIGHT;
+export const isNight = (environment: any) => {
+  const calendar = environment?.calendar;
+  const hour = calendar?.hourOfDay;
+  return (typeof hour === 'number' && (hour < 5 || hour >= 18)) || (typeof calendar?.daylight === 'number' && calendar.daylight < NIGHT_LIGHT);
+};
 // The stones that knap, as the game names them.
 export const KNAPPABLE = ['chert', 'granite', 'andesite', 'basalt', 'obsidian', 'peridotite'];
 // A threat seen this recently is still a threat once out of view; a flight ends when nothing has shown for this long and the scare is this far behind.
@@ -94,6 +98,7 @@ export type Situation = {
   night: boolean;
   home: boolean;
   atHome: boolean;
+  sheltered?: boolean;
   burrowed: boolean;
   // Dug in with a threat outside for longer than a day's patience: time to tunnel out the far side.
   besieged: boolean;

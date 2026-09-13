@@ -24,6 +24,10 @@ export const shelter: Concern = {
   },
   // A finished shelter is home.
   ended: (last, memory) => {
-    if (last.ok && last.result?.home) setHome(memory, last.result.home);
+    if (last.ok && last.result?.home) {
+      setHome(memory, last.result.home);
+      const origin = last.result.origin;
+      if (origin) memory.notes.dwelling = { door: { x: origin.x + 1, y: origin.y, z: origin.z + 2 }, item: last.result.item ?? 'soil-' };
+    }
   },
 };

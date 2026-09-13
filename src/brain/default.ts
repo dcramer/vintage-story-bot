@@ -90,7 +90,15 @@ export const TASKS: Concern[] = [
   spareKnife,
   logs,
 ];
-const REFLEXES: Concern[] = [hide, eat, goHome, burrow, unburrow, tunnel, shift, wait, relocate, digOut, explore];
+const leaveShelter: Concern = {
+  id: 'leave_shelter',
+  uncuttable: true,
+  run: ({ memory }) => {
+    const door = memory.notes.dwelling!.door;
+    return { start: 'dig_area', args: { cells: [door, { ...door, y: door.y + 1 }], timeoutMs: 120000 }, why: 'opening the shelter to leave' };
+  },
+};
+const REFLEXES: Concern[] = [leaveShelter, hide, eat, goHome, burrow, unburrow, tunnel, shift, wait, relocate, digOut, explore];
 // What runs beside any job, through tools that only talk.
 const ALONGSIDE: Alongside[] = [copper, homeMarker];
 // The ladder: danger, then hunger, then a storm, a bad place, night, then the
@@ -101,6 +109,7 @@ const ALONGSIDE: Alongside[] = [copper, homeMarker];
 // ledge) is not run from again at once; a dig-in that failed here is not
 // tried again at once either, nor is opening a burrow that would not open.
 export const LADDER: Rung[] = [
+  { job: 'wait', when: s => !!s.sheltered && s.threat && !s.hurt && !hungry(s) },
   { job: 'unburrow', when: s => s.burrowed && s.hurt },
   { job: 'tunnel', when: (s, tried) => s.burrowed && s.threat && !s.hurt && s.besieged && !tried.has('tunnel') },
   // Rock stopped every tunnel: open the mouth and run (the hide rung takes over once outside), but not
@@ -214,6 +223,14 @@ export function decide(reading: Reading, memory: Memory): Decision {
   const k = kit(inventory);
   const home = memory.notes.home;
   const tried = triedNow(memory, state.position, now);
+  const dwelling = memory.notes.dwelling;
+  const inside = !!home && horizontal(state.position, home) < 0.7 && Math.abs(state.position.y - home.y) < 1;
+  const sealed =
+    !!dwelling &&
+    [0, 1].every(dy => {
+      const block = reading.terrain?.get(dwelling.door.x, dwelling.door.y + dy, dwelling.door.z);
+      return !!block && !block.hazard && block.boxes.length > 0;
+    });
   const s: Situation = {
     threat: !!danger,
     threatNear: !!danger && horizontal(state.position, danger.point) <= THREAT_NEAR,
@@ -223,7 +240,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
     reserve: k.reserve,
     night: isNight(environment),
     home: !!home,
-    atHome: !!home && horizontal(state.position, home) < 8,
+    atHome: dwelling ? inside && sealed : !!home && horizontal(state.position, home) < 0.7 && Math.abs(state.position.y - home.y) < 1,
+    sheltered: !!dwelling && inside && sealed,
     burrowed: !!memory.burrow && horizontal(state.position, memory.burrow) <= 8,
     besieged: !isNight(environment) && memory.besiegedAt !== null && now - memory.besiegedAt >= SIEGE_MS,
     dangerHere: dangerHere(memory, state.position),
@@ -301,6 +319,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
     memory.job = 'dig_out';
     return digOut.run(ctx);
   }
+  if (dwelling && inside && sealed && job !== 'wait' && job !== 'go_home' && !(job === 'eat' && k.reserve > 0)) {
+    memory.job = 'leave_shelter';
+    return leaveShelter.run(ctx);
+  }
   const decision = concern(job).run(ctx);
   if ('start' in decision) memory.job = job;
   return decision;
@@ -316,7 +338,12 @@ export function notes(memory: Memory): Notes {
 }
 export function fresh(kept?: Partial<Notes> | null): Memory {
   return {
-    notes: { home: cell(kept?.home), stash: stashNote(kept?.stash) },
+    notes: {
+      home: cell(kept?.home),
+      stash: stashNote(kept?.stash),
+      dwelling:
+        cell(kept?.dwelling?.door) && typeof kept?.dwelling?.item === 'string' ? { door: cell(kept.dwelling.door)!, item: kept.dwelling.item } : null,
+    },
     homeMarked: false,
     tried: {},
     situation: null,

@@ -35,7 +35,8 @@ export type Job =
   | 'storage'
   | 'bags'
   | 'stash'
-  | 'resupply';
+  | 'resupply'
+  | 'leave_shelter';
 // The container the bot keeps things in: its observed key (cell and block code), and what it
 // held when last closed. Unknown until opened; stale once anyone else has been at it.
 export type Stash = {
@@ -50,6 +51,7 @@ export type Stash = {
 // left in its own chest (re-verified when it is opened); what the eye saw of the world is Knowledge.
 export type Notes = {
   home: Cell | null;
+  dwelling?: { door: Cell; item: string } | null;
   stash: Stash | null;
 };
 export type Memory = {
@@ -230,5 +232,6 @@ export function noteContents(memory: Memory, last: Ended, now: number) {
 // Home is a note: it outlives the process, and moving house is rewriting it.
 export function setHome(memory: Memory, home: Cell | null) {
   memory.notes.home = cell(home);
+  memory.notes.dwelling = null;
   memory.homeMarked = false;
 }
