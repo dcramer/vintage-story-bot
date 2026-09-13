@@ -99,7 +99,15 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
       field.report('digging', { target: o.key });
       let result;
       try {
-        result = await changeBlock(field, 'dig', { target: o.key, slot, acceptTransform: true });
+        // Native axe mining scales with the connected tree's resistance. A
+        // large tree can take longer than the ordinary one-minute block cut;
+        // abandoning that hold and moving up its trunk loses the work.
+        result = await changeBlock(field, 'dig', {
+          target: o.key,
+          slot,
+          acceptTransform: true,
+          ...(tool === 'Axe' && includes(o.code, 'log-grown') ? { timeoutMs: 180000 } : {}),
+        });
       } catch (error) {
         if (/interruption|cancelled|deadline|Selected item changed/i.test(error.message)) throw error;
         result = { ok: false, reason: error.message };
