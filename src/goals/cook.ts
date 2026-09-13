@@ -37,7 +37,10 @@ export async function cook(field, { target, item, count, fuel }) {
   let opened = false;
   let moved = 0;
   const open = async () => {
-    const selected = await selectCell(field, cell);
+    // A nearby grass tuft can intercept the ray to the low firepit even though
+    // the eye just observed the firepit itself. Clear that ordinary visual
+    // obstruction before concluding the owned firepit disappeared.
+    const selected = await selectCell(field, cell, { clearPlants: true });
     if (!selected || !/:game:firepit-(cold|extinct|lit)$/.test(selected.key)) throw Error('Firepit not observed');
     const container = await openContainer(field, { target: selected.key });
     opened = true;
