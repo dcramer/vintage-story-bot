@@ -11,6 +11,7 @@ import { shelter } from '../src/brain/default/tasks/shelter.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { fresh, kit } from '../src/brain/default.ts';
+import { standNear } from '../src/goals/build.ts';
 import craft from '../src/goals/craft_item.ts';
 import buildHouse from '../src/goals/house.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
@@ -66,6 +67,26 @@ test('the front staircase still reaches the roof after the walls are covered', (
   for (const { x, y, z } of [shelterScaffold(origin, 'earth')[0], shelterScaffold(origin, 'earth')[2]])
     map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [] });
   assert.equal(findRoute(map, start, goal, 0.3, 1.85, { partial: false }), null, 'one front block cannot reach a roof-covered wall');
+});
+
+test('a roof placement retry chooses a higher viewpoint instead of another spot beneath it', async () => {
+  const state = { position: { x: 2.5, y: 100, z: 2.5 }, body: { eyeHeight: 1.7 } };
+  const beneath = { x: 3.5, y: 100, z: 2.5 };
+  const rooftop = { x: 3.5, y: 103, z: 2.5 };
+  let destination;
+  const field = {
+    latest: state,
+    observe: async () => state,
+    approach: (_object, exclude) => [beneath, rooftop].find(q => !exclude(q)),
+    walk: async q => {
+      destination = q;
+      return { state: 'arrived' };
+    },
+  };
+  assert.equal(await standNear(field, null, { x: 4, y: 102, z: 2 }, true, true), true);
+  assert.deepEqual(destination, rooftop);
+  assert.equal(await standNear(field, null, { x: 4, y: 102, z: 2 }, true, false), true);
+  assert.deepEqual(destination, beneath, 'digging an overhead block may still use its underside');
 });
 
 test('the larger house retains a legal route from the ground to its completed ridge', () => {

@@ -3,6 +3,7 @@ import { defineGoal } from '../runtime/define.ts';
 import { distance, horizontal } from '../runtime/navigation/terrain.ts';
 import { changeBlock, selectCell } from '../support/blocks.ts';
 import { diggingSlot } from '../support/digging.ts';
+import { Gleaner, pickupBlock } from '../support/gleaning.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
 import { presets } from '../support/structures.ts';
 import { cleanName, runField } from '../support/task.ts';
@@ -28,9 +29,16 @@ async function eye(field) {
 }
 
 // Stand within native reach of a cell without occupying its column; returns false when no route exists.
-async function standNear(field, survival, cell, force = false) {
-  if (!force && distance(await eye(field), center(cell)) <= reach) return true;
-  const destination = field.approach({ point: center(cell), kind: 'block' }, q => sameColumn(q, cell) && Math.abs(q.y - cell.y) < 2.5);
+export async function standNear(field, survival, cell, force = false, placing = false) {
+  const from = await eye(field);
+  if (!force && distance(from, center(cell)) <= reach) return true;
+  // A failed placement above the eye needs a higher viewpoint. Another floor
+  // cell beneath the same roof cannot expose its support faces.
+  const raise = placing && force && cell.y > from.y;
+  const destination = field.approach(
+    { point: center(cell), kind: 'block' },
+    q => (sameColumn(q, cell) && Math.abs(q.y - cell.y) < 2.5) || (raise && q.y + field.latest.body.eyeHeight < cell.y + 0.5),
+  );
   if (!destination) return false;
   const result = await field.walk(destination, survival?.pauseWhen);
   return ['arrived', 'paused'].includes(result.state);
@@ -118,6 +126,30 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
   for (const cell of cells) {
     await field.observe(true);
     await survival?.tend();
+    const obstruction = field.env.map.get(cell.x, cell.y, cell.z);
+    const loose = {
+      kind: 'block',
+      code: obstruction?.code,
+      point: center(cell),
+      key: `block:${field.latest.position.dimension ?? 0}:${cell.x}:${cell.y}:${cell.z}:${obstruction?.code}`,
+    };
+    if (pickupBlock(loose)) {
+      if (!(await standNear(field, survival, cell)) || !(await new Gleaner(field).pickup(loose))) {
+        failed.push({ ...cell, reason: 'pickup_obstructed' });
+        continue;
+      }
+      const cleared = await field.until(
+        async () => {
+          await field.observe();
+          return known(field, cell) === 'air';
+        },
+        { timeoutMs: 3000, everyMs: 200 },
+      );
+      if (!cleared.met) {
+        failed.push({ ...cell, reason: 'pickup_not_cleared' });
+        continue;
+      }
+    }
     if (known(field, cell) === 'solid') {
       if (verifyExisting && field.env.map.get(cell.x, cell.y, cell.z)?.code !== cell.item) {
         if (!(await standNear(field, survival, cell))) {
@@ -151,7 +183,7 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
     }
     let reason = 'no_support';
     for (let attempt = 0; attempt < 2 && reason; attempt++) {
-      if (!(await standNear(field, survival, cell, attempt > 0))) {
+      if (!(await standNear(field, survival, cell, attempt > 0, true))) {
         // No second place to stand keeps the first attempt's reason; it is what actually failed.
         if (attempt > 0) break;
         reason = 'no_stand_position';
