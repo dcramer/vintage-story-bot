@@ -17,6 +17,8 @@ import { terrainTargets } from '../support/terrain-targets.ts';
 export const TWIGS = 'leavesbranchy';
 export const carried = (state, item) =>
   [...state.hotbar, ...state.backpack].filter(slot => slot.code?.includes(item)).reduce((n, slot) => n + slot.quantity, 0);
+export const standsOnLooseBlock = (target, position) =>
+  pickupBlock(target) && Math.floor(position.x) === Math.floor(target.point.x) && Math.floor(position.z) === Math.floor(target.point.z);
 
 export async function gather(env, { match = 'stick', item = match, count = 10, manageFood = false, ...options }: any = {}) {
   if (!Number.isInteger(count) || count < 1 || count > 64) throw Error('count must be 1–64');
@@ -72,7 +74,9 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
       if (!result.ok) field.report('dig_failed', { target: o.key, reason: result.reason });
       return true;
     },
-    approachExclude: target => (twiggy(target) ? q => !dryBlockWorkPosition(q) : null),
+    // A loose block is itself a thin floor shape. Standing on its column hides it
+    // under the player, so approach from an adjacent cell where it can be aimed at.
+    approachExclude: target => (twiggy(target) ? q => !dryBlockWorkPosition(q) : loose(target) ? q => standsOnLooseBlock(target, q) : null),
     habitats: habitatsFor(match),
     pauseWhen: survival?.pauseWhen ?? null,
   });

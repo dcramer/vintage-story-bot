@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { gather } from '../src/goals/gather.ts';
+import { gather, standsOnLooseBlock } from '../src/goals/gather.ts';
 import { blockWorkReady, dryBlockWorkPosition, replaceablePlant } from '../src/support/blocks.ts';
 
 test('block work requires dry ground and rejects wet approach cells', () => {
@@ -16,6 +16,13 @@ test('aim clearing never destroys a loose resource merely because it is replacea
   assert.equal(replaceablePlant('game:flower-cowparsley-free'), true);
   assert.equal(replaceablePlant('game:looseores-nativecopper-claystone-free'), false);
   assert.equal(replaceablePlant('game:loosestick-snow'), false);
+});
+
+test('loose resources are approached from beside their floor column', () => {
+  const loose = { kind: 'block', code: 'game:looseflints-claystone-free', point: { x: 10.5, y: 4.125, z: 20.5 } };
+  assert.equal(standsOnLooseBlock(loose, { x: 10.2, y: 5, z: 20.8 }), true);
+  assert.equal(standsOnLooseBlock(loose, { x: 9.5, y: 5, z: 20.5 }), false);
+  assert.equal(standsOnLooseBlock({ ...loose, kind: 'item' }, { x: 10.5, y: 5, z: 20.5 }), false);
 });
 
 function fixture({ gain = true, interruptAfter = Infinity } = {}) {
