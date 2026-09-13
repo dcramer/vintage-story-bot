@@ -99,9 +99,32 @@ export async function form(field, { kind, output, material }) {
     if (!groundDetail) throw Error('No selectable flat ground ahead for a surface; move to level ground');
     const ground = parseBlockKey(groundDetail.key);
     field.report('placing_surface', summary({ ground: groundDetail.key }));
-    const placed = await useOnBlock(field, { target: groundDetail.key, item: material, sneak: true, holdMs: 300, consume: true, expectDialog: true });
+    const placed = await useOnBlock(field, {
+      target: groundDetail.key,
+      face: 'up',
+      item: material,
+      sneak: true,
+      holdMs: 300,
+      consume: true,
+      expectDialog: true,
+    });
     if (!placed.ok) return { ok: false, reason: 'surface_not_created', ...summary(), detail: placed };
     cell = { x: ground.x, y: ground.y + 1, z: ground.z };
+    // Stone first places a loose stone; a second native sneak-click starts knapping.
+    if (kind === 'knapping' && material !== 'game:flint') {
+      const loose = await inspectSurface(field, cell);
+      const rock = material.replace(/^game:stone-/, '');
+      if (!loose?.code?.startsWith(`game:loosestones-${rock}-`)) return { ok: false, reason: 'loose_stone_missing', ...summary(), detail: loose };
+      const started = await useOnBlock(field, {
+        target: loose.key,
+        item: material,
+        sneak: true,
+        holdMs: 300,
+        expectDialog: true,
+        expectAfter: spec.surface,
+      });
+      if (!started.ok) return { ok: false, reason: 'surface_not_created', ...summary(), detail: started };
+    }
   }
   const key = `block:0:${cell.x}:${cell.y}:${cell.z}:${surfaceCode}`;
   // The native recipe dialog blocks every control; a selection that fails must not leave it open.

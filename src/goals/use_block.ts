@@ -11,6 +11,7 @@ import { cleanName, runField } from '../support/task.ts';
 // expectDialog: a native dialog opening (controlReady false) is an expected effect, e.g. recipe selection after surface creation.
 export type BlockUse = {
   target: string;
+  face?: string;
   item?: string | null;
   sneak?: boolean;
   holdMs?: number;
@@ -18,13 +19,16 @@ export type BlockUse = {
   consume?: boolean;
   expectDialog?: boolean;
 };
-export async function useOnBlock(field, { target, item, sneak = false, holdMs = 600, expectAfter, consume = false, expectDialog = false }: BlockUse) {
+export async function useOnBlock(
+  field,
+  { target, face, item, sneak = false, holdMs = 600, expectAfter, consume = false, expectDialog = false }: BlockUse,
+) {
   const cell = parseBlockKey(target);
   const state = await field.observe();
   if (cell.dimension !== state.position.dimension || distance(state.position, cell) > 8) throw Error('Target out of local reach; move closer first');
   let slot = state.activeSlot;
   if (item !== undefined) slot = (await equip(field, { item })).slot;
-  const selected = await selectCell(field, cell);
+  const selected = await selectCell(field, cell, { face });
   if (!selected || selected.key !== target) throw Error('Target not in native reach, changed or obstructed; no action sent');
   await field.observe();
   const inventory = await field.send({ action: 'inventory' });
@@ -82,6 +86,7 @@ export default defineGoal({
   schema: z
     .object({
       target: blockTarget,
+      face: z.enum(['up', 'down', 'north', 'east', 'south', 'west']).optional().describe('Required block face for placement.'),
       item: z.string().min(1).max(160).nullable().optional().describe('Item code to equip first; null = empty hand; omitted = current slot.'),
       sneak: z.boolean().default(false).describe('Shift modifier: ground storage, knapping/clay surface, firepit creation.'),
       holdMs: z.number().int().min(100).max(2000).default(600),
