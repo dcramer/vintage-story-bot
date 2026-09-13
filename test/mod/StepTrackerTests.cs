@@ -111,6 +111,12 @@ static class StepTrackerTests
         var twoCorner = new StepTracker(new Point3(1.5, 98, .5), new Point3(.5, 100, .5), .35, .6, false, 0);
         twoCorner.Queue(new Point3(1.5, 98, 2.5), false);
         Check(!twoCorner.Update(new Point3(1.1, 99.9, .5), 90, false, false, 100).Forward, "two blocks down waits before a sharp turn");
+        var swimmingRun = new StepTracker(new Point3(3.5, 98.5, .5), new Point3(.5, 98.5, .5), .35, 1.5, false, 0);
+        var brushingFloor = swimmingRun.Update(new Point3(1.5, 99, .5), 90, true, true, 100, jumpHeld: true);
+        Check(brushingFloor.Forward && brushingFloor.Jump, "an explicit swim input stays held when the feet brush a shallow edge");
+        var aboveSurface = swimmingRun.Update(new Point3(2, 100.1, .5), 90, false, false, 150, jumpHeld: true);
+        Check(aboveSurface.Forward && aboveSurface.Jump, "an explicit held jump keeps forward through a surface bob");
+        Check(!swimmingRun.Update(new Point3(2, 99, .5), 90, true, true, 200).Jump, "a later frame releases explicit jump while wading");
         Console.WriteLine("Step checks passed.");
     }
 }

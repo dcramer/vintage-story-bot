@@ -150,8 +150,8 @@ public sealed partial class AiBridgeMod
             var at = new Point3(entity.Pos.X, entity.Pos.Y, entity.Pos.Z);
             if (step == null || !step.Continues(point, then) || step.State != "walking") step = new StepTracker(point, at, reach, reachY, hop, frameNow);
             step.Queue(then, thenHop);
-            // The tracker presses forward and jump itself; the keys are only registered here.
-            frameForward = true; jumping = false;
+            // Explicit jump remains a held input through the step, including surface bobbing.
+            frameForward = true;
         }
         else step = null;
         string[] frameMappings = frameForward ? (jumping || toward != null ? ["walkforward", "jump"] : ["walkforward"]) : jumping ? ["jump"] : [];
@@ -476,7 +476,7 @@ public sealed partial class AiBridgeMod
         var entity = api.World!.Player.Entity;
         var at = new Point3(entity.Pos.X, entity.Pos.Y, entity.Pos.Z);
         var (forward, jump, yaw) = step.Update(at, SceneGeometry.Normalize(entity.Pos.Yaw * 180 / Math.PI), entity.OnGround,
-            entity.FeetInLiquid || entity.Swimming, now, entity.Swimming, moveSprint);
+            entity.FeetInLiquid || entity.Swimming, now, entity.Swimming, moveSprint, moveJump);
         controlYaw = yaw;
         if (step.State != "walking") { StopMovement(); return; }
         Press("walkforward", forward); movingControls.Forward = forward;

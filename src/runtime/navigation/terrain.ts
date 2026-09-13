@@ -366,6 +366,23 @@ export class TerrainMemory {
     }
     return Math.abs(y - to.y) <= step;
   }
+  // A level swim run keeps its observed water and diagonal corner clearance throughout.
+  runSwimmable(from, to) {
+    const steps = Math.max(1, Math.ceil(horizontal(from, to) * 2));
+    let previous = null;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const node = this.nodeAt(Math.floor(from.x + (to.x - from.x) * t), Math.floor(from.z + (to.z - from.z) * t), to.y, SWIM_DEPTH + 0.05, 0.05);
+      if (!node?.swim || Math.abs(node.y - to.y) > 0.05) return false;
+      if (previous) {
+        const dx = node.x - previous.x,
+          dz = node.z - previous.z;
+        if (dx && dz && !this.cornerOpen(Math.floor(previous.x), Math.floor(previous.z), dx, dz, node.y, undefined, true)) return false;
+      }
+      previous = node;
+    }
+    return true;
+  }
   lineWalkable(from, to) {
     if (Math.abs(from.y - to.y) > 0.05) return false;
     const steps = Math.ceil(horizontal(from, to) * 2);

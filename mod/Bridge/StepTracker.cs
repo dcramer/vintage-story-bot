@@ -54,9 +54,9 @@ public sealed class StepTracker
     // What to hold this tick, and where to look. Forward only while facing the point and
     // supported or continuing a hop/shallow descent along queued points; jump held
     // in water to keep the head up, or to hop once close.
-    public (bool Forward, bool Jump, double Yaw) Update(Point3 position, double yawDegrees, bool onGround, bool wet, long now, bool swimming = false, bool sprinting = false)
+    public (bool Forward, bool Jump, double Yaw) Update(Point3 position, double yawDegrees, bool onGround, bool wet, long now, bool swimming = false, bool sprinting = false, bool jumpHeld = false)
     {
-        bool buoyant = wet && swimming;
+        bool buoyant = jumpHeld || wet && swimming;
         double dx = Toward.X - position.X, dz = Toward.Z - position.Z;
         Distance = Math.Sqrt(dx * dx + dz * dz);
         double wantYaw = SceneGeometry.Normalize(Math.Atan2(dx, dz) * 180 / Math.PI);
@@ -110,7 +110,7 @@ public sealed class StepTracker
         // Past the point but not yet down on it (the landing of a hop): let the body land rather than
         // run on through the arc. A hop fires only while the point is still above the feet: a body that
         // stepped up onto its level already must not be launched over it.
-        bool forward = aligned && (onGround || wet || Hop || carry || airborneCarry) && !(passed && !level && !carry);
+        bool forward = aligned && (onGround || wet || Hop || carry || airborneCarry || jumpHeld) && !(passed && !level && !carry);
         bool jump = buoyant || (Hop && aligned && Distance < (sprinting ? SprintHopDistance : HopDistance) && dy > Math.Min(ReachY, 0.6));
         return (forward, jump, wantYaw);
     }

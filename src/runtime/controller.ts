@@ -601,13 +601,13 @@ export class Controller {
         lastIterationAt = iterationAt;
         const frame = terrainMore ? null : nav.tick(state, iterationAt, stepView);
         this.budget.planning(Date.now() - iterationAt);
-        const carryOn = terrainMore && !!input?.forward && !input.jump && Date.now() - pagingSince < 1000;
+        const carryOn = terrainMore && !!input?.forward && (!input.jump || !!input.toward) && Date.now() - pagingSince < 1000;
         if (!terrainMore) pagingSince = Date.now();
         input = {
           yawDegrees: frame?.yawDegrees ?? input?.yawDegrees ?? state.orientation.yawDegrees,
           pitchDegrees: frame?.pitchDegrees ?? 15,
           forward: frame?.forward ?? carryOn,
-          jump: frame?.jump ?? false,
+          jump: frame?.jump ?? (carryOn && input.jump),
           sprint: frame?.sprint ?? (carryOn && input.sprint),
           sneak: frame?.sneak ?? false,
           focus: frame?.focus ?? null,

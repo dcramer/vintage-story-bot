@@ -454,6 +454,32 @@ test('navigation accepts a surface bob over observed deep water, then waits for 
   }
 });
 
+test('terrain paging preserves the explicit swim input of a vetted step', async () => {
+  let pages = 0;
+  const water = () => {
+    const data = terrain();
+    data.more = ++pages === 2;
+    data.cells = data.cells.map(c => (c[1] === -1 || c[1] === 0 ? [c[0], c[1], c[2], 0, 'water', []] : c));
+    return data;
+  };
+  const { controller, calls, state } = fixture(false, water);
+  state.capabilities.push('step_jump_hold');
+  state.position.y = -0.25;
+  Object.assign(state.motion, { onGround: false, feetInLiquid: true, swimming: true });
+  try {
+    assert.equal((await controller.request({ ...target, y: -0.5 })).ok, true);
+    for (let i = 0; i < 100 && calls.filter(c => c.action === 'control_step').length < 2; i++) await new Promise(r => setTimeout(r, 5));
+    const steps = calls.filter(c => c.action === 'control_step');
+    assert.ok(steps.length >= 2);
+    assert.equal(steps[0].jump, true);
+    assert.equal(steps[1].jump, true);
+    assert.equal(steps[1].forward, true);
+    assert.deepEqual(steps[1].toward, steps[0].toward);
+  } finally {
+    await controller.close();
+  }
+});
+
 test('lost frame acknowledgement is not retried and releases ownership', async () => {
   const { controller, calls, frame } = fixture(true);
   assert.equal((await controller.request(target)).ok, true);

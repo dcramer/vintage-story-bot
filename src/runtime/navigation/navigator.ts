@@ -324,7 +324,9 @@ export class Navigation {
     if (grounded && !this.mergeRefused)
       for (let ahead = this.index + 1; ahead < this.route.length; ahead++) {
         const node = this.route[ahead];
-        if (!['walk', 'step'].includes(node.move) || distance(p, node) > MERGE_RUN || !map.runWalkable(p, node)) break;
+        if (distance(p, node) > MERGE_RUN) break;
+        const clear = node.swim && !this.avoid.length ? map.runSwimmable(p, node) : ['walk', 'step'].includes(node.move) && map.runWalkable(p, node);
+        if (!clear) break;
         // The merge is undone if the body drifts off the line it was made from (below).
         if (this.mergedFrom === null) this.mergedFrom = this.index;
         this.index = ahead;
@@ -493,7 +495,8 @@ export class Navigation {
       yawDegrees: desiredYaw,
       pitchDegrees: 15,
       forward: true,
-      jump: false,
+      // Keep the player's swim input through brief floor contacts and surface bobs.
+      jump: !!next.swim && state.capabilities?.includes('step_jump_hold') === true,
       sprint,
       sneak: false,
       // The hold's heartbeat caps a frame at 500 ms; the loop renews well inside that and the step carries on.

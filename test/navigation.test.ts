@@ -15,6 +15,23 @@ function column(map, x, z, floor = true) {
   for (let y = -1; y < 4; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: y === -1 && floor ? [[x, y, z, x + 1, y + 1, z + 1]] : [] });
 }
 
+test('swimming routes hold jump through shallow contacts only with mod support', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x <= 4; x++) {
+    column(map, x, 0);
+    for (let y = 0; y <= 1; y++) map.put({ x, y, z: 0, seenAt: Date.now(), traits: ['water'], boxes: [] });
+  }
+  for (const supported of [false, true]) {
+    const state = {
+      ...stateAt({ x: 0.5, y: 0.5, z: 0.5 }),
+      capabilities: supported ? ['step_jump_hold'] : [],
+      motion: { onGround: true, feetInLiquid: true },
+    };
+    const nav = new Navigation(map, state, { x: 3.5, y: 0.5, z: 0.5 }, 0);
+    assert.equal(nav.tick(state, 0).jump, supported);
+  }
+});
+
 test('resuming after a bear escape routes around its remembered position instead of reentering it', () => {
   const map = new TerrainMemory();
   for (let x = -40; x <= 45; x++) for (let z = -27; z <= 27; z++) column(map, x, z);
@@ -206,6 +223,7 @@ test('swimming and wading queue the next checkpoint instead of stopping at every
     const after = { ...map.nodeAt(2, 0, 0), move: first.move };
     const nav = new Navigation(map, state, after, 0);
     nav.adopt([first, after], origin, 0);
+    nav.mergeRefused = true;
     const frame = nav.tick(state, 0);
     assert.deepEqual(frame.next, { x: after.x, y: after.y, z: after.z, hop: false });
     assert.equal(frame.forward, true);
@@ -229,12 +247,18 @@ test('open water permits diagonal swimming while solid bank corners remain block
   const origin = map.nodeAt(0, 0, 0);
   const diagonal = () => map.moves(origin).some(({ node }) => node.x === 1.5 && node.z === 1.5 && node.swim);
   assert.equal(diagonal(), true);
+  const end = map.nodeAt(2, 2, 0);
+  assert.equal(map.runSwimmable(origin, end), true);
+  const state = { ...stateAt(origin), motion: { onGround: false, feetInLiquid: true, swimming: true } };
+  const nav = new Navigation(map, state, end, 0);
+  assert.deepEqual(nav.tick(state, 0).toward, { x: end.x, y: end.y, z: end.z }, 'an open swim run aims through intermediate checkpoints');
   for (const [x, z] of [
     [1, 0],
     [0, 1],
   ])
     for (let y = 0; y <= 2; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [[x, y, z, x + 1, y + 1, z + 1]] });
   assert.equal(diagonal(), false);
+  assert.equal(map.runSwimmable(origin, end), false, 'a merged swim must retain diagonal corner clearance');
 });
 
 test('a merged run over gentle steps keeps sprint until the final approach', () => {
