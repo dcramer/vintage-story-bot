@@ -277,6 +277,16 @@ public sealed partial class AiBridgeMod
         {
             api.Input.InWorldMouseButton.Left = false;
             api.Input.InWorldMouseButton.Right = false;
+            // An occluded client may not run another render-finalization pass after
+            // the deadline releases the button. Held interactions such as the
+            // firestarter perform their authoritative effect in OnHeldInteractStop,
+            // so drive one release frame through the same vanilla interaction
+            // system used for the held frames before forgetting the action.
+            if (api.World is ClientMain interactionClient)
+            {
+                worldInteractions ??= interactionClient.clientSystems.OfType<SystemMouseInWorldInteractions>().FirstOrDefault();
+                worldInteractions?.OnFinalizeFrame(lastTickDt);
+            }
             if (handSneak && !moveSneak && api.World?.Player?.Entity != null) SetSneak(api.World.Player.Entity.Controls, false);
         }
         handSneak = false;
