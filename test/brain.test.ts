@@ -201,8 +201,8 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ body: true, sticks: 0 }), new Set(['recover'] as any)), 'sticks', 'a failed recovery is set aside');
   assert.equal(
     pickJob(situation({ home: false, shovel: false }), new Set(['shovel'] as any)),
-    'explore',
-    'a set-aside job holds back what depends on it; the ladder goes exploring',
+    'dirt',
+    'missing tools do not block gathering shelter soil by hand',
   );
 });
 
