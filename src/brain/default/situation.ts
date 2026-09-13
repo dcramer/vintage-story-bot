@@ -28,9 +28,13 @@ export const HURT_CLASSIFY_MS = 750;
 
 // The knappable material carried, as the game names tool heads after it: flint, or a rock type.
 export function knapMaterial(slots: any[]): string | null {
-  const stone = slots.find(s => s.code && kinds.knapping.materials(s));
+  const counts = new Map<string, number>();
+  for (const slot of slots) if (slot.code && kinds.knapping.materials(slot)) counts.set(slot.code, (counts.get(slot.code) ?? 0) + slot.quantity);
+  const stone = [...counts].sort(
+    (a, b) => Number(b[1] >= 2) - Number(a[1] >= 2) || Number(b[0] === 'game:flint') - Number(a[0] === 'game:flint') || b[1] - a[1],
+  )[0]?.[0];
   if (!stone) return null;
-  return stone.code === 'game:flint' ? 'flint' : (stone.code.match(/^game:stone-([a-z]+)$/)?.[1] ?? null);
+  return stone === 'game:flint' ? 'flint' : (stone.match(/^game:stone-([a-z]+)$/)?.[1] ?? null);
 }
 // What the bot carries, in plain counts.
 export function kit(inventory: any) {
@@ -38,6 +42,7 @@ export function kit(inventory: any) {
   const exact = (code: string) => slots.filter(s => s.code === code).reduce((n, s) => n + s.quantity, 0);
   const part = (piece: string) => slots.filter(s => s.code?.includes(piece)).reduce((n, s) => n + s.quantity, 0);
   const tool = (name: string) => slots.some(s => s.tool === name && (s.durability ?? 1) > 0);
+  const material = knapMaterial(slots);
   return {
     sticks: exact('game:stick'),
     knife: tool('Knife'),
@@ -47,7 +52,7 @@ export function kit(inventory: any) {
     shovelBlade: part('game:shovelhead-'),
     knifeBlade: part('game:knifeblade-'),
     axeBlade: part('game:axehead-'),
-    material: knapMaterial(slots),
+    material,
     heads: slots.map(s => s.code).filter(code => /^game:(knifeblade|axehead|shovelhead)-/.test(code ?? '')) as string[],
     torches: part('torch-basic'),
     torch: slots.find(s => s.code?.includes('torch-basic'))?.code ?? null,
@@ -56,8 +61,8 @@ export function kit(inventory: any) {
     dirt: part('soil-'),
     dirtCode: slots.find(s => s.code?.includes('soil-'))?.code ?? null,
     stone: slots.some(s => s.code && kinds.knapping.materials(s)),
-    // Pieces that knap, counted: placing the surface takes one and the recipe is chosen with one still in hand.
-    knappables: slots.filter(s => s.code && kinds.knapping.materials(s)).reduce((n, s) => n + s.quantity, 0),
+    // The surface and held stone must share a material; mixed single stones cannot form a tool.
+    knappables: exact(material === 'flint' ? 'game:flint' : `game:stone-${material}`),
     grass: part('drygrass') + part('cattailtops'),
     logs: part('log-'),
     reserve: foodReserve(inventory) as number,

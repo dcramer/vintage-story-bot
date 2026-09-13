@@ -18,6 +18,14 @@ const chest = {
   seen: { at: 1000, items: {} },
 };
 
+test('knapping requires two matching stones and prefers a usable stack over a lone flint', () => {
+  const mixed = kit(inventory({ 'game:flint': 1, 'game:stone-peridotite': 1 }));
+  assert.equal(mixed.knappables, 1);
+  const usable = kit(inventory({ 'game:flint': 1, 'game:stone-peridotite': 3 }));
+  assert.equal(usable.material, 'peridotite');
+  assert.equal(usable.knappables, 3);
+});
+
 test('house: partial material batches resume the same site without claiming a home', () => {
   const memory = fresh({ construction: { origin: { x: 0, y: 100, z: 0 }, phase: 'walls' } });
   const ctx: any = { memory, k: kit(inventory({ 'game:packeddirt': 6 })), state: { position: { x: 4.5, y: 100, z: 7.5 } } };
