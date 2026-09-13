@@ -42,8 +42,8 @@ public sealed partial class AiBridgeMod
 
     private object HandAction(string action, JsonElement request)
     {
-        if (!TryInteger(request, "durationMs", out int handMilliseconds) || handMilliseconds < 1 || handMilliseconds > 2000)
-            return new { ok = false, error = "durationMs must be an integer from 1 to 2000." };
+        if (!TryInteger(request, "durationMs", out int handMilliseconds) || handMilliseconds < 1 || handMilliseconds > 5000)
+            return new { ok = false, error = "durationMs must be an integer from 1 to 5000." };
         if (!CanControl())
             return new { ok = false, error = "Close menus and enter the world before interacting." };
         if (request.TryGetProperty("expectedTarget", out var expected) &&

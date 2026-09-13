@@ -25,6 +25,7 @@ export async function useOnBlock(
 ) {
   const cell = parseBlockKey(target);
   const state = await field.observe();
+  if (holdMs > 2000 && !state.capabilities?.includes('long_hand_hold')) throw Error('Missing capability: long_hand_hold');
   if (cell.dimension !== state.position.dimension || distance(state.position, cell) > 8) throw Error('Target out of local reach; move closer first');
   let slot = state.activeSlot;
   if (item !== undefined) slot = (await equip(field, { item })).slot;
@@ -89,7 +90,7 @@ export default defineGoal({
       face: z.enum(['up', 'down', 'north', 'east', 'south', 'west']).optional().describe('Required block face for placement.'),
       item: z.string().min(1).max(160).nullable().optional().describe('Item code to equip first; null = empty hand; omitted = current slot.'),
       sneak: z.boolean().default(false).describe('Shift modifier: ground storage, knapping/clay surface, firepit creation.'),
-      holdMs: z.number().int().min(100).max(2000).default(600),
+      holdMs: z.number().int().min(100).max(5000).default(600),
       expectAfter: z.string().min(1).max(64).optional().describe('Substring the target cell code must contain afterwards, e.g. farmland.'),
       consume: z.boolean().default(false).describe('Require the held item count to drop.'),
       timeoutMs: z.number().int().min(1000).max(60000).default(20000),

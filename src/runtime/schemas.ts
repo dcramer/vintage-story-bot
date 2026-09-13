@@ -26,7 +26,7 @@ export const blockPoint = z
 
 export const hand = z
   .object({
-    durationMs,
+    durationMs: z.number().int().min(1).max(5000).describe('Bounded hand hold; over 2000ms requires long_hand_hold.'),
     sneak: z
       .boolean()
       .optional()
