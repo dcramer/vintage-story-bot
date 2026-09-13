@@ -884,6 +884,30 @@ test('brain: failed travel abandons an unreachable firepit and prepares a local 
   assert.match(choice.why, /grass to build a firepit/);
 });
 
+test('brain: successful travel preserves the owned firepit and starts cooking', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'eat';
+  memory.notes.cookUntil = 10_000;
+  memory.notes.firepit = { x: 2, y: 100, z: 0 };
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 8), slot('game:cattailroot', 4));
+
+  const choice = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+      inventory: supplies,
+      terrain: { get: (x, y, z) => (x === 2 && y === 100 && z === 0 ? { code: 'game:firepit-cold' } : undefined) },
+      now: 2000,
+      last: { id: 'walk', kind: 'travel', ok: true, outcome: 'done', result: { ok: true } },
+    }),
+    memory,
+  );
+
+  assert.deepEqual(memory.notes.firepit, { x: 2, y: 100, z: 0 });
+  assert.equal(choice.start, 'cook');
+});
+
 test('brain: a refused firepit placement chooses another site without setting food aside', () => {
   const memory = fresh();
   memory.startupChecked = true;

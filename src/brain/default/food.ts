@@ -116,7 +116,7 @@ export const foodEnded: Concern['ended'] = (last, memory, reading) => {
   // that walk fails, abandon both the site and any assumed contents so the
   // next food decision prepares a complete local cooking attempt instead of
   // walking back to the same unreachable ledge forever.
-  if (last.kind === 'travel' && failedOnItsOwn(last)) {
+  if (last.kind === 'travel' && !last.ok && failedOnItsOwn(last)) {
     memory.notes.firepit = null;
     memory.notes.cooking = null;
   }
