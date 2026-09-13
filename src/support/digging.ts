@@ -96,7 +96,8 @@ export function stairStep(map, node, toward, miningTier = Infinity) {
   // A sealed shaft otherwise hides the upper cuts and prevents the jump.
   const roof = map.get(x, h + 2, z);
   if (!roof || roof.hazard) return null;
-  const ceiling = solid(map, x, h + 2, z) ? [{ x, y: h + 2, z }] : [];
+  // Non-colliding leaves still intercept the native mining selection ray.
+  const ceiling = roof.boxes.length || roof.traits?.includes('leaves') ? [{ x, y: h + 2, z }] : [];
   const canCut = cell => !map.get(cell.x, cell.y, cell.z).traits.some(trait => /^tier\d+$/.test(trait) && Number(trait.slice(4)) > miningTier);
   if (!ceiling.every(canCut)) return null;
   const heading = lookAt(node, toward).yawDegrees;

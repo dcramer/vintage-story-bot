@@ -263,6 +263,12 @@ test('a sealed pit clears takeoff headroom before cutting the stair wall', () =>
   const origin = { x: 0.5, y: 0, z: 0.5 };
   const plan = stairStep(pit, origin, { x: 5, y: 0, z: 0.5 });
   assert.deepEqual(plan.dig[0], { x: 0, y: 2, z: 0 });
+  pit.put({ x: 0, y: 2, z: 0, seenAt: Date.now(), traits: ['leaves'], code: 'game:leaves-grown5-birch', boxes: [] });
+  assert.deepEqual(
+    stairStep(pit, origin, { x: 5, y: 0, z: 0.5 }).dig[0],
+    { x: 0, y: 2, z: 0 },
+    'non-colliding leaves still obstruct mining the upper wall',
+  );
   for (const c of plan.dig) pit.put({ x: c.x, y: c.y, z: c.z, seenAt: Date.now(), traits: [], boxes: [] });
   assert.ok(pit.moves(origin).some(({ node }) => node.x === 1.5 && node.z === 0.5 && node.move === 'jump'));
   pit.put({ x: 0, y: 2, z: 0, seenAt: Date.now(), traits: ['water'], boxes: [] });
