@@ -21,6 +21,7 @@ public sealed partial class AiBridgeMod
     private const long SneakArmMs = 60;
     private string? handAction;
     private string? handTarget;
+    private Point3? handAimPoint;
     private int? handSlot;
     private string? handItem;
     private long handStopAt;
@@ -71,11 +72,17 @@ public sealed partial class AiBridgeMod
                 return new { ok = false, error = "sneak must be boolean." };
             sneakHand = handSneakField.GetBoolean();
         }
+        var selection = api.World.Player.CurrentBlockSelection;
+        Point3? aimPoint = selection == null ? null : new Point3(
+            selection.Position.X + selection.HitPosition.X,
+            selection.Position.Y + selection.HitPosition.Y,
+            selection.Position.Z + selection.HitPosition.Z);
         StopActs();
         handSneak = sneakHand;
         handSneakArmedAt = sneakHand ? Environment.TickCount64 : 0;
         handAction = action;
         handTarget = CurrentTargetKey();
+        handAimPoint = aimPoint;
         handSlot = api.World!.Player.InventoryManager.ActiveHotbarSlotNumber;
         handItem = api.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible.Code.ToString();
         // For sneak interactions the button press is delayed until shift has synced (SneakArmMs), so extend
@@ -230,6 +237,19 @@ public sealed partial class AiBridgeMod
         api.Input.InWorldMouseButton.Right = handAction == "interact" && sneakArmed;
     }
 
+    // Crouching lowers LocalEyePos. A low block selected while standing can otherwise leave the
+    // crosshair during SneakArmMs, cancelling the held use before right-click is ever pressed.
+    // Keep aiming at the exact point the caller verified while the eye settles and throughout the hold.
+    private void MaintainSneakHandAim()
+    {
+        if (!handSneak || !handAimPoint.HasValue) return;
+        var entity = api.World.Player.Entity;
+        var eye = entity.Pos.XYZ.Add(entity.LocalEyePos);
+        var (yaw, pitch) = SceneGeometry.LookAt(new Point3(eye.X, eye.Y, eye.Z), handAimPoint.Value);
+        api.Input.MouseYaw = entity.Pos.Yaw = (float)(SceneGeometry.Normalize(yaw) * Math.PI / 180);
+        api.Input.MousePitch = entity.Pos.Pitch = (float)(Math.PI + Math.Clamp(pitch, -89, 89) * Math.PI / 180);
+    }
+
     private int shiftKeyCode = -2;
 
     private void SetSneak(EntityControls controls, bool pressed)
@@ -257,6 +277,7 @@ public sealed partial class AiBridgeMod
         handSneak = false;
         handAction = null;
         handTarget = null;
+        handAimPoint = null;
         handSlot = null;
         handItem = null;
     }

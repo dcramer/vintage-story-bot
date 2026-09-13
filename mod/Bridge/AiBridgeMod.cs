@@ -341,6 +341,7 @@ public sealed partial class AiBridgeMod : ModSystem
         blockActions.Tick(CanControl() && !ManualInput());
         if (handAction != null)
         {
+            MaintainSneakHandAim();
             if (Environment.TickCount64 >= handStopAt || api.IsGamePaused ||
                 !CanControl() ||
                 handTarget != CurrentTargetKey() ||
