@@ -230,7 +230,7 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
                 var boxes = block.GetCollisionBoxes(blocks, cell);
                 if (boxes is { Length: > 0 })
                 {
-                    kind = block.Code?.Path.Contains("fire") == true ? "hazard" : canopy ? "canopy" : "ground";
+                    kind = BlockHazards.Fire(block.BlockMaterial == EnumBlockMaterial.Fire, block.Code?.Path) ? "hazard" : canopy ? "canopy" : "ground";
                     code = block.Code?.Path; surface = y + boxes.Max(b => b.Y2); target = cell; surfaceBlock = block; break;
                 }
                 if (block.Id != 0 && block.BlockMaterial == EnumBlockMaterial.Leaves) canopy = true;

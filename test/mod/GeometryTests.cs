@@ -36,6 +36,11 @@ Check(SceneGeometry.Resolves(1, 40) && !SceneGeometry.Resolves(1, 60), "a block 
 Check(SceneGeometry.Resolves(SceneGeometry.Size(new(0, 0, 0), new(1, 0.06, 1)), 12) &&
     !SceneGeometry.Resolves(SceneGeometry.Size(new(0, 0, 0), new(1, 0.06, 1)), 30), "a stick is made out near, not far");
 Console.WriteLine($"{checks} geometry checks passed.");
+foreach (string path in new[] { "firepit-cold", "firepit-extinct", "firepit-construct1", "firewood", "clay-fire-free", "fireclay" })
+    Check(!BlockHazards.Fire(false, path), $"{path} is not burning");
+Check(BlockHazards.Fire(true, "fire"), "fire material burns");
+Check(BlockHazards.Fire(false, "firepit-lit"), "lit firepit burns");
+Console.WriteLine("8 fire-hazard checks passed.");
 LifeTests.Run();
 ControlHoldTests.Run();
 StepTrackerTests.Run();

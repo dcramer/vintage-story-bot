@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="../../mod/Sensors/SceneGeometry.cs" Link="SceneGeometry.cs" />
     <Compile Include="GeometryTests.cs" />
+    <Compile Include="../../mod/Sensors/BlockHazards.cs" Link="BlockHazards.cs" />
     <Compile Include="../../mod/Bridge/LifeTracker.cs" Link="LifeTracker.cs" />
     <Compile Include="LifeTests.cs" />
     <Compile Include="../../mod/Sensors/TerrainMap.cs" Link="TerrainMap.cs" />

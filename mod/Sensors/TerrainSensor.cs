@@ -113,7 +113,8 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map, Sighting
             // and the mining tier a tool needs to break it. Facts only; Node decides what to do with them.
             var traits = new List<string>();
             string path = block.Code?.Path ?? "";
-            if (path.Contains("fire") || path.Contains("lava") || fluid.Code?.Path.Contains("lava") == true) traits.Add(path.Contains("fire") ? "fire" : "lava");
+            if (BlockHazards.Fire(block.BlockMaterial == EnumBlockMaterial.Fire, path)) traits.Add("fire");
+            else if (path.Contains("lava") || fluid.Code?.Path.Contains("lava") == true) traits.Add("lava");
             else if (fluid.IsLiquid()) traits.Add("water");
             if (path.Contains("leaves")) traits.Add("leaves");
             else if (block.BlockMaterial == EnumBlockMaterial.Plant) traits.Add("plant");
