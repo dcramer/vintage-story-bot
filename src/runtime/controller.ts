@@ -545,10 +545,14 @@ export class Controller {
   async navigate(goal, record, started?, pauseWhen?, { allowStarvingRecovery = false } = {}, signal?: AbortSignal) {
     const initial = await this.snapshot(signal);
     if (goal.sprint && !initial.capabilities.includes('background_sprint')) throw new Error('Update mod: background_sprint required');
+    this.map.swim = goal.swim !== false;
+    // A swimming stroke can lift the feet briefly above the surface between goals.
+    // Admit that observed water landing; Navigation still waits for physical support.
+    const waterBelow = this.map.nodeAt(Math.floor(initial.position.x), Math.floor(initial.position.z), initial.position.y, 0, 2)?.swim;
     if (
       !initial.controlReady ||
       !initial.alive ||
-      (!initial.motion.onGround && !initial.motion.feetInLiquid) ||
+      (!initial.motion.onGround && !initial.motion.feetInLiquid && !waterBelow) ||
       (initial.motion.swimming && goal.swim === false) ||
       initial.mounted ||
       initial.position.dimension !== 0 ||
@@ -556,7 +560,7 @@ export class Controller {
       Math.abs(goal.z - initial.position.z) > 128 ||
       Math.abs(goal.y - initial.position.y) > 32
     )
-      throw new Error('Navigation needs grounded/dry/ready player and destination within 128 horizontal/32 vertical blocks.');
+      throw new Error('Navigation needs supported/ready player and destination within 128 horizontal/32 vertical blocks.');
     if (signal?.aborted) throw new Error('Goal cancelled');
     const control = await this.game.control(
       initial,
@@ -566,7 +570,6 @@ export class Controller {
       { allowStarvingRecovery },
       signal,
     );
-    this.map.swim = goal.swim !== false;
     const nav = (record.nav = new Navigation(this.map, initial, goal));
     let state = initial;
     try {

@@ -12,7 +12,7 @@ function terrain() {
   return { session: 'terrain', reset: false, cursor: 1, more: false, clock: 0, cells };
 }
 const target = { action: 'move_to', x: 2.5, y: 0, z: 0.5, dimension: 0 };
-function fixture(failFrame = false) {
+function fixture(failFrame = false, sensedTerrain = terrain) {
   const calls = [],
     state = {
       ok: true,
@@ -33,13 +33,13 @@ function fixture(failFrame = false) {
   });
   const send = async request => {
     calls.push(request);
-    if (request.action === 'sense') return { ok: true, state: structuredClone(state), terrain: terrain() };
+    if (request.action === 'sense') return { ok: true, state: structuredClone(state), terrain: sensedTerrain() };
     if (request.action === 'control_begin') state.control.owner = request.owner;
     if (request.action === 'control_end' || request.action === 'stop') state.control.owner = null;
     if (request.action === 'control_step') {
       resolveFrame();
       if (failFrame) throw Error('lost acknowledgement');
-      return { ok: true, state: structuredClone(state), terrain: terrain() };
+      return { ok: true, state: structuredClone(state), terrain: sensedTerrain() };
     }
     return { ok: true };
   };
@@ -415,6 +415,43 @@ test('shared controller excludes mutations/UI and Effect interruption releases i
   assert.equal(controller.view().state, 'cancelled');
   assert.equal(calls.filter(c => c.action === 'control_end').length, 1);
   assert.equal(calls.at(-1).owner, calls.find(c => c.action === 'control_begin').owner);
+});
+
+test('navigation accepts a surface bob over observed deep water, then waits for actual support', async () => {
+  const water = () => {
+    const data = terrain();
+    data.cells = data.cells.map(c => (c[1] === -1 || c[1] === 0 ? [c[0], c[1], c[2], 0, 'water', []] : c));
+    return data;
+  };
+  const { controller, calls, frame, state } = fixture(false, water);
+  state.position.y = 1.1;
+  state.motion.onGround = false;
+  try {
+    assert.equal((await controller.request({ ...target, y: -0.5 })).ok, true);
+    await frame;
+    assert.equal(calls.find(c => c.action === 'control_step').forward, false);
+    state.position.y = -0.25;
+    Object.assign(state.motion, { feetInLiquid: true, swimming: true });
+    for (let i = 0; i < 100 && !calls.some(c => c.toward); i++) await new Promise(r => setTimeout(r, 5));
+    assert.ok(
+      calls.some(c => c.toward),
+      'routing continues when the body returns to water',
+    );
+  } finally {
+    await controller.close();
+  }
+  const dry = fixture();
+  dry.state.position.y = 1.1;
+  dry.state.motion.onGround = false;
+  try {
+    assert.equal((await dry.controller.request(target)).ok, false);
+    assert.equal(
+      dry.calls.some(c => c.action === 'control_begin'),
+      false,
+    );
+  } finally {
+    await dry.controller.close();
+  }
 });
 
 test('lost frame acknowledgement is not retried and releases ownership', async () => {
