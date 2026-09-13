@@ -11,10 +11,12 @@ import {
   foodTolerance,
   foodYield,
   forageMatch,
+  forageScore,
   HUNGRY,
   hunger,
   shouldEat,
 } from './food.ts';
+import { habitatsFor } from './habitat.ts';
 import { ownedSlots } from './inventory.ts';
 import { clearLeafPath } from './leaf-clearing.ts';
 import { Search } from './search.ts';
@@ -207,15 +209,18 @@ export class Survival {
     this.tending = true;
     field.recoveringFood = true;
     const search = (this.search = new Search(field, {
-      kind: 'food',
+      kind: match?.length ? `food:${[...new Set(this.match)].sort().join(',')}` : 'food',
       match: this.match,
       wanted: this.forage,
       ready: (object, state) => harvestReady(object, state.position, state.body?.halfWidth, this.tolerance),
       take: object => this.harvest(object),
+      score: (object, position) => forageScore(object, position, this.tolerance),
+      prefer: (a, b) => forageScore(a, field.latest.position, this.tolerance) - forageScore(b, field.latest.position, this.tolerance),
+      budget: { distance: 384, timeMs: 6 * 60 * 1000 },
       approachExclude: target =>
         breaks(target, this.tolerance) ? q => Math.floor(q.x) === Math.floor(target.point.x) && Math.floor(q.z) === Math.floor(target.point.z) : null,
       learn: this.learn,
-      habitats: ['edge', 'shore'],
+      habitats: [...new Set(this.match.flatMap(habitatsFor))],
       memoryRange: foodMemoryRange,
       pauseWhen: this.pauseFoodWalk,
     }));
@@ -255,7 +260,13 @@ export class Survival {
       if (search.pit || search.exhausted()) {
         this.tending = false;
         field.recoveringFood = false;
-        return { reason: search.pit ? 'pit' : 'none_found', unproductive: search.unproductive, position: field.latest.position };
+        return {
+          reason: search.pit ? 'pit' : 'none_found',
+          unproductive: search.unproductive,
+          searchReason: search.budgetReason ?? 'no_progress',
+          distanceWithoutTake: search.withoutTake,
+          position: field.latest.position,
+        };
       }
       await search.step({ toward });
     }

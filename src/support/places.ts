@@ -8,6 +8,7 @@ export const PLACE_MS = 20 * 60 * 1000;
 
 export class Places {
   walkedAreas = new Map<string, { n: number; at: number }>();
+  searchedAreas = new Map<string, { n: number; at: number }>();
   failedAreas = new Map<string, { n: number; at: number }>();
   // Where each kind of search was heading when nothing was in sight, so a
   // search restarted after a flight or a night carries on the same way.
@@ -46,6 +47,15 @@ export class Places {
   known(p) {
     return this.walked(p) > 0 || this.failed(p) > 0;
   }
+  // A nearby scan is search effort, not proof that a whole area is empty or impassable.
+  // Record distinct eight-block viewpoints, separately for each kind of search.
+  search(kind: string, p) {
+    this.searchedAreas.set(`${kind}:${Math.floor(p.x / 8)},${Math.floor(p.z / 8)}`, { n: 1, at: this.now() });
+    if (this.searchedAreas.size > 4096) this.prune(this.now());
+  }
+  searched(kind: string, p) {
+    return this.count(this.searchedAreas, `${kind}:${Math.floor(p.x / 8)},${Math.floor(p.z / 8)}`);
+  }
   frontier(kind: string) {
     const entry = this.frontiers.get(kind);
     if (!entry) return null;
@@ -62,13 +72,18 @@ export class Places {
     this.frontiers.delete(kind);
   }
   prune(now = this.now()) {
-    for (const map of [this.walkedAreas, this.failedAreas]) {
+    for (const map of [this.walkedAreas, this.failedAreas, this.searchedAreas]) {
       for (const [id, entry] of map) if (now - entry.at > PLACE_MS) map.delete(id);
       while (map.size > 4096) map.delete(map.keys().next().value);
     }
     for (const [kind, entry] of this.frontiers) if (now - entry.at > PLACE_MS) this.frontiers.delete(kind);
   }
   summary() {
-    return { walked: this.walkedAreas.size, failed: this.failedAreas.size, frontiers: Object.fromEntries(this.frontiers) };
+    return {
+      searched: this.searchedAreas.size,
+      walked: this.walkedAreas.size,
+      failed: this.failedAreas.size,
+      frontiers: Object.fromEntries(this.frontiers),
+    };
   }
 }

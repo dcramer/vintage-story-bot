@@ -355,7 +355,8 @@ test('a search counts steps that took, saw and covered nothing, and forage gives
   search.unproductive = SEARCH_PATIENCE;
   assert.equal(search.exhausted(), true, 'a long unproductive stretch ends the search');
   assert.equal(places.frontier('food'), null, 'and the next one heads elsewhere');
-  assert.ok(places.failed(field.latest.position) > 0, 'from a place marked as having yielded nothing');
+  assert.ok(places.searched('food', field.latest.position) > 0, 'the search effort survives the goal');
+  assert.equal(places.failed(field.latest.position), 0, 'empty forage is not evidence of impassable terrain');
 });
 
 test('the frontier is shared across goals and forgotten near a predator', async () => {

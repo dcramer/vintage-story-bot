@@ -1,7 +1,7 @@
 import { horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
 import { pitLimit, reachable } from './digging.ts';
 import { sightRange } from './fieldwork.ts';
-import { type Habitat, habitatTarget } from './habitat.ts';
+import { type Habitat, habitatTargets } from './habitat.ts';
 import { clearLeafPath } from './leaf-clearing.ts';
 import { nearestThreat, threatClearDistance } from './threats.ts';
 
@@ -45,10 +45,8 @@ export const frontierGuarded = (position, frontier, threat) =>
     (horizontal(position, threat.point) < horizontal(position, frontier) &&
       Math.abs(normalize(lookAt(position, threat.point).yawDegrees - lookAt(position, frontier).yawDegrees + 180) - 180) <= 60));
 
-// Where to head when nothing is in sight: the compass direction whose next
-// hundred blocks the bot has walked least, with turning back costing extra so
-// a search keeps its line; then, if the far view holds an unwalked place of
-// the kind looked for roughly that way, that place instead. Pure.
+// Rank observed habitats and unexplored compass directions together by distance,
+// heading, terrain and search effort. Unknown destinations still require observed routes.
 export function chooseFrontier(
   position,
   heading: number,
@@ -57,29 +55,49 @@ export function chooseFrontier(
     surface = null,
     habitats = [] as Habitat[],
     distance = FRONTIER_DISTANCE,
+    kind = '',
     avoid = [] as { x: number; z: number }[],
-  }: { places: any; surface?: any; habitats?: Habitat[]; distance?: number; avoid?: { x: number; z: number }[] },
+  }: { places: any; surface?: any; habitats?: Habitat[]; distance?: number; kind?: string; avoid?: { x: number; z: number }[] },
 ) {
+  const cost = (end, yaw) => {
+    const far = horizontal(position, end),
+      radians = (yaw * Math.PI) / 180;
+    let score = Math.abs(normalize(yaw - heading + 180) - 180) / 90;
+    for (let step = 8; step <= far; step += 8) {
+      const q = { x: position.x + Math.sin(radians) * step, z: position.z + Math.cos(radians) * step };
+      score += Math.min(2, places.walked(q)) * 0.25 + places.failed(q) * 2 + (kind ? places.searched(kind, q) * 2 : 0);
+      const column = surface?.get?.(Math.floor(q.x), Math.floor(q.z));
+      if (column && (column.kind === 'water' || column.kind === 'hazard')) score += 2;
+    }
+    if (avoid.some(point => horizontal(end, point) < distance / 2)) score += 100;
+    return score;
+  };
   const candidates = [0, 45, -45, 90, -90, 135, -135, 180].map(offset => {
     const yaw = normalize(heading + offset),
       radians = (yaw * Math.PI) / 180;
-    let cost = Math.abs(offset) / 90;
-    for (let step = 16; step <= distance; step += 16) {
-      const q = { x: position.x + Math.sin(radians) * step, z: position.z + Math.cos(radians) * step };
-      cost += places.walked(q) + places.failed(q) * 2;
-      const column = surface?.get?.(Math.floor(q.x), Math.floor(q.z));
-      if (column && (column.kind === 'water' || column.kind === 'hazard')) cost += 2;
-    }
     const end = { x: Math.floor(position.x + Math.sin(radians) * distance) + 0.5, z: Math.floor(position.z + Math.cos(radians) * distance) + 0.5 };
-    if (avoid.some(point => horizontal(end, point) < distance / 2)) cost += 100;
-    return { yaw, end, cost };
+    const column = surface?.get?.(Math.floor(end.x), Math.floor(end.z));
+    return { ...end, y: column?.y ?? position.y, heading: yaw, cost: cost(end, yaw) + 3 };
   });
+  // Score every observed alternative, including nearby habitat and habitat behind us.
+  // Walking through an area does not mean it was searched; failed approaches still cost extra.
+  for (const place of habitatTargets(surface, position, habitats, () => false, { radius: distance, minDistance: 12 })) {
+    const yaw = lookAt(position, place).yawDegrees;
+    candidates.push({
+      x: place.x,
+      y: place.y,
+      z: place.z,
+      heading: yaw,
+      cost:
+        cost(place, yaw) +
+        horizontal(position, place) / 80 +
+        Math.abs(place.y - position.y) / 12 +
+        habitats.indexOf(place.habitat) * 0.5 +
+        (kind ? places.searched(kind, place) * 4 : places.walked(place)),
+    });
+  }
   const best = candidates.sort((a, b) => a.cost - b.cost)[0];
-  const place = habitatTarget(surface, position, habitats, c => places.known(c), { radius: distance, minDistance: distance / 3 });
-  if (place && Math.abs(normalize(lookAt(position, place).yawDegrees - best.yaw + 180) - 180) <= 60)
-    return { x: place.x, y: place.y, z: place.z, heading: best.yaw };
-  const column = surface?.get?.(Math.floor(best.end.x), Math.floor(best.end.z));
-  return { x: best.end.x, y: column?.y ?? position.y, z: best.end.z, heading: best.yaw };
+  return { x: best.x, y: best.y, z: best.z, heading: best.heading };
 }
 
 export type SearchOptions = {
@@ -95,6 +113,10 @@ export type SearchOptions = {
   ready?: (object: any, state: any) => boolean;
   // Among what is ready, which first.
   prefer?: (a: any, b: any) => number;
+  // Cost of pursuing a lead; lower first. Failed approaches retain their separate penalty.
+  score?: (object: any, position: any) => number;
+  // Bound work since the last verified take, even when walking or seeing new leads.
+  budget?: { distance: number; timeMs: number };
   // Cells not to stand on when approaching a target.
   approachExclude?: (target: any) => ((q: any) => boolean) | null;
   // Pages to read before judging what was seen.
@@ -128,9 +150,16 @@ export class Search {
   // The ground the body can reach from where it stands ran out: a hole, for the caller to name.
   pit = false;
   lastSeenCheck = 0;
+  withoutTake = 0;
+  lastTakeAt = 0;
+  lastPosition: any = null;
+  rangingFrom: any = null;
+  emptyDistance = 0;
+  budgetReason: string | null = null;
   constructor(field, options: SearchOptions) {
     this.field = field;
     this.options = options;
+    this.lastTakeAt = field.now();
   }
   get match() {
     return this.options.match;
@@ -142,7 +171,7 @@ export class Search {
   targets() {
     const p = this.field.latest.position;
     const failed = o => this.field.places.failed(o.point);
-    const score = o => approachScore(p, o) + failed(o) * FAILED_LEAD_PENALTY;
+    const score = o => (this.options.score?.(o, p) ?? approachScore(p, o)) + failed(o) * FAILED_LEAD_PENALTY;
     return this.field
       .targets(o => this.options.wanted(o))
       .filter(o => failed(o) < LEAD_FAILURES)
@@ -154,7 +183,15 @@ export class Search {
   async look(radius) {
     const objects = await this.field.scan(radius, this.match, 'all');
     await this.options.learn?.(objects);
+    if (radius === 8) this.field.places.search(this.options.kind, this.field.latest.position);
     return objects;
+  }
+  track(state) {
+    if (!this.options.budget) return;
+    if (this.lastPosition) this.withoutTake += horizontal(this.lastPosition, state.position);
+    this.lastPosition = { ...state.position };
+    if (this.withoutTake >= this.options.budget.distance) this.budgetReason = 'distance_without_take';
+    else if (this.field.now() - this.lastTakeAt >= this.options.budget.timeMs) this.budgetReason = 'time_without_take';
   }
   // A walk pauses when something looked for and not yet judged comes into view,
   // so the eye is read before the leg carries the body past it.
@@ -163,6 +200,9 @@ export class Search {
     if (requested) return requested;
     // A predator in the actionable perimeter hands control back before the leg carries the body nearer.
     if (nearestThreat(state)) return 'route_threatened';
+    this.track(state);
+    if (this.budgetReason) return 'search_budget';
+    if (this.rangingFrom && horizontal(this.rangingFrom, state.position) >= APPROACH_LEG) return 'search_viewpoint';
     const now = this.field.now();
     if (now - this.lastSeenCheck < 1000) return null;
     this.lastSeenCheck = now;
@@ -202,22 +242,38 @@ export class Search {
   async step({ toward = null }: { toward?: any } = {}): Promise<'taken' | 'approached' | 'ranged'> {
     const before = { ...this.field.latest.position },
       known = new Set(this.targets().map(o => o.key));
+    this.lastPosition = before;
     const did = await this.act({ toward });
+    this.track(this.field.latest);
+    if (did === 'taken') {
+      this.withoutTake = 0;
+      this.lastTakeAt = this.field.now();
+      this.budgetReason = null;
+    }
     const fresh = this.targets().some(o => !known.has(o.key));
     if (did === 'taken' || fresh || horizontal(before, this.field.latest.position) > PRODUCTIVE_DISTANCE) this.unproductive = 0;
     else this.unproductive++;
+    if (did === 'taken' || fresh) this.emptyDistance = 0;
+    else if (did === 'ranged') this.emptyDistance += horizontal(before, this.field.latest.position);
+    if (this.options.budget && this.emptyDistance >= 96) {
+      this.field.places.clearFrontier(this.options.kind);
+      this.field.resetExploration(90);
+      this.field.report('search_redirected', { distanceWithoutLead: this.emptyDistance });
+      this.emptyDistance = 0;
+    }
     return did;
   }
   private async act({ toward = null }: { toward?: any } = {}): Promise<'taken' | 'approached' | 'ranged'> {
     const field = this.field,
       { kind, approachExclude, memoryRange = 64, habitats = ['edge', 'open'] } = this.options;
     // In reach: the surroundings pass sees all around, including behind.
+    this.rangingFrom = null;
     const near = await this.look(8);
     const ready = near.filter(o => this.wanted(o) && this.ready(o)).sort(this.options.prefer ?? (() => 0))[0];
     if (ready) {
       const taken = await this.options.take(ready);
       if (!taken && !field.skipped.has(ready.key)) field.skip(ready, 120000);
-      return 'taken';
+      return taken ? 'taken' : 'approached';
     }
     // In view: the forward cone, once per viewpoint; a full turn when it shows nothing; then memory.
     if (viewChanged(this.lastView, field.latest)) {
@@ -239,7 +295,7 @@ export class Search {
     const p = field.latest.position;
     if (!frontier || horizontal(p, frontier) <= FRONTIER_REACHED) {
       const heading = toward ? lookAt(p, toward).yawDegrees : field.heading;
-      frontier = chooseFrontier(p, heading, { places: field.places, surface: field.env.surface, habitats });
+      frontier = chooseFrontier(p, heading, { places: field.places, surface: field.env.surface, habitats, kind });
       field.places.setFrontier(kind, frontier);
       field.heading = frontier.heading;
     }
@@ -253,6 +309,7 @@ export class Search {
       (!field.seeing || nearestThreat(field.latest)) && horizontal(p, frontier) > APPROACH_LEG
         ? field.explore(frontier, APPROACH_LEG)
         : { x: frontier.x, y: frontier.y, z: frontier.z, horizontalOnly: true, arrivalRadius: 4 };
+    if (this.options.budget) this.rangingFrom = { ...p };
     let result = await field.walk(destination, this.pause);
     // The far view shows no way there (under trees, in a dip): walk a short leg that way on what
     // memory knows and look again from there, the way a player walks on through a wood. Standing
@@ -285,13 +342,18 @@ export class Search {
     this.field.report('pit', { position: p });
     return true;
   }
-  // Nothing taken, seen or covered for a while: the goal gives up here. Where it stood is marked
-  // failed and the frontier dropped, so the next search of this kind heads somewhere else.
+  // Exhausted work is search evidence, never a failed route. Drop the frontier
+  // so the next search can choose another direction using the shared effort memory.
   exhausted() {
-    if (this.unproductive < SEARCH_PATIENCE) return false;
-    this.field.places.fail(this.field.latest.position);
+    this.track(this.field.latest);
+    if (this.unproductive < SEARCH_PATIENCE && !this.budgetReason) return false;
+    this.field.places.search(this.options.kind, this.field.latest.position);
     this.field.places.clearFrontier(this.options.kind);
-    this.field.report('exhausted', { unproductive: this.unproductive });
+    this.field.report('exhausted', {
+      unproductive: this.unproductive,
+      reason: this.budgetReason ?? 'no_progress',
+      distanceWithoutTake: this.withoutTake,
+    });
     return true;
   }
   async approach(target, exclude) {

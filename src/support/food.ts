@@ -37,6 +37,23 @@ export const foodYield = (object, page = known(object.code), tolerance = 0) => {
   const drop = (page.drops ?? []).find(d => edible(known(d.code)?.nutrition, tolerance));
   return drop ? { code: drop.code, how: 'break' } : null;
 };
+// Expected satiety from the edible drop the handbook identifies, not a promised yield.
+export function forageScore(object, position, tolerance = 0) {
+  const yieldFood = foodYield(object, undefined, tolerance);
+  if (!yieldFood) return Infinity;
+  const page = known(object.code);
+  const drops = yieldFood.how === 'use' ? page.harvest.drops : page.drops;
+  const drop = drops.find(drop => drop.code === yieldFood.code);
+  const nutrition = known(yieldFood.code)?.nutrition;
+  const satiety = nutrition.saturation * (Number.isFinite(drop.quantity) ? Math.max(0, drop.quantity) : 1);
+  if (satiety <= 0) return Infinity;
+  const distance = Math.hypot(object.point.x - position.x, object.point.z - position.z);
+  const climb = Math.abs(object.point.y - position.y) * 3;
+  // Include taking/picking up, discount old leads, and strongly prefer harmless food.
+  const effort = distance + climb + (yieldFood.how === 'use' ? 4 : 8);
+  return (effort * 80) / Math.min(640, satiety) + Math.min(20, (object.ageMs ?? 0) / 60000) + Math.max(0, -nutrition.health) * 64;
+}
+
 // Rationing: eat when hungry, or when the pack holds more than is being kept
 // and the bar is below the target; otherwise walk on with the food carried.
 export const shouldEat = (ratio, reserve, until, keep) => reserve > 0 && (ratio < HUNGRY || (ratio < until && reserve > keep));

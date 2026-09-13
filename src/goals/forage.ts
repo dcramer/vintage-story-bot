@@ -34,7 +34,8 @@ export default defineGoal({
     'than is kept, and finish at `until` satiety with `keep` satiety worth in the pack. Starving, it stomachs food that costs ' +
     'a point of health. count instead stockpiles that many additional fresh items after replacing anything eaten. ' +
     'Nothing in sight: it takes what was seen before, else ranges toward the least-walked ground, carrying on in the same ' +
-    'direction across restarts; a stretch of steps that took, saw and covered nothing ends it with none_found. No default deadline. Damage/death/control loss cancels; never respawns or resumes automatically. ' +
+    'direction across restarts. Ranks observed habitats and food by search effort and expected satiety; checks a new viewpoint every 24 blocks. ' +
+    'Redirects after 96 blocks without a lead; 384 blocks or six minutes without a verified harvest ends with none_found. No overall default deadline. Death/control loss cancels; never respawns or resumes automatically. ' +
     'Returns START and goal.id; poll goal_status. Needs an empty hotbar slot for harvesting. ' +
     'Optional sprint=true permits straight level sprinting only while food is at least 60%.',
   title: args => (args.count ? `Forage for ${args.count} fresh food items` : 'Forage for food'),
@@ -45,7 +46,9 @@ export default defineGoal({
       return {
         ok: !ended?.reason,
         goal: 'forage',
-        ...(ended?.reason ? { reason: ended.reason, position: ended.position } : {}),
+        ...(ended?.reason
+          ? { reason: ended.reason, position: ended.position, searchReason: ended.searchReason, distanceWithoutTake: ended.distanceWithoutTake }
+          : {}),
         eaten: survival.eaten,
         harvested: survival.harvested,
         retained: survival.retained,

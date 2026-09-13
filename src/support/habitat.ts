@@ -18,16 +18,15 @@ export function habitatsFor(match: string): Habitat[] {
   return ['edge', 'open'];
 }
 
-// The nearest far-view column of the habitat, beyond minDistance and in a
-// 16x16 area not yet walked, or null when none is remembered.
-export function habitatTarget(
+// Candidate habitats from observed columns only; callers rank them by travel and search evidence.
+export function habitatTargets(
   surface,
   position,
   habitats: Habitat[],
   known: (c: { x: number; z: number }) => boolean,
   { radius = 96, minDistance = 12 } = {},
 ) {
-  if (!surface?.columns?.size) return null;
+  if (!surface?.columns?.size) return [];
   const columns = [...surface.columns.values()];
   const kinds = new Map<string, Set<string>>();
   for (const c of columns) {
@@ -49,16 +48,20 @@ export function habitatTarget(
         : habitat === 'shore'
           ? c.kind === 'ground' && near(c, 'water', 3)
           : c.kind === 'ground';
-  for (const habitat of habitats) {
-    let best = null,
-      bestFar = Infinity;
-    for (const c of columns) {
-      const far = horizontal(position, { x: c.x + 0.5, z: c.z + 0.5 });
-      if (far < minDistance || far > radius || far >= bestFar || known(c) || !fits(c, habitat)) continue;
-      best = c;
-      bestFar = far;
-    }
-    if (best) return { x: best.x + 0.5, y: best.y, z: best.z + 0.5, habitat };
+  const targets = [];
+  for (const c of columns) {
+    const far = horizontal(position, { x: c.x + 0.5, z: c.z + 0.5 });
+    if (far < minDistance || far > radius || known(c)) continue;
+    const habitat = habitats.find(habitat => fits(c, habitat));
+    if (habitat) targets.push({ x: c.x + 0.5, y: c.y, z: c.z + 0.5, habitat });
   }
-  return null;
+  return targets;
+}
+
+export function habitatTarget(surface, position, habitats: Habitat[], known: (c: { x: number; z: number }) => boolean, options = {}) {
+  return (
+    habitatTargets(surface, position, habitats, known, options).sort(
+      (a, b) => habitats.indexOf(a.habitat) - habitats.indexOf(b.habitat) || horizontal(position, a) - horizontal(position, b),
+    )[0] ?? null
+  );
 }
