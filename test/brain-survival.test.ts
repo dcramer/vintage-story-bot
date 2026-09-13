@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { recoverBurrow } from '../src/brain/default/reflexes/burrow.ts';
+import { goHome } from '../src/brain/default/reflexes/go_home.ts';
 import { makeBag } from '../src/brain/default/tasks/bags.ts';
 import { house, houseSite } from '../src/brain/default/tasks/house.ts';
 import { lightingDay, shelterLight } from '../src/brain/default/tasks/lighting.ts';
@@ -203,6 +204,48 @@ test('partial shelter resumes its owned site after a controller restart', () => 
   assert.deepEqual(work.args.origin, origin);
   shelter.ended!({ ok: false } as any, memory, {} as any);
   assert.deepEqual(memory.notes.shelter, origin, 'a failed roof cannot discard the already placed walls');
+});
+
+test('night finishes a nearby almost complete owned shelter before a distant old home', () => {
+  const origin = { x: 10, y: 100, z: 20 };
+  const material = 'game:rammed-light-plain';
+  const shell = new Set(
+    [shelterScaffold(origin, material), ...template(origin, material), ...shelterDoor(origin, material)].map(c => `${c.x}:${c.y}:${c.z}`),
+  );
+  const memory = fresh({ shelter: origin, home: { x: 200, y: 100, z: 200 }, dwelling: { door: { x: 200, y: 100, z: 201 }, item: material } });
+  const ctx: any = {
+    memory,
+    home: memory.notes.home,
+    storm: false,
+    state: { position: { x: 12.5, y: 100, z: 25.5 } },
+    k: kit(inventory({ [material]: 3, 'game:firestarter': 1 })),
+    reading: {
+      terrain: {
+        get: (x, y, z) => ({
+          code:
+            x === 12 && y === 100 && z === 21
+              ? 'game:torch-basic-lit-up'
+              : x === 10 && y === 102 && z === 20
+                ? 'game:air'
+                : shell.has(`${x}:${y}:${z}`)
+                  ? material
+                  : 'game:air',
+        }),
+      },
+    },
+  };
+  const next = context => {
+    const decision = goHome.run(context);
+    assert.ok('start' in decision);
+    return decision.start;
+  };
+  assert.equal(next(ctx), 'shelter');
+  assert.equal(next({ ...ctx, storm: true }), 'enter_shelter', 'a storm still requires the existing shelter');
+  const get = ctx.reading.terrain.get;
+  ctx.reading.terrain.get = (x, y, z) => (x === 10 && y === 102 && z === 20 ? { code: 'game:chest-east' } : get(x, y, z));
+  assert.equal(next(ctx), 'enter_shelter', 'foreign occupancy must not turn night completion into a new site search');
+  goHome.ended!({ kind: 'shelter', ok: true, result: { home: { x: 12.5, y: 100, z: 22.5 }, origin, item: material } } as any, memory, {} as any);
+  assert.deepEqual(memory.notes.starter, origin);
 });
 
 test('a remembered shelter footprint is abandoned when storage blocks the aisle', () => {

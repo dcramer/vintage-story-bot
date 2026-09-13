@@ -38,6 +38,10 @@ half, eating carried food before choosing the next preparation step; this recove
 accounts for distance from home, and dawn light never permits leaving before
 05:00. At night only crafting with carried ingredients and shelter lighting
 may replace the indoor wait; no sleeping.
+When an owned starter is within eight blocks, no more than eight construction
+cells remain, and its materials and lighting supplies are available, finish it
+instead of travelling over 32 blocks to an older home at night. This exception
+requires observed clear cells and does not apply during a temporal storm.
 
 New cattail roots are harvested only below 10% satiety after raw forage fails,
 one at a time: uprooting destroys the plant. Carried roots and pending food

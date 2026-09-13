@@ -87,7 +87,9 @@ export const shelter: Concern = {
         why: 'soil for the shelter and a door reserve',
       };
     }
-    if (ctx.k.torches < TORCH_MIN) return torches.run(ctx);
+    const installedTorch =
+      pending && shelterTorches(pending).every(c => ctx.reading.terrain?.get(c.x, c.y, c.z)?.code?.startsWith('game:torch-basic-'));
+    if (ctx.k.torches < TORCH_MIN && !installedTorch) return torches.run(ctx);
     const prepare = prepareFirestarter(ctx);
     if (prepare) return prepare;
     const site = ctx.memory.notes.stash;
