@@ -26,8 +26,11 @@ export default defineGoal({
     runField(env, options, ['inventory', 'block_actions'], async (field, survival) => {
       const cells = [door, { ...door, y: door.y + 1 }];
       const slots = ownedSlots(await field.send({ action: 'inventory' }));
-      const have = slots.filter(s => s.code?.includes(item)).reduce((n, s) => n + s.quantity, 0);
+      const materials = slots.filter(s => s.code?.includes(item));
+      const material = materials.find(s => materials.filter(other => other.code === s.code).reduce((n, other) => n + other.quantity, 0) >= 2)?.code;
+      const have = materials.reduce((n, s) => n + s.quantity, 0);
       if (have < 2) return { ok: false, goal: 'enter_shelter', reason: 'not_enough_material', have, need: 2 };
+      if (!material) return { ok: false, goal: 'enter_shelter', reason: 'not_enough_matching_material', have, need: 2 };
       const p = field.latest.position;
       if (Math.hypot(p.x - home.x, p.z - home.z) > 3) {
         const approached = await travel(field, survival, { x: door.x + 0.5, y: door.y, z: door.z + 1.5, arrivalRadius: 0.6 });
@@ -37,7 +40,7 @@ export default defineGoal({
       if (!opened.ok) return { ...opened, goal: 'enter_shelter', phase: 'open' };
       const entered = await travel(field, survival, { ...home, arrivalRadius: 0.35 });
       if (!entered.ok) return { ...entered, goal: 'enter_shelter', phase: 'enter' };
-      const sealed = await build(field, survival, { cells: cells.map(c => ({ ...c, item })) });
+      const sealed = await build(field, survival, { cells: cells.map(c => ({ ...c, item: material })) });
       return { ...sealed, goal: 'enter_shelter', phase: 'seal', home, verification: 'client_observed' };
     }),
 });
