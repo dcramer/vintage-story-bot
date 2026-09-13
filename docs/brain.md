@@ -39,7 +39,9 @@ accounts for distance from home, and dawn light never permits leaving before
 05:00. At night only crafting with carried ingredients and shelter lighting
 may replace the indoor wait; no sleeping.
 
-Below 10% satiety, cooking prepares one root per batch. A carried log ends
+New cattail roots are harvested only below 10% satiety after raw forage fails,
+one at a time: uprooting destroys the plant. Carried roots and pending food
+can still be cooked or retrieved above that threshold. A carried log ends
 urgent fuel gathering; an empty firepit more than 48 blocks away is replaced
 locally instead of spending the remaining health returning to it. Pending
 food in an owned firepit is still retrieved.

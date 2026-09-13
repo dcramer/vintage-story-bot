@@ -866,13 +866,13 @@ test('brain: carried food is eaten first and recovery persists to half satiety a
   assert.equal(resumed.notes.foodRecovery, undefined);
 });
 
-test('brain: failed forage prepares cooking and resumes roots left in an owned firepit', () => {
+test('brain: failed forage prepares emergency cooking and resumes roots left in an owned firepit', () => {
   const memory = fresh();
   const hungry = state({ vitals: { hunger: { current: 180, max: 1500 } } });
   assert.equal(decide(reading({ state: hungry, inventory: kitted() }), memory).start, 'forage');
   const prepare = decide(
     reading({
-      state: hungry,
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
       inventory: kitted(),
       now: 1000,
       last: { id: 'food', kind: 'forage', ok: false, outcome: 'failed', reason: 'none_found' },
@@ -904,6 +904,7 @@ test('brain: partial provisions do not restart forage during its cooking fallbac
   memory.notes.stash = chestNote();
   const supplies = kitted();
   supplies.inventories[0].slots.push(
+    slot('game:cattailroot', 1),
     slot('game:vegetable-cookedcattailroot', 1, {
       nutrition: { saturation: 100, health: 0 },
       freshness: { state: 'fresh', freshHoursLeft: 100 },
@@ -951,6 +952,26 @@ test('brain: a productive partial root harvest cooks what it found', () => {
   assert.equal(memory.tried.eat, undefined);
   assert.equal(cooking.start, 'cook');
   assert.equal(cooking.args.count, 3);
+});
+
+test('brain: failed forage only uproots cattails in an emergency, including after recovery', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.notes.foodRecovery = true;
+  memory.notes.cookUntil = 10_000;
+  memory.notes.firepit = { x: 2, y: 100, z: 0 };
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 8));
+  for (const current of [300, 150, 149, 300, 600]) {
+    const choice = decide(reading({ state: state({ vitals: { hunger: { current, max: 1500 } } }), inventory: supplies, now: 2000 }), memory);
+    if (current < 150) {
+      assert.equal(choice.start, 'harvest');
+      assert.equal(choice.args.item, 'game:cattailroot');
+      assert.equal(choice.args.count, 1);
+    } else {
+      assert.equal(choice.start, 'forage', `preserve cattails at ${current}/1500 satiety despite the cooking fallback`);
+    }
+  }
 });
 
 test('brain: an interrupted firepit load carries fuel before resuming', () => {

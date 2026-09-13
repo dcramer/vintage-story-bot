@@ -18,12 +18,15 @@ export function food(ctx: Context, keep: number): Decision {
   const { k, memory, now, state, reading } = ctx;
   const count = (item: string) => k.slots.reduce((n, slot) => n + (slot.code === item ? slot.quantity : 0), 0);
   const roots = count(ROOT);
-  const batch = ctx.s.hunger !== null && ctx.s.hunger < 0.1 ? 1 : BATCH;
-  // A partial ration normally makes raw forage worth trying first. Once that
-  // bounded search has failed, cookUntil records the fallback window: do not
-  // let the same carried bite restart another identical forage before roots
-  // can be prepared.
-  if (ctx.tried.has(ctx.job) || (now >= (memory.notes.cookUntil ?? 0) && (k.reserve > 0 || (!roots && !memory.notes.cooking))))
+  const emergency = ctx.s.hunger !== null && ctx.s.hunger < 0.1;
+  const batch = emergency ? 1 : BATCH;
+  // Only starvation justifies uprooting new cattails. A failed forage may
+  // still fall back to carried roots despite a partial food reserve.
+  if (
+    ctx.tried.has(ctx.job) ||
+    (now >= (memory.notes.cookUntil ?? 0) && k.reserve > 0) ||
+    (!roots && !memory.notes.cooking && (!emergency || now >= (memory.notes.cookUntil ?? 0)))
+  )
     return {
       start: 'forage',
       args: { until: 0.5, keep, timeoutMs: FORAGE_MS },
@@ -82,7 +85,7 @@ export function food(ctx: Context, keep: number): Decision {
       return {
         start: 'harvest',
         args: { match: 'coopersreed', item: ROOT, count: batch, tool: 'Knife', timeoutMs: 600000 },
-        why: 'cattail roots when raw forage is scarce',
+        why: 'one emergency cattail root after raw forage failed below 10% satiety',
       };
   }
 
