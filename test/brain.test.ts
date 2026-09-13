@@ -1031,7 +1031,7 @@ test('brain: a productive partial root harvest cooks what it found', () => {
   assert.equal(cooking.args.count, 3);
 });
 
-test('brain: failed forage only uproots cattails in an emergency, including after recovery', () => {
+test('brain: failed forage keeps its cattail fallback below the hunger line', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.notes.foodRecovery = true;
@@ -1039,12 +1039,12 @@ test('brain: failed forage only uproots cattails in an emergency, including afte
   memory.notes.firepit = { x: 2, y: 100, z: 0 };
   const supplies = kitted();
   supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 8));
-  for (const current of [300, 150, 149, 300, 600]) {
+  for (const current of [300, 299, 150, 149, 300, 600]) {
     const choice = decide(reading({ state: state({ vitals: { hunger: { current, max: 1500 } } }), inventory: supplies, now: 2000 }), memory);
-    if (current < 150) {
+    if (current < 300) {
       assert.equal(choice.start, 'harvest');
       assert.equal(choice.args.item, 'game:cattailroot');
-      assert.equal(choice.args.count, 1);
+      assert.equal(choice.args.count, current < 150 ? 1 : 4);
     } else {
       assert.equal(choice.start, 'forage', `preserve cattails at ${current}/1500 satiety despite the cooking fallback`);
     }

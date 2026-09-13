@@ -52,13 +52,16 @@ export function food(ctx: Context, keep: number): Decision {
   }
 
   const emergency = ctx.s.hunger !== null && ctx.s.hunger < 0.1;
+  const hungry = ctx.s.hunger !== null && ctx.s.hunger < 0.2;
   const batch = emergency ? 1 : BATCH;
-  // Only starvation justifies uprooting new cattails. A failed forage may
-  // still fall back to carried roots despite a partial food reserve.
+  // Try ordinary forage first. Once that has failed, keep its bounded cattail
+  // fallback active until hunger clears the same 20% line that began recovery;
+  // otherwise each one-root meal restarts empty winter forage around 12% and
+  // the bot can oscillate forever without returning to its work list.
   if (
     ctx.tried.has(ctx.job) ||
     (now >= (memory.notes.cookUntil ?? 0) && k.reserve > 0) ||
-    (!roots && !memory.notes.cooking && (!emergency || now >= (memory.notes.cookUntil ?? 0)))
+    (!roots && !memory.notes.cooking && (!hungry || now >= (memory.notes.cookUntil ?? 0)))
   )
     return {
       start: 'forage',
