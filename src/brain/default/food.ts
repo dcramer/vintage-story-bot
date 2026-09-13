@@ -8,7 +8,6 @@ import { makeTool } from './tasks/tools.ts';
 
 const ROOT = 'game:cattailroot';
 const BATCH = 4;
-const FORAGE_MS = 180000;
 const COOK_MS = 600000;
 export const LOCAL_COOKING_DISTANCE = 48;
 const LOCAL_COOKING_HEIGHT = 2;
@@ -52,20 +51,22 @@ export function food(ctx: Context, keep: number): Decision {
   }
 
   const emergency = ctx.s.hunger !== null && ctx.s.hunger < 0.1;
-  const hungry = ctx.s.hunger !== null && ctx.s.hunger < 0.2;
+  const recovering = !!ctx.s.foodRecovery;
   const batch = emergency ? 1 : BATCH;
-  // Try ordinary forage first. Once that has failed, keep its bounded cattail
-  // fallback active until hunger clears the same 20% line that began recovery;
-  // otherwise each one-root meal restarts empty winter forage around 12% and
-  // the bot can oscillate forever without returning to its work list.
+  // Try ordinary forage first. Once that has failed, keep its deterministic
+  // cattail fallback active for the whole recovery episode. Restricting the
+  // fallback to the initial 20% hunger line makes a partly recovered bot start
+  // the same empty winter search again instead of finishing its meal.
   if (
     ctx.tried.has(ctx.job) ||
     (now >= (memory.notes.cookUntil ?? 0) && k.reserve > 0) ||
-    (!roots && !memory.notes.cooking && (!hungry || now >= (memory.notes.cookUntil ?? 0)))
+    (!roots && !memory.notes.cooking && (!recovering || now >= (memory.notes.cookUntil ?? 0)))
   )
     return {
       start: 'forage',
-      args: { until: 0.5, keep, timeoutMs: FORAGE_MS },
+      // Forage owns its evidence-based distance/time bound and returns
+      // none_found. A caller deadline discards that result as no_progress.
+      args: { until: 0.5, keep },
       why: `${k.reserve} carried; eat to half and look for edible forage before preparing roots`,
     };
 

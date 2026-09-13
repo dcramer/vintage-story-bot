@@ -45,7 +45,7 @@ export const eat: Concern = {
     // A raw-forage pass begun above the emergency line must hand control back
     // as soon as satiety crosses it. The next decision can then prepare the
     // existing one-root fallback instead of spending the remaining margin on
-    // the forage deadline.
+    // the forage search.
     if (
       s.hunger !== null &&
       s.hunger < 0.1 &&

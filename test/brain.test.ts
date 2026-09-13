@@ -866,8 +866,31 @@ test('brain: carried food is eaten first and recovery persists to half satiety a
   const continueEating = decide(reading({ inventory: kitted(), state: state({ vitals: { hunger: { current: 400, max: 1500 } } }) }), resumed);
   assert.equal(continueEating.start, 'forage', 'crossing 20% does not resume building before food recovers');
   assert.equal(continueEating.args.until, 0.5);
+  assert.equal(continueEating.args.timeoutMs, undefined, 'food forage ends from observed search exhaustion, not a caller deadline');
   decide(reading({ inventory: kitted(), state: state({ vitals: { hunger: { current: 750, max: 1500 } } }) }), resumed);
   assert.equal(resumed.notes.foodRecovery, undefined);
+});
+
+test('brain: failed recovery forage above the hunger line pivots to roots instead of repeating the search', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'eat';
+  memory.notes.foodRecovery = true;
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 12), slot('game:drygrass'));
+  const choice = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 382, max: 1500 } } }),
+      inventory: supplies,
+      now: 1000,
+      last: { id: 'food', kind: 'forage', ok: false, outcome: 'failed', reason: 'none_found' },
+    }),
+    memory,
+  );
+  assert.equal(choice.start, 'harvest');
+  assert.equal(choice.args.item, 'game:cattailroot');
+  assert.equal(choice.args.count, 4);
+  assert.equal(memory.tried.eat, undefined, 'the deterministic fallback remains available during recovery');
 });
 
 test('brain: failed forage prepares emergency cooking and resumes roots left in an owned firepit', () => {
@@ -1033,7 +1056,7 @@ test('brain: a productive partial root harvest cooks what it found', () => {
   assert.equal(cooking.args.count, 3);
 });
 
-test('brain: failed forage keeps its cattail fallback below the hunger line', () => {
+test('brain: failed forage keeps its cattail fallback through the recovery episode', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.notes.foodRecovery = true;
@@ -1041,15 +1064,11 @@ test('brain: failed forage keeps its cattail fallback below the hunger line', ()
   memory.notes.firepit = { x: 2, y: 100, z: 0 };
   const supplies = kitted();
   supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 8));
-  for (const current of [300, 299, 150, 149, 300, 600]) {
+  for (const current of [149, 150, 299, 300, 600, 749]) {
     const choice = decide(reading({ state: state({ vitals: { hunger: { current, max: 1500 } } }), inventory: supplies, now: 2000 }), memory);
-    if (current < 300) {
-      assert.equal(choice.start, 'harvest');
-      assert.equal(choice.args.item, 'game:cattailroot');
-      assert.equal(choice.args.count, current < 150 ? 1 : 4);
-    } else {
-      assert.equal(choice.start, 'forage', `preserve cattails at ${current}/1500 satiety despite the cooking fallback`);
-    }
+    assert.equal(choice.start, 'harvest');
+    assert.equal(choice.args.item, 'game:cattailroot');
+    assert.equal(choice.args.count, current < 150 ? 1 : 4);
   }
 });
 
