@@ -35,6 +35,18 @@ async function inspectSurface(field, cell, point?) {
   return null;
 }
 
+// A forming surface can be present and selected while a low leaf canopy wins
+// the camera ray. The terrain stream still proves which block occupies the
+// surface cell, so clear only that observed obstruction before declaring the
+// surface missing.
+export async function inspectKnownFormingSurface(field, cell, surfaceCode, inspect = inspectSurface, clear = clearLeafPath) {
+  let detail = await inspect(field, cell);
+  if (detail?.forming || field.env.map.get(cell.x, cell.y, cell.z)?.code !== surfaceCode) return detail;
+  const point = { x: cell.x + 0.5, y: cell.y + 0.05, z: cell.z + 0.5 };
+  if (await clear(field, point, 3)) detail = await inspect(field, cell);
+  return detail;
+}
+
 // Find a solid ground cell with an exposed top face to place a forming surface on, aiming by cell id
 // (the mod aims at the block's real selection box) rather than caller-computed angles. Forest floor is
 // uneven, so several nearby cells are tried; grass above the cell is replaced by the surface on placement.
@@ -135,7 +147,7 @@ export async function form(field, { kind, output, material }) {
   // The native recipe dialog blocks every control; a selection that fails must not leave it open.
   // Escape cancels it the way a player would (the game then removes the surface).
   const bail = async result => {
-    await field.send({ action: 'close_dialog' }).catch(() => {});
+    await field.send({ action: 'ui_close' }).catch(() => {});
     return result;
   };
   let detail;
@@ -146,7 +158,7 @@ export async function form(field, { kind, output, material }) {
       await field.send({ action: 'select_recipe', target: key, output });
       await field.wait(300);
     }
-    detail = await inspectSurface(field, cell);
+    detail = await inspectKnownFormingSurface(field, cell, surfaceCode);
     if (!detail?.forming) return bail({ ok: false, reason: 'surface_missing', ...summary() });
     if (!detail.forming.recipe) {
       if (!detail.forming.recipes?.some(r => r.output === output))
