@@ -224,3 +224,50 @@ test('bag preparation counts recoverable grid tops before gathering more', () =>
   assert.equal(decision.start, 'craft_item');
   assert.equal(decision.args.output, 'game:basket-normal-reed');
 });
+
+test('bag preparation stages a basket out of backpack contents before wearing it', () => {
+  const state = 'ab'.repeat(32);
+  const basket = { inventory: 'backpack', slot: 8 };
+  const bagSlot = { inventory: 'backpack', slot: 1 };
+  const staged = makeBag({
+    k: {
+      bagItem: basket,
+      emptyBagSlot: bagSlot,
+      cattailtops: 0,
+      state,
+      slots: [
+        { inventory: 'hotbar', slot: 0, code: null, quantity: 0 },
+        { inventory: 'backpack', slot: 1, code: null, quantity: 0, bag: true },
+        { inventory: 'backpack', slot: 8, code: 'game:basket-normal-reed', quantity: 1 },
+      ],
+    },
+    reading: { inventory: { inventories: [] }, state: { activeSlot: 2 } },
+  });
+  assert.deepEqual(staged.act, [{ action: 'move_item', from: basket, to: { inventory: 'hotbar', slot: 0 }, quantity: 1, expectedState: state }]);
+
+  const room = makeBag({
+    k: {
+      bagItem: basket,
+      emptyBagSlot: bagSlot,
+      cattailtops: 0,
+      state,
+      slots: [
+        { inventory: 'hotbar', slot: 0, code: 'game:stick', quantity: 3 },
+        { inventory: 'hotbar', slot: 1, code: 'game:knife-flint', quantity: 1, tool: 'Knife' },
+        { inventory: 'backpack', slot: 1, code: null, quantity: 0, bag: true },
+        { inventory: 'backpack', slot: 8, code: 'game:basket-normal-reed', quantity: 1 },
+        { inventory: 'backpack', slot: 9, code: null, quantity: 0 },
+      ],
+    },
+    reading: { inventory: { inventories: [] }, state: { activeSlot: 1 } },
+  });
+  assert.deepEqual(room.act, [
+    {
+      action: 'move_item',
+      from: { inventory: 'hotbar', slot: 0 },
+      to: { inventory: 'backpack', slot: 9 },
+      quantity: 3,
+      expectedState: state,
+    },
+  ]);
+});
