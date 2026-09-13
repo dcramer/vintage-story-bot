@@ -76,9 +76,9 @@ export function food(ctx: Context, keep: number): Decision {
         const cell = { x: Math.floor(p.x) + dx, y: Math.floor(p.y), z: Math.floor(p.z) + dz };
         const block = reading.terrain?.get(cell.x, cell.y, cell.z);
         if (!block || block.hazard || (block.code !== 'game:air' && !surfaceCover(block))) continue;
-        if (!supportedFloor(reading.terrain?.get(cell.x, cell.y - 1, cell.z), cell.y)) continue;
         if (surfaceCover(block))
           return { start: 'dig_area', args: { cells: [cell], timeoutMs: 60000 }, why: 'clear observed cover for the cooking firepit' };
+        if (!supportedFloor(reading.terrain?.get(cell.x, cell.y - 1, cell.z), cell.y)) continue;
         memory.notes.firepit = cell;
         return { start: 'firepit', args: cell, why: 'build an owned cooking firepit' };
       }

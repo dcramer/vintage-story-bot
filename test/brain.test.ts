@@ -862,9 +862,91 @@ test('brain: cooking makes inventory room before felling fuel', () => {
     memory,
   );
 
-  assert.equal(choice.start, 'craft_item');
-  assert.equal(choice.args.output, 'game:basket-normal-reed');
-  assert.equal(choice.args.count, 1);
+  assert.deepEqual(choice.act, [
+    {
+      action: 'drop',
+      from: { inventory: 'hotbar', slot: 9 },
+      quantity: 1,
+      expectedState: 'full-pack',
+    },
+  ]);
+  assert.match(choice.why, /hotbar slot/);
+});
+
+test('brain: basket crafting moves a spare stack into worn-basket storage before weaving', () => {
+  const memory = fresh();
+  memory.notes.cookUntil = 10_000;
+  const full = {
+    ok: true,
+    state: 'full-hotbar',
+    inventories: [
+      {
+        name: 'hotbar',
+        slots: [
+          slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }),
+          slot('game:axe-flint', 1, { tool: 'Axe', durability: 5 }),
+          slot('game:shovel-flint', 1, { tool: 'Shovel', durability: 5 }),
+          slot('game:firestarter'),
+          slot('game:cattailroot', 4),
+          slot('game:cattailtops', 10),
+          slot('game:soil-low-none', 2),
+          slot('game:flint'),
+          slot('game:stick', 4),
+          slot('game:firewood', 4),
+        ].map((s, i) => ({ ...s, slot: i })),
+      },
+      {
+        name: 'backpack',
+        slots: [
+          { slot: 0, code: 'game:basket-normal-reed', quantity: 1, bag: true },
+          { slot: 1, code: null, quantity: 0, bag: true },
+          { slot: 4, code: null, quantity: 0, bag: false },
+        ],
+      },
+    ],
+  };
+  const choice = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+      inventory: full,
+      now: 2000,
+    }),
+    memory,
+  );
+
+  assert.deepEqual(choice.act, [
+    {
+      action: 'move_item',
+      from: { inventory: 'hotbar', slot: 7 },
+      to: { inventory: 'backpack', slot: 4 },
+      quantity: 1,
+      expectedState: 'full-hotbar',
+    },
+  ]);
+});
+
+test('brain: cooking clears observed snow before it can know whether the firepit floor is supported', () => {
+  const memory = fresh();
+  memory.notes.cookUntil = 10_000;
+  memory.startupChecked = true;
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 12), slot('game:drygrass'), slot('game:cattailroot', 4));
+  const terrain = {
+    get: (x, y, z) =>
+      x === 0 && y === 100 && z === -2 ? { code: 'game:snowlayer-3', hazard: null, boxes: [[0, 100, -2, 1, 100.375, -1]] } : undefined,
+  };
+  const choice = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+      inventory: supplies,
+      terrain,
+      now: 2000,
+    }),
+    memory,
+  );
+
+  assert.equal(choice.start, 'dig_area');
+  assert.deepEqual(choice.args.cells, [{ x: 0, y: 100, z: -2 }]);
 });
 
 test('brain: digging out of a hole is never interrupted by a threat', () => {
