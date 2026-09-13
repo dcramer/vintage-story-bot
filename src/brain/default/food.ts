@@ -77,9 +77,19 @@ export function food(ctx: Context, keep: number): Decision {
     if (!k.knife) return makeTool(k, 'knife', 'knifeblade', k.knifeBlade, 'game:knife-generic');
     if (k.emptyBagSlot && (k.bagItem || (k.free < 2 && (k.cattailtops > 0 || k.free > 0)))) {
       const bag = makeBag(ctx);
-      // Equip or weave what is already carried, but one free slot is enough
-      // for fuel preparation. Food must not wait for another reed expedition.
-      if (k.free === 0 || bag.start !== 'harvest') return bag;
+      // Equip or weave carried supplies. Even a full pack must not send food
+      // recovery on a second reed expedition for an additional basket.
+      if (bag.start !== 'harvest') return bag;
+    }
+    // Loading a carried root frees its slot for the cooked result. Before
+    // gathering a new root, make room from expendable soil, retaining a seal.
+    if (emergency && !roots && k.free === 0) {
+      const soil = k.slots.filter(s => s.code?.startsWith('game:soil-') && k.dirt - s.quantity >= 4).sort((a, b) => a.quantity - b.quantity)[0];
+      if (soil)
+        return {
+          act: [{ action: 'drop', from: { inventory: soil.inventory, slot: soil.slot }, quantity: soil.quantity, expectedState: k.state }],
+          why: 'make room for emergency food while retaining shelter sealing blocks',
+        };
     }
     if (!count('game:firestarter')) {
       if (k.sticks < 2)

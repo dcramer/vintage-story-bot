@@ -1373,6 +1373,18 @@ test('brain: basket crafting leaves spare stacks for the craft goal to place its
   hungryMemory.notes.cookUntil = 10_000;
   const fuel = decide(reading({ state: state({ vitals: { hunger: { current: 0, max: 1500 } } }), inventory: short, now: 2000 }), hungryMemory);
   assert.equal(fuel.start, 'fell_tree', 'a free slot permits cooking fuel without gathering nine more tops for another bag');
+  short.inventories[1].slots.pop();
+  const packedMemory = fresh();
+  packedMemory.notes.cookUntil = 10_000;
+  const packed = decide(reading({ state: state({ vitals: { hunger: { current: 0, max: 1500 } } }), inventory: short, now: 2000 }), packedMemory);
+  assert.equal(packed.start, 'fell_tree', 'carried roots must not wait for an extra basket even when every slot is full');
+  short.inventories[0].slots.find(s => s.code === 'game:cattailroot').code = 'game:soil-low-none';
+  const crowdedMemory = fresh();
+  crowdedMemory.notes.cookUntil = 10_000;
+  const crowded = decide(reading({ state: state({ vitals: { hunger: { current: 0, max: 1500 } } }), inventory: short, now: 2000 }), crowdedMemory);
+  assert.equal(crowded.act[0].action, 'drop');
+  assert.equal(crowded.act[0].from.slot, 6);
+  assert.equal(crowded.act[0].quantity, 2, 'retain four soil blocks while freeing one slot for the root');
 });
 
 test('brain: cooking clears observed snow before it can know whether the firepit floor is supported', () => {
