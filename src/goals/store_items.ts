@@ -55,7 +55,7 @@ export async function closeContainer(field) {
 // Move stacks whose code contains `item` between own inventory and the open container, one transfer at a
 // time, each guarded by the container's state token and verified by the counts on both sides. Stops at the
 // first unverified move; a refused destination is skipped, never retried.
-export async function moveItems(field, { container, item, count = Infinity, direction, containerSlots = null }) {
+export async function moveItems(field, { container, item, count = Infinity, direction, containerSlots = null, allowConsumption = false }) {
   const read = async () => ({
     own: await field.send({ action: 'inventory' }),
     container: { ...(await field.send({ action: 'container_slots' })), target: container.target },
@@ -101,9 +101,18 @@ export async function moveItems(field, { container, item, count = Infinity, dire
       const contents = await read();
       const [nowFrom, nowTo] = sides(contents);
       const delta = sum(nowTo.filter(s => s.code === source.code)) - before.to;
-      if (delta === result.moved && sum(nowFrom.filter(s => s.code === source.code)) === before.from - delta) {
+      const sourceDelta = before.from - sum(nowFrom.filter(s => s.code === source.code));
+      const exact = delta === result.moved && sourceDelta === delta;
+      // A lit or still-hot firepit can consume one of the submitted fuel/input
+      // items while this verification read is in flight. The exact source
+      // decrease plus some remaining material in the requested native slot is
+      // observable proof of that one-way transfer; ordinary storage keeps the
+      // stricter equality above.
+      const activelyConsumed =
+        direction === 'store' && allowConsumption && sourceDelta === result.moved && delta >= 0 && delta < result.moved && before.to + delta > 0;
+      if (exact || activelyConsumed) {
         view = contents;
-        moved += delta;
+        moved += result.moved;
         verified = true;
         break;
       }

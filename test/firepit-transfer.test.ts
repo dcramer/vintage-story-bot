@@ -142,6 +142,52 @@ test('hot food retries only an explicit no-transfer refusal with a fresh reading
   }
 });
 
+test('firepit loading accepts a verified source decrease while the fire consumes one item', async () => {
+  const makeField = () => {
+    const own = { inventories: [{ name: 'hotbar', slots: [{ slot: 0, code: 'game:firewood', quantity: 8 }] }] };
+    const container = { state: 'embers', slots: [{ slot: 0, code: null as string | null, quantity: 0 }] };
+    const field = {
+      report: () => {},
+      wait: async () => {},
+      assess: () => {},
+      send: async request => structuredClone(request.action === 'inventory' ? own : container),
+      env: {
+        send: async () => {
+          own.inventories[0].slots[0] = { slot: 0, code: null, quantity: 0 };
+          container.slots[0] = { slot: 0, code: 'game:firewood', quantity: 7 };
+          return { ok: true, moved: 8 };
+        },
+      },
+    };
+    return { field, container };
+  };
+
+  const strict = makeField();
+  assert.deepEqual(
+    await moveItems(strict.field, {
+      container: structuredClone(strict.container),
+      item: 'game:firewood',
+      count: 8,
+      direction: 'store',
+      containerSlots: [0],
+    }),
+    { moved: 0, reason: 'transfer_unverified' },
+  );
+
+  const active = makeField();
+  assert.deepEqual(
+    await moveItems(active.field, {
+      container: structuredClone(active.container),
+      item: 'game:firewood',
+      count: 8,
+      direction: 'store',
+      containerSlots: [0],
+      allowConsumption: true,
+    }),
+    { moved: 8 },
+  );
+});
+
 test('firepit transfers use the requested native slot and never take input as output', async () => {
   const own = { inventories: [{ name: 'hotbar', slots: [{ slot: 0, code: 'game:cattailroot', quantity: 2 }] }] };
   const container = { state: 'opened', slots: [0, 1, 2].map(slot => ({ slot, code: null as string | null, quantity: 0 })) };

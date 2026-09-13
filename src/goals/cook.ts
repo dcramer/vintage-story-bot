@@ -64,7 +64,14 @@ export async function cook(field, { target, item, count, fuel }) {
       { slot: 1, item, count: wantedInput },
     ]) {
       if (!load.count) continue;
-      const result = await moveItems(field, { container, item: load.item, count: load.count, direction: 'store', containerSlots: [load.slot] });
+      const result = await moveItems(field, {
+        container,
+        item: load.item,
+        count: load.count,
+        direction: 'store',
+        containerSlots: [load.slot],
+        allowConsumption: true,
+      });
       if (result.reason) return summary({ ok: false, reason: result.reason, phase: 'loading', slot: load.slot });
       container = await field.send({ action: 'container_slots' });
     }
