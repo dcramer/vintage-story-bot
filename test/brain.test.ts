@@ -820,6 +820,45 @@ test('brain: failed forage prepares cooking and resumes roots left in an owned f
   assert.equal(retry.args.count, 2);
 });
 
+test('brain: cooking makes inventory room before felling fuel', () => {
+  const memory = fresh();
+  memory.notes.cookUntil = 10_000;
+  const full = {
+    ok: true,
+    state: 'full-pack',
+    inventories: [
+      {
+        name: 'hotbar',
+        slots: [
+          slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }),
+          slot('game:axe-flint', 1, { tool: 'Axe', durability: 5 }),
+          slot('game:shovel-flint', 1, { tool: 'Shovel', durability: 5 }),
+          slot('game:firestarter'),
+          slot('game:cattailroot', 4),
+          slot('game:cattailtops', 10),
+          slot('game:soil-low-none', 2),
+          slot('game:flint'),
+          slot('game:stick', 4),
+          slot('game:flower-horsetail-free'),
+        ].map((s, i) => ({ ...s, slot: i })),
+      },
+      { name: 'backpack', slots: [0, 1, 2, 3].map(slot => ({ slot, code: null, quantity: 0, bag: true })) },
+    ],
+  };
+  const choice = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+      inventory: full,
+      now: 2000,
+    }),
+    memory,
+  );
+
+  assert.equal(choice.start, 'craft_item');
+  assert.equal(choice.args.output, 'game:chest-normal-reed');
+  assert.match(choice.why, /carry cooking fuel/);
+});
+
 test('brain: digging out of a hole is never interrupted by a threat', () => {
   const digging = fresh();
   digging.job = 'dig_out';

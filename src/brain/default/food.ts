@@ -3,6 +3,7 @@ import { horizontal } from '../../runtime/navigation/terrain.ts';
 import { supportedFloor, surfaceCover } from '../../support/sites.ts';
 import type { Concern, Context } from './concern.ts';
 import { failedOnItsOwn } from './concern.ts';
+import { BAG, BAG_TOPS } from './tasks/bags.ts';
 import { makeTool } from './tasks/tools.ts';
 
 const ROOT = 'game:cattailroot';
@@ -45,6 +46,18 @@ export function food(ctx: Context, keep: number): Decision {
     }
     const wood = (pit ? 8 : 12) - count('game:firewood');
     if (wood > 0) {
+      // Tree drops need an ordinary inventory slot. When cooking is the first
+      // urgent job and the hotbar is already full, weave and wear the same bag
+      // the day-one task would make before sending fell_tree into a pickup loop.
+      if (k.free === 0 && k.emptyBagSlot) {
+        if (k.bagItem)
+          return {
+            act: [{ action: 'move_item', from: k.bagItem, to: k.emptyBagSlot, quantity: 1, expectedState: k.state }],
+            why: 'wear a hand basket so there is room for cooking fuel',
+          };
+        if (k.cattailtops >= BAG_TOPS)
+          return { start: 'craft_item', args: { output: BAG, count: 1, timeoutMs: 300000 }, why: 'a hand basket to carry cooking fuel' };
+      }
       if (!k.logs) return { start: 'fell_tree', args: { count: 3, timeoutMs: 300000 }, why: 'logs for cooking fuel' };
       return {
         start: 'craft_item',
