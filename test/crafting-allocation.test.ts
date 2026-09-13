@@ -50,6 +50,41 @@ test('an ingredient already in place cannot be allocated a second time', () => {
   );
 });
 
+test('wildcard ingredients do not mix incompatible concrete stacks in one grid slot', () => {
+  const matches = [
+    { inventory: 'hotbar', slot: 5, quantity: 2 },
+    { inventory: 'backpack', slot: 7, quantity: 64 },
+    { inventory: 'backpack', slot: 8, quantity: 4 },
+  ];
+  const inventory = {
+    inventories: [
+      { name: 'hotbar', slots: [{ slot: 5, code: 'game:soil-medium-none', quantity: 2 }] },
+      {
+        name: 'backpack',
+        slots: [
+          { slot: 7, code: 'game:soil-low-none', quantity: 64 },
+          { slot: 8, code: 'game:soil-low-none', quantity: 4 },
+        ],
+      },
+    ],
+  };
+  const plan = allocate(
+    {
+      ingredients: Array.from({ length: 6 }, (_, slot) => ({ slot, quantity: 1, consume: true, matches })),
+    },
+    10,
+    inventory,
+  );
+  assert.equal(
+    plan?.reduce((sum, step) => sum + step.quantity, 0),
+    60,
+  );
+  assert.ok(
+    plan?.every(step => step.from.inventory === 'backpack'),
+    'the two medium soil blocks cannot share a grid slot with low soil',
+  );
+});
+
 test('a wearable craft can go into an empty bag slot when the ordinary pack is full', () => {
   const inventory = {
     inventories: [

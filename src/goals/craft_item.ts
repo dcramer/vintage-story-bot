@@ -45,14 +45,37 @@ export async function clearGrid(field) {
 }
 
 // Allocate owned stacks to recipe ingredients without double-spending a stack.
-export function allocate(recipe, crafts = 1) {
+export function allocate(recipe, crafts = 1, inventory?) {
   const remaining = new Map();
   const plan = [];
+  const codeAt = new Map((inventory?.inventories ?? []).flatMap(({ name, slots }) => slots.map(slot => [`${name}:${slot.slot}`, slot.code])));
   for (const ingredient of recipe.ingredients ?? []) {
     if (!ingredient) continue;
     let needed = ingredient.quantity * (ingredient.consume === false ? 1 : crafts);
     const inPlace = match => match.inventory === 'craftinggrid' && match.slot === ingredient.slot;
-    for (const match of [...(ingredient.matches ?? [])].sort((a, b) => Number(inPlace(b)) - Number(inPlace(a)))) {
+    const matches = [...(ingredient.matches ?? [])].sort((a, b) => Number(inPlace(b)) - Number(inPlace(a)));
+    const groups = new Map();
+    for (const match of matches) {
+      const id = `${match.inventory}:${match.slot}`;
+      const available = remaining.get(id) ?? match.quantity;
+      if (available <= 0) continue;
+      const code = match.code ?? codeAt.get(id) ?? id;
+      groups.set(code, [...(groups.get(code) ?? []), match]);
+    }
+    // A wildcard ingredient can match several concrete block variants, but one
+    // crafting-grid slot can only hold a single stack type. Pick one concrete
+    // type that can fill the whole slot instead of staging incompatible stacks
+    // into it and having the game refuse the second transfer.
+    const compatible = [...groups.values()]
+      .filter(group => group.reduce((n, match) => n + (remaining.get(`${match.inventory}:${match.slot}`) ?? match.quantity), 0) >= needed)
+      .sort(
+        (a, b) =>
+          Number(b.some(inPlace)) - Number(a.some(inPlace)) ||
+          b.reduce((n, match) => n + (remaining.get(`${match.inventory}:${match.slot}`) ?? match.quantity), 0) -
+            a.reduce((n, match) => n + (remaining.get(`${match.inventory}:${match.slot}`) ?? match.quantity), 0),
+      )[0];
+    if (!compatible) return null;
+    for (const match of compatible) {
       const id = `${match.inventory}:${match.slot}`;
       const available = remaining.get(id) ?? match.quantity;
       if (available <= 0 || needed <= 0) continue;
@@ -98,7 +121,7 @@ export async function craftItem(field, { output, count = 1 }) {
         // Stage the requested batch together: consuming a whole ingredient
         // stack frees its slot even when the pack had no empty slot to start.
         for (let batch = Math.ceil((count - gained()) / candidate.output.quantity); batch >= 1; batch--) {
-          plan = allocate(candidate, batch);
+          plan = allocate(candidate, batch, inventory);
           if (plan) break;
         }
         if (plan) {
