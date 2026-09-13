@@ -100,21 +100,27 @@ export async function cook(field, { target, item, count, fuel }) {
       container = await field.send({ action: 'container_slots' });
     }
     if (opened) await close();
-    const selected = await selectCell(field, cell);
-    if (!selected) return summary({ ok: false, reason: 'firepit_not_observed' });
-    if (!selected.key.endsWith(':game:firepit-lit')) {
+    const light = async selected => {
+      if (selected.key.endsWith(':game:firepit-lit')) return { ok: true };
       const hand = field.latest.hotbar.find(s => s.slot === field.latest.activeSlot)?.code ?? null;
       const lit = await ignite(field, {
         target: selected.key,
         holdMs: 4000,
         lit: 'game:firepit-lit',
       });
-      if (!lit.ok) return summary({ ok: false, reason: 'ignition_unverified', detail: lit });
+      if (!lit.ok) return lit;
       // Put away the firestarter before the click that opens the hot firepit.
       const nextHand = handAfterIgnition(field.latest.hotbar, hand);
       if (nextHand !== undefined) await equip(field, { item: nextHand });
-    }
+      return lit;
+    };
+    let selected = await selectCell(field, cell);
+    if (!selected) return summary({ ok: false, reason: 'firepit_not_observed' });
+    let lit = await light(selected);
+    if (!lit.ok) return summary({ ok: false, reason: 'ignition_unverified', detail: lit });
     container = await open();
+    const now = () => field.now?.() ?? Date.now();
+    let checkFireAt = now() + 10000;
     while (moved < count) {
       await field.wait(1000);
       field.assess(await field.send({ action: 'observe' }), { controls: false });
@@ -130,6 +136,18 @@ export async function cook(field, { target, item, count, fuel }) {
         });
         moved += result.moved;
         if (result.reason) return summary({ ok: false, reason: result.reason, moved, output });
+      }
+      // A multiplayer server can roll back the client's predicted lit block.
+      // The open container does not expose burn state, so periodically close it
+      // and re-observe the block instead of waiting forever over a cold pit.
+      if (!ready?.quantity && now() >= checkFireAt) {
+        await close();
+        selected = await selectCell(field, cell);
+        if (!selected) return summary({ ok: false, reason: 'firepit_not_observed' });
+        lit = await light(selected);
+        if (!lit.ok) return summary({ ok: false, reason: 'ignition_unverified', detail: lit });
+        container = await open();
+        checkFireAt = now() + 10000;
       }
       field.report('cooking', { item, output, count, moved });
     }

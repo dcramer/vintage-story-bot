@@ -164,3 +164,89 @@ test('cooking does not retry consumed fuel and only continues when the fire is v
     else assert.equal(result.reason, 'transfer_unverified');
   }
 });
+
+test('cooking reignites when the server rolls a predicted fire back to cold', async () => {
+  remember('test:root', { combustible: { smeltsInto: 'test:cooked-root', smeltedRatio: 1 } });
+  remember('test:cooked-root', { nutrition: { saturation: 100, health: 0 } });
+  const target = () => `block:0:0:0:0:game:firepit-${lit ? 'lit' : 'cold'}`;
+  const own = [
+    { slot: 0, code: 'game:firestarter', quantity: 1 },
+    { slot: 1, code: null, quantity: 0 },
+  ];
+  const slots = [
+    { slot: 0, code: 'game:firewood', quantity: 7 },
+    { slot: 1, code: 'test:root', quantity: 1 },
+    { slot: 2, code: null, quantity: 0 },
+  ];
+  let time = 0,
+    lit = true,
+    interactions = 0;
+  const state = {
+    ok: true,
+    alive: true,
+    controlReady: true,
+    activeSlot: 0,
+    capabilities: ['long_hand_hold'],
+    position: { x: 2.5, y: 0, z: 0.5, dimension: 0 },
+    body: { halfWidth: 0.3, eyeHeight: 1.6 },
+    hotbar: own,
+    backpack: [],
+  };
+  const inventory = () => ({ ok: true, state: 'inventory', inventories: [{ name: 'hotbar', slots: own }] });
+  const contents = () => ({ ok: true, state: 'container', target: target(), slots });
+  const send = async request => {
+    if (request.action === 'observe') return state;
+    if (request.action === 'aim_cell' || request.action === 'close_container' || request.action === 'stop') return { ok: true };
+    if (request.action === 'inspect_target') return { ok: true, key: target() };
+    if (request.action === 'inventory') return structuredClone(inventory());
+    if (request.action === 'container_slots' || request.action === 'open_container') return structuredClone(contents());
+    if (request.action === 'select') {
+      state.activeSlot = request.slot;
+      return { ok: true };
+    }
+    if (request.action === 'interact') {
+      interactions++;
+      lit = true;
+      return { ok: true };
+    }
+    if (request.action === 'container_move') {
+      const from = (request.from.inventory === 'container' ? slots : own)[request.from.slot];
+      const to = (request.to.inventory === 'container' ? slots : own)[request.to.slot];
+      to.code = from.code;
+      to.quantity += request.quantity;
+      from.quantity -= request.quantity;
+      if (!from.quantity) from.code = null;
+      return { ok: true, moved: request.quantity };
+    }
+    throw Error(`Unexpected action ${request.action}`);
+  };
+  const field = {
+    latest: state,
+    env: { send },
+    send,
+    now: () => time,
+    observe: async () => state,
+    assess: () => {},
+    guard: value => value,
+    report: () => {},
+    wait: async ms => {
+      time += ms;
+      if (time === 1000) lit = false;
+      if (ms === 1000 && interactions > 0) {
+        slots[1].code = null;
+        slots[1].quantity = 0;
+        slots[2].code = 'test:cooked-root';
+        slots[2].quantity = 1;
+      }
+    },
+    until: async (predicate, { read }: any = {}) => {
+      const seen = read ? await read() : undefined;
+      return { met: await predicate(state, seen), state, read: seen };
+    },
+  };
+
+  const result = await cook(field, { target: target(), item: 'test:root', count: 1, fuel: 1 });
+  assert.equal(result.ok, true);
+  assert.equal(result.moved, 1);
+  assert.equal(interactions, 1);
+});
