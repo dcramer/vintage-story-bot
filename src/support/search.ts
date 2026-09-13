@@ -105,6 +105,8 @@ export type SearchOptions = {
   kind: string;
   // Block/item code substrings the thing is known by; what memory of the view is narrowed to.
   match: string[];
+  // Additional targets derived from current observed terrain, never added to sightings.
+  candidates?: () => any[];
   // Whether a sighting is worth taking.
   wanted: (object: any) => boolean;
   // Take one that is in reach; false when it could not be taken (it is then set aside).
@@ -172,8 +174,8 @@ export class Search {
     const p = this.field.latest.position;
     const failed = o => this.field.places.failed(o.point);
     const score = o => (this.options.score?.(o, p) ?? approachScore(p, o)) + failed(o) * FAILED_LEAD_PENALTY;
-    return this.field
-      .targets(o => this.options.wanted(o))
+    return [...new Map([...this.field.targets(o => this.options.wanted(o)), ...(this.options.candidates?.() ?? [])].map(o => [o.key, o])).values()]
+      .filter(o => this.wanted(o))
       .filter(o => failed(o) < LEAD_FAILURES)
       .sort((a, b) => score(a) - score(b));
   }
@@ -181,7 +183,7 @@ export class Search {
     return this.options.ready ? this.options.ready(object, this.field.latest) : object.withinPickingRange;
   }
   async look(radius) {
-    const objects = await this.field.scan(radius, this.match, 'all');
+    const objects = [...(await this.field.scan(radius, this.match, 'all')), ...(this.options.candidates?.() ?? [])];
     await this.options.learn?.(objects);
     if (radius === 8) this.field.places.search(this.options.kind, this.field.latest.position);
     return objects;

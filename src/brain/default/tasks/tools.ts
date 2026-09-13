@@ -29,7 +29,15 @@ export function makeTool(k: Kit, tool: string, head: string, blades: number, out
         args: { match: 'looseflints', item: 'game:flint', count: Math.max(1, flintShort(k)), timeoutMs: 600000 },
         why: `${k.knappables} flint: two to knap the ${tool}`,
       };
-    return { start: 'knap', args: { output: `game:${head}-${k.material ?? 'flint'}`, timeoutMs: 600000 }, why: `no ${tool}` };
+    return {
+      start: 'knap',
+      args: {
+        output: `game:${head}-${k.material ?? 'flint'}`,
+        material: k.material && k.material !== 'flint' ? `game:stone-${k.material}` : 'game:flint',
+        timeoutMs: 600000,
+      },
+      why: `no ${tool}`,
+    };
   }
   if (k.sticks < 1)
     return {

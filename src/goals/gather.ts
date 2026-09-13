@@ -7,6 +7,7 @@ import { habitatsFor } from '../support/habitat.ts';
 import { Search } from '../support/search.ts';
 import { Survival } from '../support/survival.ts';
 import { cleanName, foodFeatures } from '../support/task.ts';
+import { terrainTargets } from '../support/terrain-targets.ts';
 
 // Things lying on the ground: loose sticks, stones and flints (a right-click
 // each) and dropped stacks (walked over). match is the code substring looked
@@ -43,6 +44,7 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
   const picker = new Gleaner(field, []);
   const search = new Search(field, {
     kind: match,
+    candidates: () => (sticks ? terrainTargets(field, [TWIGS]) : []),
     match: sticks ? [match, TWIGS] : [match],
     wanted: o => loose(o) || dropped(o) || twiggy(o),
     // Loose things in reach are picked up; twigs are broken only with dry footing and when nothing loose is close.

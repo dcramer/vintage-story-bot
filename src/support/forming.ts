@@ -1,6 +1,6 @@
 import { useOnBlock } from '../goals/use_block.ts';
 import { lookAt, normalize } from '../runtime/navigation/terrain.ts';
-import { parseBlockKey, replaceablePlant } from './blocks.ts';
+import { parseBlockKey, replaceablePlant, selectCell } from './blocks.ts';
 import { equip, itemCount, ownedSlots } from './inventory.ts';
 import { clearLeafPath, leafBlock } from './leaf-clearing.ts';
 import { has } from './traits.ts';
@@ -17,6 +17,7 @@ const voxelPoint = (cell, [vx, vy, vz], top = true) => ({
 });
 
 async function inspectSurface(field, cell, point?) {
+  if (!point) return selectCell(field, cell);
   const state = await field.observe();
   const eye = { ...state.position, y: state.position.y + state.body.eyeHeight };
   await field.aim(lookAt(eye, point ?? { x: cell.x + 0.5, y: cell.y + 0.1, z: cell.z + 0.5 }));
@@ -39,7 +40,7 @@ async function aimGround(field) {
   const p = state.position;
   const tried = new Set();
   let covered = null;
-  for (const offset of [0, 25, -25, 50, -50, 90, -90])
+  for (const offset of [0, 25, -25, 50, -50, 90, -90, 135, -135, 180])
     for (const dist of [1.3, 1.0, 1.7]) {
       const radians = (normalize(state.orientation.yawDegrees + offset) * Math.PI) / 180;
       const x = Math.floor(p.x + Math.sin(radians) * dist),
@@ -48,15 +49,13 @@ async function aimGround(field) {
       const id = `${x},${y},${z}`;
       if (tried.has(id) || (Math.floor(p.x) === x && Math.floor(p.z) === z)) continue;
       tried.add(id);
-      const aim = await field.send({ action: 'aim_cell', x, y, z, face: 'up' });
-      if (!aim.ok) continue;
-      await field.observe();
-      const sel = await field.send({ action: 'inspect_target' });
+      const sel = await selectCell(field, { x, y, z }, { face: 'up', clearPlants: true });
+      if (!sel) continue;
       if (!sel.key?.startsWith('block:') || sel.face !== 'up' || replaceablePlant(sel.code)) continue;
       const hit = parseBlockKey(sel.key);
       if (hit.x !== x || hit.y !== y || hit.z !== z) continue; // occluded or grazed a neighbour
       const above = field.env.map.get(hit.x, hit.y + 1, hit.z);
-      if (above?.boxes.length) continue; // top not free for a surface
+      if (!above || above.hazard || above.boxes.length) continue; // unknown or occupied is not a free surface
       // Clear sky for two more blocks is preferred: leaves over a surface catch the aim at its voxels and
       // every click then takes minutes. Under a canopy or a roof the best covered cell still serves.
       if ([2, 3].some(dy => field.env.map.get(hit.x, hit.y + dy, hit.z)?.boxes.length)) {

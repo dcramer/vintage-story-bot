@@ -6,6 +6,7 @@ import { habitatsFor } from '../support/habitat.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
 import { Search } from '../support/search.ts';
 import { cleanName, runField } from '../support/task.ts';
+import { terrainTargets } from '../support/terrain-targets.ts';
 import { collectItem } from './collect_item.ts';
 
 const includes = (code, part) => typeof code === 'string' && code.includes(part);
@@ -48,6 +49,7 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
   };
   const search = new Search(field, {
     kind: match,
+    candidates: () => terrainTargets(field, [match]),
     match: [match.slice(0, 64), item.slice(0, 64)],
     wanted: o => blocks(o) || drops(o),
     // Drops lie nearby and vanish over time, so they come first. A player digs
@@ -57,7 +59,10 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     ready: (o, state) =>
       o.kind === 'item'
         ? horizontal(state.position, o.point) <= 8
-        : o.withinPickingRange && blockWorkReady(state) && (lowest || o.point.y >= Math.floor(state.position.y) - 1),
+        : o.withinPickingRange &&
+          blockWorkReady(state) &&
+          (Math.floor(o.point.x) !== Math.floor(state.position.x) || Math.floor(o.point.z) !== Math.floor(state.position.z)) &&
+          (lowest || o.point.y >= Math.floor(state.position.y) - 1),
     prefer: (a, b) =>
       Number(a.kind === 'block') - Number(b.kind === 'block') ||
       (lowest ? a.point.y - b.point.y : Math.floor(b.point.y) - Math.floor(a.point.y)) ||
