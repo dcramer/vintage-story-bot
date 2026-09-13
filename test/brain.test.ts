@@ -742,6 +742,26 @@ test('brain: forage keeps its own threat evasion instead of being cancelled', ()
   );
 });
 
+test('brain: a distant threat does not prevent an urgent cook from opening the firepit', () => {
+  const cooking = fresh();
+  cooking.job = 'eat';
+  cooking.startupChecked = true;
+  const threatened = distance =>
+    state({
+      vitals: { hunger: { current: 100, max: 1500 } },
+      nearbyEntities: [{ code: 'game:drifter-normal', point: { x: distance, y: 100, z: 0 }, distance, how: 'seen', at: 1 }],
+    });
+  const active = { id: 'cook', kind: 'cook', state: 'running', by: 'brain' };
+
+  assert.deepEqual(decide(reading({ state: threatened(12), active }), cooking), {
+    wait: 'finishing critical cooking while the threat stays at a distance',
+  });
+  const close = fresh();
+  close.job = 'eat';
+  close.startupChecked = true;
+  assert.deepEqual(decide(reading({ state: threatened(5), active }), close), { stop: 'threat' });
+});
+
 test('brain: night waits for forage to finish food already in hand', () => {
   const memory = fresh();
   memory.job = 'eat';

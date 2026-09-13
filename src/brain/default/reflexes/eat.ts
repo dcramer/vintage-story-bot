@@ -22,7 +22,9 @@ export const eat: Concern = {
   },
   ended: foodEnded,
   setAside: foodSetAside,
-  running: ({ active, danger, hurt, classifyingHurt }) => {
+  running: ({ active, danger, hurt, classifyingHurt, s }) => {
+    if (active?.kind === 'cook' && danger && !hurt && !classifyingHurt && !s.threatNear)
+      return { wait: 'finishing critical cooking while the threat stays at a distance' };
     if (active?.kind !== 'forage') return null;
     // Forage owns a deterministic evade-and-resume loop. Cancelling it on the
     // same sighting throws away its food leads and starts a second flight on
