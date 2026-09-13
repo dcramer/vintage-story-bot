@@ -1,5 +1,5 @@
 // Food recovery starts below 20% and continues to half. Eat carried food
-// first, then forage or prepare roots using the current recovery strategy.
+// first, then seek renewable forage. Roots already carried may still be cooked.
 
 import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import { HUNGRY } from '../../../support/food.ts';
@@ -44,21 +44,6 @@ export const eat: Concern = {
       return { wait: 'finishing critical cooking while the threat stays at a distance' };
     if (active?.kind !== 'forage') return null;
     if (!danger && !hurt && !classifyingHurt && nearbyCooking(ctx)) return { stop: 'check food left in the nearby firepit' };
-    // A raw-forage pass begun above the emergency line must hand control back
-    // as soon as satiety crosses it. The next decision can then prepare the
-    // existing one-root fallback instead of spending the remaining margin on
-    // the forage search.
-    if (
-      s.hunger !== null &&
-      s.hunger < 0.1 &&
-      (memory.notes.cookUntil ?? 0) > 0 &&
-      !ctx.tried.has(ctx.job) &&
-      !memory.notes.deferredCooking?.length &&
-      !danger &&
-      !hurt &&
-      !classifyingHurt
-    )
-      return { stop: 'prepare emergency roots' };
     // Forage owns a deterministic evade-and-resume loop. Cancelling it on the
     // same sighting throws away its food leads and starts a second flight on
     // top of navigation's evasion, which is especially costly near starvation.

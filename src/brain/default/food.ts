@@ -67,13 +67,22 @@ export function food(ctx: Context, keep: number): Decision {
     };
   }
 
+  // Cutting a cattail root removes the whole plant. Keep ordinary forage
+  // searching instead of degrading the wetland for one disposable meal.
+  // Roots already carried or left in an owned firepit are still worth using.
+  if (!roots && !memory.notes.cooking)
+    return {
+      start: 'forage',
+      // Forage owns its evidence-based distance/time bound and returns
+      // none_found. A caller deadline discards that result as no_progress.
+      args: { until: 0.5, keep },
+      why: `${k.reserve} carried; look for renewable edible forage without uprooting cattails`,
+    };
+
   const emergency = ctx.s.hunger !== null && ctx.s.hunger < 0.1;
   const recovering = !!ctx.s.foodRecovery;
   const batch = emergency ? 1 : BATCH;
-  // Try ordinary forage first. Once that has failed, keep its deterministic
-  // cattail fallback active for the whole recovery episode. Restricting the
-  // fallback to the initial 20% hunger line makes a partly recovered bot start
-  // the same empty winter search again instead of finishing its meal.
+  // Try ordinary forage before cooking roots the bot already carries.
   if (
     ctx.tried.has(ctx.job) ||
     (now >= (memory.notes.cookUntil ?? 0) && k.reserve > 0) ||
@@ -84,7 +93,7 @@ export function food(ctx: Context, keep: number): Decision {
       // Forage owns its evidence-based distance/time bound and returns
       // none_found. A caller deadline discards that result as no_progress.
       args: { until: 0.5, keep },
-      why: `${k.reserve} carried; eat to half and look for edible forage before preparing roots`,
+      why: `${k.reserve} carried; eat to half and look for edible forage before cooking carried roots`,
     };
 
   // While starving, an empty distant firepit is not worth a return trip.
@@ -134,12 +143,6 @@ export function food(ctx: Context, keep: number): Decision {
         start: 'harvest',
         args: { match: 'tallgrass', item: 'drygrass', count: 1, tool: 'Knife', timeoutMs: 300000 },
         why: 'grass to build a firepit',
-      };
-    if (!pending && !roots)
-      return {
-        start: 'harvest',
-        args: { match: 'coopersreed', item: ROOT, count: batch, tool: 'Knife', timeoutMs: 600000 },
-        why: batch === 1 ? 'one emergency cattail root after raw forage failed below 10% satiety' : 'a cattail root batch after raw forage failed',
       };
   }
 
@@ -247,12 +250,10 @@ export const foodEnded: Concern['ended'] = (last, memory, reading) => {
   }
 };
 
-export const foodSetAside: Concern['setAside'] = (last, memory, reading) => {
+export const foodSetAside: Concern['setAside'] = (last, memory, _reading) => {
   const reason = last.reason ?? last.result?.reason;
-  // Empty raw forage switches daytime provisions to cooking too. Waiting for
-  // urgent hunger before starting the same fallback can leave too little time
-  // to gather roots, build a firepit and heat the first meal. A failed root
-  // search still sets optional provisions aside below.
+  // Food recovery keeps widening its renewable-forage search after one region
+  // is exhausted; it never pivots to uprooting cattails.
   if (last.kind === 'forage') return false;
   // A bounded root search may exhaust the area after collecting part of its
   // batch. Those roots are already a useful result; cook them instead of

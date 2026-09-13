@@ -34,7 +34,7 @@ Follows the food, flint-tool, shelter, house and shared-material baseline in
 [getting-started](getting-started.md). `TASKS` in the default brain owns task
 order; each concern owns quantities, dependencies, and completion predicates.
 Danger and survival conditions preempt ordinary work. Food recovery eats to
-half, eating carried food before choosing the next preparation step; this recovery persists across goals and restarts. Successful cooking retains the cooking fallback while raw forage remains scarce. A separate daytime task builds a carried night reserve. Return time
+half, eating carried food before choosing the next preparation step; this recovery persists across goals and restarts. A separate daytime task builds a carried night reserve. Return time
 accounts for distance from home, and dawn light never permits leaving before
 05:00. At night only crafting with carried ingredients and shelter lighting
 may replace the indoor wait; no sleeping.
@@ -43,13 +43,9 @@ cells remain, and its materials and lighting supplies are available, finish it
 instead of travelling at least 32 blocks farther to an older home at night. This exception
 requires observed clear cells and does not apply during a temporal storm.
 
-After raw forage fails, the cattail fallback remains available until recovery
-reaches half satiety, including across interrupted work and controller restarts.
-Daytime provisions also switch to cooking after an empty raw-forage search,
-while there is still time to prepare the night reserve. A failed root search
-sets that optional task aside; an empty raw-forage search alone does not.
-Below 10% satiety harvest one root at a time; otherwise prepare batches of four.
-Uprooting destroys the plant. A new recovery episode tries raw forage again.
+Food recovery never harvests cattail roots: uprooting destroys the plant, so an
+empty forage region widens the renewable-food search instead. Roots already
+carried or left in an owned firepit may still be cooked and retrieved.
 Reserve two ordinary inventory slots before a food trip; shed expendable soil
 while keeping four sealing blocks, and stop harvesting if incidental pickups
 fill the pack. Food recovery does not detour for other kit materials.

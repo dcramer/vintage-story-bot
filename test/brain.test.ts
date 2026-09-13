@@ -889,7 +889,7 @@ test('brain: carried food is eaten first and recovery persists to half satiety a
   assert.equal(resumed.notes.foodRecovery, undefined);
 });
 
-test('brain: failed recovery forage above the hunger line pivots to roots instead of repeating the search', () => {
+test('brain: failed recovery forage widens renewable search without uprooting cattails', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.job = 'eat';
@@ -905,13 +905,13 @@ test('brain: failed recovery forage above the hunger line pivots to roots instea
     }),
     memory,
   );
-  assert.equal(choice.start, 'harvest');
-  assert.equal(choice.args.item, 'game:cattailroot');
-  assert.equal(choice.args.count, 4);
-  assert.equal(memory.tried.eat, undefined, 'the deterministic fallback remains available during recovery');
+  assert.equal(choice.start, 'forage');
+  assert.equal(choice.args.until, 0.5);
+  assert.match(choice.why, /without uprooting cattails/);
+  assert.equal(memory.tried.eat, undefined, 'renewable forage remains active during recovery');
 });
 
-test('brain: failed forage prepares emergency cooking and resumes roots left in an owned firepit', () => {
+test('brain: failed forage keeps searching but still uses roots already left in an owned firepit', () => {
   const memory = fresh();
   const hungry = state({ vitals: { hunger: { current: 180, max: 1500 } } });
   assert.equal(decide(reading({ state: hungry, inventory: kitted() }), memory).start, 'forage');
@@ -924,9 +924,9 @@ test('brain: failed forage prepares emergency cooking and resumes roots left in 
     }),
     memory,
   );
-  assert.equal(prepare.start, 'gather');
-  assert.match(prepare.why, /firestarter/);
-  assert.equal(memory.tried.eat, undefined, 'failed raw forage immediately permits the cooking fallback');
+  assert.equal(prepare.start, 'forage');
+  assert.match(prepare.why, /without uprooting cattails/);
+  assert.equal(memory.tried.eat, undefined, 'failed raw forage keeps renewable search active');
   memory.notes.firepit = { x: 2, y: 100, z: 0 };
   const supplies = kitted();
   supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 4), slot('game:cattailroot', 2));
@@ -1015,7 +1015,7 @@ test('brain: partial provisions do not restart forage during its cooking fallbac
   assert.match(prepare.why, /firestarter/);
 });
 
-test('brain: empty daytime forage prepares roots before hunger becomes urgent', () => {
+test('brain: empty daytime forage does not uproot cattails for provisions', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.job = 'provisions';
@@ -1031,27 +1031,8 @@ test('brain: empty daytime forage prepares roots before hunger becomes urgent', 
   const choice = decide(input, memory);
   assert.equal(memory.notes.foodRecovery, undefined, 'this is preventive food preparation');
   assert.equal(memory.tried.provisions, undefined);
-  assert.equal(choice.start, 'harvest');
-  assert.equal(choice.args.item, 'game:cattailroot');
-  assert.equal(choice.args.count, 4);
-
-  const exhausted = decide(
-    {
-      ...input,
-      now: 2000,
-      last: {
-        id: 'roots',
-        kind: 'harvest',
-        ok: false,
-        outcome: 'no_progress',
-        reason: 'none_found',
-        result: { item: 'game:cattailroot', gained: 0 },
-      },
-    },
-    memory,
-  );
-  assert.equal(memory.tried.provisions?.at, 2000, 'an empty root search yields to other work');
-  assert.notEqual(exhausted.args?.item, 'game:cattailroot');
+  assert.equal(choice.start, 'forage');
+  assert.match(choice.why, /without uprooting cattails/);
 });
 
 test('brain: a productive partial root harvest cooks what it found', () => {
@@ -1085,7 +1066,7 @@ test('brain: a productive partial root harvest cooks what it found', () => {
   assert.equal(cooking.args.count, 3);
 });
 
-test('brain: failed forage keeps its cattail fallback through the recovery episode', () => {
+test('brain: failed forage keeps renewable search through the recovery episode', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.notes.foodRecovery = true;
@@ -1095,9 +1076,8 @@ test('brain: failed forage keeps its cattail fallback through the recovery episo
   supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 8));
   for (const current of [149, 150, 299, 300, 600, 749]) {
     const choice = decide(reading({ state: state({ vitals: { hunger: { current, max: 1500 } } }), inventory: supplies, now: 20_000 }), memory);
-    assert.equal(choice.start, 'harvest');
-    assert.equal(choice.args.item, 'game:cattailroot');
-    assert.equal(choice.args.count, current < 150 ? 1 : 4);
+    assert.equal(choice.start, 'forage');
+    assert.match(choice.why, /without uprooting cattails/);
   }
   decide(reading({ state: state({ vitals: { hunger: { current: 750, max: 1500 } } }), inventory: supplies, now: 21_000 }), memory);
   assert.equal(memory.notes.cookUntil, undefined, 'recovery completion retires its failed-forage evidence');
@@ -1137,7 +1117,7 @@ test('brain: cooked food retrieval frees incidental drops while preserving the l
   }
 });
 
-test('brain: active recovery forage yields to emergency roots below ten percent', () => {
+test('brain: active recovery forage continues below ten percent instead of uprooting cattails', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.job = 'eat';
@@ -1151,22 +1131,8 @@ test('brain: active recovery forage yields to emergency roots below ten percent'
       reading({ state: starving, inventory: kitted(), active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' }, now: 2000 }),
       memory,
     ),
-    { stop: 'prepare emergency roots' },
+    { wait: 'letting forage finish' },
   );
-  const supplies = kitted();
-  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 6), slot('game:drygrass'));
-  const fallback = decide(
-    reading({
-      state: starving,
-      inventory: supplies,
-      last: { id: 'food', kind: 'forage', ok: false, outcome: 'interrupted', reason: 'brain: prepare emergency roots' },
-      now: 2001,
-    }),
-    memory,
-  );
-  assert.equal(fallback.start, 'harvest');
-  assert.equal(fallback.args.item, 'game:cattailroot');
-  assert.equal(fallback.args.count, 1);
 });
 
 test('brain: an interrupted firepit load carries fuel before resuming', () => {
@@ -1253,7 +1219,7 @@ test('brain: a legacy cook deadline resumes food already loaded in the firepit',
   assert.equal(choice.args.timeoutMs, undefined);
 });
 
-test('brain: starvation uses carried firewood before replacing a broken axe', () => {
+test('brain: starvation does not replace an axe merely to uproot cattails', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.notes.cookUntil = 10_000;
@@ -1267,9 +1233,8 @@ test('brain: starvation uses carried firewood before replacing a broken axe', ()
 
   const choice = decide(reading({ state: state({ vitals: { hunger: { current: 0, max: 1500 } } }), inventory: supplies, now: 2000 }), memory);
 
-  assert.equal(choice.start, 'harvest');
-  assert.equal(choice.args.item, 'game:cattailroot');
-  assert.equal(choice.args.count, 1);
+  assert.equal(choice.start, 'forage');
+  assert.match(choice.why, /without uprooting cattails/);
 });
 
 test('brain: failed travel defers cooking, prepares locally, and recovers food when back in reach', () => {
