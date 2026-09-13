@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { horizontal, lookAt } from '../runtime/navigation/terrain.ts';
-import { changeBlock, selectCell } from '../support/blocks.ts';
+import { changeBlock, parseBlockKey, selectCell } from '../support/blocks.ts';
 import { diggingSlot, known, solid } from '../support/digging.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
 import { runField } from '../support/task.ts';
@@ -89,7 +89,7 @@ export async function burrow(field, survival) {
   const seal = sealStone(inventory);
   const site = seal ? burrowSite(map, state.position) : null;
   // With nothing to seal a bank pocket with, or no bank about, a hole where it stands: what it digs seals it.
-  if (!site) return digIn(field, inventory);
+  if (!site) return digIn(field, inventory, survival);
   field.report('walking_to_bank', { stand: site.stand, mouth: site.mouth });
   if (horizontal(state.position, site.stand) > 0.6) {
     const walked = await field.walk({ ...site.stand, arrivalRadius: 0.4 }, survival?.pauseWhen);
@@ -134,7 +134,7 @@ export async function burrow(field, survival) {
 
 // No bank about: a hole where it stands, two blocks straight down, the cell above the head closed
 // with the seal stone placed against a rim block's inner face. Drifters do not climb into holes.
-async function digIn(field, inventory) {
+async function digIn(field, inventory, survival) {
   const map = field.env.map;
   let start = field.latest.position;
   const x = Math.floor(start.x),
@@ -189,10 +189,49 @@ async function digIn(field, inventory) {
       await field.aim(lookAt(eye, { x: x + 0.5, y: field.latest.position.y - 0.5, z: z + 0.5 }));
       const selected = await field.send({ action: 'inspect_target' });
       if (!selected?.key?.startsWith('block:')) return { ok: false, goal: 'burrow', reason: 'cannot_aim', cell: { x, y: y - 1, z } };
+      const selectedCell = parseBlockKey(selected.key);
+      const bodyCell =
+        selectedCell.x === Math.floor(field.latest.position.x) &&
+        selectedCell.y === Math.floor(field.latest.position.y) &&
+        selectedCell.z === Math.floor(field.latest.position.z);
       const slot = await diggingSlot(field, selected, inventory);
       if (slot === null) return { ok: false, goal: 'burrow', reason: 'cannot_dig', cell: { x, y: y - 1, z }, code: selected.code };
       field.report('cutting', { cell: selected.key, code: selected.code });
-      const dug = await changeBlock(field, 'dig', { target: selected.key, slot, acceptTransform: true, timeoutMs: 45000 });
+      // Snow-covered grass and loose resources can share the exact cell the
+      // player's feet occupy. New bridges can safely cut that scoped body
+      // cell; older installed bridges require stepping beside it first.
+      if (bodyCell && !field.latest.capabilities?.includes('body_cell_dig')) {
+        const object = {
+          kind: 'block',
+          key: selected.key,
+          code: selected.code,
+          point: { x: selectedCell.x + 0.5, y: selectedCell.y + 0.5, z: selectedCell.z + 0.5 },
+        };
+        const stand = field.approach(object, q => Math.floor(q.x) === x && Math.floor(q.z) === z);
+        if (!stand) return { ok: false, goal: 'burrow', reason: 'cannot_clear_body_cell', cell: selected.key };
+        const stepped = await field.walk(stand, survival?.pauseWhen);
+        if (!['arrived', 'paused'].includes(stepped.state))
+          return { ok: false, goal: 'burrow', reason: stepped.reason ?? 'cannot_clear_body_cell', cell: selected.key };
+        const cleared = await changeBlock(field, 'dig', {
+          target: selected.key,
+          slot,
+          acceptTransform: true,
+          timeoutMs: 45000,
+        });
+        if (!cleared.ok) return { ok: false, goal: 'burrow', reason: cleared.reason ?? 'cannot_clear_body_cell', cell: selected.key };
+        const returned = await field.walk({ ...center, arrivalRadius: 0.35 }, survival?.pauseWhen);
+        if (!['arrived', 'paused'].includes(returned.state))
+          return { ok: false, goal: 'burrow', reason: returned.reason ?? 'cannot_center', cell: selected.key };
+        await field.observe(true);
+        continue;
+      }
+      const dug = await changeBlock(field, 'dig', {
+        target: selected.key,
+        slot,
+        acceptTransform: true,
+        allowBodyCellDig: bodyCell,
+        timeoutMs: 45000,
+      });
       if (!dug.ok) return { ok: false, goal: 'burrow', reason: dug.reason ?? 'dig_failed', cell: selected.key };
       await field.until(now => now.motion.onGround && now.position.y < y, { timeoutMs: 2000, everyMs: 250, sync: true });
       y = Math.floor(field.latest.position.y + 0.01);

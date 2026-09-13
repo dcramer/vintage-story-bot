@@ -189,6 +189,75 @@ test('a burrow site is a standable cell beside two blocks of plain earth two dee
   assert.equal(dugInState(shallow, 0, 0, 0), 'sealed', 'a shallow rim supporting a seal is still the completed burrow');
 });
 
+test('a burrow steps beside surface cover before clearing its own body cell on an older bridge', async () => {
+  const { burrow } = await import('../src/goals/burrow.ts');
+  const map = world(2, () => false);
+  const inventory = {
+    state: 'pack',
+    inventories: [
+      {
+        name: 'hotbar',
+        slots: [{ slot: 0, code: 'game:shovel-flint', quantity: 1, tool: 'Shovel', toolTier: 1, durability: 50 }],
+      },
+    ],
+  };
+  const cover = 'block:0:0:0:0:game:tallgrass-short-snow3';
+  const ground = 'block:0:0:-1:0:game:soil-low-none';
+  const walks = [],
+    begins = [];
+  let covered = true;
+  const field = {
+    env: { map },
+    latest: {
+      position: { x: 0.5, y: 0.125, z: 0.5, dimension: 0 },
+      body: { eyeHeight: 1.7 },
+      motion: { onGround: true, feetInLiquid: false, swimming: false },
+      capabilities: [],
+      activeSlot: 0,
+    },
+    observe: async () => field.latest,
+    aim: async () => {},
+    approach: () => ({ x: 1.5, y: 0.125, z: 0.5, arrivalRadius: 0.35 }),
+    walk: async destination => {
+      walks.push(destination);
+      field.latest.position = { ...field.latest.position, x: destination.x, y: destination.y, z: destination.z };
+      return { state: 'arrived' };
+    },
+    send: async request => {
+      if (request.action === 'inventory') return inventory;
+      if (request.action === 'select') {
+        field.latest.activeSlot = request.slot;
+        return { ok: true };
+      }
+      if (request.action === 'aim_cell') return { ok: true };
+      if (request.action === 'inspect_target')
+        return covered
+          ? { key: cover, code: 'game:tallgrass-short-snow3', material: 'Plant', requiredMiningTier: 0 }
+          : { key: ground, code: 'game:soil-low-none', material: 'Soil', requiredMiningTier: 0 };
+      if (request.action === 'block_action_begin') {
+        begins.push({ ...request, x: field.latest.position.x });
+        if (request.target === cover) {
+          covered = false;
+          map.put({ x: 0, y: 0, z: 0, seenAt: Date.now(), code: 'game:air', traits: [], boxes: [] });
+          return { state: 'changed', changedForMs: 1000, position: { x: 0, y: 0, z: 0 }, before: 'game:tallgrass-short-snow3', after: 'game:air' };
+        }
+        return { state: 'failed', reason: 'test_stop' };
+      }
+      throw Error(`Unexpected action: ${request.action}`);
+    },
+    report: () => {},
+    wait: async () => {},
+  };
+
+  const result = await burrow(field, null);
+
+  assert.equal(result.reason, 'test_stop');
+  assert.equal(begins[0].target, cover);
+  assert.equal(begins[0].x, 1.5, 'surface cover is cut only after leaving its column');
+  assert.equal(begins[0].allowBodyCellDig, undefined, 'an older bridge never receives the unsupported escape hatch');
+  assert.equal(walks.at(-1).x, 0.5, 'the body returns over the cleared shaft before digging ground');
+});
+
 test('a sealed pit clears takeoff headroom before cutting the stair wall', () => {
   const pit = world(4, (x, y, z) => y >= 0 && y <= 3 && (x !== 0 || z !== 0 || y === 2));
   const origin = { x: 0.5, y: 0, z: 0.5 };
