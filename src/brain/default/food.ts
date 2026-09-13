@@ -153,14 +153,24 @@ export function food(ctx: Context, keep: number): Decision {
   }
   if (horizontal(state.position, pit) > 3 || Math.abs(state.position.y - pit.y) > LOCAL_COOKING_HEIGHT)
     return { start: 'travel', args: { ...pit, arrivalRadius: 2, manageFood: false, timeoutMs: 300000 }, why: 'return to the cooking firepit' };
-  const block = reading.terrain?.get(pit.x, pit.y, pit.z);
-  if (!/^game:firepit-(cold|extinct|lit)$/.test(block?.code ?? ''))
-    return { start: 'firepit', args: pit, why: 'finish the owned firepit before cooking' };
+  const observedCode = reading.terrain?.get(pit.x, pit.y, pit.z)?.code;
+  // The verified placement result can arrive before its terrain delta has
+  // reached the next brain reading. Carry that result straight into cooking;
+  // otherwise the consumed grass makes a second firepit attempt fail and the
+  // same stale reading can churn that failure indefinitely.
+  const built = reading.last?.kind === 'firepit' && reading.last.ok ? reading.last.result : null;
+  const builtHere = built?.cell?.x === pit.x && built?.cell?.y === pit.y && built?.cell?.z === pit.z;
+  const code = /^game:firepit-(cold|extinct|lit)$/.test(observedCode ?? '')
+    ? observedCode
+    : builtHere && /^game:firepit-(cold|extinct|lit)$/.test(built?.code ?? '')
+      ? built.code
+      : null;
+  if (!code) return { start: 'firepit', args: pit, why: 'finish the owned firepit before cooking' };
   memory.notes.cooking ??= { count: Math.min(roots, batch) };
   return {
     start: 'cook',
     args: {
-      target: `block:${state.position.dimension ?? 0}:${pit.x}:${pit.y}:${pit.z}:${block.code}`,
+      target: `block:${state.position.dimension ?? 0}:${pit.x}:${pit.y}:${pit.z}:${code}`,
       item: ROOT,
       count: memory.notes.cooking.count,
       fuel,

@@ -918,6 +918,34 @@ test('brain: snow-height footing within interaction reach does not churn travel 
   assert.equal(choice.start, 'cook');
 });
 
+test('brain: a verified firepit placement cooks before its terrain delta arrives', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'eat';
+  memory.notes.firepit = { x: 2, y: 100, z: 0 };
+  memory.notes.cookUntil = 10_000;
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 2), slot('game:cattailroot'));
+  const choice = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 0, max: 1500 } } }),
+      inventory: supplies,
+      terrain: { get: () => undefined },
+      now: 2000,
+      last: {
+        id: 'pit',
+        kind: 'firepit',
+        ok: true,
+        outcome: 'done',
+        result: { ok: true, goal: 'firepit', code: 'game:firepit-cold', cell: { x: 2, y: 100, z: 0 } },
+      },
+    }),
+    memory,
+  );
+  assert.equal(choice.start, 'cook');
+  assert.equal(choice.args.target, 'block:0:2:100:0:game:firepit-cold');
+});
+
 test('brain: partial provisions do not restart forage during its cooking fallback window', () => {
   const memory = fresh();
   memory.startupChecked = true;
