@@ -43,21 +43,15 @@ cells remain, and its materials and lighting supplies are available, finish it
 instead of travelling at least 32 blocks farther to an older home at night. This exception
 requires observed clear cells and does not apply during a temporal storm.
 
-Food recovery never harvests cattail roots: uprooting destroys the plant, so an
-empty forage region widens the renewable-food search instead. Roots already
-carried or left in an owned firepit may still be cooked and retrieved.
+Food recovery never harvests or cooks cattail roots: uprooting destroys the
+plant, so an empty forage region widens the renewable-food search instead.
 Reserve two ordinary inventory slots before a food trip; shed expendable soil
 while keeping four sealing blocks, and stop harvesting if incidental pickups
 fill the pack. Food recovery does not detour for other kit materials.
 When only the sealing-soil stack remains, discard incidental tree seeds or
-flowers to free food slots, preserving crop seeds and tools. Pending cooked
-food needs room even when raw roots are already carried.
-Carried roots and pending food can still be cooked or retrieved. A carried log ends
-urgent fuel gathering; an empty firepit more than 48 blocks away is replaced
-locally instead of spending the remaining health returning to it. Pending
-food in an owned firepit is still retrieved. A failed route defers that cooking
-record rather than forgetting it. Back within reach of the observed firepit,
-check its output before preparing fuel; empty output resumes the pending cook.
+flowers to free food slots, preserving crop seeds and tools. The generic cook
+goal remains available to explicit operator goals, but it is not a root-food
+fallback for the default brain.
 
 The starter shelter is a freestanding, above-ground building, never an emergency burrow. Its natural floor stays at ground level. A 5×5 rammed-earth starter shelter follows the [template](getting-started.md#starter-shelter-template) while the full rammed-earth house
 is built. A house site requires observed level ground and clear space; unknown

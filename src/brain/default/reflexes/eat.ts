@@ -1,10 +1,10 @@
 // Food recovery starts below 20% and continues to half. Eat carried food
-// first, then seek renewable forage. Roots already carried may still be cooked.
+// first, then seek renewable forage. The brain never acquires or cooks roots.
 
-import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import { HUNGRY } from '../../../support/food.ts';
 import type { Concern } from '../concern.ts';
-import { food, foodEnded, foodSetAside, LOCAL_COOKING_DISTANCE, nearbyCooking } from '../food.ts';
+
+import { food, foodEnded, foodSetAside } from '../food.ts';
 import type { Situation } from '../situation.ts';
 
 // Hungry is the goals' own line (support/food.ts), so the brain interrupts work where forage would stomach poor food.
@@ -24,26 +24,9 @@ export const eat: Concern = {
   ended: foodEnded,
   setAside: foodSetAside,
   running: ctx => {
-    const { active, danger, hurt, classifyingHurt, s, k, memory, state } = ctx;
-    if (active?.kind === 'harvest' && k.free === 0 && !k.slots.some(slot => slot.code === 'game:cattailroot'))
-      return { stop: 'make room for food before continuing the harvest' };
-    if (
-      active?.kind === 'travel' &&
-      s.hunger !== null &&
-      s.hunger < 0.1 &&
-      !memory.notes.cooking &&
-      memory.notes.firepit &&
-      horizontal(state.position, memory.notes.firepit) > LOCAL_COOKING_DISTANCE &&
-      !danger &&
-      !hurt
-    )
-      return { stop: 'prepare a local cooking fire while starving' };
-    if (active?.kind === 'fell_tree' && s.hunger !== null && s.hunger < 0.1 && k.logs > 0 && !danger && !hurt)
-      return { stop: 'prepare cooking fuel from the log already carried' };
-    if (active?.kind === 'cook' && danger && !hurt && !classifyingHurt && !s.threatNear)
-      return { wait: 'finishing critical cooking while the threat stays at a distance' };
+    const { active, danger, hurt, classifyingHurt, k } = ctx;
+    if (active?.kind === 'harvest' && k.free === 0) return { stop: 'make room for food before continuing the harvest' };
     if (active?.kind !== 'forage') return null;
-    if (!danger && !hurt && !classifyingHurt && nearbyCooking(ctx)) return { stop: 'check food left in the nearby firepit' };
     // Forage owns a deterministic evade-and-resume loop. Cancelling it on the
     // same sighting throws away its food leads and starts a second flight on
     // top of navigation's evasion, which is especially costly near starvation.
