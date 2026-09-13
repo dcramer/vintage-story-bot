@@ -104,48 +104,116 @@ export async function emptyHand(field) {
 export async function consume(field, { match, tolerance = 0 }: { match?: string; tolerance?: number } = {}) {
   await field.observe();
   let inventory = await field.send({ action: 'inventory' });
+  const inventorySlot = (contents, address) => {
+    const own = contents.inventories.find(i => i.name === address.inventory);
+    return own?.slots.find(s => s.slot === address.slot);
+  };
   let food = ownedSlots(inventory)
     .filter(slot => safeFood(slot, tolerance))
     .filter(slot => !match || slot.code.toLowerCase().includes(match.toLowerCase()))
     .sort((a, b) => b.nutrition.health - a.nutrition.health || a.freshness.freshHoursLeft - b.freshness.freshHoursLeft)[0];
   if (!food) throw Error(match ? `No fresh edible food matching ${match} in own inventory` : 'No fresh edible food in own inventory');
   if (food.inventory !== 'hotbar') {
+    let rotated = false;
     let destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && !s.code);
     if (!destination) {
       const room = foodHotbarRoom(inventory);
-      if (!room) throw Error('Eating needs an empty hotbar slot or worn-bag storage');
-      const displaced = ownedSlots(inventory).find(s => s.inventory === room.from.inventory && s.slot === room.from.slot);
-      await field.send(room);
-      const cleared = await field.until(
-        (_, contents) => {
-          const slots = ownedSlots(contents);
-          const source = slots.find(s => s.inventory === room.from.inventory && s.slot === room.from.slot);
-          const stored = slots.find(s => s.inventory === room.to.inventory && s.slot === room.to.slot);
-          return !source?.code && stored?.code === displaced?.code && stored?.quantity === displaced?.quantity;
-        },
-        { timeoutMs: 1000, everyMs: 100, read: () => field.send({ action: 'inventory' }) },
-      );
-      if (!cleared.met) throw Error('Hotbar transfer unverified; inspect inventory');
-      inventory = cleared.read;
-      destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === room.from.slot && !s.code);
+      if (room) {
+        const displaced = ownedSlots(inventory).find(s => s.inventory === room.from.inventory && s.slot === room.from.slot);
+        await field.send(room);
+        const cleared = await field.until(
+          (_, contents) => {
+            const slots = ownedSlots(contents);
+            const source = slots.find(s => s.inventory === room.from.inventory && s.slot === room.from.slot);
+            const stored = slots.find(s => s.inventory === room.to.inventory && s.slot === room.to.slot);
+            return !source?.code && stored?.code === displaced?.code && stored?.quantity === displaced?.quantity;
+          },
+          { timeoutMs: 1000, everyMs: 100, read: () => field.send({ action: 'inventory' }) },
+        );
+        if (!cleared.met) throw Error('Hotbar transfer unverified; inspect inventory');
+        inventory = cleared.read;
+        destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === room.from.slot && !s.code);
+      } else {
+        // With every carried slot occupied, rotate through the native cursor:
+        // hotbar stack -> mouse, whole food stack -> hotbar, mouse -> the food's
+        // vacated pack slot. Nothing is dropped and every move is observed.
+        const mouse = inventory.inventories.find(i => i.name === 'mouse')?.slots.find(s => !s.code);
+        const displaced = ownedSlots(inventory)
+          .filter(s => s.inventory === 'hotbar' && s.code && s.quantity > 0 && s.quantity <= 64 && s.slot !== field.latest.activeSlot)
+          .sort((a, b) => Number(safeFood(a)) - Number(safeFood(b)) || Number(Boolean(a.tool)) - Number(Boolean(b.tool)) || a.slot - b.slot)[0];
+        if (!mouse || !displaced || food.quantity > 64) throw Error('Eating needs an empty hotbar slot or reversible inventory rotation');
+        const hotbar = { inventory: 'hotbar', slot: displaced.slot };
+        const cursor = { inventory: 'mouse', slot: mouse.slot };
+        const foodSlot = { inventory: food.inventory, slot: food.slot };
+        await field.send({
+          action: 'inventory_move',
+          from: hotbar,
+          to: cursor,
+          quantity: displaced.quantity,
+          expectedState: inventory.state,
+        });
+        const parked = await field.until(
+          (_, contents) => !inventorySlot(contents, hotbar)?.code && inventorySlot(contents, cursor)?.code === displaced.code,
+          { timeoutMs: 1000, everyMs: 100, read: () => field.send({ action: 'inventory' }) },
+        );
+        if (!parked.met) throw Error('Cursor parking unverified; inspect inventory');
+        inventory = parked.read;
+        await field.send({
+          action: 'inventory_move',
+          from: foodSlot,
+          to: hotbar,
+          quantity: food.quantity,
+          expectedState: inventory.state,
+        });
+        const equipped = await field.until(
+          (_, contents) =>
+            inventorySlot(contents, hotbar)?.code === food.code &&
+            inventorySlot(contents, hotbar)?.quantity === food.quantity &&
+            !inventorySlot(contents, foodSlot)?.code,
+          { timeoutMs: 1000, everyMs: 100, read: () => field.send({ action: 'inventory' }) },
+        );
+        if (!equipped.met) throw Error('Food rotation unverified; inspect inventory');
+        inventory = equipped.read;
+        await field.send({
+          action: 'inventory_move',
+          from: cursor,
+          to: foodSlot,
+          quantity: displaced.quantity,
+          expectedState: inventory.state,
+        });
+        const restored = await field.until(
+          (_, contents) =>
+            !inventorySlot(contents, cursor)?.code &&
+            inventorySlot(contents, foodSlot)?.code === displaced.code &&
+            inventorySlot(contents, foodSlot)?.quantity === displaced.quantity,
+          { timeoutMs: 1000, everyMs: 100, read: () => field.send({ action: 'inventory' }) },
+        );
+        if (!restored.met) throw Error('Cursor restoration unverified; inspect inventory');
+        inventory = restored.read;
+        destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === displaced.slot);
+        food = destination;
+        rotated = true;
+      }
     }
     if (!destination) throw Error('Eating needs an empty hotbar slot');
-    await field.send({
-      action: 'inventory_move',
-      from: { inventory: food.inventory, slot: food.slot },
-      to: { inventory: 'hotbar', slot: destination.slot },
-      quantity: 1,
-      expectedState: inventory.state,
-    });
-    const slotFood = contents => ownedSlots(contents).find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
-    const transfer = await field.until((_, contents) => safeFood(slotFood(contents) ?? {}, tolerance) && slotFood(contents).code === food.code, {
-      timeoutMs: 1000,
-      everyMs: 100,
-      read: () => field.send({ action: 'inventory' }),
-    });
-    if (!transfer.met) throw Error('Food transfer unverified; inspect inventory');
-    inventory = transfer.read;
-    food = slotFood(inventory);
+    if (!rotated) {
+      await field.send({
+        action: 'inventory_move',
+        from: { inventory: food.inventory, slot: food.slot },
+        to: { inventory: 'hotbar', slot: destination.slot },
+        quantity: 1,
+        expectedState: inventory.state,
+      });
+      const slotFood = contents => ownedSlots(contents).find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
+      const transfer = await field.until((_, contents) => safeFood(slotFood(contents) ?? {}, tolerance) && slotFood(contents).code === food.code, {
+        timeoutMs: 1000,
+        everyMs: 100,
+        read: () => field.send({ action: 'inventory' }),
+      });
+      if (!transfer.met) throw Error('Food transfer unverified; inspect inventory');
+      inventory = transfer.read;
+      food = slotFood(inventory);
+    }
   }
   await field.send({ action: 'select', slot: food.slot });
   // Look for clear air without placing food or accidentally activating nearby

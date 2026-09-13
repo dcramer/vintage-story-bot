@@ -3,7 +3,17 @@ import { test } from 'node:test';
 import { elevationDetourDistance, routeRegressed, travel } from '../src/goals/travel.ts';
 import { remember } from '../src/support/facts.ts';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe, until } from '../src/support/fieldwork.ts';
-import { eatingLooks, edible, foodHotbarRoom, foodRecoverySatisfied, foodTolerance, foodYield, safeFood, shouldEat } from '../src/support/food.ts';
+import {
+  consume,
+  eatingLooks,
+  edible,
+  foodHotbarRoom,
+  foodRecoverySatisfied,
+  foodTolerance,
+  foodYield,
+  safeFood,
+  shouldEat,
+} from '../src/support/food.ts';
 import { equip } from '../src/support/inventory.ts';
 import { leafBlock, leafClearCandidate, threatAllowsLeafClearing } from '../src/support/leaf-clearing.ts';
 import { Places } from '../src/support/places.ts';
@@ -155,6 +165,78 @@ test('equipping makes verified hotbar room in worn-basket storage', async () => 
   assert.equal(result.slot, 0);
   assert.equal(inventories[0].slots[0].code, 'game:drygrass');
   assert.equal(inventories[1].slots[1].code, 'game:fern-eaglefern');
+});
+
+test('eating rotates a full inventory through the cursor without dropping anything', async () => {
+  let mutation = 0;
+  const state: any = {
+    activeSlot: 1,
+    position: { x: 0.5, y: 1, z: 0.5 },
+    target: null,
+    vitals: { hunger: { current: 100, max: 1500 } },
+  };
+  const inventories: any[] = [
+    {
+      name: 'hotbar',
+      slots: [
+        { slot: 0, code: 'game:fern-eaglefern', quantity: 1, tool: null },
+        { slot: 1, code: 'game:knife-flint', quantity: 1, tool: 'Knife', toolTier: 1, durability: 10 },
+      ],
+    },
+    {
+      name: 'backpack',
+      slots: [
+        { ...slot('game:vegetable-cookedcattailroot'), slot: 0, bag: false },
+        { slot: 1, code: 'game:flint', quantity: 1, bag: false },
+      ],
+    },
+    { name: 'mouse', slots: [{ slot: 0, code: null, quantity: 0 }] },
+  ];
+  const contents = () => ({ state: `pack-${mutation}`, inventories: structuredClone(inventories) });
+  const field: any = {
+    latest: state,
+    report: () => {},
+    wait: async () => {},
+    aim: async () => state,
+    observe: async () => structuredClone(state),
+    send: async request => {
+      if (request.action === 'inventory') return contents();
+      if (request.action === 'inventory_move') {
+        assert.equal(request.expectedState, `pack-${mutation}`);
+        const from = inventories.find(i => i.name === request.from.inventory).slots[request.from.slot];
+        const to = inventories.find(i => i.name === request.to.inventory).slots[request.to.slot];
+        assert.equal(to.code, null);
+        Object.assign(to, structuredClone(from));
+        to.slot = request.to.slot;
+        Object.assign(from, { code: null, quantity: 0, tool: null, nutrition: null, freshness: null });
+        mutation++;
+        return { ok: true };
+      }
+      if (request.action === 'select') {
+        state.activeSlot = request.slot;
+        return { ok: true };
+      }
+      if (request.action === 'interact') {
+        const food = inventories[0].slots[request.expectedItem.slot];
+        assert.equal(food.code, 'game:vegetable-cookedcattailroot');
+        food.quantity--;
+        if (!food.quantity) food.code = null;
+        state.vitals.hunger.current += 100;
+        mutation++;
+        return { ok: true };
+      }
+      return { ok: true };
+    },
+    until: (condition, options) => until(field, condition, options),
+    env: { send: async () => ({ ok: true }) },
+  };
+
+  const result = await consume(field);
+
+  assert.equal(result.consumed, 1);
+  assert.equal(inventories[0].slots[0].code, null);
+  assert.equal(inventories[1].slots[0].code, 'game:fern-eaglefern');
+  assert.equal(inventories[2].slots[0].code, null);
 });
 
 test('a block is forage when the pages read say it yields food now', () => {
