@@ -13,12 +13,13 @@ internal sealed class BlockActions(ICoreClientAPI api)
     private string state = "idle";
     private BlockPos? position;
     private Vec3d? hit, origin;
+    private bool allowBodyCellDig;
     private int slot, quantity;
     private long expires, sequence, changedAt, observedAt;
     public bool Digging => state == "working" && kind == "dig";
     public bool StarvingRecovery { get; private set; }
 
-    public void Reset() { Cancel("world_changed"); id = null; position = null; StarvingRecovery = false; }
+    public void Reset() { Cancel("world_changed"); id = null; position = null; StarvingRecovery = false; allowBodyCellDig = false; }
 
     public void Cancel(string why)
     {
@@ -26,7 +27,7 @@ internal sealed class BlockActions(ICoreClientAPI api)
         if (state is "working" or "changed") { state = "cancelled"; reason = why; }
     }
 
-    public object Begin(JsonElement request, InventoryAdapter inventory, bool starvingRecovery = false)
+    public object Begin(JsonElement request, InventoryAdapter inventory, bool starvingRecovery = false, bool bodyCellDig = false)
     {
         var player = api.World.Player;
         if (player.WorldData.CurrentGameMode is not (EnumGameMode.Survival or EnumGameMode.Creative))
@@ -76,7 +77,9 @@ internal sealed class BlockActions(ICoreClientAPI api)
             var boxes = block.GetCollisionBoxes(api.World.BlockAccessor, destination);
             var bodyMin = new Point3(p.X + body.X1, p.Y + .35, p.Z + body.Z1);
             var bodyMax = new Point3(p.X + body.X2, p.Y + body.Y2, p.Z + body.Z2);
-            if (boxes?.Any(box => SceneGeometry.Overlaps(
+            bool exactBodyCell = destination.X == (int)Math.Floor(p.X) && destination.Y == (int)Math.Floor(p.Y) &&
+                destination.Z == (int)Math.Floor(p.Z);
+            if ((!bodyCellDig || !exactBodyCell) && boxes?.Any(box => SceneGeometry.Overlaps(
                 new(destination.X + box.X1, destination.Y + box.Y1, destination.Z + box.Z1),
                 new(destination.X + box.X2, destination.Y + box.Y2, destination.Z + box.Z2),
                 bodyMin, bodyMax)) == true)
@@ -86,6 +89,7 @@ internal sealed class BlockActions(ICoreClientAPI api)
         }
         Cancel("replaced");
         StarvingRecovery = starvingRecovery;
+        allowBodyCellDig = bodyCellDig;
         id = nextId; kind = nextKind; target = String("target"); slot = selectedSlot;
         item = stack?.Collectible.Code.ToString(); quantity = stack?.StackSize ?? 0;
         position = destination; origin = player.Entity.Pos.XYZ.Clone();
@@ -158,7 +162,7 @@ internal sealed class BlockActions(ICoreClientAPI api)
         // place still matters for the verification.
         if (origin == null || entity.Pos.Dimension != position.dimension || (state != "changed" && !Visible()) ||
             Math.Sqrt((entity.Pos.X - origin.X) * (entity.Pos.X - origin.X) + (entity.Pos.Z - origin.Z) * (entity.Pos.Z - origin.Z)) > .35 ||
-            entity.Pos.Y - origin.Y > .35 || origin.Y - entity.Pos.Y > 1.2)
+            entity.Pos.Y - origin.Y > .35 || (!allowBodyCellDig && origin.Y - entity.Pos.Y > 1.2))
         { Cancel("observation_lost"); return; }
         after = api.World.BlockAccessor.GetBlock(position).Code.ToString();
         observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();

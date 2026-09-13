@@ -139,10 +139,15 @@ public sealed partial class AiBridgeMod
         if (request.TryGetProperty("allowStarvingRecovery", out blockRecoveryField) &&
             blockRecoveryField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
             return new { ok = false, error = "allowStarvingRecovery must be boolean." };
+        bool bodyCellDig = request.TryGetProperty("allowBodyCellDig", out var bodyCellDigField) &&
+            bodyCellDigField.ValueKind == JsonValueKind.True;
+        if (request.TryGetProperty("allowBodyCellDig", out bodyCellDigField) &&
+            bodyCellDigField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            return new { ok = false, error = "allowBodyCellDig must be boolean." };
         if (!CanControl() || ManualInput() || !entity.OnGround || entity.FeetInLiquid || entity.MountedOn != null)
             return new { ok = false, error = "Block actions need grounded, dry, ready controls." };
         StopActs();
-        return blockActions.Begin(request, inventory, blockRecovery);
+        return blockActions.Begin(request, inventory, blockRecovery, bodyCellDig);
     }
 
     private object Chat(JsonElement request)

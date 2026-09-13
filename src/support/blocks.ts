@@ -18,13 +18,23 @@ export type BlockChange = {
   slot?: number;
   expectedItem?: string | null;
   acceptTransform?: boolean;
+  allowBodyCellDig?: boolean;
   timeoutMs?: number;
 };
 // A dig can take most of a minute with a poor tool; a placement is over in a second or has failed.
 export async function changeBlock(
   field,
   kind,
-  { target, point, face, slot, expectedItem, acceptTransform = false, timeoutMs = kind === 'dig' ? 60000 : 15000 }: BlockChange,
+  {
+    target,
+    point,
+    face,
+    slot,
+    expectedItem,
+    acceptTransform = false,
+    allowBodyCellDig = false,
+    timeoutMs = kind === 'dig' ? 60000 : 15000,
+  }: BlockChange,
 ) {
   const [, dimension, x, y, z] = target.split(':');
   const cell = { x: Number(x), y: Number(y), z: Number(z) };
@@ -60,6 +70,7 @@ export async function changeBlock(
     item: held.code,
     expectedState: inventory.state,
     allowStarvingRecovery: field.recoveringFood,
+    ...(allowBodyCellDig ? { allowBodyCellDig: true } : {}),
   });
   let sequence = 0;
   const deadline = Date.now() + timeoutMs;

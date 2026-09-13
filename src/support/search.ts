@@ -1,5 +1,5 @@
 import { distance, horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
-import { pitLimit, reachable } from './digging.ts';
+import { pitLimit, reachable, solid } from './digging.ts';
 import { sightRange } from './fieldwork.ts';
 import { type Habitat, habitatTargets } from './habitat.ts';
 import { clearLeafPath } from './leaf-clearing.ts';
@@ -345,7 +345,11 @@ export class Search {
     const map = this.field.env?.map,
       p = this.field.latest.position;
     const here = map?.nodeAt?.(Math.floor(p.x), Math.floor(p.z), p.y, 0.6, 0.6);
-    if (!here || reachable(map, here) >= pitLimit) return false;
+    // A falling block can settle through the grounded player over a concealed
+    // cavity. There is deliberately no standing node in that full body cell;
+    // it is still a pit that dig_out can recover from with explicit mod support.
+    if (!here && (!map?.get || !solid(map, Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)))) return false;
+    if (here && reachable(map, here) >= pitLimit) return false;
     this.pit = true;
     this.pitToward = { x: toward.x, z: toward.z };
     this.field.report('pit', { position: p, toward: this.pitToward });

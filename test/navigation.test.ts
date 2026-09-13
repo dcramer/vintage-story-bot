@@ -29,6 +29,16 @@ test('grounded player can leave a cell whose floor is hidden by a loose object',
   assert.deepEqual(frame.toward, { x: 1.5, y: 0, z: 0.5 });
 });
 
+test('a grounded body embedded in a full cell cannot route from an adjacent phantom start', () => {
+  const map = new TerrainMemory();
+  column(map, 0, 0);
+  column(map, 1, 0);
+  map.put({ x: 0, y: 0, z: 0, seenAt: Date.now(), traits: [], boxes: [[0, 0, 0, 1, 1, 1]] });
+  const start = { x: 0.5, y: 0, z: 0.5 };
+  assert.ok(map.nodeAt(1, 0, 0), 'an adjacent node exists but is not where the body stands');
+  assert.equal(findRoute(map, start, { x: 1.5, y: 0, z: 0.5 }, 0, 0, { startSupported: true }), null);
+});
+
 test('escape follows a safe detour that initially approaches a distant hostile', () => {
   const map = new TerrainMemory();
   for (let x = 0; x <= 3; x++) column(map, x, 0);

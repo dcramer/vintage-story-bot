@@ -27,6 +27,22 @@ test('a search reports the actual failed destination when it discovers a pit', (
   assert.deepEqual(reports, [{ phase: 'pit', position, toward: { x: 10, z: -20 } }]);
 });
 
+test('a search reports a pit when a falling full block embeds the grounded body', () => {
+  const position = { x: 40.5, y: 120, z: 30.5 };
+  const toward = { x: 10, y: 100, z: -20 };
+  const reports = [];
+  const body = { boxes: [[40, 120, 30, 41, 121, 31]], hazard: false };
+  const field = {
+    latest: { position },
+    now: () => 0,
+    env: { map: { nodeAt: () => null, get: (x, y, z) => (x === 40 && y === 120 && z === 30 ? body : null) } },
+    report: (phase, details) => reports.push({ phase, ...details }),
+  };
+  const search = new Search(field, { kind: 'material', match: ['coopersreed'], wanted: () => true, take: async () => true });
+  assert.equal(search.inPit({ state: 'blocked', reason: 'no_observed_route' }, toward), true);
+  assert.deepEqual(reports, [{ phase: 'pit', position, toward: { x: 10, z: -20 } }]);
+});
+
 for (const source of ['view', 'memory'])
   test(`material search uses ${source} without a handbook callback`, async () => {
     const target = { key: 'reed', kind: 'block', point: { x: 90, y: 0, z: 0 } };

@@ -142,10 +142,48 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
     reason = null;
   for (let step = 0; step < steps; step++) {
     const state = await field.observe(true);
-    const origin = map.nodeAt(Math.floor(state.position.x), Math.floor(state.position.z), state.position.y, 0.6, 0.6);
+    let origin = map.nodeAt(Math.floor(state.position.x), Math.floor(state.position.z), state.position.y, 0.6, 0.6);
     if (!origin) {
-      reason = 'no_footing';
-      break;
+      const cell = { x: Math.floor(state.position.x), y: Math.floor(state.position.y), z: Math.floor(state.position.z) };
+      if (!state.capabilities?.includes('body_cell_dig') || !solid(map, cell.x, cell.y, cell.z)) {
+        reason = 'no_footing';
+        break;
+      }
+      // A falling full block can occupy the body's exact cell while the game
+      // still considers the player grounded. The ordinary collision guard
+      // remains in force everywhere else; this scoped request breaks only the
+      // selected current body cell, just as direct player input can.
+      const inventory = await field.send({ action: 'inventory' });
+      const selected = await selectCell(field, cell);
+      const slot = selected && (await diggingSlot(field, selected, inventory));
+      if (!selected || slot === null) {
+        reason = 'cannot_cut';
+        break;
+      }
+      field.report('digging_body_cell', { cell, code: selected.code });
+      const opened = await changeBlock(field, 'dig', {
+        target: selected.key,
+        slot,
+        acceptTransform: true,
+        allowBodyCellDig: true,
+        timeoutMs: 45000,
+      });
+      if (!opened.ok) {
+        field.report('cut_failed', { cell, code: selected.code, reason: opened.reason });
+        reason = 'cannot_cut';
+        break;
+      }
+      // The body may fall through a concealed cavity once the block breaks.
+      // Wait for grounded terrain evidence before planning the ordinary stairs.
+      for (let settles = 0; settles < 20 && !origin; settles++) {
+        await field.wait(250);
+        const landed = await field.observe(true);
+        if (landed.motion.onGround) origin = map.nodeAt(Math.floor(landed.position.x), Math.floor(landed.position.z), landed.position.y, 0.6, 0.6);
+      }
+      if (!origin) {
+        reason = 'no_footing';
+        break;
+      }
     }
     if (reachable(map, origin) >= pitLimit) {
       reason = null;

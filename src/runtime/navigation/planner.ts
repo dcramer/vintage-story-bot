@@ -64,6 +64,10 @@ export function findRoute(
   // A body in water may have sunk well under its swim node: look further up for it.
   const up = start.afloat ? 3 : 0.6;
   let origin = map.nodeAt(cx, cz, start.y, up, 0.6);
+  // A grounded body whose own column is solid is embedded, not standing on a
+  // nearby cell. Adopting an adjacent node here invents a route the body can
+  // never enter and prevents search from handing recovery to dig_out.
+  if (!origin && startSupported && !map.clearBetween(cx, cz, start.y, start.y + BODY_HEIGHT)) return null;
   if (!origin) {
     const candidates = [];
     for (let dx = -1; dx <= 1; dx++)
