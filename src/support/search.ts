@@ -1,6 +1,6 @@
 import { distance, horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
 import { pitLimit, reachable, solid } from './digging.ts';
-import { sightRange } from './fieldwork.ts';
+import { navigationReach, sightRange } from './fieldwork.ts';
 import { type Habitat, habitatTargets } from './habitat.ts';
 import { clearLeafPath } from './leaf-clearing.ts';
 import { nearestThreat, threatClearDistance } from './threats.ts';
@@ -407,7 +407,7 @@ export class Search {
       // reveal the descent/ascent toward it instead of discarding that height
       // and repeatedly exploring the cliff top above the resource.
       const leg =
-        detour && horizontal(field.latest.position, target.point) <= APPROACH_LEG
+        detour && horizontal(field.latest.position, target.point) <= navigationReach
           ? { ...target.point, arrivalRadius: 2 }
           : field.explore(target.point, APPROACH_LEG, detour);
       const result = await field.walk(leg, this.pause);

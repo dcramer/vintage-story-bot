@@ -1240,6 +1240,12 @@ test('a nearby elevated material lead keeps its observed height when no full app
   const search = new Search(field, { kind: 'coopersreed', match: ['coopersreed'], wanted: () => true, take: async () => false });
   await search.approach({ key: 'reed', point: { x: 11.5, y: 118.5, z: 11.5 } }, null);
   assert.deepEqual(walked, { x: 11.5, y: 118.5, z: 11.5, arrivalRadius: 2 });
+  await search.approach({ key: 'reed-below-cliff', point: { x: 38.5, y: 109, z: 21.5 } }, null);
+  assert.deepEqual(
+    walked,
+    { x: 38.5, y: 109, z: 21.5, arrivalRadius: 2 },
+    'known targets beyond a search leg still retain height within fine navigation range',
+  );
   assert.equal(stuckLeg({ state: 'blocked' }, { x: 0, y: 123, z: 0 }, { x: 0, y: 119, z: 0 }), false, 'a real descent is progress');
 });
 
