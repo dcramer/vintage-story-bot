@@ -144,7 +144,7 @@ export type Situation = {
 };
 
 export const environmentalHurt = (events: any[]) =>
-  events.some(event => event.type === 'message' && /^Lost [\d.]+ hp through gravity$/i.test(event.text ?? ''));
+  events.some(event => event.type === 'message' && /^Lost [\d.]+ hp through (?:gravity|fire)$/i.test(event.text ?? ''));
 export type Danger = { point: Cell; code: string };
 // A threat in view or remembered from the cancellation just completed, and whether a hit
 // was an attack: a hit with no attacker in sight is still danger unless something

@@ -478,6 +478,18 @@ test('brain: a fall is not mistaken for an unseen attacker', () => {
   );
 });
 
+test('brain: fire damage is not mistaken for an unseen attacker', () => {
+  const fire = [
+    { id: 1, at: 1, type: 'hurt', health: 10 },
+    { id: 2, at: 2, type: 'message', text: 'Lost 0.5 hp through fire', kind: 'Notification' },
+  ];
+  assert.equal(environmentalHurt(fire), true);
+  const memory = fresh();
+  memory.job = 'logs';
+  const running = { id: 'g1', kind: 'fell_tree', state: 'running', by: 'brain' };
+  assert.deepEqual(decide(reading({ events: fire, active: running }), memory), { wait: 'letting fell_tree finish' });
+});
+
 test('brain: poison from emergency food is not mistaken for an unseen attacker', () => {
   const poison = [
     { id: 1, at: 1, type: 'hurt', health: 10 },
