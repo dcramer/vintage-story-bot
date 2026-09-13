@@ -123,7 +123,7 @@ export const LADDER: Rung[] = [
   { job: 'wait', when: s => s.burrowed && s.threat && !s.hurt },
   { job: 'hide', when: (s, tried) => s.hurt || (s.threat && !tried.has('hide')) },
   { job: 'unburrow', when: s => hungry(s) && s.burrowed && s.reserve <= 0 },
-  { job: 'eat', when: s => hungry(s) || !!s.foodRecovery },
+  { job: 'eat', when: (s, tried) => (hungry(s) || !!s.foodRecovery) && !tried.has('eat') },
   { job: 'repair_home', when: (s, tried) => s.atHome && !!s.homeDamaged && !tried.has('repair_home') },
   { job: 'lighting', when: s => s.atHome && s.lit === false && s.torches > 0 },
   { job: 'go_home', when: (s, tried) => s.storm && s.home && !s.atHome && !tried.has('go_home') },

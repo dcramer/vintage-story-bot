@@ -212,7 +212,7 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
     'explore',
     'food above 20% stays below the work list even when eating was tried',
   );
-  assert.equal(pickJob(situation({ hunger: 0.1 }), new Set(['eat'] as any)), 'eat', 'a hungry one keeps looking');
+  assert.equal(pickJob(situation({ hunger: 0.1 }), new Set(['eat'] as any)), 'explore', 'an exhausted food search yields to useful work');
   assert.equal(pickJob(situation({ torches: 0 })), 'grass');
   assert.equal(pickJob(situation({ torches: 0, grass: 2 })), 'torches');
   assert.equal(pickJob(situation({ logs: 1 })), 'logs');
@@ -869,7 +869,7 @@ test('brain: carried food is eaten first and recovery persists to half satiety a
   assert.equal(resumed.notes.foodRecovery, undefined);
 });
 
-test('brain: failed recovery forage widens renewable search without uprooting cattails', () => {
+test('brain: failed recovery forage yields to useful work without uprooting cattails', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.job = 'eat';
@@ -885,10 +885,8 @@ test('brain: failed recovery forage widens renewable search without uprooting ca
     }),
     memory,
   );
-  assert.equal(choice.start, 'forage');
-  assert.equal(choice.args.until, 0.5);
-  assert.match(choice.why, /without uprooting cattails/);
-  assert.equal(memory.tried.eat, undefined, 'renewable forage remains active during recovery');
+  assert.notEqual(choice.start, 'forage');
+  assert.ok(memory.tried.eat, 'the exhaustive search is set aside before another attempt');
 });
 
 test('brain: carried roots and legacy cooking notes never replace renewable forage', () => {
@@ -913,7 +911,7 @@ test('brain: carried roots and legacy cooking notes never replace renewable fora
   assert.equal((memory.notes as any).deferredCooking, undefined);
 });
 
-test('brain: empty daytime forage does not uproot cattails for provisions', () => {
+test('brain: empty daytime forage yields to other work without uprooting cattails', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.job = 'provisions';
@@ -928,9 +926,8 @@ test('brain: empty daytime forage does not uproot cattails for provisions', () =
   });
   const choice = decide(input, memory);
   assert.equal(memory.notes.foodRecovery, undefined, 'this is preventive food preparation');
-  assert.equal(memory.tried.provisions, undefined);
-  assert.equal(choice.start, 'forage');
-  assert.match(choice.why, /without uprooting cattails/);
+  assert.ok(memory.tried.provisions);
+  assert.notEqual(choice.start, 'forage');
 });
 
 test('brain: failed forage keeps renewable search through the recovery episode', () => {
@@ -1401,7 +1398,7 @@ test('brain: a false pit sets aside the job whose route reported it', () => {
     memory,
   );
   assert.ok(memory.tried.eat, 'no wall proves the reported pit was a bad route for the originating job');
-  assert.equal(next.start, 'forage', 'food recovery changes strategy instead of repeating the same root route');
+  assert.notEqual(next.start, 'forage', 'failed food recovery yields to useful work instead of starting another search');
 });
 
 test('brain: a hand basket is woven from ten tops and worn by hand', () => {

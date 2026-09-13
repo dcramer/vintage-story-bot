@@ -23,6 +23,7 @@ export const eat: Concern = {
   },
   ended: foodEnded,
   setAside: foodSetAside,
+  setAsideEverywhere: true,
   running: ctx => {
     const { active, danger, hurt, classifyingHurt, k } = ctx;
     if (active?.kind === 'harvest' && k.free === 0) return { stop: 'make room for food before continuing the harvest' };

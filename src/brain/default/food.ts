@@ -31,9 +31,6 @@ export function food(ctx: Context, keep: number): Decision {
 
 export const foodEnded: Concern['ended'] = () => {};
 
-export const foodSetAside: Concern['setAside'] = last => {
-  // A recovery run keeps widening its deterministic renewable-food search
-  // after an exhausted region instead of falling through to destructive food.
-  if (last.kind === 'forage') return false;
-  return failedOnItsOwn(last);
-};
+// An exhaustive renewable-food search is evidence, not a reason to spend the
+// whole day repeating it. Let other work run before the normal retry window.
+export const foodSetAside: Concern['setAside'] = last => failedOnItsOwn(last);
