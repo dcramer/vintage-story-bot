@@ -66,6 +66,7 @@ export type { Job, Memory, Notes, Situation };
 export const TASKS: Concern[] = [
   resupply,
   recover,
+  provisions,
   knife,
   axe,
   bags,
@@ -74,7 +75,6 @@ export const TASKS: Concern[] = [
   dirt,
   shelter,
   stash,
-  provisions,
   sticks,
   grass,
   torches,

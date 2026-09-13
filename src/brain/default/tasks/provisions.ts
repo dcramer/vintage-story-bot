@@ -4,7 +4,7 @@ export const PROVISIONS = 640;
 export const provisions: Concern = {
   id: 'provisions',
   title: 'food carried for the night',
-  done: s => s.reserve >= PROVISIONS,
+  done: s => s.reserve >= PROVISIONS || (s.hunger !== null && s.hunger > 0.5),
   run: () => ({
     start: 'forage',
     args: { until: 0.5, keep: PROVISIONS, timeoutMs: 600000 },
