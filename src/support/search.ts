@@ -409,7 +409,7 @@ export class Search {
       const nearer = progressDistance(field.latest.position, target.point) + 2 < progressDistance(before, target.point);
       if (!['arrived', 'paused'].includes(result.state) && !nearer) field.places.fail(target.point);
       if (result.state === 'paused' && result.reason === 'route_threatened') this.avoidThreat(target);
-      else if (stuckLeg(result, before, field.latest.position)) {
+      else if (stuckLeg(result, before, field.latest.position) || unproductiveApproach(target, result, before, field.latest.position)) {
         const elevated = Math.abs((target.point.y ?? before.y) - before.y) > 2;
         for (const object of elevated ? this.targets().filter(candidate => samePatch(target, candidate)) : [target]) field.skip(object, 120000);
         await clearLeafPath(field, target.point);

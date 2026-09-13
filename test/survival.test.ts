@@ -954,3 +954,22 @@ test('a nearby elevated material lead keeps its observed height when no full app
   assert.deepEqual(walked, { x: 11.5, y: 118.5, z: 11.5, arrivalRadius: 2 });
   assert.equal(stuckLeg({ state: 'blocked' }, { x: 0, y: 123, z: 0 }, { x: 0, y: 119, z: 0 }), false, 'a real descent is progress');
 });
+
+test('a failed partial approach that walked away skips the elevated patch', async () => {
+  const field = new Fieldwork({ places: new Places(() => 1000) }, { now: () => 1000 });
+  field.latest = { position: { x: 0.5, y: 114, z: 0.5 }, orientation: { yawDegrees: 0 }, nearbyEntities: [] };
+  field.approach = () => undefined;
+  field.report = () => {};
+  field.observe = async () => field.latest;
+  field.walk = async () => {
+    field.latest.position = { x: -12.5, y: 114, z: 0.5 };
+    return { state: 'blocked', reason: 'exploration_exhausted' };
+  };
+  const target = { key: 'crop', point: { x: 2.5, y: 124, z: 0.5 } };
+  const adjacent = { key: 'next-crop', point: { x: 3.5, y: 124, z: 0.5 } };
+  const search = new Search(field, { kind: 'food', match: ['crop'], wanted: () => true, take: async () => false });
+  search.targets = () => [target, adjacent];
+  await search.approach(target, null);
+  assert.ok(field.skipped.has(target.key));
+  assert.ok(field.skipped.has(adjacent.key), 'the next crop on the same unreachable ledge must not restart the approach');
+});
