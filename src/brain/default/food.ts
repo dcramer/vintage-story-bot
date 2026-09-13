@@ -19,6 +19,11 @@ export function food(ctx: Context, keep: number): Decision {
   const count = (item: string) => k.slots.reduce((n, slot) => n + (slot.code === item ? slot.quantity : 0), 0);
   const roots = count(ROOT);
   const batch = ctx.s.hunger !== null && ctx.s.hunger < 0.1 ? 1 : BATCH;
+  // An emergency batch buys enough time to prepare the next root, not to
+  // spend the full forage search budget. Eat it directly, then the next
+  // starving decision resumes cooking the raw roots already carried.
+  if (batch === 1 && k.reserve > 0 && roots > 0)
+    return { start: 'eat', args: {}, why: 'eat the emergency bite before preparing the remaining roots' };
   if (k.reserve > 0 || ctx.tried.has(ctx.job) || (!roots && !memory.notes.cooking && now >= (memory.notes.cookUntil ?? 0)))
     return {
       start: 'forage',

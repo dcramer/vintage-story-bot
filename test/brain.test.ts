@@ -917,6 +917,41 @@ test('brain: starvation prepares one root locally instead of returning to a dist
   assert.equal(cooking.args.fuel, 2);
 });
 
+test('brain: an emergency cooked root is eaten without searching before the remaining roots are prepared', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.notes.firepit = { x: 2, y: 100, z: 0 };
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(
+    slot('game:vegetable-cookedcattailroot', 1, {
+      nutrition: { saturation: 100, health: 0 },
+      freshness: { state: 'fresh', freshHoursLeft: 100 },
+    }),
+    slot('game:cattailroot', 3),
+    slot('game:firestarter'),
+    slot('game:firewood', 6),
+  );
+  const starving = state({ vitals: { hunger: { current: 0, max: 1500 } } });
+  const bite = decide(reading({ state: starving, inventory: supplies }), memory);
+  assert.equal(bite.start, 'eat');
+  assert.match(bite.why, /emergency bite/);
+
+  const remaining = kitted();
+  remaining.inventories[0].slots.push(slot('game:cattailroot', 3), slot('game:firestarter'), slot('game:firewood', 6));
+  const cooking = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+      inventory: remaining,
+      terrain: { get: () => ({ code: 'game:firepit-lit' }) },
+      now: 2000,
+      last: { id: 'eat', kind: 'eat', ok: true, outcome: 'done', result: { ok: true } },
+    }),
+    memory,
+  );
+  assert.equal(cooking.start, 'cook');
+  assert.equal(cooking.args.count, 1);
+});
+
 test('brain: failed travel abandons an unreachable firepit and prepares a local replacement', () => {
   const memory = fresh();
   memory.startupChecked = true;
