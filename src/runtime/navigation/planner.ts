@@ -129,10 +129,11 @@ export function findRoute(
     // A frontier in deep water is not progress: the far bank is what counts, and only a full route reaches it.
     const hole = committed.has(id) && at.y < floorY - JUMP_HEIGHT;
     if (partial && horizontal(start, at) >= 1 && !at.swim && !visits.has(id) && !hole && missing.size) {
-      // A frontier down a hole is not worth walking into: what looks closer
-      // to the goal from below may have no way back up. Prefer frontiers at
-      // the start's level or above.
-      const score = remaining(at) + costs.get(id) * 0.15 + Math.max(0, start.y - at.y - 1) * 3;
+      // Discourage descending below both the start and destination. Reversible
+      // steps toward a lower known destination are useful progress; committed
+      // drops were already excluded above.
+      const floor = goal.horizontalOnly || goal.clearOf?.length ? start.y : Math.min(start.y, goal.y);
+      const score = remaining(at) + costs.get(id) * 0.15 + Math.max(0, floor - at.y - 1) * 3;
       if (score < best) {
         best = score;
         frontier = at;

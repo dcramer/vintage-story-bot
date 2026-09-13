@@ -248,6 +248,15 @@ test('replanning in stride considers a known destination below the old frontier'
   assert.equal(nav.routeReaches, false, 'standing above the target is still not arrival');
 });
 
+test('a reversible descending frontier is progress toward a lower known destination', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x <= 2; x++)
+    for (let y = -x - 1; y <= 4; y++)
+      map.put({ x, y, z: 0, seenAt: Date.now(), traits: [], boxes: y === -x - 1 ? [[x, y, 0, x + 1, y + 1, 1]] : [] });
+  const route = findRoute(map, { x: 0.5, y: 0, z: 0.5 }, { x: 10.5, y: -10, z: 0.5 }, 0.3, 1.85);
+  assert.equal(route.at(-1).y, -2, 'continue down both reversible steps instead of stopping above known usable ground');
+});
+
 test('a merged run keeps input reach margin and falls back when the body drifts away during a turn', () => {
   const map = new TerrainMemory();
   for (let x = -2; x <= 12; x++) for (let z = -1; z <= 1; z++) column(map, x, z);
