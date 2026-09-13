@@ -113,3 +113,31 @@ counts are only the last opened observation; periodic inspection detects
 teammates taking items. Gathering and deposits retain the bot's working kit.
 Container transfers are verified through inventory deltas. `brain` status
 shows the current concern, construction phase, and each task's readiness.
+
+Farming extends the settlement loop after shelter and usable storage, ahead
+of bulk teammate stockpiles. Offload excess building soil, preserve seeds and
+medium/high-fertility soil for beds, and prepare a flint hoe. Carried dirt is
+not itself farming progress. A farm needs observed irrigation, a complete
+fence with a usable gate, planted crops suited to current conditions, and
+recurring inspection, harvest, rotation and replanting.
+
+The starter farm design is a 6×4 dry enclosure beside a freshwater shoreline:
+eight tilled cells in a 4×2 interior, grouped into four two-cell beds for N,
+P, K and fallow. The back fence follows the shore; water lies one cell behind
+it at the same height as the farmland blocks. Crop rows are two and three
+cells from water (50% and 25% passive moisture). Use 15 rough-hewn fence
+blocks and a front-center gate; leave an observed approach outside the gate.
+Do not leave untiled grass inside. Check the surrounding two-cell margin for
+raised ground or snow that permits jumping over the fence; do not put the
+fence in water that can freeze. Expand only after the first beds are useful.
+
+Seed handbook text supplies each crop's nutrient, consumption, growth time,
+and cold/heat limits; native farmland HUD text supplies current N/P/K and
+moisture. Unknown readings never authorize planting. Require medium fertility
+or better, at least 25% moisture and enough of the required nutrient for that
+crop. Rotate into a different nutrient after harvest; leave depleted beds
+fallow. Winter is for preparing the enclosure, storage and soil: cold
+tolerance does not mean growth below 0°C. Do not spend seeds while frozen,
+and retain foraging/cooking as immediate food until crops actually mature.
+Source: [farming mechanics](https://wiki.vintagestory.at/Farming); crop-specific
+numbers come from the running client's handbook, not a fixed wiki table.
