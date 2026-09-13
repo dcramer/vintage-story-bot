@@ -73,5 +73,5 @@ export default defineGoal({
     'Resumes an owned unfinished firepit at the specified cell. Verifies every native construction stage; does not light it. Returns START; poll goal_status.',
   title: () => 'Build a firepit',
   announce: () => 'Building a firepit.',
-  run: (env, { timeoutMs, ...cell }) => runField(env, { timeoutMs }, ['inventory', 'sneak'], field => makeFirepit(field, cell)),
+  run: (env, { x, y, z, ...options }) => runField(env, options, ['inventory', 'sneak'], field => makeFirepit(field, { x, y, z })),
 });

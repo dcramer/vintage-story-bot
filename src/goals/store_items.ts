@@ -55,13 +55,16 @@ export async function closeContainer(field) {
 // Move stacks whose code contains `item` between own inventory and the open container, one transfer at a
 // time, each guarded by the container's state token and verified by the counts on both sides. Stops at the
 // first unverified move; a refused destination is skipped, never retried.
-export async function moveItems(field, { container, item, count = Infinity, direction }) {
+export async function moveItems(field, { container, item, count = Infinity, direction, containerSlots = null }) {
   const read = async () => ({
     own: await field.send({ action: 'inventory' }),
     container: { ...(await field.send({ action: 'container_slots' })), target: container.target },
   });
   let view = { own: await field.send({ action: 'inventory' }), container };
-  const sides = v => (direction === 'store' ? [ownSide(v.own), containerSide(v.container)] : [containerSide(v.container), ownSide(v.own)]);
+  const sides = v => {
+    const slots = containerSide(v.container).filter(s => !containerSlots || containerSlots.includes(s.slot));
+    return direction === 'store' ? [ownSide(v.own), slots] : [slots, ownSide(v.own)];
+  };
   const refused = new Set();
   let moved = 0;
   while (moved < count) {
