@@ -63,7 +63,9 @@ check its output before preparing fuel; empty output resumes the pending cook.
 The starter shelter is a freestanding, above-ground building, never an emergency burrow. Its natural floor stays at ground level. A 5×5 rammed-earth starter shelter follows the [template](getting-started.md#starter-shelter-template) while the full rammed-earth house
 is built. A house site requires observed level ground and clear space; unknown
 terrain is rejected. Revisit a fully observed footprint within 256 blocks
-and clear observed leaves throughout its wall, interior and roof cells, plus ground flowers and ferns, before building;
+and clear observed leaves throughout its wall, interior and roof cells, including
+two cells of working headroom above the roof and foliage over its access stairs,
+plus ground flowers and ferns, before building;
 non-colliding vegetation is not empty building space. Other occupied cells are rejected.
 Retain the site's elevation when travelling there. Prepare 60 rammed-earth blocks
 for the shell and two front stair rises, plus a torch and a firestarter. Starter

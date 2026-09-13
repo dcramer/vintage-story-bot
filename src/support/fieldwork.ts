@@ -509,14 +509,14 @@ export class Fieldwork {
       fled = true;
     }
   }
-  approach(object, exclude = null) {
+  approach(object, exclude = null, radius = 2) {
     const {
       position: p,
       body: { halfWidth: w, height: h },
     } = this.latest;
     const stands = [];
-    for (let dx = -2; dx <= 2; dx++)
-      for (let dz = -2; dz <= 2; dz++) {
+    for (let dx = -radius; dx <= radius; dx++)
+      for (let dz = -radius; dz <= radius; dz++) {
         const q = this.env.map.stand(Math.floor(object.point.x) + 0.5 + dx, Math.floor(object.point.z) + 0.5 + dz, object.point.y, w, h);
         if (!q || horizontal(p, q) < 0.5 || (object.kind === 'item' && horizontal(q, object.point) > 0.8) || exclude?.(q)) continue;
         stands.push(q);

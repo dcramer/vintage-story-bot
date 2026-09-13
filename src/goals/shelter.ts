@@ -116,16 +116,34 @@ export default defineGoal({
       const cover = [];
       for (let x = 0; x < SHELTER_SIZE; x++)
         for (let z = 0; z < SHELTER_SIZE; z++)
-          for (let h = 0; h <= 2; h++) {
+          // Two cells above the roof are needed for ordinary construction
+          // access. Branchy leaves there can seal off an otherwise valid
+          // staircase; clear observed foliage as part of the building site.
+          for (let h = 0; h <= 4; h++) {
             const cell = { x: origin.x + x, y: origin.y + h, z: origin.z + z };
             if (shelterCover(field.env.map.get(cell.x, cell.y, cell.z), h)) cover.push(cell);
           }
       const outside = { x: origin.x + 2, y: origin.y, z: origin.z + SHELTER_SIZE };
       if (surfaceCover(field.env.map.get(outside.x, outside.y, outside.z))) cover.push(outside);
-      for (const cell of scaffold) if (shelterCover(field.env.map.get(cell.x, cell.y, cell.z), cell.y - origin.y)) cover.push(cell);
+      for (const step of scaffold)
+        for (let dy = 0; dy <= 3; dy++) {
+          const cell = { x: step.x, y: step.y + dy, z: step.z };
+          if (
+            shelterCover(field.env.map.get(cell.x, cell.y, cell.z), cell.y - origin.y) &&
+            !cover.some(c => c.x === cell.x && c.y === cell.y && c.z === cell.z)
+          )
+            cover.push(cell);
+        }
       if (cover.length) {
         field.report('clearing_site', { origin });
-        const cleared = await digArea(field, survival, { cells: cover, tool: undefined });
+        let cleared = await digArea(field, survival, { cells: cover, tool: undefined });
+        // Removing a lower branch can expose the higher foliage that the
+        // first pass could not select. Retry only those selection failures,
+        // and only after this pass verified actual clearing progress.
+        for (let pass = 1; pass < 3 && !cleared.ok && cleared.dug > 0; pass++) {
+          if (cleared.failed.some(c => c.reason !== 'not_selectable')) break;
+          cleared = await digArea(field, survival, { cells: cleared.failed, tool: undefined });
+        }
         if (!cleared.ok) return { ...cleared, goal: 'shelter', phase: 'site', origin };
       }
       field.report('walls', { origin });

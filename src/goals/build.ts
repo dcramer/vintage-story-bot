@@ -32,12 +32,20 @@ async function eye(field) {
 export async function standNear(field, survival, cell, force = false, placing = false) {
   const from = await eye(field);
   if (!force && distance(from, center(cell)) <= reach) return true;
-  // A failed placement above the eye needs a higher viewpoint. Another floor
-  // cell beneath the same roof cannot expose its support faces.
-  const raise = placing && force && cell.y > from.y;
+  // Look over the work before seeking another viewpoint. From the access
+  // stairs this reveals the roof's headroom, which was hidden from below.
+  if (placing && force) await field.look({ ...center(cell), y: cell.y + 2 });
+  const minimumEye = placing && force ? Math.max(from.y, cell.y + 0.5) : -Infinity;
   const destination = field.approach(
     { point: center(cell), kind: 'block' },
-    q => (sameColumn(q, cell) && Math.abs(q.y - cell.y) < 2.5) || (raise && q.y + field.latest.body.eyeHeight < cell.y + 0.5),
+    q =>
+      (sameColumn(q, cell) && Math.abs(q.y - cell.y) < 2.5) ||
+      q.y + field.latest.body.eyeHeight < minimumEye ||
+      distance({ ...q, y: q.y + field.latest.body.eyeHeight }, center(cell)) > reach,
+    // Roof-access stairs can be three columns from the unfinished roof cell,
+    // still within picking range. Do not limit placement to the search loop's
+    // usual two-column harvesting approach.
+    placing ? 4 : 2,
   );
   if (!destination) return false;
   const result = await field.walk(destination, survival?.pauseWhen);
@@ -182,7 +190,8 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
       };
     }
     let reason = 'no_support';
-    for (let attempt = 0; attempt < 2 && reason; attempt++) {
+    // Ground, access stairs, then the roof itself can be separate viewpoints.
+    for (let attempt = 0; attempt < 3 && reason; attempt++) {
       if (!(await standNear(field, survival, cell, attempt > 0, true))) {
         // No second place to stand keeps the first attempt's reason; it is what actually failed.
         if (attempt > 0) break;

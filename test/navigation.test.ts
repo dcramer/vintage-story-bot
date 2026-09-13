@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { standNear } from '../src/goals/build.ts';
 import { failEdge, failedEdges } from '../src/runtime/navigation/failed-edges.ts';
 import { visitedFrontiers, visitFrontier } from '../src/runtime/navigation/frontiers.ts';
 import { Navigation, NO_PROGRESS_MS } from '../src/runtime/navigation/navigator.ts';
 import { clearanceRemaining, findRoute } from '../src/runtime/navigation/planner.ts';
 import { distance, horizontal, TerrainMemory } from '../src/runtime/navigation/terrain.ts';
+import { Fieldwork } from '../src/support/fieldwork.ts';
 
 const stateAt = position => ({
   position,
@@ -16,6 +18,54 @@ const stateAt = position => ({
 function column(map, x, z, floor = true) {
   for (let y = -1; y < 4; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: y === -1 && floor ? [[x, y, z, x + 1, y + 1, z + 1]] : [] });
 }
+
+test('roof placement reaches the access stairs while roof headroom is still unknown', async () => {
+  const map = new TerrainMemory();
+  const put = (x, y, z, solid = false) =>
+    map.put({
+      x,
+      y,
+      z,
+      seenAt: Date.now(),
+      traits: [],
+      boxes: solid ? [[x, y, z, x + 1, y + 1, z + 1]] : [],
+    });
+  for (let x = -1; x <= 6; x++) for (let z = -1; z <= 8; z++) for (let y = -1; y <= 2; y++) put(x, y, z, y === -1);
+  for (let x = 0; x < 5; x++)
+    for (let z = 0; z < 5; z++) {
+      if (x === 0 || x === 4 || z === 0 || z === 4) {
+        put(x, 0, z, true);
+        put(x, 1, z, true);
+      }
+      if (!(x === 4 && z === 3)) put(x, 2, z, true);
+    }
+  put(1, 0, 6, true);
+  put(1, 0, 5, true);
+  put(1, 1, 5, true);
+  for (const z of [5, 6]) for (const y of [3, 4]) put(1, y, z);
+  let destination;
+  const field = {
+    latest: stateAt({ x: 3.5, y: 0, z: 5.5 }),
+    env: { map },
+    observe: async function () {
+      return this.latest;
+    },
+    look: async () => {},
+    approach: Fieldwork.prototype.approach,
+    walk: async p => {
+      destination = p;
+      return { state: 'arrived' };
+    },
+  };
+  assert.equal(await standNear(field, null, { x: 4, y: 2, z: 3 }, true, true), true);
+  assert.deepEqual(destination, { x: 1.5, y: 2, z: 5.5, arrivalRadius: 0.35 });
+  field.latest = stateAt(destination);
+  field.look = async () => {
+    for (let x = 0; x < 5; x++) for (let z = 0; z < 5; z++) for (const y of [3, 4]) put(x, y, z);
+  };
+  assert.equal(await standNear(field, null, { x: 4, y: 2, z: 3 }, true, true), true);
+  assert.equal(destination.y, 3, 'continue onto the newly observed roof instead of descending to the ground');
+});
 
 test('grounded player can leave a cell whose floor is hidden by a loose object', () => {
   const map = new TerrainMemory();
