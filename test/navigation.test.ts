@@ -471,3 +471,23 @@ test('escape routing clears the hostile perimeter when the away heading is block
     'escaping one hostile cannot end beside another',
   );
 });
+
+test('unknown floors below the maximum drop are not route frontiers', () => {
+  for (const [height, floor] of [
+    [4, 0],
+    [4.125, 1],
+  ]) {
+    const map = new TerrainMemory();
+    for (let y = floor; y <= 6; y++) map.put({ x: 1, y, z: 0, seenAt: Date.now(), traits: [], boxes: y === floor ? [[1, y, 0, 2, y + 1, 1]] : [] });
+    const missing = new Map();
+    const landings = map.levels(1, 0, height, 1.25, 3.05, missing);
+    assert.ok(
+      landings.some(p => p.y === floor + 1),
+      'the legal downhill landing remains available',
+    );
+    assert.ok(
+      [...missing.values()].every((p: any) => p.y >= floor),
+      'an impossible deeper floor does not request another viewpoint',
+    );
+  }
+});

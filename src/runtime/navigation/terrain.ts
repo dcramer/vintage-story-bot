@@ -220,7 +220,10 @@ export class TerrainMemory {
   // Standing places in a column within reach of a height: one jump up, three blocks down.
   levels(x, z, nearY, up = JUMP_HEIGHT, down = MAX_DROP, missing?) {
     const found = [];
-    for (let y = Math.floor(nearY - down) - 1; y <= Math.floor(nearY + up); y++) {
+    // A floor cell can support feet at most one block above it. Rounding
+    // down here invents unknown frontiers whose highest possible landing is
+    // already below the allowed drop, especially beside thin snow layers.
+    for (let y = Math.ceil(nearY - down) - 1; y <= Math.floor(nearY + up); y++) {
       // A dry landing below observed water cannot be reached by a dry drop.
       // The surface water's standable check still requests its immediate bed
       // when needed to distinguish wading from swimming.
