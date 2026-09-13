@@ -1259,5 +1259,16 @@ test('brain: a shelter has to be entered and sealed, and opens before morning wo
   const opened = decide({ ...inside, environment: { calendar: { daylight: 0.1, hourOfDay: 5 } } }, memory);
   assert.equal(opened.start, 'dig_area');
   assert.deepEqual(opened.args.cells, [dwelling.door, { ...dwelling.door, y: 101 }]);
+  const snowy = decide(
+    {
+      ...inside,
+      environment: { calendar: { hourOfDay: 5 } },
+      terrain: {
+        get: (_x, _y, z) => ({ code: z === 2 ? 'game:snowlayer-3' : 'game:soil-low-none', hazard: null, boxes: [{}] }),
+      },
+    },
+    memory,
+  );
+  assert.deepEqual(snowy.args.cells.at(-1), { x: 0, y: 100, z: 2 }, 'clear the snowy doorstep that traps movement under a low roof');
   assert.deepEqual(fresh(brain.notes!(memory)).notes.dwelling, dwelling);
 });

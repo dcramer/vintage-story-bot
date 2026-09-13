@@ -95,6 +95,8 @@ export default defineGoal({
           const cell = { x: origin.x + x, y: origin.y, z: origin.z + z };
           if (surfaceCover(field.env.map.get(cell.x, cell.y, cell.z))) cover.push(cell);
         }
+      const outside = { x: origin.x + 1, y: origin.y, z: origin.z + 3 };
+      if (surfaceCover(field.env.map.get(outside.x, outside.y, outside.z))) cover.push(outside);
       if (cover.length) {
         field.report('clearing_site', { origin });
         const cleared = await digArea(field, survival, { cells: cover, tool: undefined });

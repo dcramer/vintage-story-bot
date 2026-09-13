@@ -5,6 +5,7 @@ import type { Brain, Decision, Reading } from '../runtime/brain.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { temporalStormUnsafe } from '../support/fieldwork.ts';
 import { hunger } from '../support/food.ts';
+import { surfaceCover } from '../support/sites.ts';
 import { copper } from './default/alongside/copper.ts';
 import { homeMarker } from './default/alongside/home.ts';
 import { suppliesMarker } from './default/alongside/supplies.ts';
@@ -86,9 +87,12 @@ export const TASKS: Concern[] = [
 const leaveShelter: Concern = {
   id: 'leave_shelter',
   uncuttable: true,
-  run: ({ memory }) => {
+  run: ({ memory, reading }) => {
     const door = memory.notes.dwelling!.door;
-    return { start: 'dig_area', args: { cells: [door, { ...door, y: door.y + 1 }], timeoutMs: 120000 }, why: 'opening the shelter to leave' };
+    const cells = [door, { ...door, y: door.y + 1 }];
+    const outside = { ...door, z: door.z + 1 };
+    if (surfaceCover(reading.terrain?.get(outside.x, outside.y, outside.z))) cells.push(outside);
+    return { start: 'dig_area', args: { cells, timeoutMs: 120000 }, why: 'opening the shelter to leave' };
   },
 };
 const REFLEXES: Concern[] = [leaveShelter, hide, eat, goHome, burrow, unburrow, tunnel, shift, wait, relocate, digOut, explore];
