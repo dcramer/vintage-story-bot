@@ -40,21 +40,27 @@ export function recoverBurrow(reading: Reading, memory: Memory): Decision | null
     by = Math.floor(state.position.y),
     bz = Math.floor(state.position.z),
     wet = state.motion?.swimming || state.motion?.feetInLiquid;
+  const shaftReady = (y: number) =>
+    !!reading.terrain &&
+    [
+      [bx, y + 1, bz],
+      [bx, y + 2, bz],
+      [bx + 1, y + 1, bz],
+      [bx - 1, y + 1, bz],
+      [bx, y + 1, bz + 1],
+      [bx, y + 1, bz - 1],
+      [bx + 1, y + 2, bz],
+      [bx - 1, y + 2, bz],
+      [bx, y + 2, bz + 1],
+      [bx, y + 2, bz - 1],
+    ].every(([x, cellY, z]) => reading.terrain?.get(x, cellY, z));
   const ready =
     !wet &&
-    reading.terrain &&
-    [
-      [bx, by + 1, bz],
-      [bx, by + 2, bz],
-      [bx + 1, by + 1, bz],
-      [bx - 1, by + 1, bz],
-      [bx, by + 1, bz + 1],
-      [bx, by + 1, bz - 1],
-      [bx + 1, by + 2, bz],
-      [bx - 1, by + 2, bz],
-      [bx, by + 2, bz + 1],
-      [bx, by + 2, bz - 1],
-    ].every(([x, y, z]) => reading.terrain.get(x, y, z));
+    shaftReady(by) &&
+    // Native physics may settle the observed body one block below the height
+    // reported when dig-in finished. Inspect that adjacent alignment before
+    // deciding the same shaft is ordinary ground and digging deeper.
+    shaftReady(by + 1);
   // Wet starts must reach the swim/wade reflex immediately. Inspect for an old
   // burrow only after the player has dry footing again.
   if (!ready && !wet) {
@@ -64,9 +70,10 @@ export function recoverBurrow(reading: Reading, memory: Memory): Decision | null
   if (wet) return null;
   memory.startupChecked = true;
   memory.startupAt = null;
-  const observedShaft = !wet && reading.terrain ? dugInState(reading.terrain, bx, by, bz) : null;
+  const shaftY = [by, by + 1].find(y => reading.terrain && dugInState(reading.terrain, bx, y, bz));
+  const observedShaft = shaftY === undefined || !reading.terrain ? null : dugInState(reading.terrain, bx, shaftY, bz);
   if (observedShaft === 'sealed' || (observedShaft === 'open' && (isNight(environment) || temporalStormUnsafe(state))))
-    memory.burrow = { x: bx, y: by + 2, z: bz };
+    memory.burrow = { x: bx, y: shaftY! + 2, z: bz };
   if (observedShaft === 'open' && !memory.burrow) memory.pit = { x: state.position.x + 8, y: state.position.y, z: state.position.z };
   return null;
 }

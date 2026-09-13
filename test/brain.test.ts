@@ -1160,6 +1160,11 @@ test('brain: a fresh controller recovers a sealed burrow from observed terrain',
   assert.equal(next.start, 'dig_area');
   assert.deepEqual(next.args.cells, [memory.burrow]);
 
+  const settled = fresh();
+  const settledSheltered = decide(reading({ environment: night, state: state({ position: { x: 0.5, y: 99, z: 0.5 } }), terrain }), settled);
+  assert.deepEqual(settled.burrow, { x: 0, y: 102, z: 0 });
+  assert.equal(settledSheltered.wait, 'night, dug in', 'one block of native settling does not make startup dig a second shaft');
+
   sealed = false;
   const openAtNight = fresh();
   const sheltered = decide(reading({ environment: night, state: state({ position: { x: 0.5, y: 100, z: 0.5 } }), terrain }), openAtNight);
