@@ -85,6 +85,9 @@ export type Memory = {
   job: Job | null;
   // Where the last walk was heading when it ended in a pit; dig_out cuts stairs that way.
   pit: Cell | null;
+  // The job whose route reported that pit. If dig_out finds no pit to escape,
+  // set that job aside instead of immediately repeating the same bad route.
+  pitJob: Job | null;
   // The pocket the bot dug in for the night: its mouth cell, to dig open again at dawn.
   burrow: Cell | null;
   // Physical burrow recovery is only valid before this controller has moved.

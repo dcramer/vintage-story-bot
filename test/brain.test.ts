@@ -1551,6 +1551,34 @@ test('brain: pit recovery follows the failed resource trip instead of always cut
   assert.equal(memory.pit.y, position.y, 'recovery progress is measured from the body, not the resource elevation');
 });
 
+test('brain: a false pit sets aside the job whose route reported it', () => {
+  const memory = fresh();
+  memory.job = 'eat';
+  const position = { x: 40.5, y: 115, z: 20.5 };
+  const starving = state({ position, vitals: { hunger: { current: 0, max: 1500 } } });
+  const escapeGoal = decide(
+    reading({
+      state: starving,
+      now: 1000,
+      last: { id: 'roots', kind: 'harvest', ok: false, reason: 'pit', result: { position, toward: { x: 48.5, z: 20.5 } } },
+    }),
+    memory,
+  );
+  assert.equal(escapeGoal.start, 'dig_out');
+  assert.equal(memory.tried.eat, undefined, 'a real pit remains recoverable without blaming the food job');
+
+  const next = decide(
+    reading({
+      state: starving,
+      now: 2000,
+      last: { id: 'out', kind: 'dig_out', ok: false, reason: 'no_wall_to_cut', result: { ok: false, climbed: 0, reason: 'no_wall_to_cut' } },
+    }),
+    memory,
+  );
+  assert.ok(memory.tried.eat, 'no wall proves the reported pit was a bad route for the originating job');
+  assert.equal(next.start, 'forage', 'food recovery changes strategy instead of repeating the same root route');
+});
+
 test('brain: a hand basket is woven from ten tops and worn by hand', () => {
   const memory = fresh();
   memory.notes.home = { x: 3.5, y: 100, z: 0.5 };

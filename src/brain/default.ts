@@ -179,6 +179,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       const where = last.result?.position ?? state.position;
       const toward = last.result?.toward;
       memory.pit = { x: toward?.x ?? where.x + 8, y: where.y, z: toward?.z ?? where.z };
+      if (mine?.id !== 'dig_out') memory.pitJob = mine?.id ?? null;
     } else if (!last.ok && mine && (mine.setAside ?? failedOnItsOwn)(last, memory, reading))
       memory.tried[mine.id] = { x: state.position.x, z: state.position.z, at: now };
     mine?.ended?.(last, memory, reading);
@@ -193,6 +194,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
   if (!state.alive) {
     memory.burrow = null;
     memory.pit = null;
+    memory.pitJob = null;
     memory.startupChecked = false;
     memory.startupAt = null;
     memory.pendingHurtAt = null;
@@ -432,6 +434,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
     marked: new Set(),
     job: null,
     pit: null,
+    pitJob: null,
     burrow: null,
     startupChecked: false,
     startupAt: null,

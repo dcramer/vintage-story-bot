@@ -16,6 +16,11 @@ export const digOut: Concern = {
   run: ({ memory }) => ({ start: 'dig_out', args: { x: memory.pit!.x, z: memory.pit!.z }, why: 'in a hole' }),
   setAside: (last, memory, reading) => !climbed(last, memory, reading) && failedOnItsOwn(last),
   ended: (last, memory, reading) => {
-    if (last.ok || !climbed(last, memory, reading)) memory.pit = null;
+    if (last.ok || !climbed(last, memory, reading)) {
+      if (!last.ok && failedOnItsOwn(last) && memory.pitJob)
+        memory.tried[memory.pitJob] = { x: reading.state.position.x, z: reading.state.position.z, at: reading.now };
+      memory.pit = null;
+      memory.pitJob = null;
+    }
   },
 };
