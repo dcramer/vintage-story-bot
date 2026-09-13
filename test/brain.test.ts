@@ -949,6 +949,33 @@ test('brain: cooking clears observed snow before it can know whether the firepit
   assert.deepEqual(choice.args.cells, [{ x: 0, y: 100, z: -2 }]);
 });
 
+test('brain: cooking accepts observed empty terrain whose block code is null', () => {
+  const memory = fresh();
+  memory.notes.cookUntil = 10_000;
+  memory.startupChecked = true;
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 12), slot('game:drygrass'), slot('game:cattailroot', 4));
+  const terrain = {
+    get: (x, y, z) => {
+      if (x === 0 && y === 100 && z === -2) return { code: null, hazard: null, boxes: [] };
+      if (x === 0 && y === 99 && z === -2) return { code: 'game:soil-low-normal', hazard: null, boxes: [[0, 99, -2, 1, 100, -1]] };
+      return undefined;
+    },
+  };
+  const choice = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+      inventory: supplies,
+      terrain,
+      now: 2000,
+    }),
+    memory,
+  );
+
+  assert.equal(choice.start, 'firepit');
+  assert.deepEqual(choice.args, { x: 0, y: 100, z: -2 });
+});
+
 test('brain: digging out of a hole is never interrupted by a threat', () => {
   const digging = fresh();
   digging.job = 'dig_out';
