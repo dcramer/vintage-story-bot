@@ -28,6 +28,18 @@ export const burrow: Concern = {
 export function recoverBurrow(reading: Reading, memory: Memory): Decision | null {
   if (memory.startupChecked) return null;
   const { state, environment } = reading;
+  const home = memory.notes.home;
+  // A known shelter's roof is not the mouth of an emergency burrow.
+  if (
+    home &&
+    memory.notes.dwelling &&
+    Math.abs(state.position.y - home.y) < 1 &&
+    Math.hypot(state.position.x - home.x, state.position.z - home.z) < 0.7
+  ) {
+    memory.startupChecked = true;
+    memory.startupAt = null;
+    return null;
+  }
   const bx = Math.floor(state.position.x),
     by = Math.floor(state.position.y),
     bz = Math.floor(state.position.z),

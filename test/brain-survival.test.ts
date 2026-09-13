@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { recoverBurrow } from '../src/brain/default/reflexes/burrow.ts';
 import { house, houseSite } from '../src/brain/default/tasks/house.ts';
 import { recoverableBody } from '../src/brain/default/tasks/recover.ts';
 import { shelter } from '../src/brain/default/tasks/shelter.ts';
@@ -104,6 +105,14 @@ test('partial shelter resumes its owned site after a controller restart', () => 
   assert.deepEqual(work.args.origin, origin);
   shelter.ended!({ ok: false } as any, memory, {} as any);
   assert.deepEqual(memory.notes.shelter, origin, 'a failed roof cannot discard the already placed walls');
+});
+
+test('restart inside an owned shelter does not identify its roof as a burrow mouth', () => {
+  const home = { x: 11.5, y: 100, z: 21.5 };
+  const memory = fresh({ home, dwelling: { door: { x: 11, y: 100, z: 22 }, item: 'soil-' } });
+  assert.equal(recoverBurrow({ state: { position: home }, now: 1000 } as any, memory), null);
+  assert.equal(memory.burrow, null);
+  assert.equal(memory.startupChecked, true);
 });
 
 test('stockpile: keeps the carried kit and reopens stale shared storage', () => {
