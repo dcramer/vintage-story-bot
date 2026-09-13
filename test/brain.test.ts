@@ -856,6 +856,41 @@ test('brain: failed forage prepares cooking and resumes roots left in an owned f
   assert.equal(retry.args.count, 2);
 });
 
+test('brain: an interrupted firepit load carries fuel before resuming', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'eat';
+  memory.notes.cookUntil = 10_000;
+  memory.notes.firepit = { x: 2, y: 100, z: 0 };
+  memory.notes.cooking = { count: 4 };
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:log-placed-oak-ud', 2), slot('game:cattailroot', 4));
+
+  const retry = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 180, max: 1500 } } }),
+      inventory: supplies,
+      terrain: { get: () => ({ code: 'game:firepit-lit' }) },
+      now: 2000,
+      last: {
+        id: 'cook',
+        kind: 'cook',
+        ok: false,
+        outcome: 'failed',
+        reason: 'transfer_unverified',
+        result: { ok: false, reason: 'transfer_unverified', phase: 'loading', slot: 0 },
+      },
+    }),
+    memory,
+  );
+
+  assert.equal(retry.start, 'craft_item');
+  assert.equal(retry.args.output, 'game:firewood');
+  assert.equal(retry.args.count, 8);
+  assert.deepEqual(memory.notes.cooking, { count: 4, needsFuel: true });
+  assert.deepEqual(fresh(brain.notes!(memory)).notes.cooking, { count: 4, needsFuel: true }, 'fuel recovery survives a controller restart');
+});
+
 test('brain: starvation prepares one root locally instead of returning to a distant empty firepit', () => {
   const memory = fresh();
   memory.startupChecked = true;

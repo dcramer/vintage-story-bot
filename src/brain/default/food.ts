@@ -33,7 +33,7 @@ export function food(ctx: Context, keep: number): Decision {
   const pit = memory.notes.firepit;
   const pending = memory.notes.cooking;
   const fuel = 2 * (pending?.count ?? Math.min(roots || batch, batch));
-  if (!pending) {
+  if (!pending || pending.needsFuel) {
     if (!k.knife) return makeTool(k, 'knife', 'knifeblade', k.knifeBlade, 'game:knife-generic');
     if (k.emptyBagSlot && (k.bagItem || (k.free < 2 && (k.cattailtops > 0 || k.free > 0)))) {
       const bag = makeBag(ctx);
@@ -57,6 +57,8 @@ export function food(ctx: Context, keep: number): Decision {
         };
       return { start: 'craft_item', args: { output: 'game:firestarter', count: 1, timeoutMs: 120000 }, why: 'a firestarter for cooking' };
     }
+    // A failed load can leave the firepit partially fueled. Carry enough for
+    // the whole retry; the cook goal's fresh container read loads only the gap.
     const wood = fuel + (pit ? 0 : 4) - count('game:firewood');
     if (wood > 0) {
       if (!k.logs) return { start: 'fell_tree', args: { count: Math.ceil(wood / 4), timeoutMs: 300000 }, why: 'logs for cooking fuel' };
@@ -72,7 +74,7 @@ export function food(ctx: Context, keep: number): Decision {
         args: { match: 'tallgrass', item: 'drygrass', count: 1, tool: 'Knife', timeoutMs: 300000 },
         why: 'grass to build a firepit',
       };
-    if (!roots)
+    if (!pending && !roots)
       return {
         start: 'harvest',
         args: { match: 'coopersreed', item: ROOT, count: batch, tool: 'Knife', timeoutMs: 600000 },
@@ -143,8 +145,22 @@ export const foodEnded: Concern['ended'] = (last, memory, reading) => {
   if (last.kind === 'cook') {
     const remaining = (memory.notes.cooking?.count ?? 0) - (last.result?.moved ?? 0);
     if (last.ok || remaining <= 0) memory.notes.cooking = null;
-    else memory.notes.cooking = { count: remaining };
+    else {
+      const reason = last.reason ?? last.result?.reason;
+      const needsFuel =
+        memory.notes.cooking?.needsFuel === true ||
+        (last.result?.phase === 'loading' && last.result?.slot === 0 && ['none_found', 'transfer_unverified'].includes(reason ?? ''));
+      memory.notes.cooking = { count: remaining, ...(needsFuel ? { needsFuel: true } : {}) };
+    }
   }
 };
 
-export const foodSetAside: Concern['setAside'] = last => !['forage', 'travel', 'firepit'].includes(last.kind) && failedOnItsOwn(last);
+export const foodSetAside: Concern['setAside'] = last => {
+  const reason = last.reason ?? last.result?.reason;
+  const recoverableFuelLoad =
+    last.kind === 'cook' &&
+    last.result?.phase === 'loading' &&
+    last.result?.slot === 0 &&
+    ['none_found', 'transfer_unverified'].includes(reason ?? '');
+  return !['forage', 'travel', 'firepit'].includes(last.kind) && !recoverableFuelLoad && failedOnItsOwn(last);
+};

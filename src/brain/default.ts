@@ -401,7 +401,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
       ...(cell(kept?.firepit) ? { firepit: cell(kept?.firepit) } : {}),
       ...(kept?.failedFirepits?.length ? { failedFirepits: kept.failedFirepits.filter(p => cell(p) && Number.isFinite(p.until)).slice(-16) } : {}),
       ...(Number.isInteger(kept?.cooking?.count) && kept!.cooking!.count > 0 && kept!.cooking!.count <= 4
-        ? { cooking: { count: kept!.cooking!.count } }
+        ? { cooking: { count: kept!.cooking!.count, ...(kept?.cooking?.needsFuel === true ? { needsFuel: true } : {}) } }
         : {}),
       ...(Number.isFinite(kept?.cookUntil) ? { cookUntil: kept!.cookUntil } : {}),
       ...(cell(kept?.house) ? { house: cell(kept?.house) } : {}),

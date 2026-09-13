@@ -65,7 +65,7 @@ export type Notes = {
   lightingDay?: number | null;
   firepit?: Cell | null;
   failedFirepits?: (Cell & { until: number })[];
-  cooking?: { count: number } | null;
+  cooking?: { count: number; needsFuel?: boolean } | null;
   cookUntil?: number;
   construction?: Construction | null;
   dwelling?: { door: Cell; item: string } | null;
