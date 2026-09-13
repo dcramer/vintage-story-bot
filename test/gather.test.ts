@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { gather } from '../src/goals/gather.ts';
-import { blockWorkReady, dryBlockWorkPosition } from '../src/support/blocks.ts';
+import { blockWorkReady, dryBlockWorkPosition, replaceablePlant } from '../src/support/blocks.ts';
 
 test('block work requires dry ground and rejects wet approach cells', () => {
   assert.equal(blockWorkReady({ motion: { onGround: true } }), true);
@@ -10,6 +10,12 @@ test('block work requires dry ground and rejects wet approach cells', () => {
   assert.equal(dryBlockWorkPosition({ x: 0, y: 0, z: 0 }), true);
   assert.equal(dryBlockWorkPosition({ x: 0, y: 0, z: 0, wet: true }), false);
   assert.equal(dryBlockWorkPosition({ x: 0, y: 0, z: 0, swim: true }), false);
+});
+
+test('aim clearing never destroys a loose resource merely because it is replaceable', () => {
+  assert.equal(replaceablePlant('game:flower-cowparsley-free'), true);
+  assert.equal(replaceablePlant('game:looseores-nativecopper-claystone-free'), false);
+  assert.equal(replaceablePlant('game:loosestick-snow'), false);
 });
 
 function fixture({ gain = true, interruptAfter = Infinity } = {}) {

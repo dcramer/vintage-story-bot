@@ -106,7 +106,12 @@ export async function changeBlock(
 }
 
 // Non-colliding vegetation the game replaces on placement but which still captures the selection ray.
-export const replaceablePlant = code => has({ kind: 'block', code }, 'replaceable');
+export const replaceablePlant = code => {
+  const block = { kind: 'block', code };
+  // Loose sticks, stones and ores are replaceable by placement too, but they
+  // are resources to pick up—not vegetation to destroy as an aiming aid.
+  return has(block, 'replaceable') && !has(block, 'pickup');
+};
 
 export const parseBlockKey = key => {
   const [, dimension, x, y, z] = key.split(':');
@@ -151,7 +156,14 @@ export async function selectCell(field, cell, { point, face, clearPlants = false
     if (hit.x === cell.x && hit.y === cell.y && hit.z === cell.z) return !face || selected.face === face ? selected : null;
     if (!clearPlants || attempt > 0 || !replaceablePlant(selected.code)) return null;
     field.report('clearing_plant', { target: selected.key });
-    const result = await changeBlock(field, 'dig', { target: selected.key, acceptTransform: true });
+    let result;
+    try {
+      result = await changeBlock(field, 'dig', { target: selected.key, acceptTransform: true });
+    } catch (error) {
+      if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
+      field.report('clearing_failed', { target: selected.key, reason: error.message });
+      return null;
+    }
     if (!result.ok) return null;
   }
   return null;
