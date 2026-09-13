@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { collectHarvestDrop, failedDropRetryMs, matchesHarvestBlock } from '../src/goals/harvest.ts';
+import { collectHarvestDrop, failedDropRetryMs, harvestBlockReady, matchesHarvestBlock } from '../src/goals/harvest.ts';
 import { Search } from '../src/support/search.ts';
 
 test('top gathering leaves harvested cattail stems for a root request', () => {
@@ -31,6 +31,17 @@ test('a harvest does not count an uncollectable drop as productive or retry it i
   assert.deepEqual(skips, [{ object: drop, ms: failedDropRetryMs }]);
   assert.equal(field.seen.has(drop.key), false);
   assert.deepEqual(reports, [{ phase: 'collecting', target: drop.key }]);
+});
+
+test('harvest leaves high cliff blocks whose drops the body cannot reach', () => {
+  const state = {
+    position: { x: 10.5, y: 110, z: 10.5 },
+    body: { height: 1.85 },
+    motion: { onGround: true, feetInLiquid: false, swimming: false },
+  };
+  const block = y => ({ kind: 'block', point: { x: 11.5, y, z: 10.5 }, withinPickingRange: true });
+  assert.equal(harvestBlockReady(block(111.5), state), true);
+  assert.equal(harvestBlockReady(block(114.5), state), false);
 });
 
 test('a search reports the actual failed destination when it discovers a pit', () => {

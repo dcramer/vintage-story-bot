@@ -34,6 +34,12 @@ export const matchesHarvestBlock = (object, match, item) => {
   const cutReed = /:tallplant-coopersreed-(land|water)-harvested-/.test(object.code);
   return !(cutReed && includes('game:cattailtops', item) && !includes('game:cattailroot', item));
 };
+export const harvestBlockReady = (object, state, lowest = false) =>
+  object.withinPickingRange &&
+  blockWorkReady(state) &&
+  object.point.y <= state.position.y + (state.body?.height ?? 1.85) + 0.5 &&
+  (Math.floor(object.point.x) !== Math.floor(state.position.x) || Math.floor(object.point.z) !== Math.floor(state.position.z)) &&
+  (lowest || object.point.y >= Math.floor(state.position.y) - 1);
 export const matchingCount = (inventory, part) =>
   ownedSlots(inventory)
     .filter(s => includes(s.code, part))
@@ -81,13 +87,7 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
     // into a bank or the surface around, never a shaft under their own feet:
     // blocks below the ground the bot stands on are left alone, higher ones
     // (a slope face) come first.
-    ready: (o, state) =>
-      o.kind === 'item'
-        ? horizontal(state.position, o.point) <= 8
-        : o.withinPickingRange &&
-          blockWorkReady(state) &&
-          (Math.floor(o.point.x) !== Math.floor(state.position.x) || Math.floor(o.point.z) !== Math.floor(state.position.z)) &&
-          (lowest || o.point.y >= Math.floor(state.position.y) - 1),
+    ready: (o, state) => (o.kind === 'item' ? horizontal(state.position, o.point) <= 8 : harvestBlockReady(o, state, lowest)),
     prefer: (a, b) =>
       Number(a.kind === 'block') - Number(b.kind === 'block') ||
       (lowest ? a.point.y - b.point.y : Math.floor(b.point.y) - Math.floor(a.point.y)) ||
