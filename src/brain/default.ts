@@ -399,6 +399,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
       ...(cell(kept?.starter) ? { starter: cell(kept?.starter) } : {}),
       ...(Number.isFinite(kept?.lightingDay) ? { lightingDay: kept!.lightingDay } : {}),
       ...(cell(kept?.firepit) ? { firepit: cell(kept?.firepit) } : {}),
+      ...(kept?.failedFirepits?.length ? { failedFirepits: kept.failedFirepits.filter(p => cell(p) && Number.isFinite(p.until)).slice(-16) } : {}),
       ...(Number.isInteger(kept?.cooking?.count) && kept!.cooking!.count > 0 && kept!.cooking!.count <= 4
         ? { cooking: { count: kept!.cooking!.count } }
         : {}),

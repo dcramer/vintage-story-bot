@@ -86,6 +86,7 @@ export function food(ctx: Context, keep: number): Decision {
       for (let dx = -2; dx <= 2; dx++) {
         if (Math.abs(dx) + Math.abs(dz) !== 2) continue;
         const cell = { x: Math.floor(p.x) + dx, y: Math.floor(p.y), z: Math.floor(p.z) + dz };
+        if (memory.notes.failedFirepits?.some(f => f.until > now && f.x === cell.x && f.y === cell.y && f.z === cell.z)) continue;
         const block = reading.terrain?.get(cell.x, cell.y, cell.z);
         if (!block || block.hazard || (block.code && block.code !== 'game:air' && !surfaceCover(block))) continue;
         if (surfaceCover(block))
@@ -130,8 +131,15 @@ export const foodEnded: Concern['ended'] = (last, memory, reading) => {
     last.kind === 'firepit' &&
     ['site_not_empty', 'unsupported_site', 'support_not_selectable', 'no_observed_effect'].includes(last.reason ?? last.result?.reason ?? '') &&
     !memory.notes.cooking
-  )
+  ) {
+    const cell = last.result?.cell ?? memory.notes.firepit;
+    if (cell)
+      memory.notes.failedFirepits = [
+        ...(memory.notes.failedFirepits ?? []).filter(p => p.until > reading.now && (p.x !== cell.x || p.y !== cell.y || p.z !== cell.z)),
+        { x: cell.x, y: cell.y, z: cell.z, until: reading.now + 1200000 },
+      ].slice(-16);
     memory.notes.firepit = null;
+  }
   if (last.kind === 'cook') {
     const remaining = (memory.notes.cooking?.count ?? 0) - (last.result?.moved ?? 0);
     if (last.ok || remaining <= 0) memory.notes.cooking = null;

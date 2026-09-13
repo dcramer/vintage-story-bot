@@ -64,6 +64,7 @@ export type Notes = {
   house?: Cell | null;
   lightingDay?: number | null;
   firepit?: Cell | null;
+  failedFirepits?: (Cell & { until: number })[];
   cooking?: { count: number } | null;
   cookUntil?: number;
   construction?: Construction | null;

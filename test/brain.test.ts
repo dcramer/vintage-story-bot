@@ -961,6 +961,26 @@ test('brain: a refused firepit placement chooses another site without setting fo
   assert.equal(memory.tried.eat, undefined);
   assert.equal(choice.start, 'explore');
   assert.match(choice.why, /firepit/);
+  const resumed = fresh(brain.notes!(memory));
+  resumed.startupChecked = true;
+  const retry = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+      inventory: supplies,
+      now: 3000,
+      terrain: {
+        get: (x, y, z) =>
+          y === 100
+            ? { code: 'game:air', boxes: [] }
+            : y === 99 && ((x === 2 && z === 0) || (x === 0 && z === 2))
+              ? { code: 'game:soil-low-none', boxes: [[x, y, z, x + 1, y + 1, z + 1]] }
+              : undefined,
+      },
+    }),
+    resumed,
+  );
+  assert.equal(retry.start, 'firepit');
+  assert.deepEqual(retry.args, { x: 0, y: 100, z: 2 }, 'the failed site stays excluded after reloading notes');
 });
 
 test('brain: cooking makes inventory room before felling fuel', () => {
