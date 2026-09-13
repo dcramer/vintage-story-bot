@@ -126,6 +126,7 @@ export type Situation = {
   axe: boolean;
   shovel: boolean;
   hoe?: boolean;
+  farmTended?: boolean;
   stone: boolean;
   torches: number;
   grass: number;

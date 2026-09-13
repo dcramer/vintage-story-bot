@@ -16,7 +16,7 @@ export const FULL_SLOTS = 1;
 // What to put away, by code with a count, most first; at most what one goal takes.
 export function surplusOf(
   k: Kit,
-  { home, torches, building = false }: { home: boolean; torches: number; building?: boolean },
+  { home, torches, building = false, farming = false }: { home: boolean; torches: number; building?: boolean; farming?: boolean },
 ): { item: string; count: number }[] {
   const keep = (code: string) => {
     if (code === 'game:stick') return STICK_MIN;
@@ -24,11 +24,13 @@ export function surplusOf(
     if (code === 'game:firewood') return 8;
     if (code === 'game:cattailroot') return 4;
     if (code.includes('log-')) return LOG_MIN;
-    if (/^game:soil-(medium|high|compost)-/.test(code)) return 0;
+    if (/^game:soil-(medium|high|compost)-/.test(code)) return farming ? 8 : 0;
+    if (/^game:roughhewnfence(gate)?-/.test(code)) return farming ? Infinity : 0;
+    if (/^game:seeds-/.test(code)) return farming ? 2 : 0;
     if (code.includes('soil-')) return home && !building ? 4 : SHELTER_DIRT;
     if (/^game:(rammed-|packeddirt|hay-|basket-normal-)/.test(code)) return Infinity;
     if (code.includes('drygrass') || code.includes('cattailtops')) return torches < TORCH_MIN ? Infinity : 0;
-    if (code === 'game:flint' || /^game:stone-/.test(code)) return k.knife && k.axe && k.shovel ? 0 : Infinity;
+    if (code === 'game:flint' || /^game:stone-/.test(code)) return k.knife && k.axe && k.shovel && k.hoe ? 0 : Infinity;
     return 0;
   };
   const totals = new Map<string, number>();
@@ -58,6 +60,7 @@ export const stash: Concern = {
       home: !!ctx.home,
       torches: ctx.k.torches,
       building: !!ctx.memory.notes.construction || !!ctx.memory.notes.shelter,
+      farming: !!ctx.memory.notes.farm,
     });
     return (
       goTo(ctx, note, 'pack full, going home to put things away') ?? {

@@ -91,6 +91,7 @@ const situation = (extra = {}) => ({
   axe: true,
   shovel: true,
   hoe: true,
+  farmTended: true,
   stone: false,
   torches: 2,
   grass: 0,
@@ -109,6 +110,7 @@ const situation = (extra = {}) => ({
 });
 
 test('brain: danger, hunger and night come before the kit, and the kit comes in day-1 order', () => {
+  assert.equal(pickJob(situation({ farmTended: false })), 'farm', 'a useful farm comes before bulk stockpiles');
   assert.equal(pickJob(situation({ hoe: false })), 'hoe', 'prepare the farm tool before bulk stockpiles');
   assert.equal(pickJob(situation({ hunger: 0.5, reserve: 0, knife: false })), 'knife', 'prepare the knife for cattail bags before bulk provisions');
   assert.equal(pickJob(situation({ threat: true, hunger: 0.1 })), 'hide');

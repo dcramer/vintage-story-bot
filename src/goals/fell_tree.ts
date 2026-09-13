@@ -8,6 +8,11 @@ export default defineGoal({
   schema: z
     .object({
       count: z.number().int().min(1).max(64).default(8).describe('Log items wanted.'),
+      wood: z
+        .string()
+        .regex(/^[a-z]+$/)
+        .optional()
+        .describe('Wood variant required by a recipe; omitted accepts any grown log.'),
       manageFood: z.boolean().default(false),
       sprint: z.boolean().default(false),
       timeoutMs: z.number().int().min(1000).max(3600000).optional(),
@@ -19,11 +24,13 @@ export default defineGoal({
     'Same search/food/interruption rules as harvest. No leaf stripping. Returns START; poll goal_status.',
   title: args => `Fell trees for ${args.count} logs`,
   announce: () => 'Chopping down a tree for logs.',
-  run: (env, { count = 8, ...options }) =>
+  run: (env, { count = 8, wood, ...options }) =>
     runField(env, { manageFood: false, ...options }, ['inventory', 'block_actions'], (field, survival, o) =>
-      harvest(field, survival, { ...o, match: 'log-grown', item: 'game:log-', tool: 'Axe', count, lowest: true }).then(result => ({
-        ...result,
-        goal: 'fell_tree',
-      })),
+      harvest(field, survival, { ...o, match: wood ? `log-grown-${wood}-` : 'log-grown', item: 'game:log-', tool: 'Axe', count, lowest: true }).then(
+        result => ({
+          ...result,
+          goal: 'fell_tree',
+        }),
+      ),
     ),
 });

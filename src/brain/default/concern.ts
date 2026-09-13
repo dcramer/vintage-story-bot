@@ -7,6 +7,7 @@
 import type { Decision, Reading } from '../../runtime/brain.ts';
 import { horizontal } from '../../runtime/navigation/terrain.ts';
 import type { Kit, Situation } from './situation.ts';
+import type { FarmNote } from './tasks/farm.ts';
 import type { Construction } from './tasks/house.ts';
 
 export type Cell = { x: number; y: number; z: number };
@@ -22,6 +23,7 @@ export type Job =
   | 'axe'
   | 'shovel'
   | 'hoe'
+  | 'farm'
   | 'spare_knife'
   | 'grass'
   | 'torches'
@@ -63,6 +65,7 @@ export type Notes = {
   recovery?: { guid: string; until: number } | null;
   home: Cell | null;
   house?: Cell | null;
+  farm?: FarmNote | null;
   lightingDay?: number | null;
   firepit?: Cell | null;
   failedFirepits?: (Cell & { until: number })[];

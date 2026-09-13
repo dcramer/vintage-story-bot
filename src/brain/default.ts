@@ -42,6 +42,7 @@ import { wait } from './default/reflexes/wait.ts';
 import { isNight, kit, type Situation, senseDanger } from './default/situation.ts';
 import { bags } from './default/tasks/bags.ts';
 import { dirt } from './default/tasks/dirt.ts';
+import { farm, farmDue } from './default/tasks/farm.ts';
 import { grass } from './default/tasks/grass.ts';
 import { house } from './default/tasks/house.ts';
 import { lighting, shelterLight } from './default/tasks/lighting.ts';
@@ -82,6 +83,7 @@ export const TASKS: Concern[] = [
   shelter,
   lighting,
   hoe,
+  farm,
   sticks,
   spareKnife,
   logs,
@@ -277,6 +279,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     axe: k.axe,
     shovel: k.shovel,
     hoe: k.hoe,
+    farmTended: !farmDue(reading, memory.notes.farm),
     stone: k.stone,
     torches: k.torches + light.installed,
     grass: k.grass,
@@ -292,10 +295,12 @@ export function decide(reading: Reading, memory: Memory): Decision {
     storage: !!memory.notes.stash,
     bags: k.bags,
     full: k.free <= FULL_SLOTS,
-    surplus: surplusOf(k, { home: !!home, torches: k.torches, building: !!memory.notes.construction || !!memory.notes.shelter }).reduce(
-      (n, i) => n + i.count,
-      0,
-    ),
+    surplus: surplusOf(k, {
+      home: !!home,
+      torches: k.torches,
+      building: !!memory.notes.construction || !!memory.notes.shelter,
+      farming: !!memory.notes.farm,
+    }).reduce((n, i) => n + i.count, 0),
     short: resupplyOf(k, { home: !!home, torches: k.torches }, memory.notes.stash).reduce((n, i) => n + i.count, 0),
     moreStorage:
       allStashes(memory.notes).length < 3 &&
@@ -433,6 +438,24 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
       ...(Number.isFinite(kept?.cookUntil) ? { cookUntil: kept!.cookUntil } : {}),
       ...(kept?.foodRecovery === true ? { foodRecovery: true } : {}),
       ...(cell(kept?.house) ? { house: cell(kept?.house) } : {}),
+      ...(cell(kept?.farm?.origin) &&
+      Number.isInteger(kept.farm.turn) &&
+      kept.farm.turn >= 0 &&
+      kept.farm.turn < 4 &&
+      /^game:soil-(medium|high|compost)-none$/.test(kept.farm.soil) &&
+      /^[a-z]+$/.test(kept.farm.wood)
+        ? {
+            farm: {
+              origin: cell(kept.farm.origin)!,
+              turn: kept.farm.turn,
+              soil: kept.farm.soil,
+              wood: kept.farm.wood,
+              rotation: Number.isInteger(kept.farm.rotation) ? ((kept.farm.rotation % 4) + 4) % 4 : 0,
+              prepared: kept.farm.prepared === true,
+              checkedAt: Number.isFinite(kept.farm.checkedAt) ? kept.farm.checkedAt : 0,
+            },
+          }
+        : {}),
       ...(cell(kept?.construction?.origin) && ['walls', 'floor', 'enter'].includes(kept?.construction?.phase ?? '')
         ? { construction: { origin: cell(kept!.construction!.origin)!, phase: kept!.construction!.phase } }
         : {}),
@@ -485,6 +508,7 @@ const brain: Brain<Memory, Notes> = {
     stash: memory.notes.stash,
     stores: memory.notes.stores,
     house: memory.notes.house,
+    farm: memory.notes.farm,
     construction: memory.notes.construction,
     lightingDay: memory.notes.lightingDay,
     firepit: memory.notes.firepit,

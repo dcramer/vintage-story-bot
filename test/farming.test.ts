@@ -1,11 +1,114 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { kit } from '../src/brain/default/situation.ts';
+import { farm, farmDue } from '../src/brain/default/tasks/farm.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { hoe } from '../src/brain/default/tasks/tools.ts';
 import { allocate } from '../src/goals/craft_item.ts';
 import { plant } from '../src/goals/plant.ts';
+import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 import { cropRequirements, FARM_SOIL, farmlandReadings, plantingProblem } from '../src/support/crops.ts';
+import { farmApproach, farmBeds, farmCell, farmFence, farmGate, farmMargin, farmSite, farmWatered, fertileBed } from '../src/support/farming.ts';
+
+function shoreline(turn = 0) {
+  const map = new TerrainMemory();
+  const plan = { origin: { x: 20, y: 100, z: 20 }, turn, soil: 'game:soil-medium-none', wood: 'pine', rotation: 0, prepared: false, checkedAt: 0 };
+  for (const p of farmMargin(plan))
+    for (let dy = -1; dy < 2; dy++) {
+      const y = p.y + dy;
+      map.put({
+        ...p,
+        y,
+        seenAt: Date.now(),
+        traits: [],
+        code: dy === -1 ? 'game:soil-low-normal' : undefined,
+        boxes: dy === -1 ? [[p.x, y, p.z, p.x + 1, y + 1, p.z + 1]] : [],
+      });
+    }
+  for (let x = 1; x <= 4; x++)
+    map.put({ ...farmCell(plan, x, -1, -1), seenAt: Date.now(), traits: ['water'], code: 'game:water-still-7', boxes: [] });
+  return { map, plan };
+}
+
+test('all farm orientations keep eight dry beds irrigated behind a complete 15-fence perimeter', () => {
+  for (let turn = 0; turn < 4; turn++) {
+    const { map, plan } = shoreline(turn);
+    assert.equal(farmFence(plan).length, 15);
+    assert.equal(farmBeds(plan).length, 8);
+    assert.ok(farmWatered(map, plan));
+    assert.deepEqual(farmSite(map, farmApproach(plan)), { origin: plan.origin, turn });
+    const blocked = farmCell(plan, -1, 1);
+    map.put({
+      ...blocked,
+      seenAt: Date.now(),
+      traits: [],
+      code: 'game:soil-low-normal',
+      boxes: [[blocked.x, blocked.y, blocked.z, blocked.x + 1, blocked.y + 1, blocked.z + 1]],
+    });
+    assert.equal(farmSite(map, farmApproach(plan)), null, 'raised ground beside fencing lets animals enter');
+  }
+  const { map, plan } = shoreline();
+  const water = farmCell(plan, 1, -1, -1);
+  map.put({ ...water, seenAt: Date.now(), traits: ['water'], code: 'game:saltwater-still-7', boxes: [] });
+  assert.equal(farmWatered(map, plan), false, 'saltwater cannot irrigate');
+  assert.equal(farmSite(map, farmApproach(plan)), null);
+  assert.equal(farmSite(new TerrainMemory(), plan.origin), null, 'unknown ground never authorizes a farm');
+  assert.equal(fertileBed('game:farmland-moist-low'), false);
+  assert.equal(fertileBed('game:farmland-moist-medium'), true);
+});
+
+test('farm supplies come from the chest before gathering, and stay in the working kit', () => {
+  const { map, plan } = shoreline(1);
+  const inventory = slots => ({ state: 'test', inventories: [{ name: 'hotbar', slots: slots.map((s, slot) => ({ ...s, slot })) }] });
+  const chest = { key: 'chest', x: 100, y: 100, z: 100, code: 'game:stationarybasket-east', seen: { at: 0, items: { [plan.soil]: 64 } } };
+  const ctx = {
+    k: kit(inventory([])),
+    memory: { notes: { farm: plan, stash: chest } },
+    reading: { terrain: map },
+    state: { position: chest },
+    home: chest,
+  } as any;
+  const take = farm.run(ctx);
+  assert.ok('start' in take && take.start === 'take_items', 'standing at the chest must fetch, not travel back to the farm');
+  assert.deepEqual(take.args.items, [{ item: plan.soil, count: 8 }]);
+  ctx.k = kit(
+    inventory([
+      { code: plan.soil, quantity: 64 },
+      { code: 'game:roughhewnfence-pine-ew-free', quantity: 16 },
+      { code: 'game:log-grown-pine-ud', quantity: 4 },
+      { code: 'game:stick', quantity: 4 },
+      { code: 'game:seeds-rye', quantity: 6 },
+    ]),
+  );
+  const gate = farm.run(ctx);
+  assert.ok('start' in gate && gate.start === 'craft_item');
+  assert.equal(
+    gate.args.output,
+    'game:roughhewnfencegate-pine-n-closed-free',
+    'the native gate recipe has one output, independent of placement orientation',
+  );
+  const surplus = surplusOf(ctx.k, { home: true, torches: 1, farming: true });
+  assert.ok(surplus.some(s => s.item === plan.soil && s.count === 56));
+  assert.ok(surplus.some(s => s.item === 'game:seeds-rye' && s.count === 4));
+  assert.ok(!surplus.some(s => s.item.includes('roughhewnfence')));
+});
+
+test('farm rotation follows a verified completed harvest, and observed fence damage triggers repair', () => {
+  const { map, plan } = shoreline();
+  const memory = { notes: { farm: plan } } as any;
+  farm.ended({ kind: 'farm', ok: false, result: { rotate: true } } as any, memory, { now: 1000 } as any);
+  assert.equal(plan.rotation, 0);
+  farm.ended({ kind: 'farm', ok: true, result: { prepared: true, rotate: true } } as any, memory, { now: 1000 } as any);
+  assert.equal(plan.rotation, 1);
+  assert.equal(plan.checkedAt, 0);
+  plan.checkedAt = 1000;
+  for (const p of [...farmFence(plan), farmGate(plan)])
+    map.put({ ...p, seenAt: Date.now(), traits: [], code: 'game:roughhewnfence-pine-ew-free', boxes: [] });
+  assert.equal(farmDue({ now: 1001, terrain: map }, plan), false);
+  const missing = farmFence(plan)[0];
+  map.put({ ...missing, seenAt: Date.now(), traits: [], boxes: [] });
+  assert.equal(farmDue({ now: 1001, terrain: map }, plan), true);
+});
 
 const rye = {
   class: 'ItemPlantableSeed',
