@@ -134,6 +134,7 @@ export const LADDER: Rung[] = [
   { job: 'shift', when: (s, tried) => s.night && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow') },
   { job: 'burrow', when: s => s.night },
   { job: 'unburrow', when: (s, tried) => s.burrowed && !tried.has('unburrow') },
+  { job: 'shelter', when: (s, tried) => !!s.shelterReady && !tried.has('shelter') },
 ];
 const CONCERNS = new Map<Job, Concern>([...REFLEXES, ...TASKS].map(concern => [concern.id, concern]));
 const concern = (job: Job) => CONCERNS.get(job)!;
@@ -280,6 +281,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
     dirt: k.dirt,
     buildingMaterials: k.buildingMaterials,
     rammedShelter: !!starter || !!houseOrigin,
+    shelterReady:
+      !starter &&
+      !houseOrigin &&
+      ((!!memory.notes.shelter && k.rammed > 0) || (k.rammed >= 57 && k.torches > 0 && k.slots.some(s => s.code === 'game:firestarter'))),
+
     logs: k.logs,
     storage: !!memory.notes.stash,
     bags: k.bags,

@@ -2031,3 +2031,20 @@ test('brain: finish indoor torch refresh despite an outside threat, but stop on 
   );
   assert.equal(absent.start, 'craft_item', 'replace a missing torch from carried materials while staying sealed');
 });
+
+test('brain: a ready shelter takes precedence over errands without bypassing survival or night', () => {
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:rammed-light-plain', 60), slot('game:torch-basic-extinct-up'), slot('game:firestarter'));
+  const memory = fresh({ shelter: { x: 20, y: 100, z: 20 } });
+  memory.startupChecked = true;
+  const ready = reading({ inventory: supplies });
+  const begin = decide(ready, memory);
+  assert.equal(memory.job, 'shelter');
+  assert.equal(begin.start, 'travel', 'go to the planned above-ground site before starting another gathering trip');
+  assert.equal(begin.args.y, 100);
+  const starving = decide({ ...ready, state: state({ vitals: { hunger: { current: 0, max: 1500 } } }) }, fresh(memory.notes));
+  assert.notEqual(starving.start, 'shelter');
+  assert.notEqual(starving.why, begin.why);
+  const dark = decide({ ...ready, environment: night }, fresh(memory.notes));
+  assert.notEqual(dark.why, begin.why, 'do not travel to a new construction site at night');
+});

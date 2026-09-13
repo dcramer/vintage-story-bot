@@ -50,7 +50,10 @@ check its output before preparing fuel; empty output resumes the pending cook.
 
 The starter shelter is a freestanding, above-ground building, never an emergency burrow. Its natural floor stays at ground level. A 5×5 rammed-earth starter shelter follows the [template](getting-started.md#starter-shelter-template) while the full rammed-earth house
 is built. A house site requires observed level ground and clear space; unknown
-terrain is rejected. Construction keeps its chosen origin and phase across
+terrain is rejected. Once 57 rammed-earth blocks, a torch and a firestarter are carried, starter
+construction takes priority over routine gathering; continue a started shell
+while materials remain. Urgent survival and night rules still take precedence.
+Construction keeps its chosen origin and phase across
 interruptions and restarts. Existing shell blocks must match the material;
 out-of-material results request another batch without abandoning the site.
 The house becomes home only after its shell, lowered floor, entry and seal

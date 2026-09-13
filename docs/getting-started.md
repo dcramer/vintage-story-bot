@@ -41,8 +41,10 @@ Top view below the roof; `#` rammed earth, `D` two-high seal, `T` torch, `C` res
 
 The doorway faces +z. From the floor-level northwest origin, the door is
 (2,0,4), the standing center is (2.5,0,2.5), and the torch occupies (2,0,1). Six chest slots line the side walls at
-x=1/3, z=1/2/3; keep the middle aisle clear. Build the first chest in a
-reserved slot, then build the shelter around it. Bring a torch and a firestarter before construction. Build
+x=1/3, z=1/2/3; keep the middle aisle clear. Prefer placing the first chest in a
+reserved slot and building around it. If the shell materials, torch and
+firestarter are already carried, build the shelter before further gathering
+and add the chest in a reserved slot afterward. Bring a torch and a firestarter before construction. Build
 walls and roof, enter, seal, then verify the interior torch lit before completion.
 Keep at least one torch inside every occupied shelter. Starting at 05:00
 each day, pick up and replace installed torches one at a time; repair missing

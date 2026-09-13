@@ -63,6 +63,7 @@ export function kit(inventory: any) {
     // Knives carried with an edge left; a second is the spare for the chest.
     knives: slots.filter(s => s.tool === 'Knife' && (s.durability ?? 1) > 0).length,
     dirt: part('soil-'),
+    rammed: exact('game:rammed-light-plain'),
     buildingMaterials: part('soil-') + exact('game:packeddirt') + exact('game:rammed-light-plain'),
     dirtCode: slots.find(s => s.code?.includes('soil-'))?.code ?? null,
     stone: slots.some(s => s.code && kinds.knapping.materials(s)),
@@ -127,6 +128,7 @@ export type Situation = {
   dirt: number;
   buildingMaterials?: number;
   rammedShelter?: boolean;
+  shelterReady?: boolean;
   logs: number;
   // A chest at home is noted; the pack has a slot or two at most; things to put away, in items;
   // things the chest was last seen holding that the kit is short of, in items.
