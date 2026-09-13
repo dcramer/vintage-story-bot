@@ -25,6 +25,8 @@ export const eat: Concern = {
   setAside: foodSetAside,
   running: ctx => {
     const { active, danger, hurt, classifyingHurt, s, k, memory, state } = ctx;
+    if (active?.kind === 'harvest' && k.free === 0 && !k.slots.some(slot => slot.code === 'game:cattailroot'))
+      return { stop: 'make room for food before continuing the harvest' };
     if (
       active?.kind === 'travel' &&
       s.hunger !== null &&

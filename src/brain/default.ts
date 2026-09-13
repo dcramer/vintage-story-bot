@@ -406,7 +406,9 @@ export function decide(reading: Reading, memory: Memory): Decision {
 }
 
 // What to pick up in passing, whatever the current job: food where it grows, and the kit's shortfalls that lie on the ground.
-export function wants(reading: Reading): string[] {
+export function wants(reading: Reading, memory?: Memory): string[] {
+  const hunger = reading.state?.vitals?.hunger;
+  if (memory?.notes.foodRecovery || (hunger?.max > 0 && hunger.current / hunger.max < 0.2)) return [];
   const k = kit(reading.inventory);
   return [...REFLEXES, ...TASKS].flatMap(concern => concern.wants?.(k) ?? []);
 }

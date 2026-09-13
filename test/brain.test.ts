@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { eat as eating } from '../src/brain/default/reflexes/eat.ts';
 import { SIEGE_MS } from '../src/brain/default/reflexes/tunnel.ts';
 import brain, {
   decide as decision,
@@ -10,6 +11,7 @@ import brain, {
   pickJob,
   SHELTER_DIRT,
   STICK_MIN,
+  wants,
 } from '../src/brain/default.ts';
 import { shelter as shelterCells, shelterScaffold } from '../src/support/structures.ts';
 
@@ -107,6 +109,22 @@ const situation = (extra = {}) => ({
   house: true,
   lit: true,
   ...extra,
+});
+
+test('food preparation does not detour for the unfinished tool kit', () => {
+  const r = reading({ inventory: inventory(slot('game:flint')), state: state({ vitals: { hunger: { current: 90, max: 1500 } } }) });
+  assert.deepEqual(wants(r as any), []);
+  r.state = state({ vitals: { hunger: { current: 500, max: 1500 } } });
+  assert.deepEqual(wants(r as any, fresh({ foodRecovery: true })), []);
+  assert.ok(wants(r as any, fresh()).includes('looseflints'));
+});
+
+test('food harvesting stops when incidental pickups fill its last ordinary slot', () => {
+  const memory = fresh({ foodRecovery: true });
+  const ctx = { active: { kind: 'harvest' }, k: { free: 0, slots: [{ code: 'game:soil-low-none' }] }, s: { foodRecovery: true }, memory } as any;
+  assert.deepEqual(eating.running(ctx), { stop: 'make room for food before continuing the harvest' });
+  ctx.k.slots.push({ code: 'game:cattailroot' });
+  assert.equal(eating.running(ctx), null, 'a carried root frees its own slot when loaded for cooking');
 });
 
 test('brain: danger, hunger and night come before the kit, and the kit comes in day-1 order', () => {
