@@ -82,7 +82,7 @@ const situation = (extra = {}) => ({
   hurt: false,
   storm: false,
   hunger: 0.8,
-  reserve: 0,
+  reserve: 640,
   night: false,
   home: true,
   atHome: true,
@@ -101,6 +101,9 @@ const situation = (extra = {}) => ({
   surplus: 0,
   short: 0,
   stashKnife: true,
+  stocked: true,
+  house: true,
+  lit: true,
   ...extra,
 });
 
@@ -153,8 +156,8 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
     { stop: 'burrow' },
     'night falling cuts a kit job short',
   );
-  assert.equal(pickJob(situation({ hunger: 0.35 })), 'explore', 'food above 20% does not preempt work with an empty pack');
-  assert.equal(pickJob(situation({ hunger: 0.35, reserve: 200 })), 'explore', 'food above 20% does not preempt work with a reserve');
+  assert.equal(pickJob(situation({ hunger: 0.35, reserve: 0 })), 'provisions', 'food reserves precede exploration');
+  assert.equal(pickJob(situation({ hunger: 0.35, reserve: 200 })), 'provisions', 'a small reserve is replenished before exploration');
   assert.equal(pickJob(situation({ dangerHere: true, night: true })), 'relocate', 'a place full of scares is left');
   assert.equal(pickJob(situation({ night: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ night: true, home: false, dirt: 0 })), 'burrow', 'night without a home: dig in where it stands');

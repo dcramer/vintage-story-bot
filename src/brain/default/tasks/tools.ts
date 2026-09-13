@@ -20,7 +20,7 @@ export function makeTool(k: Kit, tool: string, head: string, blades: number, out
     if (k.sticks < 1)
       return {
         start: 'gather',
-        args: { match: 'stick', item: 'game:stick', count: missing(k), timeoutMs: 600000 },
+        args: { match: 'stick', item: 'game:stick', count: Math.max(1, missing(k)), timeoutMs: 600000 },
         why: `sticks for the ${tool} and the rest`,
       };
     if (k.knappables < 2)
@@ -34,7 +34,7 @@ export function makeTool(k: Kit, tool: string, head: string, blades: number, out
   if (k.sticks < 1)
     return {
       start: 'gather',
-      args: { match: 'stick', item: 'game:stick', count: missing(k), timeoutMs: 600000 },
+      args: { match: 'stick', item: 'game:stick', count: Math.max(1, missing(k)), timeoutMs: 600000 },
       why: `sticks to haft the ${tool} and the rest`,
     };
   return {

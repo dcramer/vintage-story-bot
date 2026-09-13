@@ -1,10 +1,5 @@
-// The default brain: a cautious beginner (docs/brain.md). It respawns, swims
-// for shore, runs from monsters and from anything that hurts it, hides at
-// night and in storms, eats when hungry, marks copper it passes, and works
-// through the day-1 kit and a tiny dirt shelter in order. No pottery, hunting
-// or trading. Pure: decide() reads one Reading and its own memory and returns
-// one Decision; the loop in src/runtime/brain.ts does the talking to the game.
-// The parts live in src/brain/default/: this file only orders them.
+// Early survival decisions over current readings and durable camp notes.
+// Concerns own their behavior; this file orders and interrupts them.
 
 import { isDeathMarker } from '../goals/retrieve_body.ts';
 import type { Brain, Decision, Reading } from '../runtime/brain.ts';
@@ -13,6 +8,7 @@ import { temporalStormUnsafe } from '../support/fieldwork.ts';
 import { hunger } from '../support/food.ts';
 import { copper } from './default/alongside/copper.ts';
 import { homeMarker } from './default/alongside/home.ts';
+import { suppliesMarker } from './default/alongside/supplies.ts';
 import {
   type Alongside,
   type Concern,
@@ -45,13 +41,17 @@ import { isNight, kit, type Situation, senseDanger } from './default/situation.t
 import { bags } from './default/tasks/bags.ts';
 import { dirt } from './default/tasks/dirt.ts';
 import { grass } from './default/tasks/grass.ts';
+import { house } from './default/tasks/house.ts';
+import { lighting } from './default/tasks/lighting.ts';
 import { logs } from './default/tasks/logs.ts';
+import { provisions } from './default/tasks/provisions.ts';
 import { recover } from './default/tasks/recover.ts';
 import { resupply, resupplyOf } from './default/tasks/resupply.ts';
 import { shelter } from './default/tasks/shelter.ts';
 import { spareKnife } from './default/tasks/spare_knife.ts';
 import { FULL_SLOTS, stash, surplusOf } from './default/tasks/stash.ts';
 import { sticks } from './default/tasks/sticks.ts';
+import { STOCK_CHECK_MS, stockpile, suppliesMissing } from './default/tasks/stockpile.ts';
 import { storage } from './default/tasks/storage.ts';
 import { axe, knife, shovel } from './default/tasks/tools.ts';
 import { torches } from './default/tasks/torches.ts';
@@ -61,18 +61,7 @@ export { SHELTER_DIRT } from './default/tasks/shelter.ts';
 export { STICK_MIN } from './default/tasks/sticks.ts';
 export type { Job, Memory, Notes, Situation };
 
-// The list follows getting-started day 1, minus pottery and hunting: knife and
-// axe knapped first (each needs only a stick and a flint, so it is made the
-// moment both are in hand; but a body on the map comes before them, since it
-// holds the last life's tools and a walk beats knapping them all again), two
-// hand baskets worn and the reed chest from cattails put down at the site,
-// the shovel, dirt and the house before
-// dark beside the chest, torches for the night, a backup knife into the
-// chest; day 2 chops a tree. Each task is done when the kit or the notes
-// show it, and the first task not done is the one to work on; `after` names
-// what a task waits on (dirt needs a shovel, a shelter needs dirt, torches
-// need a home to light). What the chest holds is fetched before anything is
-// gathered; a full pack is emptied before the rest of the list.
+// Dependencies are checked against the current kit; interrupted work is re-derived.
 export const TASKS: Concern[] = [
   resupply,
   recover,
@@ -84,11 +73,15 @@ export const TASKS: Concern[] = [
   dirt,
   shelter,
   stash,
+  provisions,
   sticks,
   grass,
   torches,
+  lighting,
   spareKnife,
   logs,
+  house,
+  stockpile,
 ];
 const leaveShelter: Concern = {
   id: 'leave_shelter',
@@ -100,7 +93,7 @@ const leaveShelter: Concern = {
 };
 const REFLEXES: Concern[] = [leaveShelter, hide, eat, goHome, burrow, unburrow, tunnel, shift, wait, relocate, digOut, explore];
 // What runs beside any job, through tools that only talk.
-const ALONGSIDE: Alongside[] = [copper, homeMarker];
+const ALONGSIDE: Alongside[] = [copper, homeMarker, suppliesMarker];
 // The ladder: danger, then hunger, then a storm, a bad place, night, then the
 // list. A sealed burrow is already the safest response to something prowling
 // outside: opening it to flee turns cover into a trap, and only actual damage
@@ -119,15 +112,15 @@ export const LADDER: Rung[] = [
   { job: 'hide', when: (s, tried) => s.hurt || (s.threat && !tried.has('hide')) },
   { job: 'unburrow', when: s => hungry(s) && s.burrowed && s.reserve <= 0 },
   { job: 'eat', when: s => hungry(s) },
-  { job: 'go_home', when: s => s.storm && s.home && !s.atHome },
-  { job: 'wait', when: (s, tried) => s.storm && ((s.home && s.atHome) || s.burrowed) },
-  { job: 'shift', when: (s, tried) => s.storm && !s.home && !s.burrowed && tried.has('burrow') },
+  { job: 'go_home', when: (s, tried) => s.storm && s.home && !s.atHome && !tried.has('go_home') },
+  { job: 'wait', when: s => s.storm && ((s.home && s.atHome) || s.burrowed) },
+  { job: 'shift', when: (s, tried) => s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow') },
   { job: 'burrow', when: s => s.storm },
   { job: 'relocate', when: s => s.dangerHere && !s.burrowed },
-  { job: 'go_home', when: s => s.night && s.home && !s.atHome },
+  { job: 'go_home', when: (s, tried) => s.night && s.home && !s.atHome && !tried.has('go_home') },
   { job: 'wait', when: s => s.night && ((s.home && s.atHome) || s.burrowed) },
   // A burrow that failed here (rock, nothing to seal it): walk on and dig in elsewhere, never stand in the dark.
-  { job: 'shift', when: (s, tried) => s.night && !s.home && !s.burrowed && tried.has('burrow') },
+  { job: 'shift', when: (s, tried) => s.night && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow') },
   { job: 'burrow', when: s => s.night },
   { job: 'unburrow', when: (s, tried) => s.burrowed && !tried.has('unburrow') },
 ];
@@ -224,7 +217,16 @@ export function decide(reading: Reading, memory: Memory): Decision {
   const home = memory.notes.home;
   const tried = triedNow(memory, state.position, now);
   const dwelling = memory.notes.dwelling;
-  const inside = !!home && horizontal(state.position, home) < 0.7 && Math.abs(state.position.y - home.y) < 1;
+  const houseOrigin = memory.notes.house;
+  const inside =
+    !!home &&
+    Math.abs(state.position.y - home.y) < 1 &&
+    (houseOrigin
+      ? state.position.x > houseOrigin.x + 1.3 &&
+        state.position.x < houseOrigin.x + 8.7 &&
+        state.position.z > houseOrigin.z + 1.3 &&
+        state.position.z < houseOrigin.z + 5.7
+      : horizontal(state.position, home) < 0.7);
   const sealed =
     !!dwelling &&
     [0, 1].every(dy => {
@@ -238,7 +240,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
     storm,
     hunger: satiety,
     reserve: k.reserve,
-    night: isNight(environment),
+    night:
+      isNight(environment) ||
+      (!!home &&
+        typeof environment?.calendar?.hourOfDay === 'number' &&
+        environment.calendar.hourOfDay >= 17 - Math.min(3, horizontal(state.position, home) / 120)),
     home: !!home,
     atHome: dwelling ? inside && sealed : !!home && horizontal(state.position, home) < 0.7 && Math.abs(state.position.y - home.y) < 1,
     sheltered: !!dwelling && inside && sealed,
@@ -258,8 +264,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
     storage: !!memory.notes.stash,
     bags: k.bags,
     full: k.free <= FULL_SLOTS,
-    surplus: surplusOf(k, { home: !!home, torches: k.torches }).reduce((n, i) => n + i.count, 0),
+    surplus: surplusOf(k, { home: !!home, torches: k.torches, building: !!memory.notes.construction }).reduce((n, i) => n + i.count, 0),
     short: resupplyOf(k, { home: !!home, torches: k.torches }, memory.notes.stash).reduce((n, i) => n + i.count, 0),
+    house: !!memory.notes.house,
+    lit: memory.notes.lightingDay === Math.floor(environment?.calendar?.totalDays ?? 0),
+    stocked: !!memory.notes.stash?.seen && now - memory.notes.stash.seen.at < STOCK_CHECK_MS && suppliesMissing(memory.notes.stash).length === 0,
     stashKnife: Object.keys(memory.notes.stash?.seen?.items ?? {}).some(code => code.includes('knife-')),
   };
   memory.situation = s;
@@ -323,6 +332,16 @@ export function decide(reading: Reading, memory: Memory): Decision {
     memory.job = 'leave_shelter';
     return leaveShelter.run(ctx);
   }
+  if (job === 'wait' && s.atHome && !danger && !hurt && !storm) {
+    for (const task of [knife, axe, shovel, torches, lighting, spareKnife]) {
+      if (task.done?.(s) || tried.has(task.id) || (task.after ?? []).some(id => !concern(id).done?.(s))) continue;
+      const work = task.run(ctx);
+      if ('start' in work && (work.start === 'craft_item' || work.start === 'light_shelter')) {
+        memory.job = task.id;
+        return work;
+      }
+    }
+  }
   const decision = concern(job).run(ctx);
   if ('start' in decision) memory.job = job;
   return decision;
@@ -340,6 +359,11 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
   return {
     notes: {
       home: cell(kept?.home),
+      ...(Number.isFinite(kept?.lightingDay) ? { lightingDay: kept!.lightingDay } : {}),
+      ...(cell(kept?.house) ? { house: cell(kept?.house) } : {}),
+      ...(cell(kept?.construction?.origin) && ['walls', 'floor', 'enter'].includes(kept?.construction?.phase ?? '')
+        ? { construction: { origin: cell(kept!.construction!.origin)!, phase: kept!.construction!.phase } }
+        : {}),
       stash: stashNote(kept?.stash),
       dwelling:
         cell(kept?.dwelling?.door) && typeof kept?.dwelling?.item === 'string' ? { door: cell(kept.dwelling.door)!, item: kept.dwelling.item } : null,
@@ -370,9 +394,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
 const brain: Brain<Memory, Notes> = {
   name: 'default',
   description:
-    'A cautious beginner: respawns, swims for shore, runs from monsters and from whatever hurts it, hides at night and in storms, eats when hungry, marks copper it passes, ' +
-    'knaps a knife, an axe and a shovel, weaves hand baskets and a reed chest at its site, builds a small dirt shelter beside it, crafts torches, chops logs, ' +
-    'puts the surplus away when its pack is full, and looks around when there is nothing else to do.',
+    'Early survival: forage and keep night provisions, knap tools, weave bags and storage, build and light a shelter, then an 8x5 rammed-earth home; maintain shared material supplies. Respawn, flee threats, and return before nightfall.',
   fresh,
   decide,
   wants,
@@ -380,6 +402,9 @@ const brain: Brain<Memory, Notes> = {
   summary: memory => ({
     home: memory.notes.home,
     stash: memory.notes.stash,
+    house: memory.notes.house,
+    construction: memory.notes.construction,
+    lightingDay: memory.notes.lightingDay,
     burrow: memory.burrow,
     scares: memory.scares.length,
     job: memory.job,

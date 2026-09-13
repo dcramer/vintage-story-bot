@@ -96,7 +96,7 @@ export async function digArea(field, survival, { cells, tool, minTier = 0 }) {
   };
 }
 
-export async function build(field, survival, { cells }) {
+export async function build(field, survival, { cells, verifyExisting = false }) {
   const placed = [],
     failed = [];
   const summary = () => ({ total: cells.length, placed: placed.length, failed: failed.length, moved: +field.moved.toFixed(1) });
@@ -104,6 +104,17 @@ export async function build(field, survival, { cells }) {
     await field.observe(true);
     await survival?.tend();
     if (known(field, cell) === 'solid') {
+      if (verifyExisting) {
+        if (!(await standNear(field, survival, cell))) {
+          failed.push({ ...cell, reason: 'no_stand_position' });
+          continue;
+        }
+        const selected = await selectCell(field, cell);
+        if (!selected?.key.endsWith(`:${cell.item}`)) {
+          failed.push({ ...cell, reason: 'occupied' });
+          continue;
+        }
+      }
       placed.push({ ...cell, skipped: 'occupied' });
       continue;
     }

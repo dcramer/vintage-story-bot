@@ -28,71 +28,35 @@ Three tiers, each a list in order of concern, all re-derived from the reading ev
 
 Each concern owns its predicate, the goal it starts, its say while that goal runs, and the bookkeeping when it ends; adding one is a file and a line in a list. The contract is `Concern` in `src/brain/default/concern.ts`; the default brain's parts live in `src/brain/default/{reflexes,tasks,alongside}/`, its ladder and lists in `src/brain/default.ts`.
 
-## Default brain: cautious beginner
+## Default brain: early survival
 
-A new player who stays alive first and builds up slowly. Afraid of monsters
-and of whatever just hit it, keeps its belly full, spends the night inside four walls,
-marks copper it passes for later. Follows
-[getting-started](getting-started.md) days 1–2 minus all pottery. It never
-fights; it runs or hides.
+Follows the food, flint-tool, shelter, house and shared-material baseline in
+[getting-started](getting-started.md). `TASKS` in the default brain owns task
+order; each concern owns quantities, dependencies, and completion predicates.
+Danger and survival conditions preempt ordinary work. Food recovery eats to
+half; a separate daytime task builds a carried night reserve. Return time
+accounts for distance from home, and dawn light never permits leaving before
+05:00. At night only crafting with carried ingredients and shelter lighting
+may replace the indoor wait; no sleeping.
 
-### Jobs
+A small dirt shelter provides initial cover while the full rammed-earth house
+is built. A house site requires observed level ground and clear space; unknown
+terrain is rejected. Construction keeps its chosen origin and phase across
+interruptions and restarts. Existing shell blocks must match the material;
+out-of-material results request another batch without abandoning the site.
+The house becomes home only after its shell, lowered floor, entry and seal
+are verified. These goals report client-observed changes, not server ACKs.
 
-| Job | Goal | When |
-| --- | --- | --- |
-| hide | `travel` away from the threat, or home / straight ahead; stopped once nothing has shown for 20 s and the scare is 16 blocks behind | Monster seen or heard near, or hurt by something unseen |
-| recover | `retrieve_body` | A death marker is on the map, by day; before any tool is knapped again, since the body holds the last life's |
-| copper | `add_map_waypoint` Copper and a `chat` line, alongside whatever runs | A copper nugget sighted with no Copper marker within 32 blocks |
-| dead | `respawn` | Dead with a respawn offered |
-| close | `close_dialog` | The controls blocked by a native dialog a player closes with Escape (a recipe selector, the handbook, a container), three presses in ten seconds at most |
-| swim | `look` and `move` with jump held | In deep water with no goal running |
-| go_home | `travel` home | Storm or night, away from home |
-| burrow | `burrow` | Night with no home: a pocket in a bank of earth when a block to seal it is carried, else a hole two blocks straight down where it stands, sealed with what it digs; never cut short by a threat |
-| unburrow | `dig_area` on the mouth | Morning, dug in |
-| wait | none | Storm at home, night at home, dug in for the night, or dug in with something prowling outside |
-| shift | `travel` 32 blocks on the current heading | Night or storm with no home and a burrow that failed here: dig in elsewhere, never stand in the dark |
-| tunnel | `dig_out` away from the threat, else `dig_area` on the mouth | Dug in with a threat outside for three minutes of daylight: stairs out the far side; rock stops them (no pickaxe), so a failed tunnel is set aside and the mouth is opened to run |
+Notes include `home`, `dwelling` (door and sealing material), `construction`,
+`house`, `lightingDay`, and `stash`. Being near home does not mean indoors:
+the body must be inside and both door cells observed solid. Entry opens the
+door, walks in, and seals it; departure opens it first. Failed re-entry falls
+back to emergency cover. Carried sealing blocks and building materials stay
+out of routine surplus deposits. Torches are lit through native firestarter
+use and replaced daily.
 
-Wants (what every walk stops for within six blocks): berries on a ripe bush, an edible mushroom and a wild hive always; loose sticks while short of a few; loose flint and stones while a tool head is wanted and nothing knappable is carried.
-| eat | `forage` to half with two bites kept; `eat` alone when dug in with food | Satiety below 20%; eats what is carried when hungry (in the burrow too, off an earth wall), keeps the rest, searches ever farther in one direction for more, and when starving stomachs a bite that costs a point of health |
-| dirt | `harvest soil-` | No home and fewer than 28 dirt |
-| shelter | `travel` to six blocks west of the chest when one is noted, then `shelter` | Enough dirt (by day, or at night with nowhere else) |
-| knife | `gather` one stick or flint if short, `knap` a knife blade, `craft_item` the knife | No knife; first of the kit, the moment a stick and a flint are in hand |
-| axe, shovel | the same, one tool per task | No axe; no shovel |
-| sticks | `gather stick` (loose sticks, then branchy leaves in reach) | Fewer than 4 sticks, once there is a home |
-| spare_knife | a second knife made like the first, `store_items` into the chest | The chest was never seen holding a knife |
-| grass | `harvest tallgrass` | Wants torches, no dry grass or cattail tops |
-| torches | `craft_item torch` | Fewer than 2 torches |
-| logs | `fell_tree` | Fewer than 8 logs |
-| bags | `harvest coopersreed` with the knife (the chest's tops in the same trip), `craft_item` a hand basket, `move_item` into a bag slot | Fewer than 2 bags worn |
-| storage | `harvest coopersreed` with the knife, `craft_item` a reed chest (the game's stationary basket), `build` it where it stands | A knife and no chest noted; that spot is the site |
-| stash | `store_items` into the chest: everything the kit does not keep on hand, most first | A chest noted and the pack full (one free slot or none) with something to put away |
-| resupply | `take_items` from the chest | The chest was last seen holding something the kit is short of (sticks, flint, dirt, grass, torches, logs); before gathering it |
-| explore | `explore` | Fed, safe, daylight, kit done |
-
-Order of concern, and the interrupt rule for a running job: danger (a hostile
-near, or a hit), a storm, food in hand when hungry, a place that keeps scaring,
-night (dig in, or go home), then the day-1 list, then exploring. A running job
-is cut short only when the ladder itself would rather do one of the pressing
-things above the list; a flight, a dig-out and a night dig-in are never cut
-short by a threat. The list (`TASKS` in the brain) follows [getting-started](getting-started.md) day 1 minus pottery and hunting, then day 2's tree. It is a task tracker: each task says
-when the kit shows it done, the order carries the dependencies (a tool needs a
-stick and a head, dirt needs a shovel, a shelter needs dirt, torches need a home
-to light; a tool needs one stick and one flint, so the knife comes first and
-a few sticks on hand wait for a home), and the first task not done is the one worked on. `brain` status
-shows every task as done, next, open or set aside. A failed job is set aside while the bot stays within 24
-blocks of where it failed, for five minutes at most; the next job in the ladder
-runs meanwhile, so a failure never leaves it standing about. The chest is the
-one container it uses: its key and what it held when last closed are notes; a
-chest that cannot be opened again is forgotten and made again. Tools, torches
-and food stay in the pack, and so do the sticks, logs, dirt and grass the list
-keeps on hand; a task with a place (the chest) walks there first.
-
-### Tiny shelter
-
-Not the full house: a one-door box 3 wide by 3 deep, walls 2 high, flat roof,
-from dirt (23 blocks), door 1 wide and 2 high sealed with 2 blocks from
-inside, one torch on the floor once shut. Built by day near where it stands;
-the spot becomes home.
-
-A noted dwelling is safe only when the body is inside and both door cells are observed solid. `enter_shelter` opens its seal, enters, and seals it again; morning work opens the door first. Keep four soil blocks for closing it. Night lasts until 05:00 even when dawn light arrives earlier.
+Shared supplies have explicit stored targets and a map marker. Container
+counts are only the last opened observation; periodic inspection detects
+teammates taking items. Gathering and deposits retain the bot's working kit.
+Container transfers are verified through inventory deltas. `brain` status
+shows the current concern, construction phase, and each task's readiness.

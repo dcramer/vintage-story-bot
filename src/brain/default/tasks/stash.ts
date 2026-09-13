@@ -14,11 +14,15 @@ import { TORCH_MIN } from './torches.ts';
 export const FULL_SLOTS = 1;
 
 // What to put away, by code with a count, most first; at most what one goal takes.
-export function surplusOf(k: Kit, { home, torches }: { home: boolean; torches: number }): { item: string; count: number }[] {
+export function surplusOf(
+  k: Kit,
+  { home, torches, building = false }: { home: boolean; torches: number; building?: boolean },
+): { item: string; count: number }[] {
   const keep = (code: string) => {
     if (code === 'game:stick') return STICK_MIN;
     if (code.includes('log-')) return LOG_MIN;
-    if (code.includes('soil-')) return home ? 4 : SHELTER_DIRT;
+    if (code.includes('soil-')) return home && !building ? 4 : SHELTER_DIRT;
+    if (/^game:(rammed-|packeddirt|hay-|chest-normal-)/.test(code)) return Infinity;
     if (code.includes('drygrass') || code.includes('cattailtops')) return torches < TORCH_MIN ? Infinity : 0;
     if (code === 'game:flint' || /^game:stone-/.test(code)) return k.knife && k.axe && k.shovel ? 0 : Infinity;
     return 0;
@@ -46,7 +50,7 @@ export const stash: Concern = {
   after: ['storage'],
   run: ctx => {
     const note = ctx.memory.notes.stash as Stash;
-    const items = surplusOf(ctx.k, { home: !!ctx.home, torches: ctx.k.torches });
+    const items = surplusOf(ctx.k, { home: !!ctx.home, torches: ctx.k.torches, building: !!ctx.memory.notes.construction });
     return (
       goTo(ctx, note, 'pack full, going home to put things away') ?? {
         start: 'store_items',

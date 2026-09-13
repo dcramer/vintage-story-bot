@@ -123,6 +123,9 @@ export type Situation = {
   short: number;
   // The chest was last seen holding a knife.
   stashKnife: boolean;
+  stocked?: boolean;
+  house?: boolean;
+  lit?: boolean;
 };
 
 export const environmentalHurt = (events: any[]) =>

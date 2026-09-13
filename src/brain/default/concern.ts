@@ -7,6 +7,7 @@
 import type { Decision, Reading } from '../../runtime/brain.ts';
 import { horizontal } from '../../runtime/navigation/terrain.ts';
 import type { Kit, Situation } from './situation.ts';
+import type { Construction } from './tasks/house.ts';
 
 export type Cell = { x: number; y: number; z: number };
 export type Job =
@@ -36,7 +37,11 @@ export type Job =
   | 'bags'
   | 'stash'
   | 'resupply'
-  | 'leave_shelter';
+  | 'leave_shelter'
+  | 'stockpile'
+  | 'house'
+  | 'provisions'
+  | 'lighting';
 // The container the bot keeps things in: its observed key (cell and block code), and what it
 // held when last closed. Unknown until opened; stale once anyone else has been at it.
 export type Stash = {
@@ -51,6 +56,9 @@ export type Stash = {
 // left in its own chest (re-verified when it is opened); what the eye saw of the world is Knowledge.
 export type Notes = {
   home: Cell | null;
+  house?: Cell | null;
+  lightingDay?: number | null;
+  construction?: Construction | null;
   dwelling?: { door: Cell; item: string } | null;
   stash: Stash | null;
 };
@@ -233,5 +241,6 @@ export function noteContents(memory: Memory, last: Ended, now: number) {
 export function setHome(memory: Memory, home: Cell | null) {
   memory.notes.home = cell(home);
   memory.notes.dwelling = null;
+  memory.notes.lightingDay = null;
   memory.homeMarked = false;
 }

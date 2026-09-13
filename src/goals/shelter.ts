@@ -58,7 +58,9 @@ export default defineGoal({
       const torchCode = torch ? slots.find(s => s.code?.includes('torch-basic'))?.code : null;
       if (torchCode) {
         field.report('lighting', { origin });
-        lit = (await build(field, survival, { cells: [{ x: origin.x + 1, y: origin.y, z: origin.z + 1, item: torchCode }] })).ok;
+        lit =
+          (await build(field, survival, { cells: [{ x: origin.x + 1, y: origin.y, z: origin.z + 1, item: torchCode }] })).ok &&
+          torchCode.includes('torch-basic-lit-');
       }
       return { ok: true, goal: 'shelter', origin, home, item, placed: walls.placed + seal.placed, lit, verification: 'client_observed' };
     }),
