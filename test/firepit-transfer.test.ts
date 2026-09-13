@@ -4,6 +4,31 @@ import { makeFirepit } from '../src/goals/firepit.ts';
 import { moveItems } from '../src/goals/store_items.ts';
 import { until } from '../src/support/fieldwork.ts';
 
+test('firepit creation recognizes a finished pit when terrain memory is stale', async () => {
+  const cell = { x: 0, y: 1, z: 0 };
+  const state = {
+    position: { x: 1.5, y: 1, z: 0.5, dimension: 0 },
+    body: { eyeHeight: 1.6 },
+  };
+  const field: any = {
+    latest: state,
+    observe: async () => state,
+    aim: async () => {},
+    send: async request => (request.action === 'inspect_target' ? { key: 'block:0:0:1:0:game:firepit-lit', code: 'game:firepit-lit' } : { ok: true }),
+    env: { map: { get: () => undefined } },
+  };
+
+  const result = await makeFirepit(field, cell);
+
+  assert.deepEqual(result, {
+    ok: true,
+    goal: 'firepit',
+    cell,
+    code: 'game:firepit-lit',
+    verification: 'client_observed',
+  });
+});
+
 test('firepit creation retries only after a verified no-effect grass placement', async () => {
   const cell = { x: 0, y: 1, z: 0 };
   let aimed = cell;

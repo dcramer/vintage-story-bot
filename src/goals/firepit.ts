@@ -20,7 +20,14 @@ export async function makeFirepit(field, cell) {
     if (!selected?.key.endsWith(`:${code}`)) return failure('firepit_not_observed');
     return { ok: true, goal: 'firepit', cell, code, verification: 'client_observed' };
   }
-  if (!stage && (!block || block.hazard || (code && code !== 'game:air'))) return failure('site_not_empty');
+  if (!stage && (!block || block.hazard || (code && code !== 'game:air'))) {
+    // Container use can leave terrain memory stale even though the native
+    // selection already sees the finished pit. Revalidate before treating the
+    // remembered site as occupied and abandoning it.
+    const selected = await selectCell(field, cell);
+    if (complete.test(selected?.code ?? '')) return { ok: true, goal: 'firepit', cell, code: selected.code, verification: 'client_observed' };
+    return failure('site_not_empty');
+  }
   const floor = { ...cell, y: cell.y - 1 };
   if (!supportedFloor(field.env.map.get(floor.x, floor.y, floor.z), cell.y)) return failure('unsupported_site');
   const inventory = await field.send({ action: 'inventory' });
