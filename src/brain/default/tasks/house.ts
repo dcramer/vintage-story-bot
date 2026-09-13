@@ -50,21 +50,36 @@ export const house: Concern = {
     }
     const count = (item: string) => k.slots.reduce((n, s) => n + (s.code?.includes(item) ? s.quantity : 0), 0);
     if (plan.phase === 'walls' && count(RAMMED) < 6) {
+      // The handbook's packed-dirt recipe accepts one soil variant per batch;
+      // high-fertility soil and mixed partial stacks cannot satisfy that batch.
+      const soils = ['verylow', 'low', 'medium'].map(grade => ({ grade, count: count(`game:soil-${grade}-none`) }));
+      soils.sort((a, b) => b.count - a.count);
+      let soil = soils[0];
+      if (!soil.count) {
+        const seen = [...(ctx.reading?.terrain?.cells?.values() ?? [])]
+          .filter((c: any) => /^game:soil-(verylow|low|medium)-/.test(c.code ?? '') && !c.hazard)
+          .sort(
+            (a: any, b: any) =>
+              Math.hypot(a.x - ctx.state.position.x, a.y - ctx.state.position.y, a.z - ctx.state.position.z) -
+              Math.hypot(b.x - ctx.state.position.x, b.y - ctx.state.position.y, b.z - ctx.state.position.z),
+          )[0] as any;
+        soil = soils.find(s => seen?.code?.startsWith(`game:soil-${s.grade}-`)) ?? soils.find(s => s.grade === 'low')!;
+      }
       if (count('game:packeddirt') >= 6)
         return {
           start: 'craft_item',
           args: { output: RAMMED, count: Math.min(24, Math.floor(count('game:packeddirt') / 6) * 6), timeoutMs: 300000 },
           why: 'rammed earth for the house',
         };
-      if (k.dirt >= 10)
+      if (soil.count >= 10)
         return {
           start: 'craft_item',
-          args: { output: 'game:packeddirt', count: Math.min(24, Math.floor((k.dirt - 4) / 6) * 6), timeoutMs: 300000 },
+          args: { output: 'game:packeddirt', count: Math.min(24, Math.floor((soil.count - 4) / 6) * 6), timeoutMs: 300000 },
           why: 'packing soil for rammed earth',
         };
       return {
         start: 'harvest',
-        args: { match: 'soil-', item: 'soil-', count: 28 - k.dirt, tool: 'Shovel', timeoutMs: 600000 },
+        args: { match: `soil-${soil.grade}-`, item: `soil-${soil.grade}-none`, count: 28 - soil.count, tool: 'Shovel', timeoutMs: 600000 },
         why: 'soil for the house, keeping its door reserve',
       };
     }

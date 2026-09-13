@@ -33,6 +33,11 @@ test('house: partial material batches resume the same site without claiming a ho
   assert.equal(packed.start, 'craft_item');
   assert.equal(packed.args.count, 6, 'do not request more crafts than the carried batch supports');
   craft.schema.parse(packed.args);
+  ctx.k = kit(inventory({ 'game:soil-high-none': 64, 'game:soil-low-none': 5, 'game:soil-medium-none': 5 }));
+  const soil: any = house.run(ctx);
+  assert.equal(soil.start, 'harvest', 'incompatible stacks cannot be counted as a packed-dirt batch');
+  assert.equal(soil.args.item, 'soil-low-none');
+  assert.equal(soil.args.count, 23);
   ctx.k = kit(inventory({ 'game:rammed-light-plain': 6 }));
   const walls: any = house.run(ctx);
   assert.equal(walls.start, 'house');
