@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { matchesHarvestBlock } from '../src/goals/harvest.ts';
+import { collectHarvestDrop, failedDropRetryMs, matchesHarvestBlock } from '../src/goals/harvest.ts';
 import { Search } from '../src/support/search.ts';
 
 test('top gathering leaves harvested cattail stems for a root request', () => {
@@ -9,6 +9,28 @@ test('top gathering leaves harvested cattail stems for a root request', () => {
   assert.equal(matchesHarvestBlock(cut, 'coopersreed', 'cattailroot'), true);
   assert.equal(matchesHarvestBlock(cut, 'coopersreed', 'cattail'), true);
   assert.equal(matchesHarvestBlock({ ...cut, code: 'game:tallplant-coopersreed-water-normal-free' }, 'coopersreed', 'cattailtops'), true);
+});
+
+test('a harvest does not count an uncollectable drop as productive or retry it immediately', async () => {
+  const drop = { key: 'entity:9', kind: 'item', code: 'game:cattailroot' };
+  const reports = [];
+  const skips = [];
+  const field = {
+    report: (phase, details) => reports.push({ phase, ...details }),
+    skip: (object, ms) => skips.push({ object, ms }),
+    seen: new Map([[drop.key, drop]]),
+  };
+  const collected = await collectHarvestDrop(field, drop, async () => ({
+    ok: false,
+    reason: 'pickup_failed',
+    target: drop.key,
+    wanted: 1,
+    gained: 0,
+  }));
+  assert.equal(collected, false);
+  assert.deepEqual(skips, [{ object: drop, ms: failedDropRetryMs }]);
+  assert.equal(field.seen.has(drop.key), false);
+  assert.deepEqual(reports, [{ phase: 'collecting', target: drop.key }]);
 });
 
 test('a search reports the actual failed destination when it discovers a pit', () => {

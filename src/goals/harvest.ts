@@ -10,6 +10,23 @@ import { terrainTargets } from '../support/terrain-targets.ts';
 import { collectItem } from './collect_item.ts';
 
 const includes = (code, part) => typeof code === 'string' && code.includes(part);
+export const failedDropRetryMs = 600000;
+
+export async function collectHarvestDrop(field, object, collect = collectItem) {
+  field.report('collecting', { target: object.key });
+  let collected = false;
+  try {
+    const result = await collect(field, { target: object.key, expectedItem: object.code, radius: 8 });
+    collected = result.ok;
+    if (!collected) field.skip(object, failedDropRetryMs);
+  } catch (error) {
+    if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
+    field.skip(object, failedDropRetryMs);
+  }
+  field.seen.delete(object.key);
+  return collected;
+}
+
 export const matchesHarvestBlock = (object, match, item) => {
   if (object.kind !== 'block' || !includes(object.code, match)) return false;
   // The reed handbook combines both states' drops. Cut stems only yield
@@ -76,18 +93,7 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
       (lowest ? a.point.y - b.point.y : Math.floor(b.point.y) - Math.floor(a.point.y)) ||
       horizontal(a.point, field.latest.position) - horizontal(b.point, field.latest.position),
     take: async o => {
-      if (o.kind === 'item') {
-        field.report('collecting', { target: o.key });
-        try {
-          const result = await collectItem(field, { target: o.key, expectedItem: o.code, radius: 8 });
-          if (!result.ok) field.skip(o, 20000);
-        } catch (error) {
-          if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
-          field.skip(o, 20000);
-        }
-        field.seen.delete(o.key);
-        return true;
-      }
+      if (o.kind === 'item') return collectHarvestDrop(field, o);
       const slot = await held();
       inventory = await field.send({ action: 'inventory' });
       field.report('digging', { target: o.key });
