@@ -67,6 +67,7 @@ export async function moveItems(field, { container, item, count = Infinity, dire
   };
   const refused = new Set();
   let moved = 0;
+  let changes = 0;
   while (moved < count) {
     const [from, to] = sides(view);
     const source = from.find(s => includes(s.code, item) && s.quantity > 0 && !refused.has(id(s.address)));
@@ -84,6 +85,14 @@ export async function moveItems(field, { container, item, count = Infinity, dire
       quantity,
       expectedState: view.container.state,
     });
+    // Heat and cooking can change stack attributes between the read and click.
+    // This refusal explicitly guarantees no transfer; read both sides before
+    // another bounded attempt. Never retry a submitted, unverified transfer.
+    if (!result.ok && result.error === 'Container changed; read open_container again. Nothing moved.') {
+      if (++changes >= 5) return { moved, reason: 'container_changed' };
+      view = await read();
+      continue;
+    }
     if (!result.ok && !/No items moved/.test(result.error ?? '')) throw Error(result.error);
     let verified = false;
     for (let i = 0; i < 10 && result.moved > 0; i++) {

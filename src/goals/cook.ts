@@ -5,6 +5,7 @@ import { parseBlockKey, selectCell } from '../support/blocks.ts';
 import { learn } from '../support/facts.ts';
 import { ignite } from '../support/fire.ts';
 import { edible } from '../support/food.ts';
+import { equip } from '../support/inventory.ts';
 import { cleanName, runField } from '../support/task.ts';
 import { closeContainer, moveItems, openContainer } from './store_items.ts';
 
@@ -55,12 +56,15 @@ export async function cook(field, { target, item, count, fuel }) {
     const selected = await selectCell(field, cell);
     if (!selected) return summary({ ok: false, reason: 'firepit_not_observed' });
     if (!selected.key.endsWith(':game:firepit-lit')) {
+      const hand = field.latest.hotbar.find(s => s.slot === field.latest.activeSlot)?.code ?? null;
       const lit = await ignite(field, {
         target: selected.key,
         holdMs: 4000,
         lit: 'game:firepit-lit',
       });
       if (!lit.ok) return summary({ ok: false, reason: 'ignition_unverified', detail: lit });
+      // Put away the firestarter before the click that opens the hot firepit.
+      await equip(field, { item: hand === 'game:firestarter' ? null : hand });
     }
     container = await open();
     while (moved < count) {
