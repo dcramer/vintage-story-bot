@@ -377,7 +377,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     }
   }
   if (job === 'wait' && s.atHome && !danger && !hurt && !storm) {
-    for (const task of [knife, axe, shovel, torches, lighting, spareKnife]) {
+    for (const task of [knife, axe, shovel, bags, storage, torches, lighting, shelter, spareKnife]) {
       if (task.done?.(s) || tried.has(task.id) || (task.after ?? []).some(id => !concern(id).done?.(s))) continue;
       const work = task.run(ctx);
       if ('start' in work && (work.start === 'craft_item' || work.start === 'light_shelter')) {
