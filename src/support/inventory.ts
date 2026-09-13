@@ -30,6 +30,38 @@ export async function equip(field, { item, tool, minTier = 0, slot }: { item?: a
         ? source
         : slots.find(s => s.inventory === 'hotbar' && !s.code)
       : slots.find(s => s.inventory === 'hotbar' && s.slot === slot);
+  if (!destination && slot === undefined && source.inventory !== 'hotbar') {
+    const storage = slots.find(s => s.inventory === 'backpack' && !s.bag && !s.code);
+    const displaced = slots.find(s => s.inventory === 'hotbar' && s.code && !s.tool && s.slot !== field.latest.activeSlot && s.code !== source.code);
+    if (storage && displaced) {
+      field.report('making hotbar room', { item: displaced.code, from: displaced.slot, to: storage.slot });
+      await field.observe();
+      await field.send({
+        action: 'inventory_move',
+        from: { inventory: 'hotbar', slot: displaced.slot },
+        to: { inventory: 'backpack', slot: storage.slot },
+        quantity: displaced.quantity,
+        expectedState: inventory.state,
+      });
+      const transfer = await field.until(
+        (_, contents) => {
+          const current = ownedSlots(contents);
+          const freed = current.find(s => s.inventory === 'hotbar' && s.slot === displaced.slot);
+          const stored = current.find(s => s.inventory === 'backpack' && s.slot === storage.slot);
+          return (
+            !freed?.code &&
+            stored?.code === displaced.code &&
+            stored.quantity === displaced.quantity &&
+            itemCount(contents, displaced.code) === itemCount(inventory, displaced.code)
+          );
+        },
+        { timeoutMs: 2000, everyMs: 200, read: () => field.send({ action: 'inventory' }) },
+      );
+      if (!transfer.met) throw Error('Hotbar room transfer unverified; inspect inventory before another attempt');
+      inventory = transfer.read;
+      destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === displaced.slot);
+    }
+  }
   if (!destination) throw Error('Equip needs an empty ordinary hotbar slot');
   const same = source.inventory === 'hotbar' && source.slot === destination.slot;
   if (!same && destination.code) throw Error('Requested hotbar slot occupied; no swap or overwrite');

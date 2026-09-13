@@ -4,6 +4,7 @@ import { elevationDetourDistance, routeRegressed, travel } from '../src/goals/tr
 import { remember } from '../src/support/facts.ts';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe, until } from '../src/support/fieldwork.ts';
 import { eatingLooks, edible, foodHotbarRoom, foodRecoverySatisfied, foodTolerance, foodYield, safeFood, shouldEat } from '../src/support/food.ts';
+import { equip } from '../src/support/inventory.ts';
 import { leafBlock, leafClearCandidate, threatAllowsLeafClearing } from '../src/support/leaf-clearing.ts';
 import { Places } from '../src/support/places.ts';
 import {
@@ -100,6 +101,60 @@ test('eating makes reversible hotbar room in worn-basket storage', () => {
     quantity: 9,
     expectedState: 'full-pack',
   });
+});
+
+test('equipping makes verified hotbar room in worn-basket storage', async () => {
+  let activeSlot = 1;
+  let packState = 0;
+  const inventories: any[] = [
+    {
+      name: 'hotbar',
+      slots: [
+        { slot: 0, code: 'game:fern-eaglefern', quantity: 1, tool: null },
+        { slot: 1, code: 'game:knife-flint', quantity: 1, tool: 'Knife', toolTier: 1, durability: 10 },
+      ],
+    },
+    {
+      name: 'backpack',
+      slots: [
+        { slot: 0, code: 'game:drygrass', quantity: 1, bag: false },
+        { slot: 1, code: null, quantity: 0, bag: false },
+      ],
+    },
+  ];
+  const contents = () => ({ state: `pack-${packState}`, inventories: structuredClone(inventories) });
+  const field: any = {
+    latest: { activeSlot },
+    report: () => {},
+    wait: async () => {},
+    observe: async () => field.latest,
+    send: async request => {
+      if (request.action === 'inventory') return contents();
+      if (request.action === 'inventory_move') {
+        assert.equal(request.expectedState, `pack-${packState}`);
+        const from = inventories.find(i => i.name === request.from.inventory).slots[request.from.slot];
+        const to = inventories.find(i => i.name === request.to.inventory).slots[request.to.slot];
+        Object.assign(to, { code: from.code, quantity: request.quantity, tool: from.tool ?? null });
+        Object.assign(from, { code: null, quantity: 0, tool: null });
+        packState++;
+        return { ok: true };
+      }
+      if (request.action === 'select') {
+        activeSlot = request.slot;
+        field.latest.activeSlot = activeSlot;
+        return { ok: true };
+      }
+      return { ok: true };
+    },
+    until: (condition, options) => until(field, condition, options),
+  };
+
+  const result = await equip(field, { item: 'game:drygrass' });
+
+  assert.equal(result.item, 'game:drygrass');
+  assert.equal(result.slot, 0);
+  assert.equal(inventories[0].slots[0].code, 'game:drygrass');
+  assert.equal(inventories[1].slots[1].code, 'game:fern-eaglefern');
 });
 
 test('a block is forage when the pages read say it yields food now', () => {
