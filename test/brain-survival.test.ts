@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { recoverBurrow } from '../src/brain/default/reflexes/burrow.ts';
+import { makeBag } from '../src/brain/default/tasks/bags.ts';
 import { house, houseSite } from '../src/brain/default/tasks/house.ts';
 import { lightingDay, shelterLight } from '../src/brain/default/tasks/lighting.ts';
 import { recoverableBody } from '../src/brain/default/tasks/recover.ts';
@@ -213,4 +214,13 @@ test('home maintenance repairs observed shell gaps, never unknown cells or the o
   ctx.k.slots = [];
   ctx.s = { night: true };
   assert.ok('wait' in repairHome.run(ctx as any), 'no nighttime gathering for repairs');
+});
+
+test('bag preparation counts recoverable grid tops before gathering more', () => {
+  const decision = makeBag({
+    k: { cattailtops: 9 },
+    reading: { inventory: { inventories: [{ name: 'craftinggrid', slots: [{ slot: 0, code: 'game:cattailtops', quantity: 1 }] }] } },
+  });
+  assert.equal(decision.start, 'craft_item');
+  assert.equal(decision.args.output, 'game:basket-normal-reed');
 });

@@ -910,18 +910,12 @@ test('brain: cooking makes inventory room before felling fuel', () => {
     memory,
   );
 
-  assert.deepEqual(choice.act, [
-    {
-      action: 'drop',
-      from: { inventory: 'hotbar', slot: 9 },
-      quantity: 1,
-      expectedState: 'full-pack',
-    },
-  ]);
-  assert.match(choice.why, /hotbar slot/);
+  assert.equal(choice.start, 'craft_item');
+  assert.equal(choice.args.output, 'game:basket-normal-reed');
+  assert.equal(choice.args.count, 1);
 });
 
-test('brain: basket crafting moves a spare stack into worn-basket storage before weaving', () => {
+test('brain: basket crafting leaves spare stacks for the craft goal to place its output', () => {
   const memory = fresh();
   memory.notes.cookUntil = 10_000;
   const full = {
@@ -962,15 +956,8 @@ test('brain: basket crafting moves a spare stack into worn-basket storage before
     memory,
   );
 
-  assert.deepEqual(choice.act, [
-    {
-      action: 'move_item',
-      from: { inventory: 'hotbar', slot: 7 },
-      to: { inventory: 'backpack', slot: 4 },
-      quantity: 1,
-      expectedState: 'full-hotbar',
-    },
-  ]);
+  assert.equal(choice.start, 'craft_item');
+  assert.equal(choice.args.output, 'game:basket-normal-reed');
 });
 
 test('brain: cooking clears observed snow before it can know whether the firepit floor is supported', () => {
