@@ -1,11 +1,15 @@
-import { house, SHELTER_MATERIAL, shelter } from '../../../support/structures.ts';
+import { house, houseScaffold, SHELTER_MATERIAL, shelter, shelterScaffold } from '../../../support/structures.ts';
 import type { Concern, Notes } from '../concern.ts';
 
 // The doorway is deliberately opened by entry/exit; those goals own its seal.
 // Only observed empty shell cells are damage we can safely replace. Unknown
 // terrain or a different occupied block is never permission to demolish it.
 export function homeDamage(reading, notes: Notes) {
-  const cells = notes.house ? house(notes.house, SHELTER_MATERIAL) : notes.starter ? shelter(notes.starter, SHELTER_MATERIAL) : [];
+  const cells = notes.house
+    ? [houseScaffold(notes.house, SHELTER_MATERIAL), ...house(notes.house, SHELTER_MATERIAL)]
+    : notes.starter
+      ? [...shelterScaffold(notes.starter, SHELTER_MATERIAL), ...shelter(notes.starter, SHELTER_MATERIAL)]
+      : [];
   return cells.filter(cell => {
     const block = reading.terrain?.get(cell.x, cell.y, cell.z);
     return block && !block.hazard && block.boxes.length === 0 && (!block.code || block.code === 'game:air');
@@ -24,8 +28,8 @@ export const repairHome: Concern = {
     if (carried > 0)
       return {
         start: 'build',
-        args: { cells: cells.slice(0, carried), timeoutMs: 600000 },
-        why: 'replacing observed missing home walls or roof blocks',
+        args: { cells: cells.slice(0, Math.min(carried, 8)), timeoutMs: 600000 },
+        why: 'replacing observed missing home walls, roof or access steps',
       };
     const batch = Math.ceil(cells.length / 6) * 6;
     const packed = count('game:packeddirt');

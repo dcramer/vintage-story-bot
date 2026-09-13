@@ -90,7 +90,7 @@ around it. Additional chests use the remaining side-wall slots.
 
 Maintenance is recurring work, not a construction-complete flag. While at the
 structure, each brain reading compares observed walls and roof with its recorded
-template. Confirmed empty shell cells request rammed-earth repairs through
+template, including exterior roof-access steps. Confirmed empty cells request rammed-earth repairs through
 `build`; its normal block-delta verification applies. Recheck after each repair
 and interruption. Unknown cells remain unknown, and different occupied blocks
 are preserved. The entry/exit goals maintain the two-cell seal; lighting checks

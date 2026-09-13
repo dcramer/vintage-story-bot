@@ -11,7 +11,7 @@ import brain, {
   SHELTER_DIRT,
   STICK_MIN,
 } from '../src/brain/default.ts';
-import { shelter as shelterCells } from '../src/support/structures.ts';
+import { shelter as shelterCells, shelterScaffold } from '../src/support/structures.ts';
 
 const decide = (reading, memory): any => decision(reading, memory);
 
@@ -1888,7 +1888,10 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
           code:
             y === 100 && x === 3 && z === -1
               ? 'game:torch-basic-lit-up'
-              : shelterCells({ x: 1, y: 100, z: -2 }, 'game:rammed-light-plain').some(c => c.x === x && c.y === y && c.z === z)
+              : [
+                    ...shelterCells({ x: 1, y: 100, z: -2 }, 'game:rammed-light-plain'),
+                    ...shelterScaffold({ x: 1, y: 100, z: -2 }, 'game:rammed-light-plain'),
+                  ].some(c => c.x === x && c.y === y && c.z === z)
                 ? 'game:rammed-light-plain'
                 : 'game:air',
         }),

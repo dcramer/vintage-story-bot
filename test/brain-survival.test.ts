@@ -348,6 +348,17 @@ test('home maintenance repairs observed shell gaps, never unknown cells or the o
   ctx.k.slots = [];
   ctx.s = { night: true };
   assert.ok('wait' in repairHome.run(ctx as any), 'no nighttime gathering for repairs');
+  const extensive: any = repairHome.run({
+    ...ctx,
+    reading: { terrain: { get: () => ({ code: 'game:air', boxes: [], hazard: null }) } },
+    k: { slots: [{ code: 'game:rammed-light-plain', quantity: 64 }] },
+  } as any);
+  assert.equal(extensive.args.cells.length, 8, 'large repairs must fit the public build request limit');
+  assert.deepEqual(
+    extensive.args.cells.slice(0, 3),
+    shelterScaffold(notes.starter, 'game:rammed-light-plain'),
+    'restore roof access before the shell',
+  );
 });
 
 test('bag preparation counts recoverable grid tops before gathering more', () => {
