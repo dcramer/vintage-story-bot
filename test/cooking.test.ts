@@ -2,6 +2,63 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { cook } from '../src/goals/cook.ts';
 import { remember } from '../src/support/facts.ts';
+import { ignite } from '../src/support/fire.ts';
+
+test('ignition keeps trying verified no-effects beyond the old stochastic cap', async () => {
+  const target = 'block:0:0:0:0:game:firepit-cold';
+  const state = {
+    activeSlot: 0,
+    alive: true,
+    body: { eyeHeight: 1.6 },
+    capabilities: ['long_hand_hold'],
+    controlReady: true,
+    position: { x: 2.5, y: 0, z: 0.5, dimension: 0 },
+  };
+  const inventory = {
+    state: 'inventory-state',
+    inventories: [
+      {
+        name: 'hotbar',
+        slots: [{ slot: 0, code: 'game:firestarter', quantity: 1, durability: 20 }],
+      },
+      { name: 'backpack', slots: [] },
+    ],
+  };
+  let attempts = 0;
+  const selected = () => ({
+    ok: true,
+    code: attempts >= 13 ? 'game:firepit-lit' : 'game:firepit-cold',
+    key: attempts >= 13 ? 'block:0:0:0:0:game:firepit-lit' : target,
+  });
+  const send = async request => {
+    if (request.action === 'observe') return state;
+    if (request.action === 'aim_cell' || request.action === 'select' || request.action === 'stop') return { ok: true };
+    if (request.action === 'inspect_target') return selected();
+    if (request.action === 'inventory') return structuredClone(inventory);
+    if (request.action === 'interact') {
+      attempts++;
+      return { ok: true };
+    }
+    throw Error(`Unexpected action ${request.action}`);
+  };
+  const field = {
+    latest: state,
+    env: { send },
+    send,
+    observe: async () => state,
+    report: () => {},
+    guard: value => value,
+    wait: async () => {},
+    until: async predicate => {
+      assert.equal(predicate(state), true);
+      return { met: true, state };
+    },
+  };
+
+  const result = await ignite(field, { target, lit: 'firepit-lit', holdMs: 1 });
+  assert.equal(result.ok, true);
+  assert.equal(attempts, 13);
+});
 
 test('cooking refuses to ignite when it cannot move clear of the cold firepit', async () => {
   remember('test:root', { combustible: { smeltsInto: 'test:cooked-root', smeltedRatio: 1 } });
