@@ -119,7 +119,11 @@ export const foodEnded: Concern['ended'] = (last, memory, reading) => {
     memory.notes.firepit = null;
     memory.notes.cooking = null;
   }
-  if (last.kind === 'firepit' && ['site_not_empty', 'unsupported_site'].includes(last.reason ?? last.result?.reason ?? '') && !memory.notes.cooking)
+  if (
+    last.kind === 'firepit' &&
+    ['site_not_empty', 'unsupported_site', 'support_not_selectable', 'no_observed_effect'].includes(last.reason ?? last.result?.reason ?? '') &&
+    !memory.notes.cooking
+  )
     memory.notes.firepit = null;
   if (last.kind === 'cook') {
     const remaining = (memory.notes.cooking?.count ?? 0) - (last.result?.moved ?? 0);
@@ -128,4 +132,4 @@ export const foodEnded: Concern['ended'] = (last, memory, reading) => {
   }
 };
 
-export const foodSetAside: Concern['setAside'] = last => last.kind !== 'forage' && last.kind !== 'travel' && failedOnItsOwn(last);
+export const foodSetAside: Concern['setAside'] = last => !['forage', 'travel', 'firepit'].includes(last.kind) && failedOnItsOwn(last);

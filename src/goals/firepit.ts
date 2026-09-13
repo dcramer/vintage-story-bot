@@ -27,17 +27,25 @@ export async function makeFirepit(field, cell) {
   const needed = stage ? 5 - Number(stage[1]) : 4;
   if (itemCount(inventory, 'game:firewood') < needed || (!stage && itemCount(inventory, 'game:drygrass') < 1)) return failure('not_enough_material');
   if (!stage) {
-    const ground = await selectCell(field, floor, { face: 'up' });
-    if (!ground) return failure('support_not_selectable');
-    const placed = await useOnBlock(field, {
-      target: ground.key,
-      face: 'up',
-      item: 'game:drygrass',
-      sneak: true,
-      consume: true,
-      holdMs: 200,
-    });
-    if (!placed.ok) return { ...placed, goal: 'firepit', cell };
+    let placed;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ground = await selectCell(field, floor, { face: 'up' });
+      if (!ground) return failure('support_not_selectable');
+      placed = await useOnBlock(field, {
+        target: ground.key,
+        face: 'up',
+        item: 'game:drygrass',
+        sneak: true,
+        consume: true,
+        holdMs: 200,
+        expectAfter: 'game:firepit-construct1',
+      });
+      if (placed.ok) break;
+      // The server explicitly left both the target and inventory unchanged,
+      // so another native click cannot duplicate or overwrite anything.
+      if (placed.reason !== 'no_observed_effect' || placed.consumed > 0) return { ...placed, goal: 'firepit', cell };
+    }
+    if (!placed?.ok) return { ...placed, goal: 'firepit', cell };
   }
   for (let expected = stage ? Number(stage[1]) : 1; expected <= 4; expected++) {
     const selected = await selectCell(field, cell);
