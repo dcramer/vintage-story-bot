@@ -52,11 +52,12 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
     // only choose the destination, and exploration legs remain the fallback
     // once nothing visible leads toward it.
     const leg =
-      remaining <= 48 && !localDetour
+      continuation ??
+      (!localDetour
         ? y === undefined
           ? { x, y: state.position.y, z, horizontalOnly: true, arrivalRadius }
           : { x, y, z, arrivalRadius }
-        : (continuation ?? field.explore(goal, Math.min(48, Math.max(remaining, elevationDetour)), elevationDetour));
+        : field.explore(goal, Math.min(48, Math.max(remaining, elevationDetour)), elevationDetour));
     const before = state.position;
     const result = await field.walk(leg, current => {
       const survivalReason = survival?.pauseWhen(current);
@@ -85,7 +86,7 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
     // cliff. After one stationary direct attempt, use the same deterministic
     // forward/lateral frontier search as long travel instead of retrying an
     // identical unobserved segment forever.
-    localDetour = remaining <= 48 && !['arrived', 'paused'].includes(result.state) && progress <= 2;
+    localDetour = result.reason === 'route_regressed' || (!['arrived', 'paused'].includes(result.state) && progress <= 2);
     if (result.state === 'arrived' || result.state === 'paused' || progress > 2) stuck = 0;
     else {
       stuck++;

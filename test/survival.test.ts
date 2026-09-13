@@ -849,14 +849,38 @@ test('long travel extends a productive partial detour instead of reversing it', 
     },
     walk: async target => {
       legs.push(target);
-      latest = ++walks === 1 ? { ...initial, position: { x: 0.5, y: 1, z: 10.5 } } : { ...initial, position: { x: 100.5, y: 1, z: 0.5 } };
-      return { state: walks === 1 ? 'blocked' : 'arrived' };
+      walks++;
+      if (walks === 2) latest = { ...initial, position: { x: 0.5, y: 1, z: 10.5 } };
+      if (walks === 3) latest = { ...initial, position: { x: 100.5, y: 1, z: 0.5 } };
+      return { state: walks < 3 ? 'blocked' : 'arrived' };
     },
   };
   const result = await travel(field, null, { x: 100.5, z: 0.5 });
   assert.equal(result.ok, true);
   assert.equal(explores, 1);
-  assert.deepEqual(legs, [detour, detour]);
+  assert.deepEqual(legs, [{ x: 100.5, y: 1, z: 0.5, horizontalOnly: true, arrivalRadius: 1 }, detour, detour]);
+});
+
+test('long travel hands the actual destination and elevation to the shared route planner first', async () => {
+  let latest = { position: { x: 0.5, y: 1, z: 0.5 }, condition: {} };
+  const destination = { x: 100.5, y: 20, z: 0.5 };
+  const field = {
+    moved: 0,
+    get latest() {
+      return latest;
+    },
+    observe: async () => latest,
+    report: () => {},
+    explore: () => {
+      throw Error('a mapped trip must not begin with an invented exploration target');
+    },
+    walk: async target => {
+      assert.deepEqual(target, { ...destination, arrivalRadius: 1 });
+      latest = { ...latest, position: destination };
+      return { state: 'arrived' };
+    },
+  };
+  assert.equal((await travel(field, null, destination)).ok, true);
 });
 
 test('nearby travel explores after a stationary direct route failure', async () => {
