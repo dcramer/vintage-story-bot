@@ -38,9 +38,14 @@ export const storage: Concern = {
         const origin = ctx.memory.notes.shelter ?? shelterSite(ctx.reading.terrain, state.position);
         if (!origin) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'level ground for the chest and above-ground shelter' };
         ctx.memory.notes.shelter = origin;
+        const spot = shelterStorage(origin).find(cell => {
+          const block = ctx.reading.terrain?.get(cell.x, cell.y, cell.z);
+          return block && !block.hazard && !block.boxes.length && (!block.code || block.code === 'game:air');
+        });
+        if (!spot) return { wait: 'reserved indoor chest slots are occupied or not observed' };
         return {
           start: 'build',
-          args: { cells: [{ ...shelterStorage(origin)[0], item: k.chest }], timeoutMs: 600000 },
+          args: { cells: [{ ...spot, item: k.chest }], timeoutMs: 600000 },
           why: 'the first chest marks its reserved place inside the planned shelter',
         };
       }
