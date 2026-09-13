@@ -137,6 +137,44 @@ test('a shortcut refused by the cliff guard follows its original checkpoint and 
   assert.ok(nav.replans > 0, 'a stationary body must replan instead of renewing the same shortcut');
 });
 
+test('a physically stalled shortcut restores its untried detour instead of poisoning it', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x < 4; x++) for (let z = 0; z < 3; z++) column(map, x, z);
+  const state = stateAt({ x: 0.5, y: 0, z: 0.5 });
+  const first = { x: 1.5, y: 0, z: 1.5, move: 'walk' };
+  const end = { x: 2.5, y: 0, z: 0.5, move: 'walk' };
+  const nav = new Navigation(map, state, end, 0);
+  nav.adopt([first, end], state.position, 0);
+  const shortcut = nav.tick(state, 0);
+  assert.deepEqual(shortcut.toward, { x: end.x, y: end.y, z: end.z });
+  nav.tick(state, 100, { state: 'blocked', toward: shortcut.toward });
+  const recovery = nav.tick(state, 200);
+  assert.deepEqual(recovery.toward, { x: first.x, y: first.y, z: first.z });
+  assert.equal(nav.lastReplan, 'shortcut_stalled');
+  assert.equal(nav.blocked.size, 0, 'no original route edge was attempted');
+  assert.equal(failedEdges(map, 200).size, 0);
+  nav.tick(state, 300, { state: 'blocked', toward: recovery.toward });
+  assert.equal(nav.blocked.size, 1, 'a failure of the original step remains route evidence');
+});
+
+test('a thin snow step respects native lifting clearance beneath the source ceiling', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x < 3; x++) for (let z = 0; z < 2; z++) column(map, x, z);
+  map.put({ x: 1, y: 0, z: 0, seenAt: Date.now(), boxes: [[1, 0, 0, 2, 0.125, 1]], traits: [] });
+  map.put({ x: 0, y: 2, z: 0, seenAt: Date.now(), boxes: [[0, 2, 0, 1, 3, 1]], traits: [] });
+  const from = { x: 0.5, y: 0, z: 0.5 },
+    to = { x: 1.5, y: 0.125, z: 0.5 };
+  assert.ok(map.nodeAt(1, 0, 0), 'there is room to stand on the snow once outside');
+  assert.equal(
+    map.moves(from).some(move => move.node.x === to.x && move.node.z === to.z),
+    false,
+  );
+  assert.equal(map.runWalkable(from, to), false, 'merging must not restore the impossible step');
+  map.put({ x: 0, y: 2, z: 0, seenAt: Date.now(), boxes: [], traits: [] });
+  assert.ok(map.moves(from).some(move => move.node.x === to.x && move.node.z === to.z));
+  assert.equal(map.runWalkable(from, to), true);
+});
+
 test('a two-block descent carries only with an observed level run beyond the landing', () => {
   for (const length of [1, 2]) {
     const map = new TerrainMemory();

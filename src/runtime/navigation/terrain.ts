@@ -305,6 +305,7 @@ export class TerrainMemory {
           kind = 'drop';
           cost = d + (-rise > 1.5 && !run ? 1.5 * -rise : 0.4 * -rise);
         } else {
+          if (rise > 0.001 && !this.stepClear(node, to, missing)) continue;
           // Level or step diagonal: don't cut a corner through a solid block;
           // one open orthogonal side is enough to round it, as a player does.
           if (diagonal && !this.cornerOpen(x, z, dx, dz, Math.max(t, to.y), missing)) continue;
@@ -367,15 +368,27 @@ export class TerrainMemory {
   runWalkable(from, to, step = STEP_HEIGHT) {
     const steps = Math.max(1, Math.ceil(horizontal(from, to) * 2));
     let y = from.y;
+    let previous = from;
     for (let i = 1; i <= steps; i++) {
       const t = i / steps,
         x = from.x + (to.x - from.x) * t,
         z = from.z + (to.z - from.z) * t;
       const node = this.nodeAt(Math.floor(x), Math.floor(z), y, step, step);
       if (!node || Math.abs(node.y - y) > step || this.shore(node)) return false;
+      if (node.y > y + 0.001 && !this.stepClear(previous, node)) return false;
       y = node.y;
+      previous = { x, y, z };
     }
     return Math.abs(y - to.y) <= step;
+  }
+  // Native TryStep tests the body at the obstacle top plus 0.03 before
+  // raising it. Even a thin snow layer can be blocked by the source ceiling.
+  stepClear(from, to, missing?) {
+    const top = to.y + BODY_HEIGHT + 0.03;
+    return (
+      this.clearBetween(Math.floor(from.x), Math.floor(from.z), from.y, top, missing) &&
+      this.clearBetween(Math.floor(to.x), Math.floor(to.z), to.y, top, missing)
+    );
   }
   // A level swim run keeps its observed water and diagonal corner clearance throughout.
   runSwimmable(from, to) {

@@ -161,8 +161,20 @@ export class Navigation {
     this.lookingAt = null;
     this.nextPlanAt = 0;
   }
-  replan(_p, now, reason) {
+  replan(p, now, reason) {
     this.lastReplan = reason;
+    if (['stalled', 'jump_failed'].includes(reason) && this.mergedFrom !== null) {
+      // The failed input followed a shortcut, not the original route edge.
+      // Restore the detour before excluding any of its untried steps.
+      this.index = this.mergedFrom;
+      this.mergedFrom = null;
+      this.mergeRefused = true;
+      this.edgeStart = p;
+      this.bestNear = undefined;
+      this.progressAt = now;
+      this.lastReplan = 'shortcut_stalled';
+      return null;
+    }
     // The edge that failed is the one into the next checkpoint; after a merge edgeStart is the
     // body's own cell, several cells short of it, which names no planner edge at all.
     if (['stalled', 'jump_failed'].includes(reason) && this.route[this.index]) {

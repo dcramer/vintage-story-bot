@@ -143,6 +143,23 @@ test('a sealed pit clears takeoff headroom before cutting the stair wall', () =>
   assert.equal(stairStep(pit, origin, { x: 5, y: 0, z: 0.5 }), null, 'do not open an overhead hazard');
 });
 
+test('a low ceiling over thin snow needs headroom cleared without inventing a stair wall', () => {
+  const map = world(4, (x, y, z) => x === 0 && z === 0 && y === 2);
+  for (const [x, z] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ])
+    map.put({ x, y: 0, z, seenAt: Date.now(), traits: [], boxes: [[x, 0, z, x + 1, 0.125, z + 1]] });
+  const origin = { x: 0.5, y: 0, z: 0.5 };
+  assert.equal(reachable(map, origin), 1);
+  const plan = stairStep(map, origin, { x: -10, z: 0 });
+  assert.deepEqual(plan, { step: null, dig: [{ x: 0, y: 2, z: 0 }], direction: null });
+  map.put({ x: 0, y: 2, z: 0, seenAt: Date.now(), traits: [], boxes: [] });
+  assert.equal(reachable(map, origin), pitLimit);
+});
+
 test('stairs avoid rock beyond the carried mining tier and reuse cleared steps', () => {
   const pit = world(3, (x, y, z) => (x !== 0 || z !== 0) && y >= 0 && y <= 3);
   const origin = { x: 0.5, y: 0, z: 0.5 };
