@@ -240,7 +240,7 @@ export class Fieldwork {
     // An area a leg already failed in costs as much as a thirty-block detour
     // per failure: the coarse map cannot see the cliff that stopped the leg.
     const plan = planRoughRoute(this.env.surface, p, goal, { penalty: column => this.places.failed(column) * 30 });
-    const point = plan.checkpoints.length ? nextLeg(plan.checkpoints, p, { maxDistance }) : null;
+    const point = plan.checkpoints.length ? nextLeg(plan.checkpoints, p, { maxDistance, maxVertical: 32 }) : null;
     this.roughRouteStatus = {
       status: plan.status,
       reason: plan.reason,
@@ -249,7 +249,7 @@ export class Fieldwork {
       end: plan.checkpoints.at(-1) ? { x: plan.checkpoints.at(-1).x, z: plan.checkpoints.at(-1).z } : null,
     };
     if (!point || horizontal(p, point) < 2) return null;
-    return { x: point.x, y: point.y, z: point.z, horizontalOnly: true, arrivalRadius: Math.min(3, Math.max(1, point.step)), roughRoute: plan.status };
+    return { x: point.x, y: point.y, z: point.z, arrivalRadius: Math.min(3, Math.max(1, point.step)), roughRoute: plan.status };
   }
   // Whether the eye reports what it sees: entities, items and every block it can make out.
   get attentive() {

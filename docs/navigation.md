@@ -58,6 +58,8 @@ A stalled merged shortcut restores the original checkpoint and follows the detou
 
 A lower destination does not authorize an irreversible descent on an unfinished route. Fine and rough partial routes reject frontiers below their starting level reached through a drop the body cannot climb back; a complete observed route may descend.
 
+Surveyed rough-route checkpoints retain their elevation and stay within the fine navigator's 32-block vertical range. A known death-marker height is also retained when recovering belongings; arrival on a ledge above the destination is not completion.
+
 Sub-block steps require the native lifting clearance at their source and destination, including the 0.03-block lift above the obstacle. When a low ceiling prevents stepping onto surrounding snow, `dig_out` may clear that observed, breakable ceiling without cutting a stair wall.
 
 When a confined pillar has no wall to cut, `dig_out` may place one carried soil block in an observed empty adjacent cell against solid support, with clear jump headroom. It verifies the placement before climbing. Recovery building never makes an unobserved route traversable in the planner.

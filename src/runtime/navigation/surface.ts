@@ -181,17 +181,21 @@ export function simplify(columns, maxSpan = 12, turnDegrees = 20) {
 
 // The next leg to hand the fine navigator: the farthest rough-route checkpoint
 // within reach, so short bounded legs still follow the surveyed line.
-export function nextLeg(checkpoints, from, { minDistance = 6, maxDistance = 40 } = {}) {
+export function nextLeg(checkpoints, from, { minDistance = 6, maxDistance = 40, maxVertical = Infinity } = {}) {
   let chosen = null,
     along = 0;
   for (let i = 1; i < checkpoints.length; i++) {
     along += horizontal(checkpoints[i - 1], checkpoints[i]);
     const direct = horizontal(from, checkpoints[i]);
-    if (direct > maxDistance || along > maxDistance * 1.5) break;
+    if (direct > maxDistance || along > maxDistance * 1.5 || Math.abs(checkpoints[i].y - from.y) > maxVertical) break;
     if (direct >= minDistance || i === checkpoints.length - 1) chosen = checkpoints[i];
   }
   return (
     chosen ??
-    (checkpoints.length > 1 && horizontal(from, checkpoints[checkpoints.length - 1]) <= maxDistance ? checkpoints[checkpoints.length - 1] : null)
+    (checkpoints.length > 1 &&
+    horizontal(from, checkpoints[checkpoints.length - 1]) <= maxDistance &&
+    Math.abs(checkpoints[checkpoints.length - 1].y - from.y) <= maxVertical
+      ? checkpoints[checkpoints.length - 1]
+      : null)
   );
 }

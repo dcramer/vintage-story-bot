@@ -66,3 +66,46 @@ test('a drop that is never picked up ends the goal after a bounded number of app
   assert.equal(field.calls.walks, 6);
   assert.ok(field.looks < 200, `looked ${field.looks} times`);
 });
+
+test('body recovery does not finish travel on a ledge above the death marker', async () => {
+  const { retrieveBody } = await import('../src/goals/retrieve_body.ts');
+  const position = { x: 0.5, y: 10, z: 0.5 };
+  const field = {
+    latest: { position },
+    moved: 0,
+    now: () => 0,
+    report: () => {},
+    observe: async () => ({ position }),
+    send: async request => {
+      assert.equal(request.action, 'map_waypoints');
+      return { ok: true, waypoints: [{ guid: 'death', icon: 'gravestone', position: { ...position, y: 0 } }] };
+    },
+    walk: async target => {
+      assert.equal(target.y, 0);
+      assert.notEqual(target.horizontalOnly, true);
+      throw Error('route_checked');
+    },
+  };
+  await assert.rejects(retrieveBody(field, null, { guid: 'death' }), /route_checked/);
+});
+
+test('a surveyed low rough checkpoint cannot be reached on an upper ledge', async () => {
+  const { Fieldwork } = await import('../src/support/fieldwork.ts');
+  const { SurfaceMemory, nextLeg } = await import('../src/runtime/navigation/surface.ts');
+  const { findRoute } = await import('../src/runtime/navigation/planner.ts');
+  const surface = new SurfaceMemory();
+  surface.apply({ columns: Array.from({ length: 21 }, (_, x) => [x, 0, Math.max(0, 10 - x), 'ground', 1]) });
+  const position = { x: 0.5, y: 10, z: 0.5 };
+  const target = Fieldwork.prototype.roughRoute.call(
+    { env: { surface }, latest: { position }, places: { failed: () => 0 } },
+    { x: 20.5, y: 0, z: 0.5 },
+  );
+  assert.equal(target.y, 0);
+  const upperLedge = {
+    nodeAt: () => position,
+    moves: at => (at.x < 20.5 ? [{ node: { ...at, x: at.x + 1 }, cost: 1 }] : []),
+    gapMoves: () => [],
+  };
+  assert.equal(nextLeg([position, { x: 10.5, y: 30, z: 0.5 }, { x: 20.5, y: 50, z: 0.5 }], position, { maxVertical: 32 })?.y, 30);
+  assert.equal(findRoute(upperLedge, position, target, 0.3, 1.85, { partial: false }), null);
+});

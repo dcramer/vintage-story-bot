@@ -26,7 +26,7 @@ export async function retrieveBody(field, survival, { guid, radius = 12, arrival
   if (!marker) throw Error(guid ? 'No such marker on the map' : 'No death marker on the map');
   const body = marker.position;
   field.report('travelling_to_body', { marker: marker.guid, body });
-  const trip = await travel(field, survival, { x: body.x, z: body.z, arrivalRadius });
+  const trip = await travel(field, survival, { x: body.x, ...(Number.isFinite(body.y) ? { y: body.y } : {}), z: body.z, arrivalRadius });
   if (!trip.ok)
     return {
       ok: false,
@@ -34,6 +34,8 @@ export async function retrieveBody(field, survival, { guid, radius = 12, arrival
       reason: (trip as any).reason ?? 'trip_failed',
       marker: marker.guid,
       body,
+      position: (trip as any).position ?? field.latest.position,
+      toward: (trip as any).toward ?? { x: body.x, z: body.z },
       moved: +field.moved.toFixed(1),
       legs: trip.legs,
     };
