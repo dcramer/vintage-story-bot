@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { matchesHarvestBlock } from '../src/goals/harvest.ts';
 import { Search } from '../src/support/search.ts';
+
+test('top gathering leaves harvested cattail stems for a root request', () => {
+  const cut = { kind: 'block', code: 'game:tallplant-coopersreed-land-harvested-snow' };
+  assert.equal(matchesHarvestBlock(cut, 'coopersreed', 'cattailtops'), false);
+  assert.equal(matchesHarvestBlock(cut, 'coopersreed', 'cattailroot'), true);
+  assert.equal(matchesHarvestBlock(cut, 'coopersreed', 'cattail'), true);
+  assert.equal(matchesHarvestBlock({ ...cut, code: 'game:tallplant-coopersreed-water-normal-free' }, 'coopersreed', 'cattailtops'), true);
+});
 
 test('a search reports the actual failed destination when it discovers a pit', () => {
   const position = { x: 40, y: 120, z: 30 };

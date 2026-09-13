@@ -10,6 +10,13 @@ import { terrainTargets } from '../support/terrain-targets.ts';
 import { collectItem } from './collect_item.ts';
 
 const includes = (code, part) => typeof code === 'string' && code.includes(part);
+export const matchesHarvestBlock = (object, match, item) => {
+  if (object.kind !== 'block' || !includes(object.code, match)) return false;
+  // The reed handbook combines both states' drops. Cut stems only yield
+  // roots; their visible harvested state cannot satisfy a tops-only request.
+  const cutReed = /:tallplant-coopersreed-(land|water)-harvested-/.test(object.code);
+  return !(cutReed && includes('game:cattailtops', item) && !includes('game:cattailroot', item));
+};
 export const matchingCount = (inventory, part) =>
   ownedSlots(inventory)
     .filter(s => includes(s.code, part))
@@ -17,7 +24,7 @@ export const matchingCount = (inventory, part) =>
 
 // Dig visible blocks matching `match` with an optional tool class until `count` drops containing `item` are carried.
 export async function harvest(field, survival, { match, item, count, tool, minTier = 0, lowest = false }) {
-  const blocks = o => o.kind === 'block' && includes(o.code, match);
+  const blocks = o => matchesHarvestBlock(o, match, item);
   const drops = o => o.kind === 'item' && includes(o.code, item);
   let inventory = await field.send({ action: 'inventory' });
   if (tool !== undefined && !ownedSlots(inventory).some(s => s.tool === tool && s.toolTier >= minTier && s.durability > 0))
