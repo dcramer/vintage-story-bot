@@ -13,8 +13,9 @@ export const hungry = (s: Situation) => s.hunger !== null && s.hunger < HUNGRY;
 
 export const eat: Concern = {
   id: 'eat',
-  // Peckish is not an interruption; hungry is.
-  cuts: ({ s }) => hungry(s) || !!s.foodRecovery,
+  // Peckish is not an interruption, and an empty pack never interrupts useful
+  // work for a speculative food search. Food already carried is still eaten.
+  cuts: ({ s }) => (hungry(s) || !!s.foodRecovery) && s.reserve > 0,
   run: ctx => {
     const { k, satiety } = ctx;
     const percent = Math.round((satiety ?? 0) * 100);

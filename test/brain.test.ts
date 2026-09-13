@@ -127,7 +127,7 @@ test('food harvesting stops when incidental pickups fill its last ordinary slot'
   assert.deepEqual(eating.running(ctx), { stop: 'make room for food before continuing the harvest' });
 });
 
-test('brain: danger, hunger and night come before the kit, and the kit comes in day-1 order', () => {
+test('brain: danger and carried food come before progress, and the kit comes in day-1 order', () => {
   assert.equal(pickJob(situation({ farmTended: false })), 'farm', 'a useful farm comes before bulk stockpiles');
   assert.equal(pickJob(situation({ hoe: false })), 'hoe', 'prepare the farm tool before bulk stockpiles');
   assert.equal(pickJob(situation({ hunger: 0.5, reserve: 0, knife: false })), 'knife', 'prepare the knife for cattail bags before bulk provisions');
@@ -138,17 +138,17 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
   assert.equal(pickJob(situation({ storm: true, home: false })), 'burrow', 'a storm sends a homeless bot underground');
   assert.equal(pickJob(situation({ storm: true, home: false, burrowed: true })), 'wait', 'an existing burrow shelters from a storm');
   assert.equal(pickJob(situation({ hunger: 0.1, night: true, reserve: 100 })), 'eat', 'the pack is eaten from at night');
-  assert.equal(pickJob(situation({ hunger: 0.1, night: true, atHome: false })), 'eat', 'critical hunger cannot wait for day');
+  assert.equal(
+    pickJob(situation({ hunger: 0.1, reserve: 0, night: true, atHome: false })),
+    'go_home',
+    'an empty pack does not start a food expedition at night',
+  );
   assert.equal(
     pickJob(situation({ hunger: 0.1, night: true, reserve: 100, burrowed: true })),
     'eat',
     'dug in with food in the pack: eat where it sits',
   );
-  assert.equal(
-    pickJob(situation({ hunger: 0.1, night: true, reserve: 0, burrowed: true })),
-    'unburrow',
-    'dug in with nothing to eat: open the burrow to search',
-  );
+  assert.equal(pickJob(situation({ hunger: 0.1, night: true, reserve: 0, burrowed: true })), 'wait', 'an empty pack does not abandon cover for food');
   const starvingNight = fresh();
   starvingNight.job = 'burrow';
   const digging = decide(
@@ -179,8 +179,8 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
     { stop: 'burrow' },
     'night falling cuts a kit job short',
   );
-  assert.equal(pickJob(situation({ hunger: 0.35, reserve: 0 })), 'provisions', 'food reserves precede exploration');
-  assert.equal(pickJob(situation({ hunger: 0.35, reserve: 200 })), 'provisions', 'a small reserve is replenished before exploration');
+  assert.equal(pickJob(situation({ hunger: 0.35, reserve: 0 })), 'provisions', 'food is prepared once durable work is complete');
+  assert.equal(pickJob(situation({ hunger: 0.35, reserve: 200 })), 'provisions', 'a small reserve is replenished once durable work is complete');
   assert.equal(pickJob(situation({ dangerHere: true, night: true })), 'relocate', 'a place full of scares is left');
   assert.equal(pickJob(situation({ night: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ night: true, home: false, dirt: 0 })), 'burrow', 'night without a home: dig in where it stands');
@@ -205,6 +205,11 @@ test('brain: danger, hunger and night come before the kit, and the kit comes in 
     pickJob(situation({ storage: false, shovel: false })),
     'storage',
     'the reed chest comes right after the knife and axe: it fixes the site',
+  );
+  assert.equal(
+    pickJob(situation({ hunger: 0.1, reserve: 0, house: false, farmTended: false, stocked: false })),
+    'house',
+    'an empty stomach does not block the permanent house',
   );
   assert.equal(pickJob(situation({ hunger: 0.3 })), 'explore', 'food above 20% does not start a search');
   assert.equal(
@@ -785,8 +790,8 @@ test('brain: forage keeps its own threat evasion instead of being cancelled', ()
       }),
       urgent,
     ),
-    { stop: 'eat' },
-    'urgent hunger can still preempt daytime provisions',
+    { wait: 'letting forage finish' },
+    'an empty pack does not restart food recovery on top of an existing provision search',
   );
   const food = { id: 'food', kind: 'forage', state: 'running', by: 'brain' };
   assert.deepEqual(
@@ -843,7 +848,7 @@ test('brain: night waits for forage to finish food already in hand', () => {
   );
 });
 
-test('brain: carried food is eaten first and recovery persists to half satiety across restarts', () => {
+test('brain: carried food is eaten first, but an empty pack resumes durable work across restarts', () => {
   const memory = fresh();
   const berries = inventory(
     slot('game:fruit-blackberry', 3, {
@@ -862,9 +867,8 @@ test('brain: carried food is eaten first and recovery persists to half satiety a
   const resumed = fresh(brain.notes!(memory));
   resumed.startupChecked = true;
   const continueEating = decide(reading({ inventory: kitted(), state: state({ vitals: { hunger: { current: 400, max: 1500 } } }) }), resumed);
-  assert.equal(continueEating.start, 'forage', 'crossing 20% does not resume building before food recovers');
-  assert.equal(continueEating.args.until, 0.5);
-  assert.equal(continueEating.args.timeoutMs, undefined, 'food forage ends from observed search exhaustion, not a caller deadline');
+  assert.notEqual(continueEating.start, 'forage', 'an exhausted pack does not become a speculative food expedition');
+  assert.equal(resumed.notes.foodRecovery, undefined);
   decide(reading({ inventory: kitted(), state: state({ vitals: { hunger: { current: 750, max: 1500 } } }) }), resumed);
   assert.equal(resumed.notes.foodRecovery, undefined);
 });
@@ -889,7 +893,7 @@ test('brain: failed recovery forage yields to useful work without uprooting catt
   assert.ok(memory.tried.eat, 'the exhaustive search is set aside before another attempt');
 });
 
-test('brain: carried roots and legacy cooking notes never replace renewable forage', () => {
+test('brain: carried roots and legacy cooking notes never replace durable work', () => {
   const memory = fresh({
     cooking: { count: 4 },
     deferredCooking: [{ x: 2, y: 100, z: 0, count: 4, retryAfter: 0 }],
@@ -905,8 +909,8 @@ test('brain: carried roots and legacy cooking notes never replace renewable fora
     }),
     memory,
   );
-  assert.equal(choice.start, 'forage');
-  assert.match(choice.why, /without uprooting cattails/);
+  assert.notEqual(choice.start, 'forage');
+  assert.doesNotMatch(choice.why, /cattailroot|cooking/i);
   assert.equal((memory.notes as any).cooking, undefined);
   assert.equal((memory.notes as any).deferredCooking, undefined);
 });
@@ -930,7 +934,7 @@ test('brain: empty daytime forage yields to other work without uprooting cattail
   assert.notEqual(choice.start, 'forage');
 });
 
-test('brain: failed forage keeps renewable search through the recovery episode', () => {
+test('brain: stale recovery state cannot restart forage when the pack is empty', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.notes.foodRecovery = true;
@@ -938,17 +942,11 @@ test('brain: failed forage keeps renewable search through the recovery episode',
   const supplies = kitted();
   supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 8));
   for (const current of [149, 150, 299, 300, 600, 749]) {
+    memory.notes.foodRecovery = true;
     const choice = decide(reading({ state: state({ vitals: { hunger: { current, max: 1500 } } }), inventory: supplies, now: 20_000 }), memory);
-    assert.equal(choice.start, 'forage');
-    assert.match(choice.why, /without uprooting cattails/);
+    assert.notEqual(choice.start, 'forage');
+    assert.equal(memory.notes.foodRecovery, undefined);
   }
-  decide(reading({ state: state({ vitals: { hunger: { current: 750, max: 1500 } } }), inventory: supplies, now: 21_000 }), memory);
-  memory.job = null;
-  const nextEpisode = decide(
-    reading({ state: state({ vitals: { hunger: { current: 225, max: 1500 } } }), inventory: supplies, now: 22_000 }),
-    memory,
-  );
-  assert.equal(nextEpisode.start, 'forage', 'a new hunger episode tries ordinary food again');
 });
 
 test('brain: active recovery forage continues below ten percent instead of uprooting cattails', () => {
@@ -968,7 +966,7 @@ test('brain: active recovery forage continues below ten percent instead of uproo
   );
 });
 
-test('brain: starvation does not replace an axe merely to uproot cattails', () => {
+test('brain: starvation with an empty pack keeps making the missing axe', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.notes.firepit = { x: 2, y: 100, z: 0 };
@@ -981,8 +979,8 @@ test('brain: starvation does not replace an axe merely to uproot cattails', () =
 
   const choice = decide(reading({ state: state({ vitals: { hunger: { current: 0, max: 1500 } } }), inventory: supplies, now: 2000 }), memory);
 
-  assert.equal(choice.start, 'forage');
-  assert.match(choice.why, /without uprooting cattails/);
+  assert.equal(choice.start, 'gather');
+  assert.match(choice.why, /axe/);
 });
 
 test('brain: digging out of a hole is never interrupted by a threat', () => {
@@ -1062,7 +1060,7 @@ test('brain: a failed burrow opening keeps the seal location for another attempt
   assert.deepEqual(retry.args.cells, [memory.burrow]);
 });
 
-test('brain: hunger, not morning, explains opening a burrow at night', () => {
+test('brain: an empty stomach does not open a safe burrow at night', () => {
   const memory = fresh();
   memory.burrow = { x: 0, y: 102, z: 0 };
   const next = decide(
@@ -1072,8 +1070,7 @@ test('brain: hunger, not morning, explains opening a burrow at night', () => {
     }),
     memory,
   );
-  assert.equal(next.start, 'dig_area');
-  assert.equal(next.why, 'hungry, opening the burrow');
+  assert.equal(next.wait, 'night, dug in');
 });
 
 test('brain: a fresh controller recovers a sealed burrow from observed terrain', () => {
@@ -1655,7 +1652,7 @@ test('brain: finish indoor torch refresh despite an outside threat, but stop on 
   assert.equal(absent.start, 'craft_item', 'replace a missing torch from carried materials while staying sealed');
 });
 
-test('brain: a ready shelter takes precedence over errands without bypassing survival or night', () => {
+test('brain: a ready shelter takes precedence over errands and an empty stomach, but not night', () => {
   const supplies = kitted();
   supplies.inventories[0].slots.push(slot('game:rammed-light-plain', 60), slot('game:torch-basic-extinct-up'), slot('game:firestarter'));
   const memory = fresh({ shelter: { x: 20, y: 100, z: 20 } });
@@ -1666,8 +1663,8 @@ test('brain: a ready shelter takes precedence over errands without bypassing sur
   assert.equal(begin.start, 'travel', 'go to the planned above-ground site before starting another gathering trip');
   assert.equal(begin.args.y, 100);
   const starving = decide({ ...ready, state: state({ vitals: { hunger: { current: 0, max: 1500 } } }) }, fresh(memory.notes));
-  assert.notEqual(starving.start, 'shelter');
-  assert.notEqual(starving.why, begin.why);
+  assert.equal(starving.start, 'travel');
+  assert.equal(starving.why, begin.why);
   const dark = decide({ ...ready, environment: night }, fresh(memory.notes));
   assert.notEqual(dark.why, begin.why, 'do not travel to a new construction site at night');
 });

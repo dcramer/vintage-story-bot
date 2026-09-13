@@ -75,20 +75,20 @@ export const TASKS: Concern[] = [
   bags,
   storage,
   stash,
-  provisions,
   shovel,
   dirt,
   grass,
   torches,
   shelter,
   lighting,
+  house,
   hoe,
   farm,
   sticks,
   spareKnife,
   logs,
-  house,
   stockpile,
+  provisions,
 ];
 const leaveShelter: Concern = {
   id: 'leave_shelter',
@@ -122,8 +122,7 @@ export const LADDER: Rung[] = [
   { job: 'unburrow', when: (s, tried) => s.burrowed && s.threat && !s.hurt && s.besieged && tried.has('tunnel') && (!s.threatNear || starving(s)) },
   { job: 'wait', when: s => s.burrowed && s.threat && !s.hurt },
   { job: 'hide', when: (s, tried) => s.hurt || (s.threat && !tried.has('hide')) },
-  { job: 'unburrow', when: s => hungry(s) && s.burrowed && s.reserve <= 0 },
-  { job: 'eat', when: (s, tried) => (hungry(s) || !!s.foodRecovery) && !tried.has('eat') },
+  { job: 'eat', when: (s, tried) => (hungry(s) || !!s.foodRecovery) && s.reserve > 0 && !tried.has('eat') },
   { job: 'repair_home', when: (s, tried) => s.atHome && !!s.homeDamaged && !tried.has('repair_home') },
   { job: 'lighting', when: s => s.atHome && s.lit === false && s.torches > 0 },
   { job: 'go_home', when: (s, tried) => s.storm && s.home && !s.atHome && !tried.has('go_home') },
@@ -237,8 +236,12 @@ export function decide(reading: Reading, memory: Memory): Decision {
   }
   const storm = temporalStormUnsafe(state);
   const k = kit(inventory);
-  if (satiety !== null && satiety < 0.2) memory.notes.foodRecovery = true;
-  else if (satiety !== null && satiety >= 0.5) {
+  // Hunger may consume food already in the pack, but an empty pack does not
+  // turn construction into an open-ended scavenging trip. Useful work and
+  // recoverable materials survive a death; the default brain can respawn and
+  // continue, then prepare optional provisions once the camp is established.
+  if (satiety !== null && satiety < 0.2 && k.reserve > 0) memory.notes.foodRecovery = true;
+  else if (k.reserve <= 0 || (satiety !== null && satiety >= 0.5)) {
     delete memory.notes.foodRecovery;
   }
   const home = memory.notes.home;
