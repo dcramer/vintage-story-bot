@@ -35,9 +35,12 @@ export const storage: Concern = {
       }
       const old = ctx.memory.notes.stash;
       if (!old) {
-        const origin = ctx.memory.notes.shelter ?? shelterSite(ctx.reading.terrain, state.position);
+        const pending = ctx.memory.notes.shelter;
+        const origin = pending ?? shelterSite(ctx.reading.terrain, state.position);
         if (!origin) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'level ground for the chest and above-ground shelter' };
         ctx.memory.notes.shelter = origin;
+        const trip = pending && goTo(ctx, { x: origin.x + 2.5, z: origin.z + 5.5 }, 'returning to the planned shelter site', 8, 2);
+        if (trip) return trip;
         const spot = shelterStorage(origin).find(cell => {
           const block = ctx.reading.terrain?.get(cell.x, cell.y, cell.z);
           return block && !block.hazard && !block.boxes.length && (!block.code || block.code === 'game:air');

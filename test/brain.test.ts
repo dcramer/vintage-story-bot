@@ -1682,6 +1682,14 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
     { x: 4, y: 100, z: -1, item: 'game:stationarybasket-east' },
     'an occupied first slot does not trap a planned shelter chest retry',
   );
+  const returning = fresh();
+  returning.notes.shelter = { x: 100, y: 100, z: 100 };
+  const returnToSite = decide(reading({ inventory: inventory(slot('game:stationarybasket-east', 1), ...tools) }), returning);
+  assert.deepEqual(
+    [returnToSite.start, returnToSite.args.x, returnToSite.args.z, returnToSite.args.arrivalRadius],
+    ['travel', 102.5, 105.5, 2],
+    'a chest is carried back to the anchored shelter instead of being placed remotely',
+  );
   const built = [{ x: 4, y: 100, z: 2, face: 'up', code: 'game:stationarybasket-north' }];
   decide(
     settledReading({ inventory: inventory(slot('game:stick', 10), ...tools), last: { id: 'b', kind: 'build', ok: true, result: { built } } }),
