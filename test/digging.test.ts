@@ -199,6 +199,7 @@ test('burrow digging uses a carried shovel while respecting required mining tier
           { slot: 0, code: null, quantity: 0 },
           { slot: 1, code: 'game:shovel-copper', tool: 'Shovel', toolTier: 2, durability: 10, quantity: 1 },
           { slot: 2, code: 'game:pickaxe-copper', tool: 'Pickaxe', toolTier: 2, durability: 10, quantity: 1 },
+          { slot: 3, code: 'game:axe-copper', tool: 'Axe', toolTier: 2, durability: 10, quantity: 1 },
         ],
       },
     ],
@@ -206,6 +207,7 @@ test('burrow digging uses a carried shovel while respecting required mining tier
   const field = { latest: { activeSlot: 0 } };
   assert.equal(await diggingSlot(field, { material: 'Soil' }, inventory), 1);
   assert.equal(await diggingSlot(field, { material: 'Stone', requiredMiningTier: 2 }, inventory), 2);
+  assert.equal(await diggingSlot(field, { material: 'Wood', requiredMiningTier: 1 }, inventory), 3);
   assert.equal(await diggingSlot(field, { material: 'Stone', requiredMiningTier: 3 }, inventory), null);
   inventory.inventories[0].slots[1].durability = 0;
   assert.equal(await diggingSlot(field, { material: 'Soil' }, inventory), 0, 'broken shovel falls back to the current slot');

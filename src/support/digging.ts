@@ -124,7 +124,8 @@ export function stairStep(map, node, toward, miningTier = Infinity) {
 // Whether the selected block can be broken with what is carried; picks the tool slot when one is needed.
 export async function diggingSlot(field, selected, inventory) {
   const tier = selected.requiredMiningTier ?? 0;
-  const tool = tier > 0 ? 'Pickaxe' : ['Soil', 'Sand', 'Gravel', 'Snow'].includes(selected.material) ? 'Shovel' : null;
+  const materialTool = selected.material === 'Wood' ? 'Axe' : ['Soil', 'Sand', 'Gravel', 'Snow'].includes(selected.material) ? 'Shovel' : null;
+  const tool = materialTool ?? (tier > 0 ? 'Pickaxe' : null);
   if (!tool) return field.latest.activeSlot;
   const slots = ownedSlots(inventory);
   const usable = s => s.tool === tool && s.toolTier >= tier && s.durability > 0 && s.quantity > 0;

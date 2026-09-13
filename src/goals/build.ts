@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { distance, horizontal } from '../runtime/navigation/terrain.ts';
 import { changeBlock, selectCell } from '../support/blocks.ts';
+import { diggingSlot } from '../support/digging.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
 import { presets } from '../support/structures.ts';
 import { cleanName, runField } from '../support/task.ts';
@@ -34,9 +35,9 @@ export async function digArea(field, survival, { cells, tool, minTier = 0 }) {
   const done = [],
     failed = [];
   const summary = () => ({ total: cells.length, dug: done.length, failed: failed.length, moved: +field.moved.toFixed(1) });
-  const held = async () => {
-    if (tool === undefined) return undefined;
+  const held = async selected => {
     const inventory = await field.send({ action: 'inventory' });
+    if (tool === undefined) return diggingSlot(field, selected, inventory);
     const current = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === field.latest.activeSlot);
     if (current?.tool === tool && current.toolTier >= minTier && current.durability > 0) return current.slot;
     return (await equip(field, { tool, minTier })).slot;
@@ -72,7 +73,11 @@ export async function digArea(field, survival, { cells, tool, minTier = 0 }) {
       }
       let result;
       try {
-        result = await changeBlock(field, 'dig', { target: selected.key, slot: await held(), acceptTransform: true });
+        const slot = await held(selected);
+        result =
+          slot === null
+            ? { ok: false, reason: 'cannot_dig' }
+            : await changeBlock(field, 'dig', { target: selected.key, slot, acceptTransform: true });
       } catch (error) {
         if (/interruption|cancelled|deadline|Selected item changed/i.test(error.message)) throw error;
         result = { ok: false, reason: error.message };
