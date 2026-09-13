@@ -103,6 +103,9 @@ for (const ok of [false, true]) {
     assert.equal(view.outcome, 'interrupted');
     assert.equal(view.reason, 'stopped');
     assert.equal(view.active, false);
+    assert.equal(view.result.ok, false, 'adapters reading only the result must also see cancellation');
+    assert.equal(view.result.code, 'cancelled');
+    assert.equal(view.result.outcome, 'interrupted');
     const event = controller.events.read(0).events.find(event => event.type === 'goal_finished');
     assert.equal(event.ok, false);
     assert.equal(event.outcome, 'interrupted');

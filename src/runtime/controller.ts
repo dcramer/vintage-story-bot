@@ -511,6 +511,13 @@ export class Controller {
         started.resolve({ ok: false, error: reason });
       } finally {
         clearTimeout(announce);
+        // Adapters may read result directly without looking at the record's
+        // state. A late successful return must not turn stop into success.
+        if (abort.signal.aborted) {
+          record.state = 'cancelled';
+          record.code = 'cancelled';
+          record.result = { ...record.result, ok: false, reason: record.reason ?? 'stopped', code: 'cancelled', outcome: 'interrupted' };
+        }
         started.resolve({ ok: false, error: record.reason ?? 'Goal cancelled before start' });
         if (this.active === record) this.active = null;
         record.finishedAt = Date.now();
