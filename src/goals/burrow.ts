@@ -207,9 +207,19 @@ async function digIn(field, inventory, survival) {
           code: selected.code,
           point: { x: selectedCell.x + 0.5, y: selectedCell.y + 0.5, z: selectedCell.z + 0.5 },
         };
-        const stand = field.approach(object, q => Math.floor(q.x) === x && Math.floor(q.z) === z);
+        const arrivalRadius = 0.35;
+        const halfWidth = field.latest.body.halfWidth;
+        const stand = field.approach(
+          object,
+          q =>
+            (Math.floor(q.x) === x && Math.floor(q.z) === z) ||
+            (q.x + halfWidth + arrivalRadius > selectedCell.x &&
+              q.x - halfWidth - arrivalRadius < selectedCell.x + 1 &&
+              q.z + halfWidth + arrivalRadius > selectedCell.z &&
+              q.z - halfWidth - arrivalRadius < selectedCell.z + 1),
+        );
         if (!stand) return { ok: false, goal: 'burrow', reason: 'cannot_clear_body_cell', cell: selected.key };
-        const stepped = await field.walk(stand, survival?.pauseWhen);
+        const stepped = await field.walk({ ...stand, arrivalRadius }, survival?.pauseWhen);
         if (!['arrived', 'paused'].includes(stepped.state))
           return { ok: false, goal: 'burrow', reason: stepped.reason ?? 'cannot_clear_body_cell', cell: selected.key };
         const cleared = await changeBlock(field, 'dig', {

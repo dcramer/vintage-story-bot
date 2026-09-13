@@ -210,17 +210,26 @@ test('a burrow steps beside surface cover before clearing its own body cell on a
     env: { map },
     latest: {
       position: { x: 0.5, y: 0.125, z: 0.5, dimension: 0 },
-      body: { eyeHeight: 1.7 },
+      body: { eyeHeight: 1.7, halfWidth: 0.3 },
       motion: { onGround: true, feetInLiquid: false, swimming: false },
       capabilities: [],
       activeSlot: 0,
     },
     observe: async () => field.latest,
     aim: async () => {},
-    approach: () => ({ x: 1.5, y: 0.125, z: 0.5, arrivalRadius: 0.35 }),
+    approach: (_, exclude) =>
+      [
+        { x: 1.5, y: 0.125, z: 0.5, arrivalRadius: 0.35 },
+        { x: 2.5, y: 0.125, z: 0.5, arrivalRadius: 0.35 },
+      ].find(destination => !exclude(destination)),
     walk: async destination => {
       walks.push(destination);
-      field.latest.position = { ...field.latest.position, x: destination.x, y: destination.y, z: destination.z };
+      field.latest.position = {
+        ...field.latest.position,
+        x: destination.x > 1 ? destination.x - destination.arrivalRadius : destination.x,
+        y: destination.y,
+        z: destination.z,
+      };
       return { state: 'arrived' };
     },
     send: async request => {
@@ -253,7 +262,7 @@ test('a burrow steps beside surface cover before clearing its own body cell on a
 
   assert.equal(result.reason, 'test_stop');
   assert.equal(begins[0].target, cover);
-  assert.equal(begins[0].x, 1.5, 'surface cover is cut only after leaving its column');
+  assert.equal(begins[0].x, 2.15, 'arrival tolerance still leaves the body clear of the surface cell');
   assert.equal(begins[0].allowBodyCellDig, undefined, 'an older bridge never receives the unsupported escape hatch');
   assert.equal(walks.at(-1).x, 0.5, 'the body returns over the cleared shaft before digging ground');
 });
