@@ -24,6 +24,7 @@ export const TRAITS = {
   container: 'holds items: chest, basket, vessel',
   climbable: 'a ladder or vine',
   liquid: 'water or lava',
+  fire: 'burning block that damages anything entering its cell',
   replaceable: 'placing a block there replaces it: grass, flowers, snow',
   leaves: 'tree canopy',
   plant: 'plant matter',
@@ -71,6 +72,7 @@ const FUEL_SECONDS = 20;
 // Prior knowledge by code, used only where no page says otherwise (a page
 // not read yet, or an older mod): what a player knows before reading anything.
 const priors: [RegExp, string[]][] = [
+  [/^game:firepit-lit$/, ['fire']],
   [/^game:(loosestick|loosestones|looseflints)-/, ['pickup']],
   [/^game:log-/, ['choppable']],
   [/^game:leaves/, ['leaves']],

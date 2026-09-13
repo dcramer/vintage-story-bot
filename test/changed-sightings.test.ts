@@ -25,3 +25,22 @@ test('only observed changed terrain invalidates a food lead', () => {
   update([1, 2, 3, 200, null, [], null]);
   assert.equal(game.sightings.records.has(ripe), false, 'observed air must erase harvested food');
 });
+
+test('a sighted lit firepit remains a terrain hazard while its changed cell is unknown', () => {
+  const game = new GameClient(async () => ({ ok: false }));
+  const lit = 'block:0:1:2:3:game:firepit-lit';
+  game.remember({
+    terrain: { session: 'test', cursor: 1, clock: 100, cells: [[1, 2, 3, 100, null, null, 'changed']] },
+    sightings: { clock: 100, sightings: [[lit, 'block', 'game:firepit-lit', 1.5, 2.5, 3.5, 'near', 100]] },
+  });
+  assert.equal(game.map.get(1, 2, 3)?.hazard, 'fire');
+
+  game.remember({
+    terrain: { session: 'test', cursor: 2, clock: 200, cells: [[1, 2, 3, 200, null, null, 'changed']] },
+    sightings: {
+      clock: 200,
+      sightings: [['block:0:1:2:3:game:firepit-cold', 'block', 'game:firepit-cold', 1.5, 2.5, 3.5, 'near', 200]],
+    },
+  });
+  assert.equal(game.map.get(1, 2, 3), undefined, 'a later cold sighting removes the conservative hazard');
+});

@@ -3,7 +3,7 @@ import { learned, remember } from '../support/facts.ts';
 import { decorate, traitsOf } from '../support/traits.ts';
 import { requestBridge } from './bridge.ts';
 import { GoalError } from './failure.ts';
-import { SightingsMemory } from './navigation/sightings.ts';
+import { cellOfKey, SightingsMemory } from './navigation/sightings.ts';
 import { SurfaceMemory } from './navigation/surface.ts';
 import { TerrainMemory } from './navigation/terrain.ts';
 
@@ -59,8 +59,39 @@ export class GameClient {
         .filter(row => row.length >= 7 && row[5] !== null)
         .map(([x, y, z, at, _hazard, _boxes, code]) => ({ x, y, z, at, code })),
     );
+    this.reconcileSightedHazards();
     if (batch.sightings && batch.state) batch.state.nearbyEntities = this.sightings.entities(batch.state.position);
     if (batch.state) this.notice(batch.state);
+  }
+  // A changing block can invalidate its terrain cell while its GUI prevents a
+  // fresh surroundings ray. Preserve a directly observed burning block as a
+  // navigation hazard until another sighting proves that cell changed.
+  reconcileSightedHazards() {
+    const hazards = new Map<string, { cell: { x: number; y: number; z: number }; code: string }>();
+    for (const record of this.sightings.remembered('block')) {
+      const cell = cellOfKey(record.key);
+      if (!cell || !traitsOf({ kind: 'block', code: record.code, facts: record.extra?.facts }).includes('fire')) continue;
+      hazards.set(`${cell.x},${cell.y},${cell.z}`, { cell, code: record.code });
+    }
+    for (const [id, cell] of this.map.cells) {
+      if (!cell.sightingHazard || hazards.has(id)) continue;
+      if (cell.sightingBase) this.map.put(cell.sightingBase);
+      else this.map.forget(id);
+    }
+    for (const [id, hazard] of hazards) {
+      const current = this.map.cells.get(id);
+      if (current?.hazard === 'fire') continue;
+      this.map.put({
+        ...(current ?? hazard.cell),
+        at: current?.at ?? 0,
+        seenAt: current?.seenAt ?? Date.now(),
+        boxes: current?.boxes ?? [],
+        traits: [...new Set([...(current?.traits ?? []), 'fire'])],
+        code: hazard.code,
+        sightingHazard: true,
+        sightingBase: current ?? null,
+      });
+    }
   }
   // A kind seen or carried for the first time is looked up in the handbook once,
   // facts only: one small read per code, ever, never a page of text.
