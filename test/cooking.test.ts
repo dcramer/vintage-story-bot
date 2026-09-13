@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cook } from '../src/goals/cook.ts';
+import { cook, handAfterIgnition } from '../src/goals/cook.ts';
 import { remember } from '../src/support/facts.ts';
 import { ignite } from '../src/support/fire.ts';
 
@@ -58,6 +58,17 @@ test('ignition keeps trying verified no-effects beyond the old stochastic cap', 
   const result = await ignite(field, { target, lit: 'firepit-lit', holdMs: 1 });
   assert.equal(result.ok, true);
   assert.equal(attempts, 13);
+});
+
+test('a full ordinary hotbar puts the firestarter away into an existing safe hand', () => {
+  const full = Array.from({ length: 12 }, (_, slot) => ({
+    slot,
+    code: slot === 4 ? 'game:firestarter' : slot === 10 ? null : `game:item-${slot}`,
+  }));
+  assert.equal(handAfterIgnition(full, 'game:firestarter'), 'game:item-0', 'bag-only hotbar slots are not usable hands');
+  full[7].code = null;
+  assert.equal(handAfterIgnition(full, 'game:firestarter'), null, 'an ordinary empty hand remains preferable');
+  assert.equal(handAfterIgnition(full, 'game:knife-generic-flint'), 'game:knife-generic-flint');
 });
 
 test('cooking refuses to ignite when it cannot move clear of the cold firepit', async () => {

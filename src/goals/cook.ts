@@ -9,6 +9,13 @@ import { equip } from '../support/inventory.ts';
 import { cleanName, runField } from '../support/task.ts';
 import { closeContainer, moveItems, openContainer } from './store_items.ts';
 
+export function handAfterIgnition(hotbar, hand) {
+  if (hand !== 'game:firestarter') return hand;
+  const ordinary = hotbar.filter(slot => slot.slot < 10);
+  if (ordinary.some(slot => !slot.code)) return null;
+  return ordinary.find(slot => slot.code && slot.code !== 'game:firestarter')?.code;
+}
+
 // Firepit slots are the native fuel/input/output slots, not interchangeable storage.
 export async function cook(field, { target, item, count, fuel }) {
   const cell = parseBlockKey(target);
@@ -104,7 +111,8 @@ export async function cook(field, { target, item, count, fuel }) {
       });
       if (!lit.ok) return summary({ ok: false, reason: 'ignition_unverified', detail: lit });
       // Put away the firestarter before the click that opens the hot firepit.
-      await equip(field, { item: hand === 'game:firestarter' ? null : hand });
+      const nextHand = handAfterIgnition(field.latest.hotbar, hand);
+      if (nextHand !== undefined) await equip(field, { item: nextHand });
     }
     container = await open();
     while (moved < count) {
