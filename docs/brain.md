@@ -45,6 +45,9 @@ requires observed clear cells and does not apply during a temporal storm.
 
 After raw forage fails, the cattail fallback remains available until recovery
 reaches half satiety, including across interrupted work and controller restarts.
+Daytime provisions also switch to cooking after an empty raw-forage search,
+while there is still time to prepare the night reserve. A failed root search
+sets that optional task aside; an empty raw-forage search alone does not.
 Below 10% satiety harvest one root at a time; otherwise prepare batches of four.
 Uprooting destroys the plant. A new recovery episode tries raw forage again.
 Reserve two ordinary inventory slots before a food trip; shed expendable soil

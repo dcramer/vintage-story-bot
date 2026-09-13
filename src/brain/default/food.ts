@@ -73,7 +73,7 @@ export function food(ctx: Context, keep: number): Decision {
   if (
     ctx.tried.has(ctx.job) ||
     (now >= (memory.notes.cookUntil ?? 0) && k.reserve > 0) ||
-    (!roots && !memory.notes.cooking && (!recovering || !(memory.notes.cookUntil > 0)))
+    (!roots && !memory.notes.cooking && !(memory.notes.cookUntil > (recovering ? 0 : now)))
   )
     return {
       start: 'forage',
@@ -135,10 +135,7 @@ export function food(ctx: Context, keep: number): Decision {
       return {
         start: 'harvest',
         args: { match: 'coopersreed', item: ROOT, count: batch, tool: 'Knife', timeoutMs: 600000 },
-        why:
-          batch === 1
-            ? 'one emergency cattail root after raw forage failed below 10% satiety'
-            : 'a cattail root batch after raw forage failed below 20% satiety',
+        why: batch === 1 ? 'one emergency cattail root after raw forage failed below 10% satiety' : 'a cattail root batch after raw forage failed',
       };
   }
 
@@ -247,16 +244,11 @@ export const foodEnded: Concern['ended'] = (last, memory, reading) => {
 
 export const foodSetAside: Concern['setAside'] = (last, memory, reading) => {
   const reason = last.reason ?? last.result?.reason;
-  // An optional provisions pass that exhausted the local forage must yield to
-  // the work list instead of immediately starting the identical bounded search
-  // again. Urgent recovery keeps searching, and carried roots still enter the
-  // cooking fallback below.
-  if (last.kind === 'forage') {
-    const roots = reading.inventory?.inventories
-      ?.flatMap(inventory => inventory.slots ?? [])
-      .reduce((n, slot) => n + (slot.code === ROOT ? (slot.quantity ?? 0) : 0), 0);
-    return memory.job === 'provisions' && !roots && !memory.notes.cooking && failedOnItsOwn(last);
-  }
+  // Empty raw forage switches daytime provisions to cooking too. Waiting for
+  // urgent hunger before starting the same fallback can leave too little time
+  // to gather roots, build a firepit and heat the first meal. A failed root
+  // search still sets optional provisions aside below.
+  if (last.kind === 'forage') return false;
   // A bounded root search may exhaust the area after collecting part of its
   // batch. Those roots are already a useful result; cook them instead of
   // setting aside the whole food concern and starting raw forage again.

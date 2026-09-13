@@ -1015,32 +1015,43 @@ test('brain: partial provisions do not restart forage during its cooking fallbac
   assert.match(prepare.why, /firestarter/);
 });
 
-test('brain: exhausted optional provisions forage yields to the work list', () => {
+test('brain: empty daytime forage prepares roots before hunger becomes urgent', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.job = 'provisions';
   memory.notes.stash = chestNote();
-  const choice = decide(
-    reading({
-      state: state({ vitals: { hunger: { current: 600, max: 1500 } } }),
-      inventory: kitted(),
-      now: 1000,
-      last: { id: 'food', kind: 'forage', ok: false, outcome: 'no_progress', reason: 'Requested deadline reached' },
-    }),
-    memory,
-  );
-  assert.notEqual(choice.start, 'forage');
-  assert.equal(memory.tried.provisions?.at, 1000);
-  memory.job = null;
-  const afterTravel = decide(
-    reading({
-      state: state({ position: { x: 100, y: 100, z: 100 }, vitals: { hunger: { current: 600, max: 1500 } } }),
-      inventory: kitted(),
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 12), slot('game:drygrass'), slot(null, 0), slot(null, 0));
+  const input = reading({
+    state: state({ vitals: { hunger: { current: 600, max: 1500 } } }),
+    inventory: supplies,
+    now: 1000,
+    last: { id: 'food', kind: 'forage', ok: false, outcome: 'no_progress', reason: 'none_found' },
+  });
+  const choice = decide(input, memory);
+  assert.equal(memory.notes.foodRecovery, undefined, 'this is preventive food preparation');
+  assert.equal(memory.tried.provisions, undefined);
+  assert.equal(choice.start, 'harvest');
+  assert.equal(choice.args.item, 'game:cattailroot');
+  assert.equal(choice.args.count, 4);
+
+  const exhausted = decide(
+    {
+      ...input,
       now: 2000,
-    }),
+      last: {
+        id: 'roots',
+        kind: 'harvest',
+        ok: false,
+        outcome: 'no_progress',
+        reason: 'none_found',
+        result: { item: 'game:cattailroot', gained: 0 },
+      },
+    },
     memory,
   );
-  assert.notEqual(afterTravel.start, 'forage', 'moving away from the failed search does not immediately reopen optional provisions');
+  assert.equal(memory.tried.provisions?.at, 2000, 'an empty root search yields to other work');
+  assert.notEqual(exhausted.args?.item, 'game:cattailroot');
 });
 
 test('brain: a productive partial root harvest cooks what it found', () => {
