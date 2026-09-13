@@ -165,6 +165,12 @@ test('house: unknown terrain and hazards never qualify as a building site', () =
     ),
   );
   assert.equal(houseSite({ get: () => ({ boxes: [{}], hazard: 'water' }) }, p), null);
+  const occupied = (code, traits = []) => ({
+    get: (x, y, z) => (y === 100 ? { code, traits, boxes: [], hazard: null } : terrain.get(x, y, z)),
+  });
+  assert.ok(houseSite(occupied('game:flower-horsetail-free'), p), 'ground plants are cleared before construction');
+  assert.ok(houseSite(occupied('game:leaves-birch', ['leaves']), p), 'visible leaves are removable cover');
+  assert.equal(houseSite(occupied('game:stationarybasket-east'), p), null, 'non-colliding occupied cells are not empty construction space');
 });
 
 test('shelter refuses unknown ground, unsupported floors and blocked interiors', () => {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
-import { surfaceCover } from '../support/sites.ts';
+import { shelterCover } from '../support/sites.ts';
 import { house as houseCells, houseScaffold } from '../support/structures.ts';
 import { runField } from '../support/task.ts';
 import { build, digArea } from './build.ts';
@@ -27,14 +27,15 @@ export default defineGoal({
       if (phase === 'walls') {
         const cover = [];
         for (let x = 0; x < 10; x++)
-          for (let z = 0; z < 7; z++) {
-            const cell = { x: origin.x + x, y: origin.y, z: origin.z + z };
-            if (surfaceCover(field.env.map.get(cell.x, cell.y, cell.z))) cover.push(cell);
-          }
+          for (let z = 0; z < 7; z++)
+            for (let h = 0; h <= 4; h++) {
+              const cell = { x: origin.x + x, y: origin.y + h, z: origin.z + z };
+              if (shelterCover(field.env.map.get(cell.x, cell.y, cell.z), h)) cover.push(cell);
+            }
         const outside = { x: origin.x + 4, y: origin.y, z: origin.z + 7 };
-        if (surfaceCover(field.env.map.get(outside.x, outside.y, outside.z))) cover.push(outside);
+        if (shelterCover(field.env.map.get(outside.x, outside.y, outside.z), 0)) cover.push(outside);
         for (const step of houseScaffold(origin, 'game:rammed-light-plain'))
-          if (surfaceCover(field.env.map.get(step.x, step.y, step.z))) cover.push(step);
+          if (shelterCover(field.env.map.get(step.x, step.y, step.z), step.y - origin.y)) cover.push(step);
         if (cover.length) {
           const cleared = await digArea(field, survival, { cells: cover, tool: undefined });
           if (!cleared.ok) return { ...cleared, goal: 'house', phase: 'site', origin };

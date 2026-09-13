@@ -1,4 +1,4 @@
-import { supportedFloor, surfaceCover } from '../../../support/sites.ts';
+import { shelterCover, supportedFloor } from '../../../support/sites.ts';
 import { house as blueprint, houseScaffold } from '../../../support/structures.ts';
 import type { Cell, Concern } from '../concern.ts';
 import { failedOnItsOwn, goTo, setHome } from '../concern.ts';
@@ -25,7 +25,7 @@ export function houseSite(terrain: any, position: Cell): Cell | null {
             }
             for (let h = 0; h <= 4; h++) {
               const air = terrain.get(origin.x + x, y + h, origin.z + z);
-              if (!air || air.hazard || (air.boxes.length && !(h === 0 && surfaceCover(air)))) {
+              if (!air || air.hazard || ((air.boxes.length || (air.code && air.code !== 'game:air')) && !shelterCover(air, h))) {
                 fits = false;
                 break;
               }
@@ -37,7 +37,7 @@ export function houseSite(terrain: any, position: Cell): Cell | null {
           if (!supportedFloor(ground, y)) continue;
           for (let h = 0; h < 4; h++) {
             const air = terrain.get(step.x, y + h, step.z);
-            if (!air || air.hazard || (air.boxes.length && !(h === 0 && surfaceCover(air)))) fits = false;
+            if (!air || air.hazard || ((air.boxes.length || (air.code && air.code !== 'game:air')) && !shelterCover(air, h))) fits = false;
           }
           if (fits) return origin;
         }
