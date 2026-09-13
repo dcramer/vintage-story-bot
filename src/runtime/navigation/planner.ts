@@ -2,6 +2,19 @@ import { failedEdges } from './failed-edges.ts';
 import { visitedFrontiers } from './frontiers.ts';
 import { BODY_HEIGHT, horizontal, JUMP_HEIGHT, key } from './terrain.ts';
 
+// Escape is a region, not a compass point that may lie beyond an impassable
+// bank. Every observed threat must be cleared before that region is reached.
+export function clearanceRemaining(point, threats) {
+  return Math.max(
+    0,
+    ...threats.map(threat =>
+      threat.verticalRange !== undefined && Math.abs(point.y - threat.point.y) > threat.verticalRange
+        ? 0
+        : Math.max(0, threat.minimumDistance - horizontal(point, threat.point)),
+    ),
+  );
+}
+
 // A* over standing cells, in the shape of mineflayer-pathfinder: moves come
 // from the terrain grid with their costs, a goal is a predicate, and when the
 // goal is beyond what has been seen the best frontier node is returned as a
@@ -24,7 +37,12 @@ export function findRoute(
   } = {},
 ) {
   const deadline = performance.now() + deadlineMs;
-  const remaining = p => (goal.horizontalOnly ? horizontal(p, goal) : Math.hypot(p.x - goal.x, (p.y - goal.y) * 0.5, p.z - goal.z));
+  const remaining = p =>
+    goal.clearOf?.length
+      ? clearanceRemaining(p, goal.clearOf)
+      : goal.horizontalOnly
+        ? horizontal(p, goal)
+        : Math.hypot(p.x - goal.x, (p.y - goal.y) * 0.5, p.z - goal.z);
   // A hostile is kept clear of, not by refusing every cell nearer than the body is now (a notch in a hill
   // would trap the bot), but by charging for closeness: cells inside the kept distance cost extra by how
   // far inside they are, and only cells within striking range are refused outright.
@@ -34,6 +52,7 @@ export function findRoute(
   const dread = p =>
     avoid.reduce((sum, item) => sum + (relevant(p, item) ? Math.max(0, item.minimumDistance - horizontal(p, item.point)) * 4 : 0), 0);
   const reached = p => {
+    if (goal.clearOf?.length) return remaining(p) === 0;
     if (goal.arrivalRadius && horizontal(p, goal) < goal.arrivalRadius && (goal.horizontalOnly || Math.abs(p.y - goal.y) < 0.6)) return true;
     return Math.abs(p.x - goal.x) < 0.51 && Math.abs(p.z - goal.z) < 0.51 && (goal.horizontalOnly || Math.abs(p.y - goal.y) < 0.6);
   };

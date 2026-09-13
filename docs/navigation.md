@@ -56,6 +56,8 @@ Failed steps stay excluded across navigation legs for one minute, scoped to the 
 
 Visited frontier viewpoints also survive new legs for one minute (at most 256 per terrain memory). A newly observed cell from that viewpoint's missing set permits reconsideration sooner. Thin full-width cover suppresses buried frontiers, and observed water requests its immediate bed without making deeper dry landings exploration targets.
 
+Evasion routes seek any observed standing cell beyond every active hostile's clearance perimeter, not only the compass point directly away. The compass point guides looking; terrain determines the escape route. Reaching an escape route's end never reports the original travel destination reached.
+
 ## Observability
 
 `goal_status` progress phases: `walking`, `rough_route` / `no_rough_route` (with rough route status and the chosen leg), `rerouting` (reason), `route_cleared`, `probing`, `recovering_route`, `evading`. The dashboard `navigation` topic carries the live navigator view: state, reason, next checkpoint, yaw error, last replan, diagnostics (missing cells, support, clearance), threats.

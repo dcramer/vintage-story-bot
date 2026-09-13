@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { failEdge, failedEdges } from '../src/runtime/navigation/failed-edges.ts';
 import { visitedFrontiers, visitFrontier } from '../src/runtime/navigation/frontiers.ts';
 import { Navigation, NO_PROGRESS_MS } from '../src/runtime/navigation/navigator.ts';
-import { findRoute } from '../src/runtime/navigation/planner.ts';
+import { clearanceRemaining, findRoute } from '../src/runtime/navigation/planner.ts';
 import { distance, horizontal, TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 
 const stateAt = position => ({
@@ -382,4 +382,24 @@ test('new navigation legs retain visited frontiers until terrain evidence change
   visitFrontier(map, end, now);
   map.put({ ...missing, seenAt: now, traits: [], boxes: [] });
   assert.equal(visitedFrontiers(map, now).size, 0, 'new observed terrain permits reconsidering the viewpoint');
+});
+
+test('escape routing clears the hostile perimeter when the away heading is blocked', () => {
+  const map = new TerrainMemory();
+  for (let x = -40; x <= 0; x++) column(map, x, 0);
+  const start = { x: 0.5, y: 0, z: 0.5 };
+  const threat = { key: 'entity:1', code: 'game:bowtorn-surface', point: { x: 0.5, y: 9, z: 4.5 } };
+  const state = { ...stateAt(start), nearbyEntities: [threat] };
+  const nav = new Navigation(map, state, { x: -3.5, y: 0, z: 0.5 }, 0);
+  nav.tick(state, 0);
+  assert.equal(nav.evading, true);
+  assert.ok(nav.target.z < start.z, 'the original away heading has no observed footing');
+  assert.equal(nav.routeReaches, true, 'the observed lateral corridor reaches safety');
+  assert.equal(clearanceRemaining(nav.route.at(-1), nav.target.clearOf), 0);
+  assert.ok(nav.route.at(-1).x < -30, 'the route uses reachable ground beside the blocked heading');
+  const first = nav.target.clearOf[0];
+  assert.ok(
+    clearanceRemaining(nav.route.at(-1), [first, { ...first, point: nav.route.at(-1) }]) > 0,
+    'escaping one hostile cannot end beside another',
+  );
 });

@@ -1,8 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { fleeTarget, hostileEntity, nearbyThreats, nearbyUnclearedThreats, threatStartDistance, threatVerticalRange } from '../../support/threats.ts';
+import {
+  fleeTarget,
+  hostileEntity,
+  nearbyThreats,
+  nearbyUnclearedThreats,
+  threatClearDistance,
+  threatStartDistance,
+  threatVerticalRange,
+} from '../../support/threats.ts';
 import { failEdge, failedEdges } from './failed-edges.ts';
 import { visitedFrontiers, visitFrontier } from './frontiers.ts';
-import { findRoute } from './planner.ts';
+import { clearanceRemaining, findRoute } from './planner.ts';
 import { angle, distance, horizontal, JUMP_HEADROOM, JUMP_HEIGHT, key, lookAt, MAX_DROP, STEP_HEIGHT } from './terrain.ts';
 
 // Follows a route of standing cells the way a player walks: aim at the next
@@ -114,6 +122,7 @@ export class Navigation {
   }
   // Whether a route's last cell satisfies the destination (a full route) or is only the nearest frontier.
   reaches(end) {
+    if (end && this.target.clearOf?.length) return clearanceRemaining(end, this.target.clearOf) === 0;
     return (
       !!end &&
       horizontal(end, this.target) <= Math.max(this.target.arrivalRadius ?? 0.3, 0.5) + 0.01 &&
@@ -211,6 +220,17 @@ export class Navigation {
       this.threat = nearby;
       this.threats = threats;
     }
+    if (this.evading) {
+      this.target = {
+        ...this.target,
+        clearOf: threats.map(entity => ({
+          point: entity.point,
+          minimumDistance: threatClearDistance(entity.code) + 1,
+          verticalRange: threatVerticalRange(entity.code),
+        })),
+      };
+      this.routeReaches = this.reaches(this.route.at(-1));
+    }
     for (const entity of state.nearbyEntities ?? []) {
       if (!hostileEntity(entity)) continue;
       const until = now + 60000 - (entity.ageMs ?? 0);
@@ -237,8 +257,7 @@ export class Navigation {
     if (
       grounded &&
       // A step ends on its point or just past it (within about half a block); the destination is met the same way.
-      horizontal(p, this.target) < Math.max(this.target.arrivalRadius ?? 0.3, 0.5) &&
-      (this.target.horizontalOnly || Math.abs(p.y - this.target.y) < 0.6)
+      this.reaches(p)
     ) {
       if (this.evading && nearby) {
         this.threat = nearby;
@@ -276,7 +295,8 @@ export class Navigation {
       const planned = findRoute(map, from, this.target, w, h, this);
       const end = planned?.at(-1),
         old = this.route.at(-1);
-      if (end && old && (this.reaches(end) || horizontal(end, this.target) + 1.5 < horizontal(old, this.target))) this.adopt(planned, p, now, true);
+      const remaining = point => (this.target.clearOf?.length ? clearanceRemaining(point, this.target.clearOf) : horizontal(point, this.target));
+      if (end && old && (this.reaches(end) || remaining(end) + 1.5 < remaining(old))) this.adopt(planned, p, now, true);
       else this.plannedRevision = map.revision;
     }
     // Advance past checkpoints the body has reached: close by, or crossed
@@ -307,7 +327,11 @@ export class Navigation {
     if (this.index >= this.route.length) {
       // The last cell of a full route was reached: the body stands within a step's tolerance of the
       // destination, which is as close as a walk gets to any point; that is arrival.
-      if (this.routeReaches) return this.finish('arrived', 'destination_reached');
+      if (this.routeReaches) {
+        if (!this.evading) return this.finish('arrived', 'destination_reached');
+        this.survey(now);
+        return null;
+      }
       // Remember the frontier cell this partial route ended on, by the cell's
       // own key, so the planner does not pick it again for this goal.
       const end = this.route.at(-1) ?? p,
