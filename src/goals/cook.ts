@@ -147,7 +147,7 @@ export default defineGoal({
       item: z.string().min(1).max(160).describe('Exact raw item code whose handbook cooking output is edible.'),
       count: z.number().int().min(1).max(8).default(1),
       fuel: z.number().int().min(1).max(32).default(8).describe('Firewood to have in the fuel slot before lighting.'),
-      timeoutMs: z.number().int().min(5000).max(1200000).default(600000),
+      timeoutMs: z.number().int().min(5000).max(1200000).optional(),
     })
     .strict(),
   destructive: true,

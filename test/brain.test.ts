@@ -1196,6 +1196,33 @@ test('brain: starvation prepares one root locally instead of returning to a dist
   assert.equal(cooking.start, 'cook');
   assert.equal(cooking.args.count, 1);
   assert.equal(cooking.args.fuel, 2);
+  assert.equal(cooking.args.timeoutMs, undefined, 'cooking ends from success or interruption, not a caller deadline');
+});
+
+test('brain: a legacy cook deadline resumes food already loaded in the firepit', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'eat';
+  memory.notes.cookUntil = 10_000;
+  memory.notes.firepit = { x: 2, y: 100, z: 0 };
+  memory.notes.cooking = { count: 1 };
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 2));
+
+  const choice = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 0, max: 1500 } } }),
+      inventory: supplies,
+      terrain: { get: () => ({ code: 'game:firepit-cold' }) },
+      now: 2_000,
+      last: { id: 'cook', kind: 'cook', ok: false, outcome: 'no_progress', reason: 'Requested deadline reached' },
+    }),
+    memory,
+  );
+
+  assert.equal(memory.tried.eat, undefined);
+  assert.equal(choice.start, 'cook');
+  assert.equal(choice.args.timeoutMs, undefined);
 });
 
 test('brain: starvation uses carried firewood before replacing a broken axe', () => {

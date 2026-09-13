@@ -179,7 +179,6 @@ export function food(ctx: Context, keep: number): Decision {
       item: ROOT,
       count: memory.notes.cooking.count,
       fuel,
-      timeoutMs: COOK_MS,
     },
     why: 'cook roots and retrieve any food left in the firepit',
   };
@@ -256,6 +255,11 @@ export const foodSetAside: Concern['setAside'] = (last, memory, reading) => {
   // setting aside the whole food concern and starting raw forage again.
   if (last.kind === 'harvest' && last.result?.item === ROOT && (last.result?.gained ?? 0) > 0) return false;
   if (last.kind === 'take_items' && last.result?.target?.includes(':game:firepit-') && last.result?.reason === 'none_found') return false;
+  // Input left in an owned firepit is durable progress. A caller from an older
+  // controller may still report its legacy cook deadline; keep the recovery
+  // concern live so the next decision resumes that loaded fire instead of
+  // launching another empty forage trip.
+  if (last.kind === 'cook' && memory.notes.cooking) return false;
   const recoverableFuelLoad =
     last.kind === 'cook' &&
     last.result?.phase === 'loading' &&
