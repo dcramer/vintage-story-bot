@@ -253,6 +253,36 @@ test('a search without surface vision approaches its far frontier in legal local
   assert.ok(Math.hypot(walked[0].x - start.x, walked[0].z - start.z) <= APPROACH_LEG + 1, 'the native navigation request is a bounded local leg');
 });
 
+test('a threatened search also bounds its frontier when walking bypasses rough routing', async () => {
+  const places = new Places(() => 1000);
+  const field = new Fieldwork({ places, surface: {} }, { now: () => 1000 });
+  const start = { x: 0.5, y: 100, z: 0.5 };
+  field.latest = {
+    position: start,
+    orientation: { yawDegrees: 0 },
+    nearbyEntities: [{ code: 'game:wolf-eurasian-adult-female', point: { x: 10, y: 100, z: 0.5 } }],
+    body: { halfWidth: 0.3, height: 1.8 },
+    capabilities: ['surface_vision'],
+  };
+  field.scan = async () => [];
+  field.lookAround = async () => [];
+  field.recall = () => [];
+  field.report = () => {};
+  field.explore = () => ({ x: start.x, y: start.y, z: start.z + APPROACH_LEG, horizontalOnly: true, arrivalRadius: 2 });
+  let walked: any = null;
+  field.walk = async target => {
+    walked = target;
+    field.latest = { ...field.latest, position: { x: target.x, y: start.y, z: target.z } };
+    return { state: 'arrived' };
+  };
+  const search = new Search(field, { kind: 'stick', match: ['stick'], wanted: () => true, take: async () => false });
+
+  await search.step();
+
+  assert.equal(field.seeing, true, 'the danger branch, not missing surface vision, bounds the leg');
+  assert.ok(Math.hypot(walked.x - start.x, walked.z - start.z) <= APPROACH_LEG + 1, 'the native navigation request stays local');
+});
+
 test('a lead with a threatened route is briefly set aside instead of retried immediately', () => {
   const target = { key: 'cranberry', point: { x: 41, y: 0, z: 0 } };
   const places = new Places(() => 1000);

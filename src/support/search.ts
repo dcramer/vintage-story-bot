@@ -244,12 +244,13 @@ export class Search {
       field.heading = frontier.heading;
     }
     field.report('ranging', { frontier: { x: Math.round(frontier.x), z: Math.round(frontier.z) }, distance: Math.round(horizontal(p, frontier)) });
-    // Surface vision lets walk split a far frontier into rough-route legs. If
-    // that capability is unavailable, keep this first leg local: the native
-    // navigator rejects destinations beyond 128 blocks, while frontiers are
-    // deliberately farther away so searches keep a stable heading.
+    // Surface vision usually lets walk split a far frontier into rough-route
+    // legs. If that capability is unavailable, or danger makes walk bypass
+    // rough routing, keep this first leg local: the native navigator rejects
+    // destinations beyond 128 blocks, while frontiers are deliberately
+    // farther away so searches keep a stable heading.
     const destination =
-      !field.seeing && horizontal(p, frontier) > APPROACH_LEG
+      (!field.seeing || nearestThreat(field.latest)) && horizontal(p, frontier) > APPROACH_LEG
         ? field.explore(frontier, APPROACH_LEG)
         : { x: frontier.x, y: frontier.y, z: frontier.z, horizontalOnly: true, arrivalRadius: 4 };
     let result = await field.walk(destination, this.pause);
