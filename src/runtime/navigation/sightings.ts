@@ -32,11 +32,17 @@ export class SightingsMemory {
     this.now = snapshot.clock ?? this.now;
     this.wall = wall;
     const fresh = [];
+    const blocks = [];
     for (const [key, kind, code, x, y, z, how, at, extra] of snapshot.sightings ?? []) {
       const record = { key, kind, code, point: { x, y, z }, how, at: at ?? this.now, seenAt: wall, extra: extra ?? null, visible: true };
       if (!this.records.has(key)) fresh.push(record);
       this.records.set(key, record);
+      if (kind === 'block') {
+        const cell = cellOfKey(key);
+        if (cell) blocks.push({ ...cell, code, at: record.at });
+      }
     }
+    this.forgetChangedBlocks(blocks);
     // The snapshot carries only what was confirmed since the last look; a
     // sighting is in view while its last confirmation is inside the eye's window.
     for (const record of this.records.values()) record.visible = record.at > 0 && this.now - record.at <= (windowMs[record.kind] ?? 1000);
@@ -74,6 +80,18 @@ export class SightingsMemory {
   }
   forget(key) {
     this.records.delete(key);
+  }
+  // A newly observed code (including air) replaces the old sighting at that cell.
+  // Unknown/forgotten terrain is not evidence that a remembered plant disappeared.
+  forgetChangedBlocks(blocks: { x: number; y: number; z: number; code: string | null; at: number }[]) {
+    if (!blocks.length) return;
+    const observed = new Map(blocks.map(block => [`${block.x},${block.y},${block.z}`, block]));
+    for (const record of this.records.values()) {
+      if (record.kind !== 'block') continue;
+      const cell = cellOfKey(record.key);
+      const current = cell && observed.get(`${cell.x},${cell.y},${cell.z}`);
+      if (current && current.at >= record.at && current.code !== record.code) this.forget(record.key);
+    }
   }
   // Blocks and items set aside after a failed attempt, by every goal: a player
   // does not try the same stuck stick again a minute later. Entities never.

@@ -53,6 +53,11 @@ export class GameClient {
     this.knowledge?.touch();
     if (batch.surface) this.surface.apply(batch.surface);
     if (batch.sightings) this.sighted(this.sightings.apply(batch.sightings));
+    this.sightings.forgetChangedBlocks(
+      (batch.terrain?.cells ?? [])
+        .filter(row => row.length >= 7 && row[5] !== null)
+        .map(([x, y, z, at, _hazard, _boxes, code]) => ({ x, y, z, at, code })),
+    );
     if (batch.sightings && batch.state) batch.state.nearbyEntities = this.sightings.entities(batch.state.position);
     if (batch.state) this.notice(batch.state);
   }
