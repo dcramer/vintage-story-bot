@@ -135,6 +135,7 @@ export function superviseStream({
       : null;
   let server = null,
     encoder = null,
+    capture = null,
     display = null,
     codec = null,
     stopping = false,
@@ -144,6 +145,8 @@ export function superviseStream({
     server: Boolean(server),
     encoder: Boolean(encoder),
     display,
+    width: capture?.width ?? null,
+    height: capture?.height ?? null,
     codec,
     reason,
     fps,
@@ -193,8 +196,20 @@ export function superviseStream({
   }
 
   async function ensureEncoder() {
-    if (encoder) return;
     const screen = await currentDisplay();
+    if (encoder) {
+      if (screen && ['display', 'pid', 'startedAt', 'width', 'height'].every(key => screen[key] === capture?.[key])) return;
+      // X11 capture can stay alive on a replaced display and publish black
+      // frames forever. A live encoder process is not proof it still captures
+      // the current game display, even when the display number is unchanged.
+      const stale = encoder;
+      encoder = null;
+      capture = null;
+      stale.kill('SIGTERM');
+      reason = 'display changed; restarting capture';
+      changed();
+      return;
+    }
     if (!screen) {
       reason = 'no display is serving; start the game';
       return;
@@ -235,12 +250,14 @@ export function superviseStream({
     child.once('exit', code => {
       if (encoder === child) {
         encoder = null;
+        capture = null;
         reason = `ffmpeg exited (${code}); see ${paths.encoderLog}`;
         log(reason);
         changed();
       }
     });
     encoder = child;
+    capture = screen;
     display = screen.display;
     reason = null;
     log(`ffmpeg streaming ${screen.display} at ${screen.width}x${screen.height} ${fps} fps via ${codec}`);
@@ -267,6 +284,7 @@ export function superviseStream({
     clearInterval(timer);
     const children = [encoder, server].filter(Boolean);
     encoder = null;
+    capture = null;
     server = null;
     for (const child of children) child.kill('SIGTERM');
     const deadline = Date.now() + 5000;
