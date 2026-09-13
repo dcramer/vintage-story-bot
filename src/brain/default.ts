@@ -414,6 +414,13 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
       ...(Number.isInteger(kept?.cooking?.count) && kept!.cooking!.count > 0 && kept!.cooking!.count <= 4
         ? { cooking: { count: kept!.cooking!.count, ...(kept?.cooking?.needsFuel === true ? { needsFuel: true } : {}) } }
         : {}),
+      ...(Array.isArray(kept?.deferredCooking) && kept.deferredCooking.length
+        ? {
+            deferredCooking: kept.deferredCooking
+              .filter(p => cell(p) && Number.isInteger(p.count) && p.count > 0 && p.count <= 4 && Number.isFinite(p.retryAfter))
+              .slice(-16),
+          }
+        : {}),
       ...(Number.isFinite(kept?.cookUntil) ? { cookUntil: kept!.cookUntil } : {}),
       ...(kept?.foodRecovery === true ? { foodRecovery: true } : {}),
       ...(cell(kept?.house) ? { house: cell(kept?.house) } : {}),

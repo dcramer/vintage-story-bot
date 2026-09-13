@@ -4,7 +4,7 @@
 import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import { HUNGRY } from '../../../support/food.ts';
 import type { Concern } from '../concern.ts';
-import { food, foodEnded, foodSetAside, LOCAL_COOKING_DISTANCE } from '../food.ts';
+import { food, foodEnded, foodSetAside, LOCAL_COOKING_DISTANCE, nearbyCooking } from '../food.ts';
 import type { Situation } from '../situation.ts';
 
 // Hungry is the goals' own line (support/food.ts), so the brain interrupts work where forage would stomach poor food.
@@ -23,7 +23,8 @@ export const eat: Concern = {
   },
   ended: foodEnded,
   setAside: foodSetAside,
-  running: ({ active, danger, hurt, classifyingHurt, s, k, memory, state }) => {
+  running: ctx => {
+    const { active, danger, hurt, classifyingHurt, s, k, memory, state } = ctx;
     if (
       active?.kind === 'travel' &&
       s.hunger !== null &&
@@ -40,6 +41,7 @@ export const eat: Concern = {
     if (active?.kind === 'cook' && danger && !hurt && !classifyingHurt && !s.threatNear)
       return { wait: 'finishing critical cooking while the threat stays at a distance' };
     if (active?.kind !== 'forage') return null;
+    if (!danger && !hurt && !classifyingHurt && nearbyCooking(ctx)) return { stop: 'check food left in the nearby firepit' };
     // Forage owns a deterministic evade-and-resume loop. Cancelling it on the
     // same sighting throws away its food leads and starts a second flight on
     // top of navigation's evasion, which is especially costly near starvation.

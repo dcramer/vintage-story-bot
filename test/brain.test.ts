@@ -1050,7 +1050,7 @@ test('brain: starvation uses carried firewood before replacing a broken axe', ()
   assert.equal(choice.args.count, 1);
 });
 
-test('brain: failed travel abandons an unreachable firepit and prepares a local replacement', () => {
+test('brain: failed travel defers cooking, prepares locally, and recovers food when back in reach', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.job = 'eat';
@@ -1076,6 +1076,57 @@ test('brain: failed travel abandons an unreachable firepit and prepares a local 
   assert.equal(memory.tried.eat, undefined, 'an unreachable old firepit does not set food aside');
   assert.equal(choice.start, 'harvest');
   assert.match(choice.why, /grass to build a firepit/);
+  const restarted = fresh(memory.notes);
+  restarted.startupChecked = true;
+  const local = reading({
+    state: state({ position: { x: 20.5, y: 110, z: 21.5 }, vitals: { hunger: { current: 100, max: 1500 } } }),
+    inventory: kitted(),
+    terrain: { get: (x, y, z) => (x === 20 && y === 110 && z === 20 ? { code: 'game:firepit-cold' } : undefined) },
+    now: 63_000,
+  });
+  restarted.job = 'eat';
+  const running = { id: 'search', kind: 'forage', state: 'running', by: 'brain' };
+  assert.deepEqual(
+    decide({ ...local, now: 3000, active: running }, restarted),
+    { wait: 'letting forage finish' },
+    'do not immediately retry the failed approach',
+  );
+  assert.deepEqual(
+    decide({ ...local, terrain: { get: () => undefined }, active: running }, restarted),
+    { wait: 'letting forage finish' },
+    'memory alone cannot confirm the firepit still exists',
+  );
+  assert.deepEqual(
+    decide({ ...local, active: running }, restarted),
+    { stop: 'check food left in the nearby firepit' },
+    'nearby pending food interrupts another forage expedition',
+  );
+  const resumed = decide(local, restarted);
+  assert.equal(resumed.start, 'take_items', 'check output before making tools or fuel');
+  assert.equal(resumed.args.items[0].count, 4);
+  assert.equal(restarted.notes.deferredCooking.length, 0);
+  const fed = kitted();
+  fed.inventories[0].slots.push(
+    slot('game:vegetable-cookedcattailroot', 1, { nutrition: { saturation: 100, health: 0 }, freshness: { state: 'fresh', freshHoursLeft: 100 } }),
+  );
+  const next = decide(
+    {
+      ...local,
+      inventory: fed,
+      now: 64_000,
+      last: {
+        id: 'take',
+        kind: 'take_items',
+        ok: false,
+        outcome: 'failed',
+        reason: 'none_found',
+        result: { target: resumed.args.target, reason: 'none_found', items: [{ item: 'game:vegetable-cookedcattailroot', moved: 1 }], contents: [] },
+      },
+    },
+    restarted,
+  );
+  assert.equal(next.start, 'eat', 'eat a verified partial ration even though fewer roots remained than expected');
+  assert.equal(restarted.notes.cooking, null, 'the opened empty container clears stale pending food');
 });
 
 test('brain: successful travel preserves the owned firepit and starts cooking', () => {

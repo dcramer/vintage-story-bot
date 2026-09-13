@@ -12,12 +12,44 @@ const FORAGE_MS = 180000;
 const COOK_MS = 600000;
 export const LOCAL_COOKING_DISTANCE = 48;
 
+// Failed routes defer food, never prove that it disappeared. Resume only
+// once back beside the observed firepit, after a short retry cooldown.
+export const nearbyCooking = ({ memory, state, reading, now }: Context) =>
+  !memory.notes.cooking &&
+  memory.notes.deferredCooking?.find(
+    p =>
+      p.retryAfter <= now &&
+      horizontal(state.position, p) <= 3 &&
+      Math.abs(state.position.y - p.y) <= 1 &&
+      /^game:firepit-(cold|extinct|lit)$/.test(reading.terrain?.get(p.x, p.y, p.z)?.code ?? ''),
+  );
+
 // Food preparation belongs to the brain: each goal still has one outcome.
 // Remember the owned firepit and food left in it across interrupted cooking.
 export function food(ctx: Context, keep: number): Decision {
   const { k, memory, now, state, reading } = ctx;
   const count = (item: string) => k.slots.reduce((n, slot) => n + (slot.code === item ? slot.quantity : 0), 0);
   const roots = count(ROOT);
+  const deferred = nearbyCooking(ctx);
+  if (deferred) {
+    const { x, y, z, count: pendingCount, needsFuel } = deferred;
+    memory.notes.firepit = { x, y, z };
+    memory.notes.cooking = { count: pendingCount, ...(needsFuel ? { needsFuel: true } : {}) };
+    memory.notes.deferredCooking = memory.notes.deferredCooking.filter(p => p !== deferred);
+    delete memory.tried[ctx.job];
+    ctx.tried.delete(ctx.job);
+    const code = reading.terrain.get(x, y, z).code;
+    return {
+      start: 'take_items',
+      args: {
+        target: `block:${state.position.dimension ?? 0}:${x}:${y}:${z}:${code}`,
+        items: [{ item: 'game:vegetable-cookedcattailroot', count: pendingCount }],
+        timeoutMs: 30000,
+      },
+      why: 'check food left in the nearby owned firepit before preparing more fuel',
+    };
+  }
+
   const emergency = ctx.s.hunger !== null && ctx.s.hunger < 0.1;
   const batch = emergency ? 1 : BATCH;
   // Only starvation justifies uprooting new cattails. A failed forage may
@@ -128,13 +160,32 @@ export function food(ctx: Context, keep: number): Decision {
 export const foodEnded: Concern['ended'] = (last, memory, reading) => {
   if (last.kind === 'forage' && !last.ok && last.outcome !== 'interrupted' && last.outcome !== 'refused')
     memory.notes.cookUntil = reading.now + COOK_MS;
-  // A remembered firepit is only useful while the bot can still reach it. If
-  // that walk fails, abandon both the site and any assumed contents so the
-  // next food decision prepares a complete local cooking attempt instead of
-  // walking back to the same unreachable ledge forever.
+  // Keep ownership and pending food when a route fails, without retrying
+  // that unreachable destination instead of preparing food locally.
   if (last.kind === 'travel' && !last.ok && failedOnItsOwn(last)) {
+    const pit = memory.notes.firepit;
+    if (pit && memory.notes.cooking) {
+      memory.notes.deferredCooking = [
+        ...(memory.notes.deferredCooking ?? []).filter(p => p.x !== pit.x || p.y !== pit.y || p.z !== pit.z),
+        { ...pit, ...memory.notes.cooking, retryAfter: reading.now + 60000 },
+      ].slice(-16);
+    }
     memory.notes.firepit = null;
     memory.notes.cooking = null;
+  }
+  if (
+    last.kind === 'take_items' &&
+    memory.notes.firepit &&
+    last.result?.target?.includes(`:${memory.notes.firepit.x}:${memory.notes.firepit.y}:${memory.notes.firepit.z}:game:firepit-`) &&
+    memory.notes.cooking
+  ) {
+    const moved = (last.result.items ?? []).filter(i => i.item === 'game:vegetable-cookedcattailroot').reduce((n, i) => n + (i.moved ?? 0), 0);
+    if (moved > 0) {
+      memory.notes.cooking.count -= moved;
+      if (memory.notes.cooking.count <= 0) memory.notes.cooking = null;
+    }
+    if (Array.isArray(last.result.contents) && !last.result.contents.some(s => s.code === ROOT || s.code === 'game:vegetable-cookedcattailroot'))
+      memory.notes.cooking = null;
   }
   if (
     last.kind === 'firepit' &&
@@ -169,6 +220,7 @@ export const foodSetAside: Concern['setAside'] = last => {
   // batch. Those roots are already a useful result; cook them instead of
   // setting aside the whole food concern and starting raw forage again.
   if (last.kind === 'harvest' && last.result?.item === ROOT && (last.result?.gained ?? 0) > 0) return false;
+  if (last.kind === 'take_items' && last.result?.target?.includes(':game:firepit-') && last.result?.reason === 'none_found') return false;
   const recoverableFuelLoad =
     last.kind === 'cook' &&
     last.result?.phase === 'loading' &&

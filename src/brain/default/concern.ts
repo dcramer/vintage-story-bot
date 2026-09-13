@@ -66,6 +66,7 @@ export type Notes = {
   firepit?: Cell | null;
   failedFirepits?: (Cell & { until: number })[];
   cooking?: { count: number; needsFuel?: boolean } | null;
+  deferredCooking?: (Cell & { count: number; needsFuel?: boolean; retryAfter: number })[];
   cookUntil?: number;
   foodRecovery?: boolean;
   construction?: Construction | null;

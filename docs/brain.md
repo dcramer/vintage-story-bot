@@ -44,7 +44,9 @@ one at a time: uprooting destroys the plant. Carried roots and pending food
 can still be cooked or retrieved above that threshold. A carried log ends
 urgent fuel gathering; an empty firepit more than 48 blocks away is replaced
 locally instead of spending the remaining health returning to it. Pending
-food in an owned firepit is still retrieved.
+food in an owned firepit is still retrieved. A failed route defers that cooking
+record rather than forgetting it. Back within reach of the observed firepit,
+check its output before preparing fuel; empty output resumes the pending cook.
 
 The starter shelter is a freestanding, above-ground building, never an emergency burrow. Its natural floor stays at ground level. A 5×5 rammed-earth starter shelter follows the [template](getting-started.md#starter-shelter-template) while the full rammed-earth house
 is built. A house site requires observed level ground and clear space; unknown
