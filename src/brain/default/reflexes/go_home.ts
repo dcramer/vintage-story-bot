@@ -12,14 +12,8 @@ export const goHome: Concern = {
   run: ctx => {
     const { home, storm, memory, k, state, reading } = ctx;
     const pending = memory.notes.shelter;
-    if (
-      !storm &&
-      pending &&
-      home &&
-      horizontal(state.position, home) > 32 &&
-      horizontal(state.position, { x: pending.x + 2.5, z: pending.z + 2.5 }) <= 8 &&
-      Math.abs(state.position.y - pending.y) < 2
-    ) {
+    const distance = pending ? horizontal(state.position, { x: pending.x + 2.5, z: pending.z + 2.5 }) : Infinity;
+    if (!storm && pending && home && horizontal(state.position, home) > distance + 32 && distance <= 64) {
       const cells = [
         ...shelterScaffold(pending, SHELTER_MATERIAL),
         ...blueprint(pending, SHELTER_MATERIAL),

@@ -266,6 +266,10 @@ test('night finishes a nearby almost complete owned shelter before a distant old
     return decision.start;
   };
   assert.equal(next(ctx), 'shelter');
+  const approach = { ...ctx, state: { position: { x: 12.5, y: 94, z: -20 } } };
+  assert.equal(next(approach), 'travel', 'approach a nearly finished starter that is much closer than the old home');
+  assert.equal(next({ ...approach, home: { x: 12.5, y: 94, z: -10 } }), 'enter_shelter', 'a closer existing home still wins');
+  assert.equal(next({ ...ctx, state: { position: { x: 12.5, y: 100, z: -50 } } }), 'enter_shelter', 'distant construction waits for daylight');
   assert.equal(next({ ...ctx, storm: true }), 'enter_shelter', 'a storm still requires the existing shelter');
   const get = ctx.reading.terrain.get;
   ctx.reading.terrain.get = (x, y, z) => (x === 10 && y === 102 && z === 20 ? { code: 'game:chest-east' } : get(x, y, z));
