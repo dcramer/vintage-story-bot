@@ -63,3 +63,14 @@ test('stockpile: keeps the carried kit and reopens stale shared storage', () => 
   stockpile.ended!({ kind: 'inspect_container', ok: true, result: { contents: [] } } as any, memory, { now: 400000 } as any);
   assert.deepEqual(memory.notes.stash!.seen!.items, {}, 'a teammate taking supplies invalidates prior counts');
 });
+
+test('stockpile: remembered supplies survive changing to an additional chest', () => {
+  const first = { ...chest, full: true, seen: { at: 1000, items: { 'game:stick': 32 } } };
+  const second = { ...chest, x: 2, key: 'block:0:2:100:0:game:stationarybasket-east', seen: { at: 1000, items: {} } };
+  const memory = fresh({ stash: second, stores: [first] });
+  const ctx: any = { memory, now: 1100, state: { position: { x: 1, y: 100, z: 0 } }, k: kit(inventory({ 'game:stick': 4 })) };
+  const work: any = stockpile.run(ctx);
+  assert.equal(work.start, 'gather');
+  assert.equal(work.args.item, 'game:flint', 'sticks already stored in the first chest are not gathered again');
+  assert.deepEqual(fresh(memory.notes).notes.stores?.[0].seen, first.seen);
+});

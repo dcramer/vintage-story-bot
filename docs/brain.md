@@ -48,14 +48,15 @@ The house becomes home only after its shell, lowered floor, entry and seal
 are verified. These goals report client-observed changes, not server ACKs.
 
 Notes include `home`, `dwelling` (door and sealing material), `construction`,
-`house`, `lightingDay`, and `stash`. Being near home does not mean indoors:
+`house`, `lightingDay`, `stash`, and additional `stores`. Being near home does not mean indoors:
 the body must be inside and both door cells observed solid. Entry opens the
 door, walks in, and seals it; departure opens it first. Failed re-entry falls
 back to emergency cover. Carried sealing blocks and building materials stay
 out of routine surplus deposits. Torches are lit through native firestarter
 use and replaced daily.
 
-Shared supplies have explicit stored targets and a map marker. Container
+Shared supplies have explicit stored targets and a map marker. Full storage
+adds another chest, up to three; targets count all their observed contents. Container
 counts are only the last opened observation; periodic inspection detects
 teammates taking items. Gathering and deposits retain the bot's working kit.
 Container transfers are verified through inventory deltas. `brain` status

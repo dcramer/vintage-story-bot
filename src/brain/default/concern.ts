@@ -45,6 +45,7 @@ export type Job =
 // The container the bot keeps things in: its observed key (cell and block code), and what it
 // held when last closed. Unknown until opened; stale once anyone else has been at it.
 export type Stash = {
+  full?: boolean;
   key: string;
   x: number;
   y: number;
@@ -61,6 +62,7 @@ export type Notes = {
   construction?: Construction | null;
   dwelling?: { door: Cell; item: string } | null;
   stash: Stash | null;
+  stores?: Stash[];
 };
 export type Memory = {
   notes: Notes;
@@ -198,6 +200,7 @@ export const stashNote = (n: any): Stash | null =>
   n && typeof n.key === 'string' && typeof n.code === 'string' && cell(n)
     ? {
         key: n.key,
+        ...(typeof n.full === 'boolean' ? { full: n.full } : {}),
         ...cell(n)!,
         code: n.code,
         seen:
@@ -231,6 +234,8 @@ export function noteContents(memory: Memory, last: Ended, now: number) {
     return;
   }
   if (last.ok) memory.stashMisses = 0;
+  if (last.reason === 'no_room') memory.notes.stash.full = true;
+  if (Number.isInteger(last.result?.free)) memory.notes.stash.full = last.result.free === 0;
   const contents = last.result?.contents;
   if (!Array.isArray(contents)) return;
   const items: Record<string, number> = {};
@@ -243,4 +248,10 @@ export function setHome(memory: Memory, home: Cell | null) {
   memory.notes.dwelling = null;
   memory.notes.lightingDay = null;
   memory.homeMarked = false;
+}
+
+export const allStashes = (notes: Notes): Stash[] => [...(notes.stash ? [notes.stash] : []), ...(notes.stores ?? [])];
+export function selectStash(memory: Memory, stash: Stash) {
+  memory.notes.stores = allStashes(memory.notes).filter(s => s.key !== stash.key);
+  memory.notes.stash = stash;
 }

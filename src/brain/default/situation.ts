@@ -126,6 +126,7 @@ export type Situation = {
   stocked?: boolean;
   house?: boolean;
   lit?: boolean;
+  moreStorage?: boolean;
 };
 
 export const environmentalHurt = (events: any[]) =>

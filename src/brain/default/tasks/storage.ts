@@ -5,6 +5,7 @@
 // house goes up beside. Its observed key is the note every store and take uses;
 // a chest found gone is forgotten and made again.
 import type { Concern } from '../concern.ts';
+import { goTo, selectStash } from '../concern.ts';
 
 // The recipe (the game calls it a reed chest): eight lots of three cattail tops.
 export const CHEST_TOPS = 24;
@@ -13,11 +14,17 @@ export const CHEST = 'game:stationarybasket-east';
 export const storage: Concern = {
   id: 'storage',
   title: 'a chest at home to keep things in',
-  done: s => s.storage,
+  done: s => s.storage && !s.moreStorage,
   after: ['knife'],
-  run: ({ k, state }) => {
+  run: ctx => {
+    const { k, state } = ctx;
     if (k.chest) {
-      const p = state.position;
+      const old = ctx.memory.notes.stash;
+      if (old) {
+        const walk = goTo(ctx, old, 'adding storage beside the supplies', 3);
+        if (walk) return walk;
+      }
+      const p = old ?? state.position;
       const spot = { x: Math.floor(p.x) + 2, y: Math.floor(p.y), z: Math.floor(p.z) };
       return {
         start: 'build',
@@ -36,14 +43,14 @@ export const storage: Concern = {
     if (last.kind !== 'build') return;
     const built = last.ok ? last.result?.built?.find((c: any) => typeof c.code === 'string' && c.code.includes('stationarybasket')) : null;
     if (built) {
-      memory.notes.stash = {
+      selectStash(memory, {
         key: `block:0:${built.x}:${built.y}:${built.z}:${built.code}`,
         x: built.x,
         y: built.y,
         z: built.z,
         code: built.code,
         seen: null,
-      };
+      });
       return;
     }
     // The spot is taken by something else, or the chest was not seen where it went: not again at once.

@@ -15,7 +15,13 @@ export default defineGoal({
     runField(env, options, ['containers'], async field => {
       try {
         const container = await openContainer(field, options);
-        return { ok: true, goal: 'inspect_container', contents: container.slots, verification: 'client_observed' };
+        return {
+          ok: true,
+          goal: 'inspect_container',
+          contents: container.slots,
+          free: container.slots.filter(s => !s.code).length,
+          verification: 'client_observed',
+        };
       } finally {
         await closeContainer(field);
       }

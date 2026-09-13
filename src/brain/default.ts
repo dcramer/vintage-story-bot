@@ -11,6 +11,7 @@ import { homeMarker } from './default/alongside/home.ts';
 import { suppliesMarker } from './default/alongside/supplies.ts';
 import {
   type Alongside,
+  allStashes,
   type Concern,
   type Context,
   cell,
@@ -266,9 +267,17 @@ export function decide(reading: Reading, memory: Memory): Decision {
     full: k.free <= FULL_SLOTS,
     surplus: surplusOf(k, { home: !!home, torches: k.torches, building: !!memory.notes.construction }).reduce((n, i) => n + i.count, 0),
     short: resupplyOf(k, { home: !!home, torches: k.torches }, memory.notes.stash).reduce((n, i) => n + i.count, 0),
+    moreStorage:
+      allStashes(memory.notes).length < 3 &&
+      allStashes(memory.notes).length > 0 &&
+      allStashes(memory.notes).every(stash => stash.full) &&
+      suppliesMissing(allStashes(memory.notes)).length > 0,
     house: !!memory.notes.house,
     lit: memory.notes.lightingDay === Math.floor(environment?.calendar?.totalDays ?? 0),
-    stocked: !!memory.notes.stash?.seen && now - memory.notes.stash.seen.at < STOCK_CHECK_MS && suppliesMissing(memory.notes.stash).length === 0,
+    stocked:
+      allStashes(memory.notes).length > 0 &&
+      allStashes(memory.notes).every(stash => stash.seen && now - stash.seen.at < STOCK_CHECK_MS) &&
+      suppliesMissing(allStashes(memory.notes)).length === 0,
     stashKnife: Object.keys(memory.notes.stash?.seen?.items ?? {}).some(code => code.includes('knife-')),
   };
   memory.situation = s;
@@ -365,6 +374,14 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
         ? { construction: { origin: cell(kept!.construction!.origin)!, phase: kept!.construction!.phase } }
         : {}),
       stash: stashNote(kept?.stash),
+      ...(Array.isArray(kept?.stores)
+        ? {
+            stores: kept.stores
+              .map(stashNote)
+              .filter((s): s is NonNullable<typeof s> => !!s)
+              .slice(0, 2),
+          }
+        : {}),
       dwelling:
         cell(kept?.dwelling?.door) && typeof kept?.dwelling?.item === 'string' ? { door: cell(kept.dwelling.door)!, item: kept.dwelling.item } : null,
     },
@@ -402,6 +419,7 @@ const brain: Brain<Memory, Notes> = {
   summary: memory => ({
     home: memory.notes.home,
     stash: memory.notes.stash,
+    stores: memory.notes.stores,
     house: memory.notes.house,
     construction: memory.notes.construction,
     lightingDay: memory.notes.lightingDay,
