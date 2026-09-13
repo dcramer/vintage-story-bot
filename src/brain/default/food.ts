@@ -12,32 +12,6 @@ const FORAGE_MS = 180000;
 const COOK_MS = 600000;
 export const LOCAL_COOKING_DISTANCE = 48;
 
-// Emergency eating and daytime provisions use the same food goals. Let those
-// goals keep the same ownership of threat evasion and critical cooking.
-export const foodRunning: Concern['running'] = ({ active, danger, hurt, classifyingHurt, s, k, memory, state }) => {
-  if (
-    active?.kind === 'travel' &&
-    s.hunger !== null &&
-    s.hunger < 0.1 &&
-    !memory.notes.cooking &&
-    memory.notes.firepit &&
-    horizontal(state.position, memory.notes.firepit) > LOCAL_COOKING_DISTANCE &&
-    !danger &&
-    !hurt
-  )
-    return { stop: 'prepare a local cooking fire while starving' };
-  if (active?.kind === 'fell_tree' && s.hunger !== null && s.hunger < 0.1 && k.logs > 0 && !danger && !hurt)
-    return { stop: 'prepare cooking fuel from the log already carried' };
-  if (active?.kind === 'cook' && danger && !hurt && !classifyingHurt && !s.threatNear)
-    return { wait: 'finishing critical cooking while the threat stays at a distance' };
-  if (active?.kind !== 'forage') return null;
-  // Forage owns a deterministic evade-and-resume loop. Cancelling it on the
-  // same sighting throws away its food leads and starts another flight.
-  if (danger && !hurt) return { wait: 'letting forage evade threat' };
-  if (danger || hurt || classifyingHurt) return null;
-  return { wait: 'letting forage finish' };
-};
-
 // Food preparation belongs to the brain: each goal still has one outcome.
 // Remember the owned firepit and food left in it across interrupted cooking.
 export function food(ctx: Context, keep: number): Decision {

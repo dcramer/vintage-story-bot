@@ -1,9 +1,10 @@
 // Food recovery starts below 20% and continues to half. Eat carried food
 // first, then forage or prepare roots using the current recovery strategy.
 
+import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import { HUNGRY } from '../../../support/food.ts';
 import type { Concern } from '../concern.ts';
-import { food, foodEnded, foodRunning, foodSetAside } from '../food.ts';
+import { food, foodEnded, foodSetAside, LOCAL_COOKING_DISTANCE } from '../food.ts';
 import type { Situation } from '../situation.ts';
 
 // Hungry is the goals' own line (support/food.ts), so the brain interrupts work where forage would stomach poor food.
@@ -22,7 +23,35 @@ export const eat: Concern = {
   },
   ended: foodEnded,
   setAside: foodSetAside,
-  running: foodRunning,
+  running: ({ active, danger, hurt, classifyingHurt, s, k, memory, state }) => {
+    if (
+      active?.kind === 'travel' &&
+      s.hunger !== null &&
+      s.hunger < 0.1 &&
+      !memory.notes.cooking &&
+      memory.notes.firepit &&
+      horizontal(state.position, memory.notes.firepit) > LOCAL_COOKING_DISTANCE &&
+      !danger &&
+      !hurt
+    )
+      return { stop: 'prepare a local cooking fire while starving' };
+    if (active?.kind === 'fell_tree' && s.hunger !== null && s.hunger < 0.1 && k.logs > 0 && !danger && !hurt)
+      return { stop: 'prepare cooking fuel from the log already carried' };
+    if (active?.kind === 'cook' && danger && !hurt && !classifyingHurt && !s.threatNear)
+      return { wait: 'finishing critical cooking while the threat stays at a distance' };
+    if (active?.kind !== 'forage') return null;
+    // Forage owns a deterministic evade-and-resume loop. Cancelling it on the
+    // same sighting throws away its food leads and starts a second flight on
+    // top of navigation's evasion, which is especially costly near starvation.
+    // Actual damage still interrupts, as it may be from an unseen source.
+    if (danger && !hurt) return { wait: 'letting forage evade threat' };
+    if (danger || hurt || classifyingHurt) return null;
+    // A recovery run owns food until it reaches its target, even when the last
+    // carried bite briefly clears the urgent hunger alert. Cancelling it at
+    // that boundary for night shelter leaves the bot peckish and restarts the
+    // same forage/burrow cycle a few ticks later.
+    return { wait: 'letting forage finish' };
+  },
   // The mildly poisonous food authorized during starvation hurts; that is not an attacker.
   explains: events => events.some(event => event.type === 'message' && /^Lost [\d.]+ hp through poison$/i.test(event.text ?? '')),
   // Food where it grows is always worth a stop: berries on a ripe bush, a
