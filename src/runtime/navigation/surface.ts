@@ -1,6 +1,6 @@
 import { Bounded } from './bounded.ts';
 import { Heap } from './planner.ts';
-import { horizontal, normalize } from './terrain.ts';
+import { horizontal, JUMP_HEIGHT, MAX_DROP, normalize } from './terrain.ts';
 
 // Long-range landscape memory: one sight-verified surface sample per column,
 // from the snapshots the mod's eye returns with every sense, coarser with
@@ -47,12 +47,12 @@ export class SurfaceMemory {
     return this.columns.get(columnKey(Math.floor(x), Math.floor(z)));
   }
   // Nearest sampled column around a point, honouring the coarse rings.
-  nearest(x, z, within = 4) {
+  nearest(x, z, within = 4, accept = (_column: any) => true) {
     let best = null;
     for (let dx = -within; dx <= within; dx++)
       for (let dz = -within; dz <= within; dz++) {
         const column = this.get(Math.floor(x) + dx, Math.floor(z) + dz);
-        if (!column) continue;
+        if (!column || !accept(column)) continue;
         const d = Math.hypot(column.x + 0.5 - x, column.z + 0.5 - z);
         if (!best || d < best.d) best = { column, d };
       }
@@ -98,7 +98,12 @@ export function edgeCost(surface, from, to, { canopyCost = 1, shoreCost = 2, slo
 // noPath when nothing visible leads anywhere. Mirrors mineflayer-pathfinder's
 // partial-path semantics: a partial rough route is worth walking, then resurvey.
 export function planRoughRoute(surface, start, goal, { budget = 4096, penalty = (_column: any): number => 0, minimumProgress = 4 } = {}) {
-  const origin = surface.nearest(start.x, start.z, 2);
+  const origin = surface.nearest(
+    start.x,
+    start.z,
+    2,
+    column => !Number.isFinite(start.y) || (column.y - start.y <= JUMP_HEIGHT && start.y - column.y <= MAX_DROP),
+  );
   if (!origin) return { status: 'noPath', reason: 'origin_unknown', checkpoints: [] };
   const target = surface.nearest(goal.x, goal.z, 4);
   const goalReached = column => Math.hypot(column.x + 0.5 - goal.x, column.z + 0.5 - goal.z) <= Math.max(2, column.step);

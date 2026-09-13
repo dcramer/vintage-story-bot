@@ -62,6 +62,8 @@ Surveyed rough-route checkpoints retain their elevation and stay within the fine
 
 Replacement partial routes use the planner's distance measure, including known destination height. A descent toward a lower target can improve the route without making comparable horizontal progress.
 
+The rough route's starting column must also be within a legal rise or drop of the player's observed height. Horizontal proximity alone cannot start a route on an overhead ledge or a distant floor below.
+
 Sub-block steps require the native lifting clearance at their source and destination, including the 0.03-block lift above the obstacle. When a low ceiling prevents stepping onto surrounding snow, `dig_out` may clear that observed, breakable ceiling without cutting a stair wall.
 
 When a confined pillar has no wall to cut, `dig_out` may place one carried soil block in an observed empty adjacent cell against solid support, with clear jump headroom. It verifies the placement before climbing. Recovery building never makes an unobserved route traversable in the planner.

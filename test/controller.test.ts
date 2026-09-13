@@ -239,6 +239,18 @@ test('a lower destination does not authorize an irreversible drop on an unfinish
   assert.ok(complete?.length && complete.at(-1).y === 0, 'a fully observed route to the lower destination can descend');
 });
 
+test('rough routes cannot start on a ledge above or far below the player', () => {
+  for (const height of [-8, 8]) {
+    const surface = new SurfaceMemory();
+    surface.apply({ columns: Array.from({ length: 9 }, (_, x) => [x, 0, height, 'ground', 1]) });
+    assert.equal(planRoughRoute(surface, at(0, 0), at(8, 0, height)).status, 'noPath');
+    surface.apply({ columns: Array.from({ length: 9 }, (_, x) => [x, 1, 0, 'ground', 1]) });
+    const route = planRoughRoute(surface, at(0, 0), at(8, 1));
+    assert.equal(route.status, 'success');
+    assert.equal(route.checkpoints[0].y, 0, 'use the nearby column at player height');
+  }
+});
+
 test('a rough partial route also refuses an irreversible descent toward a distant lower goal', () => {
   const surface = new SurfaceMemory();
   surface.apply({ columns: Array.from({ length: 9 }, (_, x) => [x, 0, x < 3 ? 2 : 0, 'ground', 1]) });
