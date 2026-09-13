@@ -60,6 +60,8 @@ A lower destination does not authorize an irreversible descent on an unfinished 
 
 Sub-block steps require the native lifting clearance at their source and destination, including the 0.03-block lift above the obstacle. When a low ceiling prevents stepping onto surrounding snow, `dig_out` may clear that observed, breakable ceiling without cutting a stair wall.
 
+When a confined pillar has no wall to cut, `dig_out` may place one carried soil block in an observed empty adjacent cell against solid support, with clear jump headroom. It verifies the placement before climbing. Recovery building never makes an unobserved route traversable in the planner.
+
 Visited frontier viewpoints also survive new legs for one minute (at most 256 per terrain memory). A newly observed cell from that viewpoint's missing set permits reconsideration sooner. Thin full-width cover suppresses buried frontiers, and observed water requests its immediate bed without making deeper dry landings exploration targets.
 
 Evasion routes seek any observed standing cell beyond every active hostile's clearance perimeter, not only the compass point directly away. The compass point guides looking; terrain determines the escape route. Reaching an escape route's end never reports the original travel destination reached.

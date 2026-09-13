@@ -1,5 +1,5 @@
 import { failedEdges } from '../runtime/navigation/failed-edges.ts';
-import { angle, horizontal, key, lookAt } from '../runtime/navigation/terrain.ts';
+import { angle, horizontal, JUMP_HEADROOM, key, lookAt } from '../runtime/navigation/terrain.ts';
 import { changeBlock, selectCell } from './blocks.ts';
 import { equip, ownedSlots } from './inventory.ts';
 
@@ -38,6 +38,52 @@ export const solid = (map, x, y, z) => {
   return !!c && !c.hazard && c.boxes.some(b => b[4] - b[1] > 0.99 && b[3] - b[0] > 0.99 && b[5] - b[2] > 0.99);
 };
 export const known = (map, x, y, z) => !!map.get(x, y, z);
+
+// A narrow pillar can have no wall to cut. Bridge one cardinal cell with
+// carried soil, attached to observed solid support, then climb normally.
+export function supportedSteps(map, node, toward) {
+  const h = Math.floor(node.y),
+    x = Math.floor(node.x),
+    z = Math.floor(node.z);
+  if (!map.clearBetween(x, z, node.y, node.y + JUMP_HEADROOM)) return [];
+  const faces = { up: [0, 1, 0], north: [0, 0, -1], south: [0, 0, 1], east: [1, 0, 0], west: [-1, 0, 0] };
+  const heading = lookAt(node, toward).yawDegrees;
+  return cardinals
+    .flatMap(([dx, dz]) => {
+      const cell = { x: x + dx, y: h, z: z + dz };
+      const entry = map.get(cell.x, h, cell.z);
+      if (
+        !entry ||
+        entry.hazard ||
+        entry.boxes.length ||
+        (entry.code && entry.code !== 'game:air') ||
+        !map.clearBetween(cell.x, cell.z, h + 1, h + 1 + JUMP_HEADROOM)
+      )
+        return [];
+      return Object.entries(faces).flatMap(([face, offset]) => {
+        const support = { x: cell.x - offset[0], y: cell.y - offset[1], z: cell.z - offset[2] };
+        return solid(map, support.x, support.y, support.z)
+          ? [{ cell, support, face, off: Math.abs(angle(lookAt(node, { x: cell.x + 0.5, z: cell.z + 0.5, y: h }).yawDegrees, heading)) }]
+          : [];
+      });
+    })
+    .sort((a, b) => a.off - b.off);
+}
+
+async function placeStep(field, origin, toward, inventory) {
+  const soil = ownedSlots(inventory).find(s => s.quantity > 0 && /^game:soil-[a-z]+-none$/.test(s.code ?? ''));
+  if (!soil) return null;
+  for (const { cell, support, face } of supportedSteps(field.env.map, origin, toward)) {
+    const selected = await selectCell(field, support, { face });
+    if (!selected) continue;
+    const { slot } = await equip(field, { item: soil.code });
+    field.report('building_step', { cell });
+    const placed = await changeBlock(field, 'place', { target: selected.key, face, slot, expectedItem: soil.code });
+    // An attempted mutation is never retried against a different support.
+    return placed.ok ? { step: cell, dig: [], direction: null } : null;
+  }
+  return null;
+}
 
 // The first stair step toward a point: a cardinal neighbour whose cell at foot
 // level is a solid block (the step) with solid blocks above it (the wall to cut).
@@ -126,6 +172,7 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       }
       plan = stairStep(map, origin, toward, miningTier);
     }
+    if (!plan) plan = await placeStep(field, origin, toward, inventory);
     if (!plan) {
       reason = 'no_wall_to_cut';
       break;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
-import { diggingSlot, digOut, pitLimit, reachable, stairStep } from '../src/support/digging.ts';
+import { diggingSlot, digOut, pitLimit, reachable, stairStep, supportedSteps } from '../src/support/digging.ts';
 
 // A block world: floor at y=-1, air above, plus solid cells from `solid`.
 function world(width, solid) {
@@ -13,6 +13,20 @@ function world(width, solid) {
   map.apply({ session: 'w', reset: true, cursor: 1, more: false, clock: 0, cells });
   return map;
 }
+
+test('pillar recovery only proposes an empty step attached to observed support with jump clearance', () => {
+  const map = world(3, (x, y, z) => (x === 0 && z === 0 && y === 0) || (x === 1 && z === -1 && y === 1));
+  const origin = { x: 0.5, y: 1, z: 0.5 },
+    toward = { x: 10, z: 0 };
+  assert.ok(supportedSteps(map, origin, toward).some(p => p.cell.x === 1 && p.cell.z === 0 && p.face === 'south'));
+  map.put({ x: 1, y: 2, z: 0, seenAt: Date.now(), traits: [], boxes: [[1, 2, 0, 2, 3, 1]] });
+  assert.ok(
+    supportedSteps(map, origin, toward).every(p => p.cell.x !== 1 || p.cell.z !== 0),
+    'occupied headroom prevents building that step',
+  );
+  const unsupported = world(3, (x, y, z) => x === 0 && z === 0 && y === 0);
+  assert.deepEqual(supportedSteps(unsupported, origin, toward), [], 'air alone is not placement support');
+});
 
 test('pit recovery lands on the observed step when starting on thin snow', async () => {
   const map = world(2, (x, y, z) => (x !== 0 || z !== 0) && y >= 0 && y <= 3);
