@@ -80,16 +80,46 @@ export function updateCharacterName(botData, characterName) {
   writeSettings(file);
 }
 
+export function presentationConfig() {
+  const number = (name, fallback, min, max, integer = false) => {
+    const value = Number(process.env[name] || fallback);
+    if (!Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) {
+      throw new Error(`${name} must be ${integer ? 'an integer' : 'a number'} between ${min} and ${max}.`);
+    }
+    return value;
+  };
+  const camera = process.env.VINTAGE_STORY_CAMERA || 'thirdperson';
+  if (!['firstperson', 'thirdperson', 'overhead'].includes(camera)) {
+    throw new Error('VINTAGE_STORY_CAMERA must be firstperson, thirdperson or overhead.');
+  }
+  return {
+    camera,
+    distance: number('VINTAGE_STORY_CAMERA_DISTANCE', 3, 1, 10),
+    fov: number('VINTAGE_STORY_FOV', 70, 30, 120, true),
+    guiScale: number('VINTAGE_STORY_UI_SCALE', 1, 0.5, 2),
+  };
+}
+
 // Windowed at the virtual screen size so the borderless headless window fills the display exactly.
 // The mod answers on the game tick, which runs once per rendered frame, so the frame cap is also
 // the cap on how fast the bot can sense and act: never below 60.
-export function updateWindowSettings(botData, { width, height }) {
+export function updateWindowSettings(botData, { width, height }, presentation = presentationConfig()) {
   const file = readSettings(botData);
   if (!file) return false;
   const ints = (file.settings.intSettings ??= {});
+  const floats = (file.settings.floatSettings ??= {});
   const maxFps = Math.max(Number(ints.maxFps) || 0, 60);
-  if (ints.screenWidth === width && ints.screenHeight === height && ints.gameWindowMode === 0 && ints.maxFps === maxFps) return false;
-  Object.assign(ints, { screenWidth: width, screenHeight: height, gameWindowMode: 0, maxFps });
+  if (
+    ints.screenWidth === width &&
+    ints.screenHeight === height &&
+    ints.gameWindowMode === 0 &&
+    ints.maxFps === maxFps &&
+    ints.fieldOfView === presentation.fov &&
+    floats.guiScale === presentation.guiScale
+  )
+    return false;
+  Object.assign(ints, { screenWidth: width, screenHeight: height, gameWindowMode: 0, maxFps, fieldOfView: presentation.fov });
+  floats.guiScale = presentation.guiScale;
   writeSettings(file);
   return true;
 }

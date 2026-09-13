@@ -4,7 +4,7 @@ import { copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSyn
 import path from 'node:path';
 import { botWindow, isBotProcess } from './bot-window.ts';
 import { currentDisplay, ensureDisplay, listProcesses, readJson, root, toolEnv } from './display.ts';
-import { gameArguments, loadLaunchConfig, updateCharacterName, updateWindowSettings } from './launch-config.ts';
+import { gameArguments, loadLaunchConfig, presentationConfig, updateCharacterName, updateWindowSettings } from './launch-config.ts';
 import { requestWindowClose } from './x11.ts';
 
 export const paths = {
@@ -105,9 +105,10 @@ export async function startGame({ world, create, playStyle, server, display, wid
   for (const required of [`${paths.game}/Vintagestory.dll`, paths.dotnet, `${modDirectory}/VintageStoryAI.dll`, `${modDirectory}/modinfo.json`]) {
     if (!existsSync(required)) throw new Error(`Missing ${required}; install the client and deploy the mod first.`);
   }
+  const presentation = presentationConfig();
   const screen = await ensureDisplay({ display, width, height });
   updateCharacterName(paths.botData, config.characterName);
-  updateWindowSettings(paths.botData, screen);
+  updateWindowSettings(paths.botData, screen, presentation);
   const env: Record<string, string | undefined> = {
     ...process.env,
     DOTNET_ROOT: `${root}/.dotnet`,
@@ -118,6 +119,8 @@ export async function startGame({ world, create, playStyle, server, display, wid
     // Xvfb has no sound device; keep OpenAL process-local and silent.
     ALSOFT_DRIVERS: process.env.ALSOFT_DRIVERS ?? 'null',
     VINTAGE_STORY_SERVER_PASSWORD: '',
+    VINTAGE_STORY_CAMERA: presentation.camera,
+    VINTAGE_STORY_CAMERA_DISTANCE: String(presentation.distance),
   };
   delete env.WAYLAND_DISPLAY;
   // WSL: Mesa's D3D12 driver reaches the host GPU through /dev/dxg even on a virtual display.

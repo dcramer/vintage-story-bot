@@ -15,7 +15,11 @@ if (existsSync(`${root}/.env`)) loadEnvFile(`${root}/.env`);
 export const x11Root = `${root}/.runtime/x11`;
 const stateFile = `${x11Root}/display.json`;
 export const defaultDisplay = process.env.VINTAGE_STORY_DISPLAY || ':7';
-export const defaultSize = { width: 1920, height: 1080 };
+function defaultSize() {
+  const size = (process.env.VINTAGE_STORY_RESOLUTION || '1280x720').match(/^(\d+)x(\d+)$/);
+  if (!size) throw new Error('VINTAGE_STORY_RESOLUTION must be WIDTHxHEIGHT.');
+  return { width: Number(size[1]), height: Number(size[2]) };
+}
 
 export function tool(name) {
   for (const dir of (process.env.PATH ?? '').split(':')) if (dir && existsSync(`${dir}/${name}`)) return `${dir}/${name}`;
@@ -124,10 +128,18 @@ function writeState(state) {
   return state;
 }
 
-export async function ensureDisplay({ display = defaultDisplay, width = defaultSize.width, height = defaultSize.height } = {}) {
+export async function ensureDisplay({ display = defaultDisplay, width = defaultSize().width, height = defaultSize().height } = {}) {
   if (process.platform !== 'linux') throw new Error('Headless display requires Linux.');
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 640 || height < 480 || width > 7680 || height > 4320) {
+    throw new Error('Display size must be between 640x480 and 7680x4320.');
+  }
   const running = await currentDisplay();
-  if (running?.display === display) return { ...running, started: false };
+  if (running?.display === display) {
+    if (running.width !== width || running.height !== height) {
+      throw new Error('Display size changed; run pnpm game stop, then pnpm game display stop before starting again.');
+    }
+    return { ...running, started: false };
+  }
   if (await probeDisplay(display)) {
     return {
       ...writeState({ display, width, height, pid: null, external: true, sandboxed: false, startedAt: new Date().toISOString() }),

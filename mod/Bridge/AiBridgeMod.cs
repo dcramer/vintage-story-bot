@@ -73,6 +73,7 @@ public sealed partial class AiBridgeMod : ModSystem
 
     private void OnLevelReady()
     {
+        ClientPresentation.Apply(api);
         worldInteractions = (api.World as ClientMain)?.clientSystems
             .OfType<SystemMouseInWorldInteractions>().FirstOrDefault();
         vision.Reset();
