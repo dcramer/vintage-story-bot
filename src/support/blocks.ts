@@ -3,7 +3,6 @@ import { distance, lookAt } from '../runtime/navigation/terrain.ts';
 import { ownedSlots } from './inventory.ts';
 import { has } from './traits.ts';
 
-const faces = { north: [0, 0, -1], east: [1, 0, 0], south: [0, 0, 1], west: [-1, 0, 0], up: [0, 1, 0], down: [0, -1, 0] };
 const count = (inventory, code) =>
   ownedSlots(inventory)
     .filter(s => s.code === code)
@@ -36,13 +35,14 @@ export async function changeBlock(
   if (distance(state.position, cell) > 8) throw Error('Target out of local reach; move closer first');
   if (point && ['x', 'y', 'z'].some(axis => point[axis] < cell[axis] || point[axis] > cell[axis] + 1))
     throw Error('Aim point must lie in the target cell');
-  const offset = faces[face] ?? [0, 0, 0];
-  const aimPoint = point ?? Object.fromEntries(['x', 'y', 'z'].map((axis, i) => [axis, cell[axis] + 0.5 + offset[i] * 0.5]));
   await field.send({ action: 'select', slot: slot ?? state.activeSlot });
   field.report('aiming', { target, face });
-  await field.aim(lookAt({ ...state.position, y: state.position.y + state.body.eyeHeight }, aimPoint));
-  const selected = await field.send({ action: 'inspect_target' });
-  if (selected.key !== target || (face && selected.face !== face)) throw Error('Target/face not in native reach or obstructed; no action sent');
+  let selected;
+  if (point) {
+    await field.aim(lookAt({ ...state.position, y: state.position.y + state.body.eyeHeight }, point));
+    selected = await field.send({ action: 'inspect_target' });
+  } else selected = await selectCell(field, cell, { face });
+  if (selected?.key !== target || (face && selected.face !== face)) throw Error('Target/face not in native reach or obstructed; no action sent');
   await field.observe();
   const inventory = await field.send({ action: 'inventory' });
   const held = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === field.latest.activeSlot);
