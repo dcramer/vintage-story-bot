@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { fleeTarget, hostileEntity, nearbyThreats, nearbyUnclearedThreats, threatStartDistance, threatVerticalRange } from '../../support/threats.ts';
 import { failEdge, failedEdges } from './failed-edges.ts';
+import { visitedFrontiers, visitFrontier } from './frontiers.ts';
 import { findRoute } from './planner.ts';
 import { angle, distance, horizontal, JUMP_HEADROOM, JUMP_HEIGHT, key, lookAt, MAX_DROP, STEP_HEIGHT } from './terrain.ts';
 
@@ -74,6 +75,7 @@ export class Navigation {
   constructor(map, state, goal, now = Date.now()) {
     this.map = map;
     this.blocked = failedEdges(map, now);
+    this.visits = visitedFrontiers(map, now);
     this.primaryTarget = this.target = goal;
     this.width = state.body.halfWidth;
     this.height = state.body.height;
@@ -311,6 +313,7 @@ export class Navigation {
       const end = this.route.at(-1) ?? p,
         id = key(end);
       this.visits.set(id, (this.visits.get(id) ?? 0) + 1);
+      visitFrontier(this.map, end, now);
       // A leg that needs many partial routes is not getting anywhere; give it
       // back to the caller, whose rough route and exploration can change course.
       if (++this.segments >= 10 || this.visits.get(id) > 3) return this.finish('blocked', 'exploration_exhausted');
@@ -503,8 +506,9 @@ export class Navigation {
       yawDegrees: desiredYaw,
       pitchDegrees: 15,
       forward: true,
-      // Keep the player's swim input through brief floor contacts and surface bobs.
-      jump: !!next.swim && state.capabilities?.includes('step_jump_hold') === true,
+      // Keep swimming through surface bobs and until the body climbs onto a
+      // dry bank; selecting the bank checkpoint must not release buoyancy.
+      jump: (!!next.swim || (wet && !next.wet)) && state.capabilities?.includes('step_jump_hold') === true,
       sprint,
       sneak: false,
       // The hold's heartbeat caps a frame at 500 ms; the loop renews well inside that and the step carries on.

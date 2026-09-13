@@ -54,6 +54,8 @@ With `step_jump_hold`, a swimming checkpoint explicitly holds jump through brief
 
 Failed steps stay excluded across navigation legs for one minute, scoped to the bot's terrain memory and capped at 256 edges. Planner queries and pit detection use the same evidence. Nearby observed resource leads retain their known elevation when a complete approach route is not yet visible; horizontal frontier exploration must not replace a known descent with a cliff-top loop.
 
+Visited frontier viewpoints also survive new legs for one minute (at most 256 per terrain memory). A newly observed cell from that viewpoint's missing set permits reconsideration sooner. Thin full-width cover suppresses buried frontiers, and observed water requests its immediate bed without making deeper dry landings exploration targets.
+
 ## Observability
 
 `goal_status` progress phases: `walking`, `rough_route` / `no_rough_route` (with rough route status and the chosen leg), `rerouting` (reason), `route_cleared`, `probing`, `recovering_route`, `evading`. The dashboard `navigation` topic carries the live navigator view: state, reason, next checkpoint, yaw error, last replan, diagnostics (missing cells, support, clearance), threats.

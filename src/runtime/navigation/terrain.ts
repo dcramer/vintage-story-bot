@@ -148,13 +148,15 @@ export class TerrainMemory {
     if (!missing || this.buried(x, y, z)) return;
     missing.set(cellKey(Math.floor(x), Math.floor(y), Math.floor(z)), { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) });
   }
-  // Sealed under known solid ground: the first known cell above it, up to six up (the eye never
+  // Sealed under known solid ground: the first known cell above it, up to twelve up (the eye never
   // records the earth under a hillside, so a known surface anywhere above settles it).
   buried(x, y, z) {
-    for (let above = Math.floor(y) + 1; above <= Math.floor(y) + 6; above++) {
+    for (let above = Math.floor(y) + 1; above <= Math.floor(y) + 12; above++) {
       const cell = this.get(x, above, z);
-      if (!cell) continue;
-      return !cell.hazard && cell.boxes.some(b => b[3] - b[0] > 0.99 && b[5] - b[2] > 0.99 && b[4] - b[1] > 0.99);
+      if (!cell || (!cell.hazard && cell.code && !cell.boxes.length)) continue;
+      // Thin snow and slabs also seal the entire column below them; full
+      // cube height is not required to hide the ground underneath.
+      return !cell.hazard && cell.boxes.some(b => b[3] - b[0] > 0.99 && b[5] - b[2] > 0.99 && b[4] > b[1]);
     }
     return false;
   }
@@ -219,7 +221,16 @@ export class TerrainMemory {
   levels(x, z, nearY, up = JUMP_HEIGHT, down = MAX_DROP, missing?) {
     const found = [];
     for (let y = Math.floor(nearY - down) - 1; y <= Math.floor(nearY + up); y++) {
-      const node = this.standable(x, y, z, missing);
+      // A dry landing below observed water cannot be reached by a dry drop.
+      // The surface water's standable check still requests its immediate bed
+      // when needed to distinguish wading from swimming.
+      let submerged = false;
+      for (let above = y + 1; above <= Math.floor(nearY); above++)
+        if (this.get(x, above, z)?.hazard === 'water') {
+          submerged = true;
+          break;
+        }
+      const node = this.standable(x, y, z, submerged ? undefined : missing);
       if (node && node.y - nearY <= up && nearY - node.y <= down) found.push(node);
     }
     return found.sort((a, b) => Math.abs(a.y - nearY) - Math.abs(b.y - nearY));

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { failEdge, failedEdges } from '../src/runtime/navigation/failed-edges.ts';
+import { visitedFrontiers, visitFrontier } from '../src/runtime/navigation/frontiers.ts';
 import { Navigation, NO_PROGRESS_MS } from '../src/runtime/navigation/navigator.ts';
 import { findRoute } from '../src/runtime/navigation/planner.ts';
 import { distance, horizontal, TerrainMemory } from '../src/runtime/navigation/terrain.ts';
@@ -105,12 +106,13 @@ test('swimmers and waders can climb a clear bank without treating their water as
       map.moves(start).some(({ node }) => node.x === 1.5 && node.y === top),
       'surface-level bank must be reachable',
     );
-    const state = { ...stateAt(start), motion: { onGround: !deep, feetInLiquid: true, swimming: deep } };
+    const state = { ...stateAt(start), capabilities: ['step_jump_hold'], motion: { onGround: !deep, feetInLiquid: true, swimming: deep } };
     const bank = { x: 1.5, y: top, z: 0.5, move: 'jump' };
     const nav = new Navigation(map, state, bank, 0);
     nav.adopt([bank], start, 0);
     const frame = nav.tick(state, 0);
     assert.equal(frame.hop, true);
+    assert.equal(frame.jump, true, 'swim input continues while approaching a dry bank');
     assert.ok(frame.reachY < top - start.y, 'water tolerance must not suppress the bank jump');
     map.put({ x: 0, y: top, z: 0, seenAt: Date.now(), traits: [], boxes: [[0, top, 0, 1, top + 1, 1]] });
     assert.ok(!map.moves(start).some(({ node }) => node.x === 1.5), 'a solid ceiling must still prevent the climb');
@@ -336,4 +338,48 @@ test('failed steps remain excluded in a new navigation leg and expire', () => {
   assert.equal(failedEdges(map, 61100).size, 0);
   failEdge(map, edge, Date.now());
   assert.equal(findRoute(map, state.position, { x: 1.5, y: 0, z: 0.5 }, 0.3, 1.85, { partial: false }), null);
+});
+
+test('thin full-width snow cover does not make buried cells navigation frontiers', () => {
+  const map = new TerrainMemory();
+  for (let x = -4; x <= 4; x++)
+    for (let z = -4; z <= 4; z++) {
+      map.put({ x, y: 0, z, seenAt: Date.now(), traits: [], code: 'game:snowlayer-1', boxes: [[x, 0, z, x + 1, 0.125, z + 1]] });
+      for (let y = 1; y <= 4; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [] });
+    }
+  map.put({ x: 0, y: -1, z: 0, seenAt: Date.now(), traits: ['plant'], code: 'game:aquatic-watercrowfoot-tip', boxes: [] });
+  assert.equal(map.buried(0, -2, 0), true, 'a plant under the snow does not expose buried ground');
+  assert.equal(map.frontier({ x: 0.5, y: 0.125, z: 0.5 }).size, 0, 'unknown ground under the snow cannot justify circling');
+  assert.equal(map.get(0, -2, 0), undefined, 'the hidden block remains unknown');
+  map.put({ x: 0, y: -1, z: 0, seenAt: Date.now(), traits: ['leaves'], code: 'game:leaves-grown7-birch', boxes: [] });
+  assert.equal(map.buried(0, -2, 0), true, 'collisionless leaves beneath snow do not expose buried ground');
+  assert.equal(map.buried(0, -7, 0), true, 'a tall bank still covers the low cells considered for drops');
+});
+
+test('water frontiers need the immediate bed but not impossible dry landings below it', () => {
+  const map = new TerrainMemory();
+  map.put({ x: 0, y: 0, z: 0, seenAt: Date.now(), traits: ['water'], boxes: [] });
+  for (let y = 1; y <= 4; y++) map.put({ x: 0, y, z: 0, seenAt: Date.now(), traits: [], boxes: [] });
+  const missing = new Map();
+  map.levels(0, 0, 1, 1, 3, missing);
+  assert.deepEqual([...missing.values()], [{ x: 0, y: -1, z: 0 }]);
+});
+
+test('new navigation legs retain visited frontiers until terrain evidence changes', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x <= 3; x++) column(map, x, 0);
+  const start = { x: 0.5, y: 0, z: 0.5 },
+    goal = { x: 10.5, y: 0, z: 0.5 };
+  const end = findRoute(map, start, goal, 0.3, 1.85).at(-1);
+  const missing = [...map.frontier(end).values()][0];
+  const now = Date.now();
+  visitFrontier(map, end, now);
+  const nav = new Navigation(map, stateAt(start), goal, now);
+  const next = findRoute(map, start, goal, 0.3, 1.85, { visits: nav.visits });
+  assert.notDeepEqual(next?.at(-1), end, 'a restarted leg must not repeat the same viewpoint');
+  assert.equal(visitedFrontiers(new TerrainMemory(), now).size, 0);
+  assert.equal(visitedFrontiers(map, now + 60000).size, 0);
+  visitFrontier(map, end, now);
+  map.put({ ...missing, seenAt: now, traits: [], boxes: [] });
+  assert.equal(visitedFrontiers(map, now).size, 0, 'new observed terrain permits reconsidering the viewpoint');
 });
