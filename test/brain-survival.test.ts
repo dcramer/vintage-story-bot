@@ -13,6 +13,8 @@ import { fresh, kit } from '../src/brain/default.ts';
 import craft from '../src/goals/craft_item.ts';
 import buildHouse from '../src/goals/house.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
+import { findRoute } from '../src/runtime/navigation/planner.ts';
+import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 import { houseScaffold, shelterDoor, shelterScaffold, shelterStorage, shelterTorches, shelter as template } from '../src/support/structures.ts';
 
 test('starter template stays enclosed with reachable interior torch positions', () => {
@@ -25,7 +27,11 @@ test('starter template stays enclosed with reachable interior torch positions', 
     'all construction is above the natural floor',
   );
   assert.deepEqual(shelterTorches(origin), [{ x: 2, y: 100, z: 1 }]);
-  assert.deepEqual(shelterScaffold(origin, 'earth'), { x: 1, y: 100, z: 5, item: 'earth' });
+  assert.deepEqual(shelterScaffold(origin, 'earth'), [
+    { x: 1, y: 100, z: 6, item: 'earth' },
+    { x: 1, y: 100, z: 5, item: 'earth' },
+    { x: 1, y: 101, z: 5, item: 'earth' },
+  ]);
   assert.deepEqual(houseScaffold(origin, 'earth'), { x: 3, y: 100, z: 7, item: 'earth' });
   const storage = shelterStorage(origin);
   assert.equal(storage.length, 6);
@@ -35,6 +41,22 @@ test('starter template stays enclosed with reachable interior torch positions', 
   }
   for (let x = 0; x < 5; x++) for (let z = 0; z < 5; z++) assert.ok(keys.has(`${x},102,${z}`), 'sealed roof');
   for (const torch of shelterTorches(origin)) assert.ok(!keys.has(`${torch.x},${torch.y},${torch.z}`), 'torch is inside clear space');
+});
+
+test('the front staircase still reaches the roof after the walls are covered', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const map = new TerrainMemory();
+  for (let x = -2; x <= 6; x++)
+    for (let z = -2; z <= 8; z++)
+      for (let y = 99; y <= 106; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [] });
+  for (const { x, y, z } of [...template(origin, 'earth'), ...shelterScaffold(origin, 'earth')])
+    map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [[x, y, z, x + 1, y + 1, z + 1]] });
+  const start = { x: 1.5, y: 100, z: 7.5 },
+    goal = { x: 2.5, y: 103, z: 2.5 };
+  assert.ok(findRoute(map, start, goal, 0.3, 1.85, { partial: false }), 'every rise onto the completed roof is a legal jump');
+  for (const { x, y, z } of [shelterScaffold(origin, 'earth')[0], shelterScaffold(origin, 'earth')[2]])
+    map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [] });
+  assert.equal(findRoute(map, start, goal, 0.3, 1.85, { partial: false }), null, 'one front block cannot reach a roof-covered wall');
 });
 
 test('torch refresh begins at 05:00 and an observed missing torch invalidates the same-day check', () => {
@@ -147,7 +169,7 @@ test('shelter refuses unknown ground, unsupported floors and blocked interiors',
 test('shelter can use a fully observed footprint around the player', () => {
   const terrain = {
     get: (x, y, z) => (x >= 0 && x < 5 && z >= 0 && z < 5 ? { boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [], hazard: null } : undefined),
-    nodeAt: (x, z, y) => ([1, 2].includes(x) && z === 5 && y === 100 ? { y: 100 } : null),
+    nodeAt: (x, z, y) => ((([1, 2].includes(x) && z === 5) || (x === 1 && z === 6)) && y === 100 ? { y: 100 } : null),
   };
   assert.deepEqual(shelterSite(terrain, { x: 2.5, y: 100, z: 2.5 }), { x: 0, y: 100, z: 0 });
 });
@@ -163,7 +185,7 @@ test('shelter revisits observed level ground beyond hundreds of nearer unusable 
   const map = {
     cells,
     get: (x, y, z) => cells.get(`${x}:${y}:${z}`),
-    nodeAt: (x, z, y) => ([151, 152].includes(x) && z === 5 && y === 100 ? { y: 100 } : null),
+    nodeAt: (x, z, y) => ((([151, 152].includes(x) && z === 5) || (x === 151 && z === 6)) && y === 100 ? { y: 100 } : null),
   };
   assert.deepEqual(shelterSite(map, { x: 0.5, y: 110, z: 0.5 }), { x: 150, y: 100, z: 0 });
   const roof = cells.get('154:102:4');
@@ -178,7 +200,11 @@ test('shelter revisits observed level ground beyond hundreds of nearer unusable 
 test('partial shelter resumes its owned site after a controller restart', () => {
   const origin = { x: 10, y: 100, z: 20 };
   const shell = new Set(
-    [...template(origin, 'game:rammed-light-plain'), ...shelterDoor(origin, 'game:rammed-light-plain')].map(cell => `${cell.x}:${cell.y}:${cell.z}`),
+    [
+      ...shelterScaffold(origin, 'game:rammed-light-plain'),
+      ...template(origin, 'game:rammed-light-plain'),
+      ...shelterDoor(origin, 'game:rammed-light-plain'),
+    ].map(cell => `${cell.x}:${cell.y}:${cell.z}`),
   );
   const memory = fresh(fresh({ shelter: origin }).notes);
   const ctx: any = {
@@ -210,7 +236,7 @@ test('night finishes a nearby almost complete owned shelter before a distant old
   const origin = { x: 10, y: 100, z: 20 };
   const material = 'game:rammed-light-plain';
   const shell = new Set(
-    [shelterScaffold(origin, material), ...template(origin, material), ...shelterDoor(origin, material)].map(c => `${c.x}:${c.y}:${c.z}`),
+    [...shelterScaffold(origin, material), ...template(origin, material), ...shelterDoor(origin, material)].map(c => `${c.x}:${c.y}:${c.z}`),
   );
   const memory = fresh({ shelter: origin, home: { x: 200, y: 100, z: 200 }, dwelling: { door: { x: 200, y: 100, z: 201 }, item: material } });
   const ctx: any = {

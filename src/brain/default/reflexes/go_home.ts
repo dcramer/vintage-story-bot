@@ -20,7 +20,11 @@ export const goHome: Concern = {
       horizontal(state.position, { x: pending.x + 2.5, z: pending.z + 2.5 }) <= 8 &&
       Math.abs(state.position.y - pending.y) < 2
     ) {
-      const cells = [shelterScaffold(pending, SHELTER_MATERIAL), ...blueprint(pending, SHELTER_MATERIAL), ...shelterDoor(pending, SHELTER_MATERIAL)];
+      const cells = [
+        ...shelterScaffold(pending, SHELTER_MATERIAL),
+        ...blueprint(pending, SHELTER_MATERIAL),
+        ...shelterDoor(pending, SHELTER_MATERIAL),
+      ];
       const observed = cells.map(c => reading.terrain?.get(c.x, c.y, c.z));
       const missing = observed.filter(block => block?.code !== SHELTER_MATERIAL).length;
       const supplies = item => k.slots.filter(s => s.code === item).reduce((n, s) => n + s.quantity, 0);

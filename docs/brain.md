@@ -57,7 +57,8 @@ is built. A house site requires observed level ground and clear space; unknown
 terrain is rejected. Revisit a fully observed footprint within 256 blocks
 and clear observed leaves throughout its wall, interior and roof cells, plus ground flowers and ferns, before building;
 non-colliding vegetation is not empty building space. Other occupied cells are rejected.
-Retain the site's elevation when travelling there. Once 57 rammed-earth blocks, a torch and a firestarter are carried, starter
+Retain the site's elevation when travelling there. Prepare 60 rammed-earth blocks
+for the shell and two front stair rises, plus a torch and a firestarter. Starter
 construction takes priority over routine gathering; continue a started shell
 while materials remain. Urgent survival and night rules still take precedence.
 Construction keeps its chosen origin and phase across

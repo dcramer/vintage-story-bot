@@ -26,8 +26,9 @@ Survival baseline for the first five in-game days. Source for core goal definiti
 5×5 outside, 3×3 usable interior, two-block-high walls and a solid flat roof.
 Use rammed earth for walls, roof and the two removable door-seal blocks;
 retain the supported natural ground as the floor. The template requires 57
-rammed-earth blocks (30 wall, 25 roof, 2 door). Prepare 60 in six-block
-crafting batches and retain four soil for emergency cover.
+rammed-earth blocks (30 wall, 25 roof, 2 door), plus three blocks forming
+two front stair rises for roof access. Prepare 60 in six-block crafting
+batches and retain four soil for emergency cover.
 
 Top view below the roof; `#` rammed earth, `D` two-high seal, `T` torch, `C` reserved chest slot:
 

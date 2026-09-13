@@ -3,7 +3,7 @@
 
 import { shelterSite } from '../../../goals/shelter.ts';
 import { shelterCover } from '../../../support/sites.ts';
-import { shelter as blueprint, SHELTER_MATERIAL, shelterDoor, shelterStorage, shelterTorches } from '../../../support/structures.ts';
+import { shelter as blueprint, SHELTER_MATERIAL, shelterDoor, shelterScaffold, shelterStorage, shelterTorches } from '../../../support/structures.ts';
 import type { Concern } from '../concern.ts';
 import { goTo, setHome } from '../concern.ts';
 import { lightingDay, prepareFirestarter } from './lighting.ts';
@@ -56,10 +56,10 @@ export const shelter: Concern = {
     const count = code => ctx.k.slots.filter(s => s.code === code).reduce((n, s) => n + s.quantity, 0);
     const rammed = count(SHELTER_MATERIAL);
     const required = pending
-      ? [...blueprint(pending, SHELTER_MATERIAL), ...shelterDoor(pending, SHELTER_MATERIAL)].filter(
+      ? [...shelterScaffold(pending, SHELTER_MATERIAL), ...blueprint(pending, SHELTER_MATERIAL), ...shelterDoor(pending, SHELTER_MATERIAL)].filter(
           c => ctx.reading.terrain?.get(c.x, c.y, c.z)?.code !== SHELTER_MATERIAL,
         ).length
-      : 57;
+      : 60;
     const batch = Math.ceil(required / 6) * 6;
     if (rammed < required) {
       const packed = count('game:packeddirt');
