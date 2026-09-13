@@ -1,5 +1,6 @@
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { aimAtObject } from './blocks.ts';
+import { equip } from './inventory.ts';
 import { nearestThreat } from './threats.ts';
 import { has } from './traits.ts';
 
@@ -76,6 +77,14 @@ export class Gleaner {
   // Walk within reach of a loose block, aim at it and right-click; verified by more items carried.
   async pickup(object) {
     const field = this.field;
+    // Native RightClickPickup refuses a tool or unrelated building block.
+    // Select an empty hand before aiming; otherwise the click may place the
+    // held material instead of collecting the loose resource.
+    if (pickupBlock(object)) {
+      await field.observe();
+      if (!field.latest.hotbar.some(s => s.slot < 10 && !s.code)) return false;
+      await equip(field, { item: null });
+    }
     if (horizontal(field.latest.position, object.point) > field.latest.pickingRange - 0.5) {
       // A cell beside it when memory routes there, else anywhere within two blocks of it.
       const destination = field.approach(object) ?? { x: object.point.x, y: object.point.y, z: object.point.z, arrivalRadius: 2 };

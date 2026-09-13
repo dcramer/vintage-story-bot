@@ -33,6 +33,7 @@ function fixture({ gain = true, interruptAfter = Infinity } = {}) {
     sweeps = 0,
     inventory = 0,
     picked = false,
+    activeSlot = 1,
     target;
   const cancellation = new AbortController();
   const state = () => ({
@@ -46,7 +47,12 @@ function fixture({ gain = true, interruptAfter = Infinity } = {}) {
     life: { session: 'world', lastDamageAt: null, alerts: ['low_food'] },
     motion: { onGround: true },
     body: { halfWidth: 0.3, height: 1.85 },
-    hotbar: [{ code: 'game:stick', quantity: inventory }],
+    activeSlot,
+    hotbar: [
+      { slot: 0, code: 'game:stick', quantity: inventory },
+      { slot: 1, code: 'game:rammed-light-plain', quantity: 8 },
+      { slot: 2, code: null, quantity: 0 },
+    ],
     backpack: [],
     target,
   });
@@ -79,7 +85,13 @@ function fixture({ gain = true, interruptAfter = Infinity } = {}) {
     send: async request => {
       calls.push(request);
       if (request.action === 'observe') return state();
+      if (request.action === 'inventory') return { ok: true, state: 'inventory-state', inventories: [{ name: 'hotbar', slots: state().hotbar }] };
+      if (request.action === 'select') {
+        activeSlot = request.slot;
+        return { ok: true };
+      }
       if (request.action === 'interact') {
+        assert.equal(activeSlot, 2, 'native loose pickup requires an empty hand instead of the carried rammed earth');
         picked = true;
         if (gain) inventory++;
         return { ok: true };
