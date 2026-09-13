@@ -205,6 +205,37 @@ test('equipping can stage two base materials in one selected hotbar stack', asyn
   assert.equal(inventories[1].slots[0].quantity, 1);
 });
 
+test('equipping an empty hand verifies the selected zero-quantity slot', async () => {
+  const inventories = [
+    {
+      name: 'hotbar',
+      slots: [
+        { slot: 0, code: 'game:firestarter', quantity: 1 },
+        { slot: 1, code: null, quantity: 0 },
+      ],
+    },
+    { name: 'backpack', slots: [] },
+  ];
+  const field: any = {
+    latest: { activeSlot: 0 },
+    report: () => {},
+    wait: async () => {},
+    observe: async () => field.latest,
+    send: async request => {
+      if (request.action === 'inventory') return { state: 'pack', inventories };
+      if (request.action === 'select') field.latest.activeSlot = request.slot;
+      return { ok: true };
+    },
+    until: (condition, options) => until(field, condition, options),
+  };
+
+  const result = await equip(field, { item: null });
+
+  assert.equal(result.item, null);
+  assert.equal(result.slot, 1);
+  assert.equal(field.latest.activeSlot, 1);
+});
+
 test('equipping rotates a full inventory through the cursor without dropping anything', async () => {
   let activeSlot = 1;
   let packState = 0;

@@ -181,7 +181,7 @@ export async function equip(
   const after = (await field.until(state => state.activeSlot === destination.slot, { timeoutMs: 400, everyMs: 100 })).state;
   inventory = await field.send({ action: 'inventory' });
   const held = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === destination.slot);
-  if (after.activeSlot !== destination.slot || !held || held.quantity < quantity || !matches(held) || held.code !== source.code)
+  if (after.activeSlot !== destination.slot || !held || (source.code && held.quantity < quantity) || !matches(held) || held.code !== source.code)
     throw Error('Equipment selection unverified; inspect before another attempt');
   return {
     ok: true,
