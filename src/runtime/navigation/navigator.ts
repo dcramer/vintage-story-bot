@@ -10,7 +10,7 @@ import {
 } from '../../support/threats.ts';
 import { failEdge, failedEdges } from './failed-edges.ts';
 import { visitedFrontiers, visitFrontier } from './frontiers.ts';
-import { clearanceRemaining, findRoute } from './planner.ts';
+import { clearanceRemaining, findRoute, routeRemaining } from './planner.ts';
 import { angle, distance, horizontal, JUMP_HEADROOM, JUMP_HEIGHT, key, lookAt, MAX_DROP, STEP_HEIGHT } from './terrain.ts';
 
 // Follows a route of standing cells the way a player walks: aim at the next
@@ -320,7 +320,7 @@ export class Navigation {
       const planned = findRoute(map, from, this.target, w, h, this);
       const end = planned?.at(-1),
         old = this.route.at(-1);
-      const remaining = point => (this.target.clearOf?.length ? clearanceRemaining(point, this.target.clearOf) : horizontal(point, this.target));
+      const remaining = point => routeRemaining(point, this.target);
       if (end && old && (this.reaches(end) || remaining(end) + 1.5 < remaining(old))) this.adopt(planned, p, now, true);
       else this.plannedRevision = map.revision;
     }

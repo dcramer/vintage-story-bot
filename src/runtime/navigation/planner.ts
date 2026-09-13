@@ -15,6 +15,13 @@ export function clearanceRemaining(point, threats) {
   );
 }
 
+export const routeRemaining = (point, goal) =>
+  goal.clearOf?.length
+    ? clearanceRemaining(point, goal.clearOf)
+    : goal.horizontalOnly
+      ? horizontal(point, goal)
+      : Math.hypot(point.x - goal.x, (point.y - goal.y) * 0.5, point.z - goal.z);
+
 // A* over standing cells, in the shape of mineflayer-pathfinder: moves come
 // from the terrain grid with their costs, a goal is a predicate, and when the
 // goal is beyond what has been seen the best frontier node is returned as a
@@ -37,12 +44,7 @@ export function findRoute(
   } = {},
 ) {
   const deadline = performance.now() + deadlineMs;
-  const remaining = p =>
-    goal.clearOf?.length
-      ? clearanceRemaining(p, goal.clearOf)
-      : goal.horizontalOnly
-        ? horizontal(p, goal)
-        : Math.hypot(p.x - goal.x, (p.y - goal.y) * 0.5, p.z - goal.z);
+  const remaining = p => routeRemaining(p, goal);
   // A hostile is kept clear of, not by refusing every cell nearer than the body is now (a notch in a hill
   // would trap the bot), but by charging for closeness: cells inside the kept distance cost extra by how
   // far inside they are, and only cells within striking range are refused outright.

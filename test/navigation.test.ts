@@ -227,6 +227,27 @@ test('a partial route extends in stride when new terrain replaces old cells at c
   assert.equal(frame.forward, true);
 });
 
+test('replanning in stride considers a known destination below the old frontier', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x <= 4; x++) column(map, x, 0);
+  const state = stateAt({ x: 0.5, y: 0, z: 0.5 });
+  const nav = new Navigation(map, state, { x: 2.5, y: -8, z: 0.5 }, 0);
+  // The queued frontier was above the destination. Newly observed ground
+  // offers a lower frontier without much additional horizontal progress.
+  nav.adopt(
+    [
+      { x: 1.5, y: 0, z: 0.5, move: 'walk' },
+      { x: 1.5, y: 8, z: 0.5, move: 'walk' },
+    ],
+    state.position,
+    0,
+  );
+  column(map, 5, 0);
+  nav.tick(state, 1000);
+  assert.equal(nav.route.at(-1).y, 0, 'use the lower observed frontier in stride');
+  assert.equal(nav.routeReaches, false, 'standing above the target is still not arrival');
+});
+
 test('a merged run keeps input reach margin and falls back when the body drifts away during a turn', () => {
   const map = new TerrainMemory();
   for (let x = -2; x <= 12; x++) for (let z = -1; z <= 1; z++) column(map, x, z);
