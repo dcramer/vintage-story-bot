@@ -56,6 +56,8 @@ Failed steps stay excluded across navigation legs for one minute, scoped to the 
 
 A stalled merged shortcut restores the original checkpoint and follows the detour before replanning. Failure of a shortcut is not evidence that an untried edge of that detour is blocked.
 
+A lower destination does not authorize an irreversible descent on an unfinished route. Fine and rough partial routes reject frontiers below their starting level reached through a drop the body cannot climb back; a complete observed route may descend.
+
 Sub-block steps require the native lifting clearance at their source and destination, including the 0.03-block lift above the obstacle. When a low ceiling prevents stepping onto surrounding snow, `dig_out` may clear that observed, breakable ceiling without cutting a stair wall.
 
 Visited frontier viewpoints also survive new legs for one minute (at most 256 per terrain memory). A newly observed cell from that viewpoint's missing set permits reconsideration sooner. Thin full-width cover suppresses buried frontiers, and observed water requests its immediate bed without making deeper dry landings exploration targets.

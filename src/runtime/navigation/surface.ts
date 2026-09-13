@@ -112,7 +112,7 @@ export function planRoughRoute(surface, start, goal, { budget = 4096, penalty = 
     bestScore = Infinity;
   // Columns reached only down a drop the body could not climb back: a partial route never ends there.
   const committed = new Set();
-  const floorY = Math.min(origin.y, Number.isFinite(goal.y) ? goal.y : origin.y);
+  const floorY = origin.y;
   const path = end => {
     const list = [end];
     while (previous.has(end)) {

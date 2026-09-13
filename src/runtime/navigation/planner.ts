@@ -86,7 +86,7 @@ export function findRoute(
     // one; a partial route never ends beyond one, or the walk commits to a hole for a frontier
     // that merely looked nearer to the goal from below.
     committed = new Set(),
-    floorY = Math.min(start.y, Number.isFinite(goal.y) ? goal.y : start.y);
+    floorY = start.y;
   const open = new Heap();
   open.push({ p: origin, score: remaining(origin) });
   let frontier = null,

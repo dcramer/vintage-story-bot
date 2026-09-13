@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { Controller } from '../src/runtime/controller.ts';
 import { Navigation } from '../src/runtime/navigation/navigator.ts';
 import { findRoute } from '../src/runtime/navigation/planner.ts';
+import { planRoughRoute, SurfaceMemory } from '../src/runtime/navigation/surface.ts';
 import { horizontal, TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 
 function terrain() {
@@ -222,7 +223,7 @@ test('a diagonal past a hole is not a move: the body rounding that corner would 
   );
 });
 
-test('a partial route never ends down a drop the body cannot climb back, unless the goal itself lies low', () => {
+test('a lower destination does not authorize an irreversible drop on an unfinished route', () => {
   // A plateau two blocks high on the west, a valley floor east of it, nothing known beyond x = 6.
   const plateau = world(
     8,
@@ -233,7 +234,19 @@ test('a partial route never ends down a drop the body cannot climb back, unless 
   const along = findRoute(plateau, at(0, 0, 2), { x: 30.5, y: 2, z: 0.5, horizontalOnly: true }, 0.3, 1.85);
   assert.ok(!along || along.at(-1).y >= 2, 'a goal at plateau height: the frontier down in the valley is no frontier');
   const down = findRoute(plateau, at(0, 0, 2), { x: 30.5, y: 0, z: 0.5 }, 0.3, 1.85);
-  assert.ok(down?.length && down.at(-1).y === 0 && Math.floor(down.at(-1).x) >= 3, 'a goal down in the valley: the descent is the way');
+  assert.ok(!down || down.at(-1).y >= 2, 'the distant lower goal does not prove a way out of the valley');
+  const complete = findRoute(plateau, at(0, 0, 2), at(5, 0), 0.3, 1.85, { partial: false });
+  assert.ok(complete?.length && complete.at(-1).y === 0, 'a fully observed route to the lower destination can descend');
+});
+
+test('a rough partial route also refuses an irreversible descent toward a distant lower goal', () => {
+  const surface = new SurfaceMemory();
+  surface.apply({ columns: Array.from({ length: 9 }, (_, x) => [x, 0, x < 3 ? 2 : 0, 'ground', 1]) });
+  const partial = planRoughRoute(surface, at(0, 0, 2), at(30, 0));
+  assert.ok(partial.status === 'noPath' || partial.checkpoints.at(-1).y >= 2);
+  const complete = planRoughRoute(surface, at(0, 0, 2), at(8, 0));
+  assert.equal(complete.status, 'success');
+  assert.equal(complete.checkpoints.at(-1).y, 0);
 });
 
 test('a run over gentle ground merges; a block up does not', () => {
