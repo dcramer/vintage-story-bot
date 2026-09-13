@@ -214,8 +214,18 @@ export const foodEnded: Concern['ended'] = (last, memory, reading) => {
   }
 };
 
-export const foodSetAside: Concern['setAside'] = last => {
+export const foodSetAside: Concern['setAside'] = (last, memory, reading) => {
   const reason = last.reason ?? last.result?.reason;
+  // An optional provisions pass that exhausted the local forage must yield to
+  // the work list instead of immediately starting the identical bounded search
+  // again. Urgent recovery keeps searching, and carried roots still enter the
+  // cooking fallback below.
+  if (last.kind === 'forage') {
+    const roots = reading.inventory?.inventories
+      ?.flatMap(inventory => inventory.slots ?? [])
+      .reduce((n, slot) => n + (slot.code === ROOT ? (slot.quantity ?? 0) : 0), 0);
+    return memory.job === 'provisions' && !roots && !memory.notes.cooking && failedOnItsOwn(last);
+  }
   // A bounded root search may exhaust the area after collecting part of its
   // batch. Those roots are already a useful result; cook them instead of
   // setting aside the whole food concern and starting raw forage again.
@@ -226,5 +236,5 @@ export const foodSetAside: Concern['setAside'] = last => {
     last.result?.phase === 'loading' &&
     last.result?.slot === 0 &&
     ['none_found', 'transfer_unverified'].includes(reason ?? '');
-  return !['forage', 'travel', 'firepit'].includes(last.kind) && !recoverableFuelLoad && failedOnItsOwn(last);
+  return !['travel', 'firepit'].includes(last.kind) && !recoverableFuelLoad && failedOnItsOwn(last);
 };

@@ -923,6 +923,24 @@ test('brain: partial provisions do not restart forage during its cooking fallbac
   assert.match(prepare.why, /firestarter/);
 });
 
+test('brain: exhausted optional provisions forage yields to the work list', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'provisions';
+  memory.notes.stash = chestNote();
+  const choice = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 600, max: 1500 } } }),
+      inventory: kitted(),
+      now: 1000,
+      last: { id: 'food', kind: 'forage', ok: false, outcome: 'no_progress', reason: 'Requested deadline reached' },
+    }),
+    memory,
+  );
+  assert.notEqual(choice.start, 'forage');
+  assert.equal(memory.tried.provisions?.at, 1000);
+});
+
 test('brain: a productive partial root harvest cooks what it found', () => {
   const memory = fresh();
   memory.startupChecked = true;
