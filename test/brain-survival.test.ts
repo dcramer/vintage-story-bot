@@ -214,6 +214,27 @@ test('house: unknown terrain and hazards never qualify as a building site', () =
   assert.equal(houseSite(occupied('game:stationarybasket-east'), p), null, 'non-colliding occupied cells are not empty construction space');
 });
 
+test('house: known level ground near camp is used even when an errand left the body far away', () => {
+  const home = { x: 50.5, y: 100, z: 50.5 };
+  const terrain = {
+    get: (x: number, y: number, z: number) => {
+      const known = x >= 24 && x <= 62 && z >= 24 && z <= 62;
+      if (!known || y < 99 || y > 104) return undefined;
+      return { code: y === 99 ? 'game:soil-low-none' : 'game:air', boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [], hazard: null };
+    },
+  };
+  const memory = fresh({ home });
+  const next: any = house.run({
+    memory,
+    reading: { terrain },
+    state: { position: { x: 0.5, y: 100, z: 0.5 } },
+    k: kit(inventory({})),
+  } as any);
+  assert.notEqual(next.start, 'explore');
+  assert.ok(memory.notes.construction, 'the known camp terrain becomes a construction plan immediately');
+  assert.ok(Math.hypot(memory.notes.construction!.origin.x - home.x, memory.notes.construction!.origin.z - home.z) < 30);
+});
+
 test('shelter refuses unknown ground, unsupported floors and blocked interiors', () => {
   const position = { x: 0.5, y: 100, z: 0.5 };
   const terrain = {

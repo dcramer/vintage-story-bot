@@ -8,41 +8,46 @@ export type Construction = { origin: Cell; phase: 'walls' | 'floor' | 'enter' };
 export const RAMMED = 'game:rammed-light-plain';
 export const HAY = 'game:hay-normal-ud';
 export const HOUSE_BLOCKS = blueprint({ x: 0, y: 0, z: 0 }, RAMMED).length + houseScaffold({ x: 0, y: 0, z: 0 }, RAMMED).length;
+const SITE_OFFSETS = Array.from({ length: 25 }, (_, ix) => ix * 2 - 24)
+  .flatMap(dx => Array.from({ length: 25 }, (_, iz) => ({ dx, dz: iz * 2 - 24 })))
+  .sort((a, b) => Math.hypot(a.dx, a.dz) - Math.hypot(b.dx, b.dz) || a.dx - b.dx || a.dz - b.dz);
 
 // Choose only a level footprint the surroundings actually show, with a dry margin.
+// The footprint is much larger than the starter shelter, so inspect a modest
+// remembered area instead of requiring the bot to step within six blocks of
+// the one suitable patch before it can recognize it.
 export function houseSite(terrain: any, position: Cell): Cell | null {
   if (!terrain) return null;
   for (const y of [0, 1, -1, 2, -2].map(dy => Math.floor(position.y) + dy))
-    for (const dx of [0, -2, 2])
-      for (const dz of [0, -2, 2]) {
-        const origin = { x: Math.floor(position.x) - 4 + dx, y, z: Math.floor(position.z) - 3 + dz };
-        let fits = true;
-        for (let x = -1; x <= 10 && fits; x++)
-          for (let z = -1; z <= 7 && fits; z++) {
-            const ground = terrain.get(origin.x + x, y - 1, origin.z + z);
-            if (!supportedFloor(ground, y)) {
+    for (const { dx, dz } of SITE_OFFSETS) {
+      const origin = { x: Math.floor(position.x) - 4 + dx, y, z: Math.floor(position.z) - 3 + dz };
+      let fits = true;
+      for (let x = -1; x <= 10 && fits; x++)
+        for (let z = -1; z <= 7 && fits; z++) {
+          const ground = terrain.get(origin.x + x, y - 1, origin.z + z);
+          if (!supportedFloor(ground, y)) {
+            fits = false;
+            break;
+          }
+          for (let h = 0; h <= 4; h++) {
+            const air = terrain.get(origin.x + x, y + h, origin.z + z);
+            if (!air || air.hazard || ((air.boxes.length || (air.code && air.code !== 'game:air')) && !shelterCover(air, h))) {
               fits = false;
               break;
             }
-            for (let h = 0; h <= 4; h++) {
-              const air = terrain.get(origin.x + x, y + h, origin.z + z);
-              if (!air || air.hazard || ((air.boxes.length || (air.code && air.code !== 'game:air')) && !shelterCover(air, h))) {
-                fits = false;
-                break;
-              }
-            }
           }
-        if (fits) {
-          const step = houseScaffold(origin, RAMMED)[0];
-          const ground = terrain.get(step.x, y - 1, step.z);
-          if (!supportedFloor(ground, y)) continue;
-          for (let h = 0; h < 4; h++) {
-            const air = terrain.get(step.x, y + h, step.z);
-            if (!air || air.hazard || ((air.boxes.length || (air.code && air.code !== 'game:air')) && !shelterCover(air, h))) fits = false;
-          }
-          if (fits) return origin;
         }
+      if (fits) {
+        const step = houseScaffold(origin, RAMMED)[0];
+        const ground = terrain.get(step.x, y - 1, step.z);
+        if (!supportedFloor(ground, y)) continue;
+        for (let h = 0; h < 4; h++) {
+          const air = terrain.get(step.x, y + h, step.z);
+          if (!air || air.hazard || ((air.boxes.length || (air.code && air.code !== 'game:air')) && !shelterCover(air, h))) fits = false;
+        }
+        if (fits) return origin;
       }
+    }
   return null;
 }
 
@@ -55,7 +60,10 @@ export const house: Concern = {
     const { k, memory } = ctx;
     let plan = memory.notes.construction;
     if (!plan) {
-      const origin = houseSite(ctx.reading.terrain, ctx.state.position);
+      // Prefer known terrain around the established camp. An earlier errand
+      // may have left the body far away, but that should not move the planned
+      // permanent home or send site search farther from its storage.
+      const origin = houseSite(ctx.reading.terrain, memory.notes.home ?? ctx.state.position);
       if (!origin) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'looking for level ground for the house' };
       plan = memory.notes.construction = { origin, phase: 'walls' };
     }
