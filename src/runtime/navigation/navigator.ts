@@ -374,9 +374,9 @@ export class Navigation {
     }
     const next = this.route[this.index];
     this.nextCheckpoint = next;
-    // A route that leads back toward a threat is replanned like any other failure, so the
-    // replan cap ends the walk instead of the same route being refused every tick.
-    if (this.evading && !activeAvoid.every(item => horizontal(next, item.point) >= item.minimumDistance)) {
+    // Match the planner's striking-range exclusion. A safe detour can briefly get
+    // closer to a threat; refusing it here replans the same route without moving.
+    if (this.evading && !activeAvoid.every(item => horizontal(next, item.point) >= Math.min(3, item.minimumDistance))) {
       this.target = fleeTarget(p, threats);
       return this.replan(p, now, 'route_toward_threat');
     }

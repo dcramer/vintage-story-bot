@@ -15,6 +15,24 @@ function column(map, x, z, floor = true) {
   for (let y = -1; y < 4; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: y === -1 && floor ? [[x, y, z, x + 1, y + 1, z + 1]] : [] });
 }
 
+test('escape follows a safe detour that initially approaches a distant hostile', () => {
+  const map = new TerrainMemory();
+  for (let x = 0; x <= 3; x++) column(map, x, 0);
+  for (let z = 0; z <= 5; z++) column(map, 3, z);
+  for (let x = -8; x <= 3; x++) column(map, x, 5);
+  const state = {
+    ...stateAt({ x: 0.5, y: 0, z: 0.5 }),
+    nearbyEntities: [{ key: 'drifter', code: 'game:drifter-normal', point: { x: 10.5, y: 0, z: 0.5 }, ageMs: 0 }],
+  };
+  const nav = new Navigation(map, state, { x: -8.5, y: 0, z: 5.5 }, 0);
+  const frame = nav.tick(state, 0);
+  assert.equal(nav.evading, true);
+  assert.notEqual(nav.lastReplan, 'route_toward_threat');
+  assert.ok(frame?.toward, 'the planned detour must send a movement step');
+  assert.ok(nav.nextCheckpoint.x > state.position.x);
+  assert.ok(horizontal(nav.nextCheckpoint, state.nearbyEntities[0].point) > 3);
+});
+
 test('swimming routes hold jump through shallow contacts only with mod support', () => {
   const map = new TerrainMemory();
   for (let x = 0; x <= 4; x++) {
