@@ -580,7 +580,7 @@ test('brain loop: respawns when dead, waits behind an operator goal, starts and 
   assert.equal(controller.active.by, 'operator', 'an operator goal is never cancelled by the brain');
 });
 
-test('brain loop: a swimming bot with no goal swims for the nearest dry ground, jump held', async () => {
+test('brain loop: a swimming bot routes to the nearest dry ground', async () => {
   const calls: any[] = [];
   const dry = { x: 3.5, y: 100, z: 0.5 };
   const controller = {
@@ -605,8 +605,8 @@ test('brain loop: a swimming bot with no goal swims for the nearest dry ground, 
     },
     request: async request => {
       calls.push(request);
-      if (!['look', 'move'].includes(request.action)) throw new Error('no goal should start while swimming');
-      return { ok: true };
+      if (request.action !== 'travel') throw new Error('only terrain-aware travel should start while swimming');
+      return { ok: true, goal: { id: 'shore' } };
     },
     stop: async () => {},
     goalView: () => null,
@@ -615,13 +615,15 @@ test('brain loop: a swimming bot with no goal swims for the nearest dry ground, 
   loop.start();
   await new Promise(resolve => setTimeout(resolve, 25));
   await loop.stop();
-  const look = calls.find(c => c.action === 'look'),
-    move = calls.find(c => c.action === 'move');
-  assert.equal(Math.round(look.yawDegrees), 90, 'faces the dry cell to the east');
-  assert.deepEqual([move.jump, move.sneak, move.direction], [true, false, 'forward']);
+  const travel = calls.find(c => c.action === 'travel');
+  assert.deepEqual(
+    [travel.x, travel.y, travel.z, travel.arrivalRadius],
+    [dry.x, dry.y, dry.z, 0.6],
+    'the shared navigator can route around a blocked bank instead of repeating one stroke forever',
+  );
 });
 
-test('brain loop: a wading bot with no goal moves toward dry ground before starting work', async () => {
+test('brain loop: a wading bot routes to dry ground before starting work', async () => {
   const calls: any[] = [];
   const dry = { x: 3.5, y: 100, z: 0.5 };
   const controller = {
@@ -646,8 +648,8 @@ test('brain loop: a wading bot with no goal moves toward dry ground before start
     },
     request: async request => {
       calls.push(request);
-      if (!['look', 'move'].includes(request.action)) throw new Error('no goal should start with wet footing');
-      return { ok: true };
+      if (request.action !== 'travel') throw new Error('only terrain-aware travel should start with wet footing');
+      return { ok: true, goal: { id: 'shore' } };
     },
     stop: async () => {},
     goalView: () => null,
@@ -656,11 +658,9 @@ test('brain loop: a wading bot with no goal moves toward dry ground before start
   loop.start();
   await new Promise(resolve => setTimeout(resolve, 25));
   await loop.stop();
-  const look = calls.find(c => c.action === 'look'),
-    move = calls.find(c => c.action === 'move');
-  assert.equal(Math.round(look.yawDegrees), 90, 'faces the dry cell to the east');
-  assert.deepEqual([move.jump, move.sneak, move.direction], [true, false, 'forward']);
-  assert.match(loop.lastDecision, /wading toward 4,1/);
+  const travel = calls.find(c => c.action === 'travel');
+  assert.deepEqual([travel.x, travel.y, travel.z], [dry.x, dry.y, dry.z]);
+  assert.match(loop.lastDecision, /travel.*wading toward 4,1/);
 });
 
 test('brain loop: an act decision runs its actions in order by hand', async () => {
