@@ -167,6 +167,64 @@ test('equipping makes verified hotbar room in worn-basket storage', async () => 
   assert.equal(inventories[1].slots[1].code, 'game:fern-eaglefern');
 });
 
+test('equipping rotates a full inventory through the cursor without dropping anything', async () => {
+  let activeSlot = 1;
+  let packState = 0;
+  const inventories: any[] = [
+    {
+      name: 'hotbar',
+      slots: [
+        { slot: 0, code: 'game:seeds-rye', quantity: 1, tool: null },
+        { slot: 1, code: 'game:knife-flint', quantity: 1, tool: 'Knife', toolTier: 1, durability: 10 },
+      ],
+    },
+    {
+      name: 'backpack',
+      slots: [
+        { slot: 0, code: 'game:drygrass', quantity: 1, bag: false },
+        { slot: 1, code: 'game:flint', quantity: 1, bag: false },
+      ],
+    },
+    { name: 'mouse', slots: [{ slot: 0, code: null, quantity: 0 }] },
+  ];
+  const contents = () => ({ state: `pack-${packState}`, inventories: structuredClone(inventories) });
+  const field: any = {
+    latest: { activeSlot },
+    report: () => {},
+    wait: async () => {},
+    observe: async () => structuredClone(field.latest),
+    send: async request => {
+      if (request.action === 'inventory') return contents();
+      if (request.action === 'inventory_move') {
+        assert.equal(request.expectedState, `pack-${packState}`);
+        const from = inventories.find(i => i.name === request.from.inventory).slots[request.from.slot];
+        const to = inventories.find(i => i.name === request.to.inventory).slots[request.to.slot];
+        assert.equal(to.code, null);
+        Object.assign(to, structuredClone(from));
+        to.slot = request.to.slot;
+        Object.assign(from, { code: null, quantity: 0, tool: null });
+        packState++;
+        return { ok: true };
+      }
+      if (request.action === 'select') {
+        activeSlot = request.slot;
+        field.latest.activeSlot = activeSlot;
+        return { ok: true };
+      }
+      return { ok: true };
+    },
+    until: (condition, options) => until(field, condition, options),
+  };
+
+  const result = await equip(field, { item: 'game:drygrass' });
+
+  assert.equal(result.item, 'game:drygrass');
+  assert.equal(result.slot, 0);
+  assert.equal(inventories[0].slots[0].code, 'game:drygrass');
+  assert.equal(inventories[1].slots[0].code, 'game:seeds-rye');
+  assert.equal(inventories[2].slots[0].code, null);
+});
+
 test('eating rotates a full inventory through the cursor without dropping anything', async () => {
   let mutation = 0;
   const state: any = {
