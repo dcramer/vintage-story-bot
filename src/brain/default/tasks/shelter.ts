@@ -2,6 +2,7 @@
 // A verified entry and seal make the spot home.
 
 import { shelterSite } from '../../../goals/shelter.ts';
+import { surfaceCover } from '../../../support/sites.ts';
 import { shelter as blueprint, SHELTER_MATERIAL, shelterDoor } from '../../../support/structures.ts';
 import type { Concern } from '../concern.ts';
 import { goTo, setHome } from '../concern.ts';
@@ -11,13 +12,37 @@ import { TORCH_MIN, torches } from './torches.ts';
 // 57 rammed-earth blocks; six-block crafting batches plus four soil kept for emergencies.
 export const SHELTER_DIRT = 64;
 
+function obstructedShelter(map, origin) {
+  const shell = new Set(
+    [...blueprint(origin, SHELTER_MATERIAL), ...shelterDoor(origin, SHELTER_MATERIAL)].map(cell => `${cell.x}:${cell.y}:${cell.z}`),
+  );
+  for (let x = origin.x; x < origin.x + 5; x++)
+    for (let z = origin.z; z < origin.z + 5; z++)
+      for (let y = origin.y; y <= origin.y + 2; y++) {
+        const block = map?.get(x, y, z);
+        if (!block || block.code === 'game:air' || block.code == null) continue;
+        if (y === origin.y && surfaceCover(block)) continue;
+        if (shell.has(`${x}:${y}:${z}`) && block.code.includes(SHELTER_MATERIAL)) continue;
+        return true;
+      }
+  return false;
+}
+
 export const shelter: Concern = {
   id: 'shelter',
   title: 'a 5x5 rammed-earth shelter to call home',
   done: s => s.home && s.rammedShelter !== false,
   after: ['dirt', 'torches'],
   run: ctx => {
-    const pending = ctx.memory.notes.shelter;
+    let pending = ctx.memory.notes.shelter;
+    // Storage or another player can occupy a remembered footprint between a
+    // partial build and its resume. Explicitly observed foreign blocks make
+    // this site unusable; forget it and survey a fresh footprint instead of
+    // repeatedly trying to clear or build through the obstruction.
+    if (pending && obstructedShelter(ctx.reading.terrain, pending)) {
+      ctx.memory.notes.shelter = null;
+      pending = null;
+    }
     if (pending) {
       const trip = goTo(ctx, { x: pending.x + 2.5, z: pending.z + 5.5 }, 'finishing the shelter', 5, 2);
       if (trip) return trip;

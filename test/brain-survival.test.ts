@@ -143,18 +143,42 @@ test('shelter refuses unknown ground, unsupported floors and blocked interiors',
 
 test('partial shelter resumes its owned site after a controller restart', () => {
   const origin = { x: 10, y: 100, z: 20 };
+  const shell = new Set(
+    [...template(origin, 'game:rammed-light-plain'), ...shelterDoor(origin, 'game:rammed-light-plain')].map(cell => `${cell.x}:${cell.y}:${cell.z}`),
+  );
   const memory = fresh(fresh({ shelter: origin }).notes);
   const ctx: any = {
     memory,
     state: { position: { x: 12.5, y: 100, z: 25.5 } },
     k: kit(inventory({ 'game:rammed-light-plain': 6, 'game:torch-basic-extinct-up': 2, 'game:firestarter': 1 })),
-    reading: { terrain: { get: (_x, y, z) => ({ code: y === 102 && z === 20 ? 'game:air' : 'game:rammed-light-plain' }) } },
+    reading: {
+      terrain: {
+        get: (x, y, z) => ({ code: shell.has(`${x}:${y}:${z}`) && !(y === 102 && z === 20) ? 'game:rammed-light-plain' : 'game:air' }),
+      },
+    },
   };
   const work: any = shelter.run(ctx);
   assert.equal(work.start, 'shelter');
   assert.deepEqual(work.args.origin, origin);
   shelter.ended!({ ok: false } as any, memory, {} as any);
   assert.deepEqual(memory.notes.shelter, origin, 'a failed roof cannot discard the already placed walls');
+});
+
+test('a remembered shelter footprint is abandoned when storage occupies it', () => {
+  const origin = { x: 10, y: 100, z: 20 };
+  const memory = fresh({ shelter: origin });
+  const work: any = shelter.run({
+    memory,
+    state: { position: { x: 12.5, y: 100, z: 25.5 } },
+    k: kit(inventory({ 'game:rammed-light-plain': 60, 'game:torch-basic-extinct-up': 1, 'game:firestarter': 1 })),
+    reading: {
+      terrain: {
+        get: (x, y, z) => (x === 11 && y === 100 && z === 21 ? { code: 'game:stationarybasket-east', boxes: [{}] } : undefined),
+      },
+    },
+  } as any);
+  assert.equal(memory.notes.shelter, null);
+  assert.equal(work.start, 'explore', 'unknown terrain is surveyed before choosing a replacement footprint');
 });
 
 test('restart inside an owned shelter does not identify its roof as a burrow mouth', () => {
