@@ -72,6 +72,25 @@ const eatingHeadings = [0, 45, 90, 135, 180, 225, 270, 315];
 const eatingPitches = [-60, -30, 0, 30, 60];
 export const eatingLooks = () => eatingPitches.flatMap(pitchDegrees => eatingHeadings.map(yawDegrees => ({ yawDegrees, pitchDegrees })));
 
+// Make one ordinary hotbar slot available without discarding anything. This is
+// only needed when the chosen food is in a worn bag; after the bite, that slot
+// is empty again and any displaced tool or stack remains owned in the bag.
+export function foodHotbarRoom(inventory) {
+  const slots = ownedSlots(inventory);
+  const to = slots.find(slot => slot.inventory === 'backpack' && !slot.bag && !slot.code);
+  const from = slots
+    .filter(slot => slot.inventory === 'hotbar' && slot.code && slot.quantity > 0)
+    .sort((a, b) => Number(safeFood(a)) - Number(safeFood(b)) || Number(Boolean(a.tool)) - Number(Boolean(b.tool)) || a.slot - b.slot)[0];
+  if (!from || !to) return null;
+  return {
+    action: 'inventory_move',
+    from: { inventory: 'hotbar', slot: from.slot },
+    to: { inventory: 'backpack', slot: to.slot },
+    quantity: from.quantity,
+    expectedState: inventory.state,
+  };
+}
+
 export async function emptyHand(field) {
   await field.observe();
   const inventory = await field.send({ action: 'inventory' });
@@ -91,7 +110,25 @@ export async function consume(field, { match, tolerance = 0 }: { match?: string;
     .sort((a, b) => b.nutrition.health - a.nutrition.health || a.freshness.freshHoursLeft - b.freshness.freshHoursLeft)[0];
   if (!food) throw Error(match ? `No fresh edible food matching ${match} in own inventory` : 'No fresh edible food in own inventory');
   if (food.inventory !== 'hotbar') {
-    const destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && !s.code);
+    let destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && !s.code);
+    if (!destination) {
+      const room = foodHotbarRoom(inventory);
+      if (!room) throw Error('Eating needs an empty hotbar slot or worn-bag storage');
+      const displaced = ownedSlots(inventory).find(s => s.inventory === room.from.inventory && s.slot === room.from.slot);
+      await field.send(room);
+      const cleared = await field.until(
+        (_, contents) => {
+          const slots = ownedSlots(contents);
+          const source = slots.find(s => s.inventory === room.from.inventory && s.slot === room.from.slot);
+          const stored = slots.find(s => s.inventory === room.to.inventory && s.slot === room.to.slot);
+          return !source?.code && stored?.code === displaced?.code && stored?.quantity === displaced?.quantity;
+        },
+        { timeoutMs: 1000, everyMs: 100, read: () => field.send({ action: 'inventory' }) },
+      );
+      if (!cleared.met) throw Error('Hotbar transfer unverified; inspect inventory');
+      inventory = cleared.read;
+      destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === room.from.slot && !s.code);
+    }
     if (!destination) throw Error('Eating needs an empty hotbar slot');
     await field.send({
       action: 'inventory_move',

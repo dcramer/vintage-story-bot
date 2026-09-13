@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { elevationDetourDistance, routeRegressed, travel } from '../src/goals/travel.ts';
 import { remember } from '../src/support/facts.ts';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe, until } from '../src/support/fieldwork.ts';
-import { eatingLooks, edible, foodRecoverySatisfied, foodTolerance, foodYield, safeFood, shouldEat } from '../src/support/food.ts';
+import { eatingLooks, edible, foodHotbarRoom, foodRecoverySatisfied, foodTolerance, foodYield, safeFood, shouldEat } from '../src/support/food.ts';
 import { leafBlock, leafClearCandidate, threatAllowsLeafClearing } from '../src/support/leaf-clearing.ts';
 import { Places } from '../src/support/places.ts';
 import {
@@ -69,6 +69,37 @@ test('eating searches a deterministic three-dimensional clear-air grid', () => {
     { yawDegrees: 180, pitchDegrees: -60 },
   ]);
   assert.deepEqual(looks.at(-1), { yawDegrees: 315, pitchDegrees: 60 });
+});
+
+test('eating makes reversible hotbar room in worn-basket storage', () => {
+  const inventory = {
+    state: 'full-pack',
+    inventories: [
+      {
+        name: 'hotbar',
+        slots: [
+          { slot: 0, code: 'game:axe-flint', quantity: 1, tool: 'Axe' },
+          { slot: 1, code: 'game:soil-low-none', quantity: 9 },
+        ],
+      },
+      {
+        name: 'backpack',
+        slots: [
+          { slot: 0, code: 'game:basket-normal-reed', quantity: 1, bag: true },
+          { ...slot('food'), slot: 4, code: 'game:vegetable-cookedcattailroot', bag: false },
+          { slot: 5, code: null, quantity: 0, bag: false },
+        ],
+      },
+    ],
+  };
+
+  assert.deepEqual(foodHotbarRoom(inventory), {
+    action: 'inventory_move',
+    from: { inventory: 'hotbar', slot: 1 },
+    to: { inventory: 'backpack', slot: 5 },
+    quantity: 9,
+    expectedState: 'full-pack',
+  });
 });
 
 test('a block is forage when the pages read say it yields food now', () => {
