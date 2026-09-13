@@ -263,7 +263,7 @@ test('brain: a threat interrupts its own goal, a failed job is set aside, a fini
   ];
   const dirt = inventory(slot('game:soil-medium-none', SHELTER_DIRT), ...tools);
   const walls = decide(reading({ inventory: dirt }), shelterMemory);
-  assert.deepEqual([walls.start, walls.args.item, shelterMemory.job], ['shelter', 'game:soil-medium-none', 'shelter']);
+  assert.deepEqual([walls.start, walls.args.item, shelterMemory.job], ['shelter', 'soil-', 'shelter']);
   assert.equal(shelterCells({ x: 0, y: 0, z: 0 }, 'd').length, 23);
   const home = { x: 3.5, y: 100, z: 0.5 };
   decide(reading({ inventory: dirt, last: { id: 's1', kind: 'shelter', ok: true, result: { home } } }), shelterMemory);

@@ -6,6 +6,7 @@ import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { fresh, kit } from '../src/brain/default.ts';
 import craft from '../src/goals/craft_item.ts';
 import buildHouse from '../src/goals/house.ts';
+import { shelterSite } from '../src/goals/shelter.ts';
 
 const inventory = (items: Record<string, number>) => ({
   inventories: [{ name: 'hotbar', slots: Object.entries(items).map(([code, quantity], slot) => ({ code, quantity, slot })) }],
@@ -68,6 +69,18 @@ test('house: unknown terrain and hazards never qualify as a building site', () =
   const terrain = { get: (_x: number, y: number) => ({ boxes: y === 99 ? [{}] : [], hazard: null }) };
   assert.ok(houseSite(terrain, p));
   assert.equal(houseSite({ get: () => ({ boxes: [{}], hazard: 'water' }) }, p), null);
+});
+
+test('shelter refuses unknown ground, unsupported floors and blocked interiors', () => {
+  const position = { x: 0.5, y: 100, z: 0.5 };
+  const terrain = {
+    get: (x, y, z) => ({ boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [], hazard: null }),
+    nodeAt: () => ({ y: 100 }),
+  };
+  assert.ok(shelterSite(terrain, position));
+  assert.equal(shelterSite({ ...terrain, get: () => undefined }, position), null);
+  assert.equal(shelterSite({ ...terrain, get: () => ({ boxes: [], hazard: null }) }, position), null);
+  assert.equal(shelterSite({ ...terrain, get: (x, y, z) => ({ boxes: [[x, y, z, x + 1, y + 1, z + 1]], hazard: null }) }, position), null);
 });
 
 test('stockpile: keeps the carried kit and reopens stale shared storage', () => {
