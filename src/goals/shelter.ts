@@ -2,7 +2,15 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { ownedSlots } from '../support/inventory.ts';
 import { shelterCover, supportedFloor, surfaceCover } from '../support/sites.ts';
-import { SHELTER_MATERIAL, SHELTER_SIZE, shelter as shelterCells, shelterCenter, shelterDoor, shelterTorches } from '../support/structures.ts';
+import {
+  SHELTER_MATERIAL,
+  SHELTER_SIZE,
+  shelter as shelterCells,
+  shelterCenter,
+  shelterDoor,
+  shelterScaffold,
+  shelterTorches,
+} from '../support/structures.ts';
 import { cleanName, runField } from '../support/task.ts';
 import { build, digArea } from './build.ts';
 import { lightShelter } from './light_shelter.ts';
@@ -20,7 +28,10 @@ export function shelterSite(map, position) {
           if (!cell || cell.hazard || ((cell.boxes.length || (cell.code && cell.code !== 'game:air')) && !shelterCover(cell, h))) return false;
         }
       }
-    return !!map.nodeAt(origin.x + 2, origin.z + SHELTER_SIZE, origin.y, 0.6, 0.1);
+    return (
+      !!map.nodeAt(origin.x + 2, origin.z + SHELTER_SIZE, origin.y, 0.6, 0.1) &&
+      !!map.nodeAt(origin.x + 1, origin.z + SHELTER_SIZE, origin.y, 0.6, 0.1)
+    );
   };
   const distance = origin => Math.hypot(origin.x + 2.5 - position.x, (origin.y - position.y) * 2, origin.z + 2.5 - position.z);
   const candidates = [];
@@ -69,8 +80,8 @@ export default defineGoal({
     .strict(),
   destructive: true,
   description:
-    'Build the starter shelter (5x5, 3x3 interior, walls 2 high, flat roof, 57 blocks) on nearby observed level ground, walk in, seal the ' +
-    'door from inside and light the interior torch. Fails fast with not_enough_material; walls, cannot_enter and seal ' +
+    'Build the starter shelter (5x5, 3x3 interior, walls 2 high, flat roof, 57 shell blocks plus a front step) on nearby observed level ground, walk in, seal the ' +
+    'door from inside and light the interior torch. The front step lets the builder climb onto the walls for the roof. Fails fast with not_enough_material; walls, cannot_enter and seal ' +
     'report which phase stopped. Result home is the spot to return to. Returns START; poll goal_status.',
   title: args => `Build a ${cleanName(args.item)} shelter`,
   announce: args => `Putting up a little ${cleanName(args.item)} shelter.`,
@@ -87,7 +98,8 @@ export default defineGoal({
       const stock = new Map<string, number>();
       for (const s of slots) if (s.code?.includes(item)) stock.set(s.code, (stock.get(s.code) ?? 0) + s.quantity);
       const have = [...stock.values()].reduce((n, q) => n + q, 0);
-      const need = [...shelterCells(origin, item), ...shelterDoor(origin, item)].filter(cell => !existing(cell)).length;
+      const scaffold = shelterScaffold(origin, item);
+      const need = [scaffold, ...shelterCells(origin, item), ...shelterDoor(origin, item)].filter(cell => !existing(cell)).length;
       if (have < need) return { ok: false, goal: 'shelter', reason: 'not_enough_material', item, have, need, origin };
       const supply = [...stock.entries()].sort((a, b) => b[1] - a[1]);
       const assign = cells =>
@@ -109,13 +121,14 @@ export default defineGoal({
           }
       const outside = { x: origin.x + 2, y: origin.y, z: origin.z + SHELTER_SIZE };
       if (surfaceCover(field.env.map.get(outside.x, outside.y, outside.z))) cover.push(outside);
+      if (surfaceCover(field.env.map.get(scaffold.x, scaffold.y, scaffold.z))) cover.push(scaffold);
       if (cover.length) {
         field.report('clearing_site', { origin });
         const cleared = await digArea(field, survival, { cells: cover, tool: undefined });
         if (!cleared.ok) return { ...cleared, goal: 'shelter', phase: 'site', origin };
       }
       field.report('walls', { origin });
-      const walls: any = await build(field, survival, { cells: assign(shelterCells(origin, item)), verifyExisting: true });
+      const walls: any = await build(field, survival, { cells: assign([scaffold, ...shelterCells(origin, item)]), verifyExisting: true });
       if (!walls.ok) return { ok: false, goal: 'shelter', reason: walls.reason ?? 'walls', phase: 'walls', origin, walls };
       field.report('entering', { origin });
       const entered = await travel(field, survival, { ...home, arrivalRadius: 0.35 });

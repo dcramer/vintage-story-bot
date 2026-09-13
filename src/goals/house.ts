@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { surfaceCover } from '../support/sites.ts';
-import { house as houseCells } from '../support/structures.ts';
+import { house as houseCells, houseScaffold } from '../support/structures.ts';
 import { runField } from '../support/task.ts';
 import { build, digArea } from './build.ts';
 import { travel } from './travel.ts';
@@ -37,7 +37,8 @@ export default defineGoal({
           const cleared = await digArea(field, survival, { cells: cover, tool: undefined });
           if (!cleared.ok) return { ...cleared, goal: 'house', phase: 'site', origin };
         }
-        const result = await build(field, survival, { cells: houseCells(origin, 'game:rammed-light-plain'), verifyExisting: true });
+        const item = 'game:rammed-light-plain';
+        const result = await build(field, survival, { cells: [houseScaffold(origin, item), ...houseCells(origin, item)], verifyExisting: true });
         return { ...result, goal: 'house', phase, origin };
       }
       const cells = [];

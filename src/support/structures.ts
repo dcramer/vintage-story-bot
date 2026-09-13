@@ -42,9 +42,17 @@ export function shelter(origin, item) {
   return cells;
 }
 export const shelterDoor = (origin, item) => [0, 1].map(dy => ({ x: origin.x + 2, y: origin.y + dy, z: origin.z + 4, item }));
+// A permanent front step also gives the builder a one-block rise onto the
+// finished wall. Without it the player cannot see the wall's top face from
+// ground level, so every roof placement fails before the first course starts.
+export const shelterScaffold = (origin, item) => ({ x: origin.x + 1, y: origin.y, z: origin.z + 5, item });
 export const shelterCenter = origin => ({ x: origin.x + 2.5, z: origin.z + 2.5 });
 export const shelterTorches = origin => [{ x: origin.x + 2, y: origin.y, z: origin.z + 1 }];
 export const shelterStorage = origin => [1, 2, 3].flatMap(z => [1, 3].map(x => ({ x: origin.x + x, y: origin.y, z: origin.z + z })));
+
+// The larger house uses the same front-step technique. Its sloped roof then
+// remains traversable one course at a time all the way to the ridge.
+export const houseScaffold = (origin, item) => ({ x: origin.x + 3, y: origin.y, z: origin.z + 7, item });
 
 export const presets = { house, pit_kiln: pitKiln, shelter };
 

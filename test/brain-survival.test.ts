@@ -12,7 +12,7 @@ import { fresh, kit } from '../src/brain/default.ts';
 import craft from '../src/goals/craft_item.ts';
 import buildHouse from '../src/goals/house.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
-import { shelterDoor, shelterStorage, shelterTorches, shelter as template } from '../src/support/structures.ts';
+import { houseScaffold, shelterDoor, shelterScaffold, shelterStorage, shelterTorches, shelter as template } from '../src/support/structures.ts';
 
 test('starter template stays enclosed with reachable interior torch positions', () => {
   const origin = { x: 0, y: 100, z: 0 };
@@ -24,6 +24,8 @@ test('starter template stays enclosed with reachable interior torch positions', 
     'all construction is above the natural floor',
   );
   assert.deepEqual(shelterTorches(origin), [{ x: 2, y: 100, z: 1 }]);
+  assert.deepEqual(shelterScaffold(origin, 'earth'), { x: 1, y: 100, z: 5, item: 'earth' });
+  assert.deepEqual(houseScaffold(origin, 'earth'), { x: 3, y: 100, z: 7, item: 'earth' });
   const storage = shelterStorage(origin);
   assert.equal(storage.length, 6);
   for (const cell of storage) {
@@ -144,7 +146,7 @@ test('shelter refuses unknown ground, unsupported floors and blocked interiors',
 test('shelter can use a fully observed footprint around the player', () => {
   const terrain = {
     get: (x, y, z) => (x >= 0 && x < 5 && z >= 0 && z < 5 ? { boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [], hazard: null } : undefined),
-    nodeAt: (x, z, y) => (x === 2 && z === 5 && y === 100 ? { y: 100 } : null),
+    nodeAt: (x, z, y) => ([1, 2].includes(x) && z === 5 && y === 100 ? { y: 100 } : null),
   };
   assert.deepEqual(shelterSite(terrain, { x: 2.5, y: 100, z: 2.5 }), { x: 0, y: 100, z: 0 });
 });
@@ -157,7 +159,11 @@ test('shelter revisits observed level ground beyond hundreds of nearer unusable 
   for (let x = 150; x < 155; x++)
     for (let z = 0; z < 5; z++)
       for (let y = 99; y <= 102; y++) cells.set(`${x}:${y}:${z}`, { x, y, z, boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [], hazard: null });
-  const map = { cells, get: (x, y, z) => cells.get(`${x}:${y}:${z}`), nodeAt: (x, z, y) => (x === 152 && z === 5 && y === 100 ? { y: 100 } : null) };
+  const map = {
+    cells,
+    get: (x, y, z) => cells.get(`${x}:${y}:${z}`),
+    nodeAt: (x, z, y) => ([151, 152].includes(x) && z === 5 && y === 100 ? { y: 100 } : null),
+  };
   assert.deepEqual(shelterSite(map, { x: 0.5, y: 110, z: 0.5 }), { x: 150, y: 100, z: 0 });
   const roof = cells.get('154:102:4');
   cells.set('154:102:4', { ...roof, code: 'game:leaves-grown5-birch', traits: ['leaves'] });
