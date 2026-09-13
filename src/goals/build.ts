@@ -12,6 +12,16 @@ const center = c => ({ x: c.x + 0.5, y: c.y + 0.5, z: c.z + 0.5 });
 const sameColumn = (q, c) => Math.floor(q.x) === c.x && Math.floor(q.z) === c.z;
 const reach = 4.2;
 
+function facePoints(cell, offset) {
+  const axes = ['x', 'y', 'z'];
+  const tangent = axes.filter((_, i) => offset[i] === 0);
+  const middle = Object.fromEntries(axes.map((axis, i) => [axis, cell[axis] + 0.5 + offset[i] * 0.49]));
+  return [
+    middle,
+    ...[0.15, 0.85].flatMap(a => [0.15, 0.85].map(b => ({ ...middle, [tangent[0]]: cell[tangent[0]] + a, [tangent[1]]: cell[tangent[1]] + b }))),
+  ];
+}
+
 async function eye(field) {
   const state = await field.observe();
   return { x: state.position.x, y: state.position.y + state.body.eyeHeight, z: state.position.z };
@@ -150,15 +160,21 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
       for (const [face, offset] of Object.entries(faces)) {
         const support = { x: cell.x - offset[0], y: cell.y - offset[1], z: cell.z - offset[2] };
         if (known(field, support) !== 'solid') continue;
-        const point = { x: support.x + 0.5 + offset[0] * 0.5, y: support.y + 0.5 + offset[1] * 0.5, z: support.z + 0.5 + offset[2] * 0.5 };
-        const selected = await selectCell(field, support, { point, face, clearPlants: true });
+        let selected, point;
+        for (const candidate of facePoints(support, offset)) {
+          selected = await selectCell(field, support, { point: candidate, face, clearPlants: true });
+          if (selected) {
+            point = candidate;
+            break;
+          }
+        }
         if (!selected) {
           reason = 'support_not_selectable';
           continue;
         }
         let result;
         try {
-          result = await changeBlock(field, 'place', { target: selected.key, face, slot, expectedItem: cell.item });
+          result = await changeBlock(field, 'place', { target: selected.key, point, face, slot, expectedItem: cell.item });
         } catch (error) {
           if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
           result = { ok: false, reason: error.message };
