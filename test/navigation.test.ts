@@ -15,6 +15,18 @@ function column(map, x, z, floor = true) {
   for (let y = -1; y < 4; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: y === -1 && floor ? [[x, y, z, x + 1, y + 1, z + 1]] : [] });
 }
 
+test('grounded player can leave a cell whose floor is hidden by a loose object', () => {
+  const map = new TerrainMemory();
+  column(map, 0, 0, false);
+  column(map, 1, 0);
+  const state = stateAt({ x: 0.5, y: 0, z: 0.5 });
+  assert.equal(map.standingOn(state.position), false);
+  const nav = new Navigation(map, state, { x: 1.5, y: 0, z: 0.5 }, 0);
+  const frame = nav.tick(state, 0);
+  assert.equal(nav.state, 'moving');
+  assert.deepEqual(frame.toward, { x: 1.5, y: 0, z: 0.5 });
+});
+
 test('escape follows a safe detour that initially approaches a distant hostile', () => {
   const map = new TerrainMemory();
   for (let x = 0; x <= 3; x++) column(map, x, 0);

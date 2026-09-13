@@ -1,4 +1,4 @@
-import { horizontal, JUMP_HEIGHT, key } from './terrain.ts';
+import { BODY_HEIGHT, horizontal, JUMP_HEIGHT, key } from './terrain.ts';
 
 // A* over standing cells, in the shape of mineflayer-pathfinder: moves come
 // from the terrain grid with their costs, a goal is a predicate, and when the
@@ -11,7 +11,7 @@ export function findRoute(
   goal,
   _w,
   _h,
-  { blocked = new Set(), visits = new Map(), partial = true, budget = 1024, avoid = [], deadlineMs = 600 } = {},
+  { blocked = new Set(), visits = new Map(), partial = true, budget = 1024, avoid = [], deadlineMs = 600, startSupported = false } = {},
 ) {
   const deadline = performance.now() + deadlineMs;
   const remaining = p => (goal.horizontalOnly ? horizontal(p, goal) : Math.hypot(p.x - goal.x, (p.y - goal.y) * 0.5, p.z - goal.z));
@@ -44,6 +44,11 @@ export function findRoute(
       }
     origin = candidates.sort((a, b) => horizontal(a, start) - horizontal(b, start))[0] ?? null;
   }
+  // The player's grounded state proves its present footing even when a loose
+  // object hides the floor from the terrain feed. Use that one proven start
+  // cell only when the remembered body space is clear; every destination and
+  // subsequent step still requires observed terrain.
+  if (!origin && startSupported && map.clearBetween(cx, cz, start.y, start.y + BODY_HEIGHT)) origin = { ...start };
   if (!origin) return null;
   const costs = new Map([[key(origin), 0]]),
     previous = new Map(),

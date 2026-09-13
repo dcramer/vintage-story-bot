@@ -66,6 +66,7 @@ export class Navigation {
   threat = null;
   threats = [];
   avoid = [];
+  startSupported = false;
   // Keep the last observed threat position briefly after escaping its immediate perimeter.
   // Otherwise resuming the destination sends the body straight back into the same threat.
   rememberedThreats = new Map<string, any>();
@@ -75,6 +76,7 @@ export class Navigation {
     this.width = state.body.halfWidth;
     this.height = state.body.height;
     this.eyeHeight = state.body.eyeHeight;
+    this.startSupported = !!state.motion.onGround && !state.motion.feetInLiquid && !state.motion.swimming;
     this.deadline = now + (goal.timeoutMs ?? 60000);
     this.surveyAt = this.progressAt = now;
     this.edgeStart = state.position;
@@ -174,6 +176,7 @@ export class Navigation {
       h = this.height;
     // In water the jump key keeps the head up; a body that stops holding it sinks and drowns.
     const wet = !!(state.motion.feetInLiquid || state.motion.swimming);
+    this.startSupported = !!state.motion.onGround && !wet;
     // Checkpoint arrivals and replans can both describe circling the same patch.
     // Only reaching another two-block cell renews this clock, across every route.
     const cell = progressCell(p);

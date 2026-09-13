@@ -27,7 +27,14 @@ export default defineAction({
     const from = state.position;
     const goal = { x, y: y ?? from.y, z, horizontalOnly: y === undefined, arrivalRadius };
     const avoid = nearbyThreats(state).map(entity => ({ point: entity.point, minimumDistance: Math.max(0, horizontal(from, entity.point) - 0.5) }));
-    const checkpoints = findRoute(runtime.map, from, goal, 0, 0, { avoid, partial: true, budget: 4096, deadlineMs: 1000 }) ?? [];
+    const checkpoints =
+      findRoute(runtime.map, from, goal, 0, 0, {
+        avoid,
+        partial: true,
+        budget: 4096,
+        deadlineMs: 1000,
+        startSupported: !!state.motion.onGround && !state.motion.feetInLiquid && !state.motion.swimming,
+      }) ?? [];
     const end = checkpoints.at(-1);
     const reached = !!end && horizontal(end, goal) <= Math.max(arrivalRadius, 0.51) && (goal.horizontalOnly || Math.abs(end.y - goal.y) < 0.6);
     let length = 0;
