@@ -1153,6 +1153,34 @@ test('nearby elevated travel gives its detour enough reach to find an ascent', a
   assert.deepEqual(legs, [destination, detour, destination]);
 });
 
+test('travel stops a detour when it crosses the real destination', async () => {
+  const state = (x, z) => ({ position: { x, y: 1, z }, condition: {}, nearbyEntities: [] });
+  const destination = { x: 20.5, z: 0.5, arrivalRadius: 2 };
+  const detour = { x: 40.5, y: 1, z: 0.5, horizontalOnly: true, arrivalRadius: 4 };
+  let latest = state(0.5, 0.5),
+    walks = 0;
+  const field = {
+    moved: 0,
+    get latest() {
+      return latest;
+    },
+    observe: async () => latest,
+    report: () => {},
+    explore: () => detour,
+    walk: async (_target, pauseWhen) => {
+      walks++;
+      if (walks === 1) return { state: 'blocked', reason: 'no_visible_route' };
+      const crossing = state(20.5, 0.5);
+      assert.equal(pauseWhen(crossing), 'destination_reached');
+      latest = crossing;
+      return { state: 'paused', reason: 'destination_reached' };
+    },
+  };
+  const result = await travel(field, null, destination);
+  assert.equal(result.ok, true);
+  assert.equal(walks, 2, 'the detour must not carry the body past the destination');
+});
+
 test('travel bounds regression from its best observed destination distance', () => {
   assert.equal(routeRegressed(100, 112), false);
   assert.equal(routeRegressed(100, 112.01), true);

@@ -64,6 +64,11 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
       if (survivalReason) return survivalReason;
       const currentRemaining = horizontal(current.position, goal);
       bestRemaining = Math.min(bestRemaining, currentRemaining);
+      // A rough-route or exploration leg may cross the real destination on
+      // its way to a farther checkpoint. Stop that leg while the body is in
+      // range; waiting for the leg to finish can carry it straight past the
+      // requested point before the outer loop gets another observation.
+      if (currentRemaining <= arrivalRadius && (y === undefined || Math.abs(current.position.y - y) < 1.5)) return 'destination_reached';
       return !nearestThreat(current) && routeRegressed(bestRemaining, currentRemaining) ? 'route_regressed' : null;
     });
     legs++;
