@@ -59,9 +59,10 @@ export async function cook(field, { target, item, count, fuel }) {
     }
     const wantedInput = Math.max(0, count - slot(1).quantity - slot(2).quantity);
     const wantedFuel = Math.max(0, fuel - slot(0).quantity);
+    // Load food first: a smoldering firepit may immediately burn new fuel.
     for (const load of [
-      { slot: 0, item: 'game:firewood', count: wantedFuel },
       { slot: 1, item, count: wantedInput },
+      { slot: 0, item: 'game:firewood', count: wantedFuel },
     ]) {
       if (!load.count) continue;
       const result = await moveItems(field, {
@@ -72,10 +73,23 @@ export async function cook(field, { target, item, count, fuel }) {
         containerSlots: [load.slot],
         allowConsumption: true,
       });
-      if (result.reason) return summary({ ok: false, reason: result.reason, phase: 'loading', slot: load.slot });
+      if (result.reason) {
+        if (load.slot === 0 && result.reason === 'transfer_unverified') {
+          // Do not resend an uncertain transfer. If the fire is visibly lit,
+          // wait for the already verified input to cook; output still needs
+          // its own paired inventory verification before this goal succeeds.
+          await close();
+          const burning = await selectCell(field, cell);
+          if (burning?.key.endsWith(':game:firepit-lit')) {
+            field.report('fuel_burning', { transfer: 'unverified' });
+            break;
+          }
+        }
+        return summary({ ok: false, reason: result.reason, phase: 'loading', slot: load.slot });
+      }
       container = await field.send({ action: 'container_slots' });
     }
-    await close();
+    if (opened) await close();
     const selected = await selectCell(field, cell);
     if (!selected) return summary({ ok: false, reason: 'firepit_not_observed' });
     if (!selected.key.endsWith(':game:firepit-lit')) {
