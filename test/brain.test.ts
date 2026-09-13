@@ -1002,6 +1002,36 @@ test('brain: failed forage only uproots cattails in an emergency, including afte
   }
 });
 
+test('brain: active recovery forage yields to emergency roots below ten percent', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'eat';
+  memory.notes.foodRecovery = true;
+  memory.notes.cookUntil = 10_000;
+  const starving = state({ vitals: { hunger: { current: 149, max: 1500 } } });
+  assert.deepEqual(
+    decide(
+      reading({ state: starving, inventory: kitted(), active: { id: 'food', kind: 'forage', state: 'running', by: 'brain' }, now: 2000 }),
+      memory,
+    ),
+    { stop: 'prepare emergency roots' },
+  );
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 6), slot('game:drygrass'));
+  const fallback = decide(
+    reading({
+      state: starving,
+      inventory: supplies,
+      last: { id: 'food', kind: 'forage', ok: false, outcome: 'interrupted', reason: 'brain: prepare emergency roots' },
+      now: 2001,
+    }),
+    memory,
+  );
+  assert.equal(fallback.start, 'harvest');
+  assert.equal(fallback.args.item, 'game:cattailroot');
+  assert.equal(fallback.args.count, 1);
+});
+
 test('brain: an interrupted firepit load carries fuel before resuming', () => {
   const memory = fresh();
   memory.startupChecked = true;

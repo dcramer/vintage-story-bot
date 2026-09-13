@@ -42,6 +42,12 @@ export const eat: Concern = {
       return { wait: 'finishing critical cooking while the threat stays at a distance' };
     if (active?.kind !== 'forage') return null;
     if (!danger && !hurt && !classifyingHurt && nearbyCooking(ctx)) return { stop: 'check food left in the nearby firepit' };
+    // A raw-forage pass begun above the emergency line must hand control back
+    // as soon as satiety crosses it. The next decision can then prepare the
+    // existing one-root fallback instead of spending the remaining margin on
+    // the forage deadline.
+    if (s.hunger !== null && s.hunger < 0.1 && !memory.notes.deferredCooking?.length && !danger && !hurt && !classifyingHurt)
+      return { stop: 'prepare emergency roots' };
     // Forage owns a deterministic evade-and-resume loop. Cancelling it on the
     // same sighting throws away its food leads and starts a second flight on
     // top of navigation's evasion, which is especially costly near starvation.
