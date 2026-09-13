@@ -480,15 +480,31 @@ export class Fieldwork {
   }
   async evadeThreat(unstick?) {
     let fled = false;
+    let stalled = 0;
+    let anchor = { ...this.latest.position };
+    let progressAt = this.now();
     while (true) {
       this.check();
       const threat = fled ? nearestUnclearedThreat(this.latest) : nearestThreat(this.latest);
       if (!threat) return fled;
+      if (this.now() - progressAt >= 60000 || stalled >= 3) return 'blocked';
       const target = fleeTarget(this.latest.position, threat);
       this.report('evading', { threat: threat.code, distance: +horizontal(this.latest.position, threat.point).toFixed(1), target });
       const before = { ...this.latest.position };
-      const result = await this.walk(target, state => (nearestUnclearedThreat(state) ? null : 'threat_cleared'));
+      const result = await this.walk(target, state => {
+        if (!nearestUnclearedThreat(state)) return 'threat_cleared';
+        if (horizontal(anchor, state.position) > 2) {
+          anchor = { ...state.position };
+          progressAt = this.now();
+        }
+        return this.now() - progressAt >= 60000 ? 'threat_escape_blocked' : null;
+      });
       if (!['arrived', 'paused'].includes(result.state) && horizontal(before, this.latest.position) <= 2) await unstick?.(target);
+      if (horizontal(before, this.latest.position) > 2) {
+        anchor = { ...this.latest.position };
+        progressAt = this.now();
+        stalled = 0;
+      } else stalled++;
       fled = true;
     }
   }

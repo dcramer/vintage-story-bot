@@ -226,7 +226,9 @@ export class Survival {
     }));
     while (this.tending) {
       await field.observe(true);
-      if (await field.evadeThreat(target => clearLeafPath(field, target))) {
+      const evasion = await field.evadeThreat(target => clearLeafPath(field, target));
+      if (evasion === 'blocked') return { reason: 'threat_escape_blocked', position: field.latest.position };
+      if (evasion) {
         // Fled: leads the predator guards are set aside and the search goes on away from it.
         search.avoidThreat();
         continue;
