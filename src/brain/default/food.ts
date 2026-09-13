@@ -28,7 +28,12 @@ export function food(ctx: Context, keep: number): Decision {
   const pending = memory.notes.cooking;
   if (!pending) {
     if (!k.knife) return makeTool(k, 'knife', 'knifeblade', k.knifeBlade, 'game:knife-generic');
-    if (k.emptyBagSlot && (k.bagItem || (k.free < 2 && (k.cattailtops > 0 || k.free > 0)))) return makeBag(ctx);
+    if (k.emptyBagSlot && (k.bagItem || (k.free < 2 && (k.cattailtops > 0 || k.free > 0)))) {
+      const bag = makeBag(ctx);
+      // Equip or weave what is already carried, but one free slot is enough
+      // for fuel preparation. Food must not wait for another reed expedition.
+      if (k.free === 0 || bag.start !== 'harvest') return bag;
+    }
     if (!k.axe) return makeTool(k, 'axe', 'axehead', k.axeBlade, 'game:axe');
     if (!count('game:firestarter')) {
       if (k.sticks < 2)

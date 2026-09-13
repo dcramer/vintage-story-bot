@@ -958,6 +958,12 @@ test('brain: basket crafting leaves spare stacks for the craft goal to place its
 
   assert.equal(choice.start, 'craft_item');
   assert.equal(choice.args.output, 'game:basket-normal-reed');
+  const short = structuredClone(full);
+  short.inventories[0].slots.find(s => s.code === 'game:cattailtops').quantity = 1;
+  const hungryMemory = fresh();
+  hungryMemory.notes.cookUntil = 10_000;
+  const fuel = decide(reading({ state: state({ vitals: { hunger: { current: 0, max: 1500 } } }), inventory: short, now: 2000 }), hungryMemory);
+  assert.equal(fuel.start, 'fell_tree', 'a free slot permits cooking fuel without gathering nine more tops for another bag');
 });
 
 test('brain: cooking clears observed snow before it can know whether the firepit floor is supported', () => {
