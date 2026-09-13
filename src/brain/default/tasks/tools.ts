@@ -26,7 +26,7 @@ export function makeTool(k: Kit, tool: string, head: string, blades: number, out
     if (k.knappables < 2)
       return {
         start: 'gather',
-        args: { match: 'looseflints', item: 'game:flint', count: Math.max(1, flintShort(k)), timeoutMs: 600000 },
+        args: { match: 'looseflints', item: 'game:flint', count: Math.max(2 - k.knappables, flintShort(k)), timeoutMs: 600000 },
         why: `${k.knappables} flint: two to knap the ${tool}`,
       };
     return {
@@ -52,10 +52,10 @@ export function makeTool(k: Kit, tool: string, head: string, blades: number, out
   };
 }
 
-const toolTask = (id: 'knife' | 'axe' | 'shovel', head: string, blades: (k: Kit) => number, output: string): Concern => ({
+const toolTask = (id: 'knife' | 'axe' | 'shovel' | 'hoe', head: string, blades: (k: Kit) => number, output: string): Concern => ({
   id,
   title: `a ${id}`,
-  done: s => s[id],
+  done: s => !!s[id],
   run: ({ k }) => makeTool(k, id, head, blades(k), output),
   // Flint and knappable stones are picked up in passing while a tool is missing and nothing knappable is carried.
   wants: k => (!k[id] && k.knappables < 2 ? KNAPPABLE_WANTS : []),
@@ -65,3 +65,4 @@ const toolTask = (id: 'knife' | 'axe' | 'shovel', head: string, blades: (k: Kit)
 export const knife = toolTask('knife', 'knifeblade', k => k.knifeBlade, 'game:knife-generic');
 export const axe = toolTask('axe', 'axehead', k => k.axeBlade, 'game:axe');
 export const shovel = toolTask('shovel', 'shovelhead', k => k.shovelBlade, 'game:shovel');
+export const hoe: Concern = { ...toolTask('hoe', 'hoehead', k => k.hoeBlade, 'game:hoe'), after: ['storage', 'shelter'] };

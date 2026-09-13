@@ -56,7 +56,7 @@ import { FULL_SLOTS, stash, surplusOf } from './default/tasks/stash.ts';
 import { sticks } from './default/tasks/sticks.ts';
 import { STOCK_CHECK_MS, stockpile, suppliesMissing } from './default/tasks/stockpile.ts';
 import { storage } from './default/tasks/storage.ts';
-import { axe, knife, shovel } from './default/tasks/tools.ts';
+import { axe, hoe, knife, shovel } from './default/tasks/tools.ts';
 import { torches } from './default/tasks/torches.ts';
 
 export { environmentalHurt, HURT_CLASSIFY_MS, kit } from './default/situation.ts';
@@ -81,6 +81,7 @@ export const TASKS: Concern[] = [
   torches,
   shelter,
   lighting,
+  hoe,
   sticks,
   spareKnife,
   logs,
@@ -275,6 +276,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     knife: k.knife,
     axe: k.axe,
     shovel: k.shovel,
+    hoe: k.hoe,
     stone: k.stone,
     torches: k.torches + light.installed,
     grass: k.grass,
@@ -384,7 +386,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     }
   }
   if (job === 'wait' && s.atHome && !danger && !hurt && !storm) {
-    for (const task of [knife, axe, shovel, bags, storage, torches, lighting, shelter, spareKnife]) {
+    for (const task of [knife, axe, shovel, hoe, bags, storage, torches, lighting, shelter, spareKnife]) {
       if (task.done?.(s) || tried.has(task.id) || (task.after ?? []).some(id => !concern(id).done?.(s))) continue;
       const work = task.run(ctx);
       if ('start' in work && (work.start === 'craft_item' || work.start === 'light_shelter')) {

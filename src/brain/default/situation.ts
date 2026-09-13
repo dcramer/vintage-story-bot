@@ -52,12 +52,14 @@ export function kit(inventory: any) {
     knife: tool('Knife'),
     axe: tool('Axe'),
     shovel: tool('Shovel'),
+    hoe: tool('Hoe'),
     // Tool heads of any knappable material; the material carried names the head to knap and the tool to haft.
     shovelBlade: part('game:shovelhead-'),
+    hoeBlade: part('game:hoehead-'),
     knifeBlade: part('game:knifeblade-'),
     axeBlade: part('game:axehead-'),
     material,
-    heads: slots.map(s => s.code).filter(code => /^game:(knifeblade|axehead|shovelhead)-/.test(code ?? '')) as string[],
+    heads: slots.map(s => s.code).filter(code => /^game:(knifeblade|axehead|shovelhead|hoehead)-/.test(code ?? '')) as string[],
     torches: part('torch-basic'),
     torch: slots.find(s => s.code?.includes('torch-basic'))?.code ?? null,
     // Knives carried with an edge left; a second is the spare for the chest.
@@ -123,6 +125,7 @@ export type Situation = {
   knife: boolean;
   axe: boolean;
   shovel: boolean;
+  hoe?: boolean;
   stone: boolean;
   torches: number;
   grass: number;

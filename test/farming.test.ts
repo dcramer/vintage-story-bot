@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { kit } from '../src/brain/default/situation.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
+import { hoe } from '../src/brain/default/tasks/tools.ts';
 import { allocate } from '../src/goals/craft_item.ts';
 import { plant } from '../src/goals/plant.ts';
 import { cropRequirements, FARM_SOIL, farmlandReadings, plantingProblem } from '../src/support/crops.ts';
@@ -17,6 +18,30 @@ const rye = {
     '[game:crop-rye-1]',
   ],
 };
+
+test('farm hoe is knapped and hafted from its actual carried material', () => {
+  const inventory = slots => ({ state: 'test', inventories: [{ name: 'hotbar', slots: slots.map((s, slot) => ({ ...s, slot })) }] });
+  const knap = hoe.run({
+    k: kit(
+      inventory([
+        { code: 'game:flint', quantity: 2 },
+        { code: 'game:stick', quantity: 1 },
+      ]),
+    ),
+  } as any);
+  assert.ok('start' in knap && knap.start === 'knap');
+  assert.equal(knap.args.output, 'game:hoehead-flint');
+  const haft = hoe.run({
+    k: kit(
+      inventory([
+        { code: 'game:hoehead-granite', quantity: 1 },
+        { code: 'game:stick', quantity: 1 },
+      ]),
+    ),
+  } as any);
+  assert.ok('start' in haft && haft.start === 'craft_item');
+  assert.equal(haft.args.output, 'game:hoe-granite');
+});
 
 test('fertile soil is stored for beds, never selected by construction crafting', () => {
   const inventory = {

@@ -21,6 +21,7 @@ export type Job =
   | 'knife'
   | 'axe'
   | 'shovel'
+  | 'hoe'
   | 'spare_knife'
   | 'grass'
   | 'torches'
