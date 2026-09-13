@@ -106,7 +106,7 @@ export const house: Concern = {
       };
     }
     return (
-      goTo(ctx, { x: plan.origin.x + 4.5, z: plan.origin.z + 7.5 }, 'returning to the house site') ?? {
+      goTo(ctx, { x: plan.origin.x + 4.5, y: plan.origin.y, z: plan.origin.z + 7.5 }, 'returning to the house site') ?? {
         start: 'house',
         args: { ...plan, timeoutMs: 1800000 },
         why: `house ${plan.phase}`,

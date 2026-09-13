@@ -44,7 +44,7 @@ export const shelter: Concern = {
       pending = null;
     }
     if (pending) {
-      const trip = goTo(ctx, { x: pending.x + 2.5, z: pending.z + 5.5 }, 'finishing the shelter', 5, 2);
+      const trip = goTo(ctx, { x: pending.x + 2.5, y: pending.y, z: pending.z + 5.5 }, 'finishing the shelter', 5, 2);
       if (trip) return trip;
     }
     const count = code => ctx.k.slots.filter(s => s.code === code).reduce((n, s) => n + s.quantity, 0);
@@ -85,7 +85,7 @@ export const shelter: Concern = {
     const prepare = prepareFirestarter(ctx);
     if (prepare) return prepare;
     const site = ctx.memory.notes.stash;
-    const trip = !pending && site && goTo(ctx, { x: site.x - 6, z: site.z }, 'the site by the chest', 3, 1);
+    const trip = !pending && site && goTo(ctx, { x: site.x - 6, y: site.y, z: site.z }, 'the site by the chest', 3, 1);
     if (trip) return trip;
     const origin = pending ?? shelterSite(ctx.reading.terrain, ctx.state.position);
     if (!origin) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'looking for supported shelter ground' };

@@ -234,12 +234,12 @@ export const stashNote = (n: any): Stash | null =>
       }
     : null;
 // A task with a place goes there first: a walk when the place is farther than the goal itself would go, else null.
-export function goTo(ctx: Context, place: { x: number; z: number }, why: string, radius = 12, arrival = 3): Decision | null {
+export function goTo(ctx: Context, place: { x: number; y?: number; z: number }, why: string, radius = 12, arrival = 3): Decision | null {
   const far = horizontal(place, ctx.state.position);
-  if (far <= radius) return null;
+  if (far <= radius && (place.y === undefined || Math.abs(place.y - ctx.state.position.y) < 1.5)) return null;
   return {
     start: 'travel',
-    args: { x: place.x, z: place.z, arrivalRadius: arrival, manageFood: true, timeoutMs: 900000 },
+    args: { x: place.x, ...(place.y === undefined ? {} : { y: place.y }), z: place.z, arrivalRadius: arrival, manageFood: true, timeoutMs: 900000 },
     why: `${why}, ${Math.round(far)} blocks away`,
   };
 }

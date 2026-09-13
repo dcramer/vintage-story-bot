@@ -1790,6 +1790,15 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
   );
   const planning = fresh();
   planning.notes.shelter = { x: 1, y: 100, z: -2 };
+  const aboveSite = decide(
+    reading({
+      state: state({ position: { x: 3.5, y: 110, z: 3.5 } }),
+      inventory: inventory(slot('game:stationarybasket-east', 1), ...tools),
+    }),
+    planning,
+  );
+  assert.equal(aboveSite.start, 'travel', 'a ledge above the planned chest site is not arrival');
+  assert.equal(aboveSite.args.y, 100, 'preserve the observed site elevation through travel');
   const avoidOccupied = decide(
     reading({
       inventory: inventory(slot('game:stationarybasket-east', 1), ...tools),
