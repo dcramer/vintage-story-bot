@@ -12,4 +12,7 @@ export const provisions: Concern = {
   running: ({ active, danger, hurt }) => (active?.kind === 'forage' && danger && !hurt ? { wait: 'letting forage evade threat' } : null),
   ended: foodEnded,
   setAside: foodSetAside,
+  // An exhausted optional search should not reopen merely because the next
+  // task carried the player away from the point where forage ended.
+  setAsideEverywhere: true,
 };

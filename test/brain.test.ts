@@ -939,6 +939,16 @@ test('brain: exhausted optional provisions forage yields to the work list', () =
   );
   assert.notEqual(choice.start, 'forage');
   assert.equal(memory.tried.provisions?.at, 1000);
+  memory.job = null;
+  const afterTravel = decide(
+    reading({
+      state: state({ position: { x: 100, y: 100, z: 100 }, vitals: { hunger: { current: 600, max: 1500 } } }),
+      inventory: kitted(),
+      now: 2000,
+    }),
+    memory,
+  );
+  assert.notEqual(afterTravel.start, 'forage', 'moving away from the failed search does not immediately reopen optional provisions');
 });
 
 test('brain: a productive partial root harvest cooks what it found', () => {
