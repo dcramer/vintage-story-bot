@@ -63,8 +63,9 @@ export function kit(inventory: any) {
     // Knives carried with an edge left; a second is the spare for the chest.
     knives: slots.filter(s => s.tool === 'Knife' && (s.durability ?? 1) > 0).length,
     dirt: part('soil-'),
+    buildingSoil: exact('game:soil-low-none') + exact('game:soil-verylow-none'),
     rammed: exact('game:rammed-light-plain'),
-    buildingMaterials: part('soil-') + exact('game:packeddirt') + exact('game:rammed-light-plain'),
+    buildingMaterials: exact('game:soil-low-none') + exact('game:soil-verylow-none') + exact('game:packeddirt') + exact('game:rammed-light-plain'),
     dirtCode: slots.find(s => s.code?.includes('soil-'))?.code ?? null,
     stone: slots.some(s => s.code && kinds.knapping.materials(s)),
     // The surface and held stone must share a material; mixed single stones cannot form a tool.

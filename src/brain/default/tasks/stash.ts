@@ -24,6 +24,7 @@ export function surplusOf(
     if (code === 'game:firewood') return 8;
     if (code === 'game:cattailroot') return 4;
     if (code.includes('log-')) return LOG_MIN;
+    if (/^game:soil-(medium|high|compost)-/.test(code)) return 0;
     if (code.includes('soil-')) return home && !building ? 4 : SHELTER_DIRT;
     if (/^game:(rammed-|packeddirt|hay-|basket-normal-)/.test(code)) return Infinity;
     if (code.includes('drygrass') || code.includes('cattailtops')) return torches < TORCH_MIN ? Infinity : 0;

@@ -84,7 +84,9 @@ export function food(ctx: Context, keep: number): Decision {
     // Loading a carried root frees its slot for the cooked result. Before
     // gathering a new root, make room from expendable soil, retaining a seal.
     if (emergency && !roots && k.free === 0) {
-      const soil = k.slots.filter(s => s.code?.startsWith('game:soil-') && k.dirt - s.quantity >= 4).sort((a, b) => a.quantity - b.quantity)[0];
+      const soil = k.slots
+        .filter(s => /^game:soil-(low|verylow)-/.test(s.code ?? '') && k.dirt - s.quantity >= 4)
+        .sort((a, b) => a.quantity - b.quantity)[0];
       if (soil)
         return {
           act: [{ action: 'drop', from: { inventory: soil.inventory, slot: soil.slot }, quantity: soil.quantity, expectedState: k.state }],

@@ -6,7 +6,7 @@ export const dirt: Concern = {
   id: 'dirt',
   title: `${SHELTER_DIRT} dirt for a shelter`,
   done: s => s.home || (s.buildingMaterials ?? s.dirt) >= SHELTER_DIRT,
-  short: (k, s) => (!s.home && k.buildingMaterials < SHELTER_DIRT ? { item: 'soil-', count: SHELTER_DIRT - k.buildingMaterials } : null),
+  short: (k, s) => (!s.home && k.buildingMaterials < SHELTER_DIRT ? { item: 'game:soil-low-none', count: SHELTER_DIRT - k.buildingMaterials } : null),
   run: ({ k }) => ({
     start: 'harvest',
     args: {

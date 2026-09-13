@@ -2,6 +2,7 @@
 // A verified entry and seal make the spot home.
 
 import { shelterSite } from '../../../goals/shelter.ts';
+import { FARM_SOIL } from '../../../support/crops.ts';
 import { shelterCover } from '../../../support/sites.ts';
 import { shelter as blueprint, SHELTER_MATERIAL, shelterDoor, shelterScaffold, shelterStorage, shelterTorches } from '../../../support/structures.ts';
 import type { Concern } from '../concern.ts';
@@ -69,10 +70,15 @@ export const shelter: Concern = {
           args: { output: SHELTER_MATERIAL, count: Math.min(batch - rammed, Math.floor(packed / 6) * 6), timeoutMs: 300000 },
           why: 'rammed earth for the shelter template',
         };
-      if (ctx.k.dirt >= 10)
+      if (ctx.k.buildingSoil >= 10)
         return {
           start: 'craft_item',
-          args: { output: 'game:packeddirt', count: Math.min(batch - rammed, Math.floor((ctx.k.dirt - 4) / 6) * 6), timeoutMs: 300000 },
+          args: {
+            output: 'game:packeddirt',
+            count: Math.min(batch - rammed, Math.floor((ctx.k.buildingSoil - 4) / 6) * 6),
+            exclude: FARM_SOIL,
+            timeoutMs: 300000,
+          },
           why: 'packed dirt for the rammed-earth shelter',
         };
       return {
@@ -80,7 +86,7 @@ export const shelter: Concern = {
         args: {
           match: 'soil-low-',
           item: 'soil-low-none',
-          count: Math.max(1, batch + 4 - rammed - packed - ctx.k.dirt),
+          count: Math.max(1, batch + 4 - rammed - packed - ctx.k.buildingSoil),
           tool: 'Shovel',
           timeoutMs: 600000,
         },

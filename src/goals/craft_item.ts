@@ -45,7 +45,7 @@ export async function clearGrid(field) {
 }
 
 // Allocate owned stacks to recipe ingredients without double-spending a stack.
-export function allocate(recipe, crafts = 1, inventory?) {
+export function allocate(recipe, crafts = 1, inventory?, exclude: string[] = []) {
   const remaining = new Map();
   const plan = [];
   const codeAt = new Map((inventory?.inventories ?? []).flatMap(({ name, slots }) => slots.map(slot => [`${name}:${slot.slot}`, slot.code])));
@@ -60,6 +60,7 @@ export function allocate(recipe, crafts = 1, inventory?) {
       const available = remaining.get(id) ?? match.quantity;
       if (available <= 0) continue;
       const code = match.code ?? codeAt.get(id) ?? id;
+      if (exclude.some(part => code.includes(part))) continue;
       groups.set(code, [...(groups.get(code) ?? []), match]);
     }
     // A wildcard ingredient can match several concrete block variants, but one
@@ -94,7 +95,7 @@ export function allocate(recipe, crafts = 1, inventory?) {
   return plan;
 }
 
-export async function craftItem(field, { output, count = 1 }) {
+export async function craftItem(field, { output, count = 1, exclude = [] }) {
   const match = output.split(':').pop().slice(0, 64);
   const search = async () => {
     const found = [];
@@ -121,7 +122,7 @@ export async function craftItem(field, { output, count = 1 }) {
         // Stage the requested batch together: consuming a whole ingredient
         // stack frees its slot even when the pack had no empty slot to start.
         for (let batch = Math.ceil((count - gained()) / candidate.output.quantity); batch >= 1; batch--) {
-          plan = allocate(candidate, batch, inventory);
+          plan = allocate(candidate, batch, inventory, exclude);
           if (plan) break;
         }
         if (plan) {
@@ -181,6 +182,11 @@ export default defineGoal({
     .object({
       output: z.string().min(1).max(160).describe('Exact output item/block code, e.g. game:packeddirt.'),
       count: z.number().int().min(1).max(64).default(1).describe('Output items wanted; crafts repeat until carried gain reaches it.'),
+      exclude: z
+        .array(z.string().min(1).max(128))
+        .max(8)
+        .default([])
+        .describe('Ingredient code substrings to preserve, such as soil-medium- reserved for farming.'),
       timeoutMs: z.number().int().min(1000).max(600000).default(120000),
     })
     .strict(),

@@ -1,3 +1,4 @@
+import { FARM_SOIL } from '../../../support/crops.ts';
 import { shelterCover, supportedFloor } from '../../../support/sites.ts';
 import { house as blueprint, houseScaffold } from '../../../support/structures.ts';
 import type { Cell, Concern } from '../concern.ts';
@@ -62,12 +63,12 @@ export const house: Concern = {
     if (plan.phase === 'walls' && count(RAMMED) < 6) {
       // The handbook's packed-dirt recipe accepts one soil variant per batch;
       // high-fertility soil and mixed partial stacks cannot satisfy that batch.
-      const soils = ['verylow', 'low', 'medium'].map(grade => ({ grade, count: count(`game:soil-${grade}-none`) }));
+      const soils = ['verylow', 'low'].map(grade => ({ grade, count: count(`game:soil-${grade}-none`) }));
       soils.sort((a, b) => b.count - a.count);
       let soil = soils[0];
       if (!soil.count) {
         const seen = [...(ctx.reading?.terrain?.cells?.values() ?? [])]
-          .filter((c: any) => /^game:soil-(verylow|low|medium)-/.test(c.code ?? '') && !c.hazard)
+          .filter((c: any) => /^game:soil-(verylow|low)-/.test(c.code ?? '') && !c.hazard)
           .sort(
             (a: any, b: any) =>
               Math.hypot(a.x - ctx.state.position.x, a.y - ctx.state.position.y, a.z - ctx.state.position.z) -
@@ -84,7 +85,7 @@ export const house: Concern = {
       if (soil.count >= 10)
         return {
           start: 'craft_item',
-          args: { output: 'game:packeddirt', count: Math.min(24, Math.floor((soil.count - 4) / 6) * 6), timeoutMs: 300000 },
+          args: { output: 'game:packeddirt', count: Math.min(24, Math.floor((soil.count - 4) / 6) * 6), exclude: FARM_SOIL, timeoutMs: 300000 },
           why: 'packing soil for rammed earth',
         };
       return {

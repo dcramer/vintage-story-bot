@@ -1,3 +1,4 @@
+import { FARM_SOIL } from '../../../support/crops.ts';
 import { house, houseScaffold, SHELTER_MATERIAL, shelter, shelterScaffold } from '../../../support/structures.ts';
 import type { Concern, Notes } from '../concern.ts';
 
@@ -43,7 +44,7 @@ export const repairHome: Concern = {
     if (soil >= 10)
       return {
         start: 'craft_item',
-        args: { output: 'game:packeddirt', count: Math.min(batch, Math.floor((soil - 4) / 6) * 6), timeoutMs: 300000 },
+        args: { output: 'game:packeddirt', count: Math.min(batch, Math.floor((soil - 4) / 6) * 6), exclude: FARM_SOIL, timeoutMs: 300000 },
         why: 'packing repair material while keeping the door reserve',
       };
     if (ctx.s.night || ctx.s.storm) return { wait: 'home damage needs materials; gathering waits for safe daylight' };

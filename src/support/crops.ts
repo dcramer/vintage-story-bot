@@ -1,5 +1,7 @@
 // Crop requirements come from the seed handbook; soil readings come from
 // the aimed farmland's HUD. Missing or unfamiliar text stays unknown.
+export const FARM_SOIL = ['game:soil-medium-', 'game:soil-high-', 'game:soil-compost-'];
+
 export function cropRequirements(page) {
   if (page?.class !== 'ItemPlantableSeed' || !Array.isArray(page.text)) return null;
   const text = page.text.join('\n').replace(/<[^>]*>/g, '');
