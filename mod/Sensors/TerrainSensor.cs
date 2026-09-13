@@ -56,11 +56,11 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map, Sighting
         if (pending.Count == 0 && now >= nextBatch)
         {
             var cells = new List<Cell>();
-            // The full eight-block surroundings disk, three blocks down and six up,
-            // so a slope or ledge is observed before the player stands under it.
+            // Four cells down includes the supporting block beneath a three-block
+            // descent. Every sample still requires line of sight within eight blocks.
             // Cells within four blocks refresh twice a second, the rest every
             // 1.5 seconds; a low frame rate then still keeps the body path fresh.
-            for (int x = -8; x <= 8; x++) for (int z = -8; z <= 8; z++) for (int y = -3; y <= 6; y++)
+            for (int x = -8; x <= 8; x++) for (int z = -8; z <= 8; z++) for (int y = -4; y <= 6; y++)
                 if (x * x + z * z <= 64) cells.Add(new((int)Math.Floor(pos.X) + x, (int)Math.Floor(pos.Y) + y, (int)Math.Floor(pos.Z) + z));
             foreach (var cell in cells.OrderBy(c => c == priority ? 0 : map.Fresh(c, now, RefreshMs(c, pos)) ? 2 : 1)
                 .ThenBy(c => SceneGeometry.Square(c.X + .5 - pos.X) + SceneGeometry.Square(c.Z + .5 - pos.Z))) pending.Enqueue(cell);
