@@ -16,6 +16,26 @@ export function handAfterIgnition(hotbar, hand) {
   return ordinary.find(slot => slot.code && slot.code !== 'game:firestarter')?.code;
 }
 
+export async function selectFirepit(field, cell, { reposition = false } = {}) {
+  const select = async () => {
+    const selected = await selectCell(field, cell, { clearPlants: true });
+    return selected && /:game:firepit-(cold|extinct|lit)$/.test(selected.key) ? selected : null;
+  };
+  let selected = await select();
+  if (selected || !reposition) return selected;
+  const center = { x: cell.x + 0.5, y: cell.y, z: cell.z + 0.5 };
+  const origin = field.latest.position;
+  const alternate = field.approach({ kind: 'block', point: center }, point => {
+    const side = (point.x - center.x) * (origin.x - center.x) + (point.z - center.z) * (origin.z - center.z);
+    return side > 0;
+  });
+  if (!alternate) return null;
+  field.report('repositioning', { reason: 'firepit_obstructed', target: cell });
+  await field.walk(alternate);
+  selected = await select();
+  return selected;
+}
+
 // Firepit slots are the native fuel/input/output slots, not interchangeable storage.
 export async function cook(field, { target, item, count, fuel }) {
   const cell = parseBlockKey(target);
@@ -44,11 +64,10 @@ export async function cook(field, { target, item, count, fuel }) {
   let opened = false;
   let moved = 0;
   const open = async () => {
-    // A nearby grass tuft can intercept the ray to the low firepit even though
-    // the eye just observed the firepit itself. Clear that ordinary visual
-    // obstruction before concluding the owned firepit disappeared.
-    const selected = await selectCell(field, cell, { clearPlants: true });
-    if (!selected || !/:game:firepit-(cold|extinct|lit)$/.test(selected.key)) throw Error('Firepit not observed');
+    // Low firepits are easily hidden by nearby foliage. Try the other side
+    // once before concluding that the owned firepit disappeared.
+    const selected = await selectFirepit(field, cell, { reposition: true });
+    if (!selected) throw Error('Firepit not observed');
     const container = await openContainer(field, { target: selected.key });
     opened = true;
     return container;

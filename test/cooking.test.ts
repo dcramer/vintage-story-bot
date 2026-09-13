@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cook, handAfterIgnition } from '../src/goals/cook.ts';
+import { cook, handAfterIgnition, selectFirepit } from '../src/goals/cook.ts';
 import { remember } from '../src/support/facts.ts';
 import { ignite } from '../src/support/fire.ts';
 
@@ -69,6 +69,44 @@ test('a full ordinary hotbar puts the firestarter away into an existing safe han
   full[7].code = null;
   assert.equal(handAfterIgnition(full, 'game:firestarter'), null, 'an ordinary empty hand remains preferable');
   assert.equal(handAfterIgnition(full, 'game:knife-generic-flint'), 'game:knife-generic-flint');
+});
+
+test('cooking approaches a firepit from another side when foliage blocks the first view', async () => {
+  const cell = { x: 0, y: 0, z: 0 };
+  const state = {
+    position: { x: 2.5, y: 0, z: 0.5 },
+    body: { eyeHeight: 1.6 },
+  };
+  let inspections = 0;
+  const field = {
+    latest: state,
+    observe: async () => state,
+    send: async request => {
+      if (request.action === 'aim_cell') return { ok: true };
+      if (request.action === 'inspect_target') {
+        inspections++;
+        return inspections === 1
+          ? { key: 'block:0:1:0:0:game:leaves-grown7-oak', code: 'game:leaves-grown7-oak' }
+          : { key: 'block:0:0:0:0:game:firepit-cold', code: 'game:firepit-cold' };
+      }
+      throw Error(`Unexpected action ${request.action}`);
+    },
+    approach: (_target, exclude) => {
+      assert.equal(exclude({ x: 1.5, y: 0, z: 0.5 }), true, 'reject the obstructed side');
+      assert.equal(exclude({ x: -0.5, y: 0, z: 0.5 }), false, 'allow the opposite side');
+      return { x: -0.5, y: 0, z: 0.5 };
+    },
+    report: () => {},
+    walk: async target => {
+      state.position = target;
+      return { state: 'arrived' };
+    },
+  };
+
+  const selected = await selectFirepit(field, cell, { reposition: true });
+
+  assert.equal(selected.key, 'block:0:0:0:0:game:firepit-cold');
+  assert.equal(inspections, 2);
 });
 
 test('cooking refuses to ignite when it cannot move clear of the cold firepit', async () => {
