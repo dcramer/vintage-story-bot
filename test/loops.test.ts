@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { collectItem } from '../src/goals/collect_item.ts';
+import { explore } from '../src/goals/explore.ts';
 import { until } from '../src/support/fieldwork.ts';
 
 // A scripted field: what each look and each read returns is a script, time is a counter, and
@@ -44,6 +45,31 @@ test('until ends on the first look that meets the condition and reports a miss a
   const read = scripted({ inventory: () => ({ n: 7 }) });
   const seen = await until(read, (_, contents) => contents.n === 7, { read: () => read.send({ action: 'inventory' }) });
   assert.equal(seen.read.n, 7);
+});
+
+test('exploration does not report success after a blocked leg with no movement', async () => {
+  const position = { x: 0.5, y: 64, z: 0.5 };
+  const field = {
+    heading: 90,
+    latest: { position },
+    moved: 0,
+    seen: new Map(),
+    report: () => {},
+    explore: () => ({ x: 48.5, y: 64, z: 0.5 }),
+    walk: async () => ({ state: 'blocked', reason: 'no_observed_route' }),
+    scan: async () => [],
+  };
+
+  const result = await explore(field, null, { legs: 1, heading: undefined });
+  assert.deepEqual(result, {
+    ok: false,
+    goal: 'explore',
+    reason: 'no_observed_route',
+    legs: ['blocked'],
+    moved: 0,
+    position,
+    heading: 90,
+  });
 });
 
 test('a drop that is never picked up ends the goal after a bounded number of approaches', async () => {

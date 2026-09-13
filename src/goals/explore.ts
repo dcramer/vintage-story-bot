@@ -2,6 +2,43 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { runField } from '../support/task.ts';
 
+export async function explore(field, survival, { legs, heading }) {
+  if (heading !== undefined) field.heading = heading;
+  const results = [];
+  for (let i = 0; i < legs; i++) {
+    await survival?.tend();
+    field.report('exploring', { leg: i + 1, legs });
+    const result = await field.walk(field.explore(), survival?.pauseWhen);
+    results.push(result.state);
+    await field.scan(64, '', 'all');
+    if (!['arrived', 'paused'].includes(result.state) && field.moved < 1)
+      return {
+        ok: false,
+        goal: 'explore',
+        reason: result.reason ?? result.state,
+        legs: results,
+        moved: +field.moved.toFixed(1),
+        position: field.latest.position,
+        heading: field.heading,
+      };
+  }
+  const sightings = {};
+  for (const o of field.seen.values()) sightings[o.code] = (sightings[o.code] ?? 0) + 1;
+  return {
+    ok: true,
+    goal: 'explore',
+    legs: results,
+    moved: +field.moved.toFixed(1),
+    position: field.latest.position,
+    heading: field.heading,
+    sightings: Object.fromEntries(
+      Object.entries(sightings as Record<string, number>)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 48),
+    ),
+  };
+}
+
 export default defineGoal({
   name: 'explore',
   schema: z
@@ -20,30 +57,5 @@ export default defineGoal({
   title: () => 'Explore the surroundings',
   announce: () => 'Exploring the area a bit.',
   run: (env, { legs = 4, heading, ...options }) =>
-    runField(env, { manageFood: false, ...options }, [], async (field, survival) => {
-      if (heading !== undefined) field.heading = heading;
-      const results = [];
-      for (let i = 0; i < legs; i++) {
-        await survival?.tend();
-        field.report('exploring', { leg: i + 1, legs });
-        const result = await field.walk(field.explore(), survival?.pauseWhen);
-        results.push(result.state);
-        await field.scan(64, '', 'all');
-      }
-      const sightings = {};
-      for (const o of field.seen.values()) sightings[o.code] = (sightings[o.code] ?? 0) + 1;
-      return {
-        ok: true,
-        goal: 'explore',
-        legs: results,
-        moved: +field.moved.toFixed(1),
-        position: field.latest.position,
-        heading: field.heading,
-        sightings: Object.fromEntries(
-          Object.entries(sightings as Record<string, number>)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 48),
-        ),
-      };
-    }),
+    runField(env, { manageFood: false, ...options }, [], (field, survival) => explore(field, survival, { legs, heading })),
 });
