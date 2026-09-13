@@ -74,7 +74,7 @@ export function kit(inventory: any) {
     // Bags worn, a hand basket carried but not worn, and a bag slot to wear it in.
     bags: slots.filter(s => s.bag && s.code).length,
     bagItem: (() => {
-      const bag = slots.find(s => !s.bag && s.code?.startsWith('game:chest-normal-'));
+      const bag = slots.find(s => !s.bag && s.code?.startsWith('game:basket-normal-'));
       return bag ? { inventory: bag.inventory, slot: bag.slot } : null;
     })(),
     emptyBagSlot: (() => {

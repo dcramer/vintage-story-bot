@@ -26,7 +26,7 @@ const inventory = (...slots) => ({
   inventories: [
     { name: 'hotbar', slots: slots.map((s, i) => ({ ...s, slot: i })) },
     // Two hand baskets worn, as day 1 ends with.
-    { name: 'backpack', slots: [0, 1].map(i => ({ slot: i, code: 'game:chest-normal-reed', quantity: 1, bag: true })) },
+    { name: 'backpack', slots: [0, 1].map(i => ({ slot: i, code: 'game:basket-normal-reed', quantity: 1, bag: true })) },
   ],
 });
 const state = (extra = {}) => ({
@@ -855,7 +855,7 @@ test('brain: cooking makes inventory room before felling fuel', () => {
   );
 
   assert.equal(choice.start, 'craft_item');
-  assert.equal(choice.args.output, 'game:chest-normal-reed');
+  assert.equal(choice.args.output, 'game:basket-normal-reed');
   assert.match(choice.why, /carry cooking fuel/);
 });
 
@@ -1224,8 +1224,8 @@ test('brain: a hand basket is woven from ten tops and worn by hand', () => {
     'tops for two chests in one trip; the chest is already noted',
   );
   const weave = decide(reading({ inventory: pack(knife, axe, slot('game:cattailtops', 10)) }), memory);
-  assert.deepEqual([weave.start, weave.args.output], ['craft_item', 'game:chest-normal-reed']);
-  const wear = decide(reading({ inventory: pack(knife, axe, slot('game:chest-normal-reed', 1)) }), memory);
+  assert.deepEqual([weave.start, weave.args.output], ['craft_item', 'game:basket-normal-reed']);
+  const wear = decide(reading({ inventory: pack(knife, axe, slot('game:basket-normal-reed', 1)) }), memory);
   assert.deepEqual(wear.act, [
     {
       action: 'move_item',

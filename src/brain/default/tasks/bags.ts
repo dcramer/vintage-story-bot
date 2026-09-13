@@ -6,7 +6,7 @@ import { CHEST_TOPS } from './storage.ts';
 
 export const BAGS = 2;
 export const BAG_TOPS = 10;
-export const BAG = 'game:chest-normal-reed';
+export const BAG = 'game:basket-normal-reed';
 
 export const bags: Concern = {
   id: 'bags',
