@@ -32,23 +32,22 @@ export function shelterSite(map, position) {
       }
   if (candidates.length) return candidates.sort((a, b) => distance(a) - distance(b))[0];
 
-  // Revisit a fully observed nearby footprint before another blind exploration
-  // leg. This is terrain memory, never a world query; unknown clearance still
-  // rejects the site. Bound the expensive footprint checks to 256 candidates.
-  const remembered = [];
+  // Revisit observed ground before exploring again. Test every candidate in
+  // range: a nearest-candidate cap can hide the only flat patch behind slopes.
+  let remembered = null;
+  let nearest = Infinity;
   for (const cell of map.cells?.values?.() ?? []) {
-    if (Math.hypot(cell.x + 2.5 - position.x, cell.z + 2.5 - position.z) > 64 || Math.abs(cell.y + 1 - position.y) > 32) continue;
+    if (Math.hypot(cell.x + 2.5 - position.x, cell.z + 2.5 - position.z) > 256 || Math.abs(cell.y + 1 - position.y) > 32) continue;
     if (!supportedFloor(cell, cell.y + 1)) continue;
     const above = map.get(cell.x, cell.y + 1, cell.z);
     if (!above || above.hazard || (above.boxes.length && !surfaceCover(above))) continue;
-    remembered.push({ x: cell.x, y: cell.y + 1, z: cell.z });
+    const origin = { x: cell.x, y: cell.y + 1, z: cell.z };
+    const near = distance(origin);
+    if (near >= nearest || !fits(origin)) continue;
+    remembered = origin;
+    nearest = near;
   }
-  return (
-    remembered
-      .sort((a, b) => distance(a) - distance(b))
-      .slice(0, 256)
-      .find(fits) ?? null
-  );
+  return remembered;
 }
 
 // Four walls before dark: build the starter shelter beside where the bot stands,

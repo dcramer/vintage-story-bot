@@ -50,7 +50,7 @@ check its output before preparing fuel; empty output resumes the pending cook.
 
 The starter shelter is a freestanding, above-ground building, never an emergency burrow. Its natural floor stays at ground level. A 5×5 rammed-earth starter shelter follows the [template](getting-started.md#starter-shelter-template) while the full rammed-earth house
 is built. A house site requires observed level ground and clear space; unknown
-terrain is rejected. Revisit a fully observed footprint within 64 blocks
+terrain is rejected. Revisit a fully observed footprint within 256 blocks
 before further exploration; retain its elevation when travelling there. Once 57 rammed-earth blocks, a torch and a firestarter are carried, starter
 construction takes priority over routine gathering; continue a started shell
 while materials remain. Urgent survival and night rules still take precedence.

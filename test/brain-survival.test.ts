@@ -149,14 +149,17 @@ test('shelter can use a fully observed footprint around the player', () => {
   assert.deepEqual(shelterSite(terrain, { x: 2.5, y: 100, z: 2.5 }), { x: 0, y: 100, z: 0 });
 });
 
-test('shelter revisits a fully observed nearby footprint before more exploration', () => {
+test('shelter revisits observed level ground beyond hundreds of nearer unusable candidates', () => {
   const cells = new Map();
-  for (let x = 20; x < 25; x++)
+  for (let x = 0; x < 60; x++)
+    for (let z = 0; z < 20; z += 2)
+      for (let y = 99; y <= 102; y++) cells.set(`${x}:${y}:${z}`, { x, y, z, boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [], hazard: null });
+  for (let x = 150; x < 155; x++)
     for (let z = 0; z < 5; z++)
       for (let y = 99; y <= 102; y++) cells.set(`${x}:${y}:${z}`, { x, y, z, boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [], hazard: null });
-  const map = { cells, get: (x, y, z) => cells.get(`${x}:${y}:${z}`), nodeAt: (x, z, y) => (x === 22 && z === 5 && y === 100 ? { y: 100 } : null) };
-  assert.deepEqual(shelterSite(map, { x: 0.5, y: 110, z: 0.5 }), { x: 20, y: 100, z: 0 });
-  cells.delete('24:102:4');
+  const map = { cells, get: (x, y, z) => cells.get(`${x}:${y}:${z}`), nodeAt: (x, z, y) => (x === 152 && z === 5 && y === 100 ? { y: 100 } : null) };
+  assert.deepEqual(shelterSite(map, { x: 0.5, y: 110, z: 0.5 }), { x: 150, y: 100, z: 0 });
+  cells.delete('154:102:4');
   assert.equal(shelterSite(map, { x: 0.5, y: 110, z: 0.5 }), null, 'unknown roof clearance is not a remembered building site');
 });
 
