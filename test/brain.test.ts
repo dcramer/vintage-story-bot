@@ -625,6 +625,7 @@ test('brain loop: a swimming bot routes to the nearest dry ground', async () => 
 
 test('brain loop: a wading bot routes to dry ground before starting work', async () => {
   const calls: any[] = [];
+  const stops: string[] = [];
   const dry = { x: 3.5, y: 100, z: 0.5 };
   const controller = {
     active: null,
@@ -649,9 +650,13 @@ test('brain loop: a wading bot routes to dry ground before starting work', async
     request: async request => {
       calls.push(request);
       if (request.action !== 'travel') throw new Error('only terrain-aware travel should start with wet footing');
+      controller.active = { id: 'shore', kind: 'travel', state: 'running', by: 'brain' };
       return { ok: true, goal: { id: 'shore' } };
     },
-    stop: async () => {},
+    stop: async reason => {
+      stops.push(reason);
+      controller.active = null;
+    },
     goalView: () => null,
   };
   const loop = new BrainLoop(controller as any, brain, 5);
@@ -660,7 +665,9 @@ test('brain loop: a wading bot routes to dry ground before starting work', async
   await loop.stop();
   const travel = calls.find(c => c.action === 'travel');
   assert.deepEqual([travel.x, travel.y, travel.z], [dry.x, dry.y, dry.z]);
-  assert.match(loop.lastDecision, /travel.*wading toward 4,1/);
+  assert.equal(calls.filter(c => c.action === 'travel').length, 1, 'night cannot churn the in-flight shore route');
+  assert.deepEqual(stops, ['brain_removed'], 'only test teardown, not the night job, cancels wet-footing recovery');
+  assert.match(loop.lastDecision, /letting shore travel finish/);
 });
 
 test('brain loop: an act decision runs its actions in order by hand', async () => {

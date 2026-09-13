@@ -332,6 +332,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // A goal of its own is running. What cuts it short is what the ladder would rather do now:
   // danger first, then a storm, night, a bad place, or food in hand when hungry.
   if (active) {
+    // A terrain-aware shore route is the only usable recovery while the feet
+    // are wet. Do not let the job ladder cancel and restart it every tick;
+    // priorities take over again as soon as the body reaches dry footing.
+    if ((state.motion?.swimming || state.motion?.feetInLiquid) && active.by === 'brain' && active.kind === 'travel')
+      return { wait: 'letting shore travel finish' };
     const mine = memory.job ? concern(memory.job) : null;
     const own = mine?.running?.(ctx);
     if (own) return own;
