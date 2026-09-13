@@ -224,6 +224,35 @@ test('a search with nothing in sight heads a hundred blocks the least-walked way
   assert.deepEqual([edge.x, edge.z], [80.5, -79.5], 'a seen forest edge the right way is the frontier');
 });
 
+test('a search without surface vision approaches its far frontier in legal local legs', async () => {
+  const places = new Places(() => 1000);
+  const field = new Fieldwork({ places }, { now: () => 1000 });
+  const start = { x: 0.5, y: 100, z: 0.5 };
+  field.latest = {
+    position: start,
+    orientation: { yawDegrees: 0 },
+    nearbyEntities: [],
+    body: { halfWidth: 0.3, height: 1.8 },
+  };
+  field.scan = async () => [];
+  field.lookAround = async () => [];
+  field.recall = () => [];
+  field.report = () => {};
+  field.explore = () => ({ x: start.x, y: start.y, z: start.z + APPROACH_LEG, horizontalOnly: true, arrivalRadius: 2 });
+  const walked: any[] = [];
+  field.walk = async target => {
+    walked.push(target);
+    field.latest = { ...field.latest, position: { x: target.x, y: start.y, z: target.z } };
+    return { state: 'arrived' };
+  };
+  const search = new Search(field, { kind: 'stick', match: ['stick'], wanted: () => true, take: async () => false });
+
+  await search.step();
+
+  assert.equal(places.frontier('stick').z, start.z + FRONTIER_DISTANCE, 'the persistent search frontier stays far away');
+  assert.ok(Math.hypot(walked[0].x - start.x, walked[0].z - start.z) <= APPROACH_LEG + 1, 'the native navigation request is a bounded local leg');
+});
+
 test('a lead with a threatened route is briefly set aside instead of retried immediately', () => {
   const target = { key: 'cranberry', point: { x: 41, y: 0, z: 0 } };
   const places = new Places(() => 1000);

@@ -244,7 +244,15 @@ export class Search {
       field.heading = frontier.heading;
     }
     field.report('ranging', { frontier: { x: Math.round(frontier.x), z: Math.round(frontier.z) }, distance: Math.round(horizontal(p, frontier)) });
-    let result = await field.walk({ x: frontier.x, y: frontier.y, z: frontier.z, horizontalOnly: true, arrivalRadius: 4 }, this.pause);
+    // Surface vision lets walk split a far frontier into rough-route legs. If
+    // that capability is unavailable, keep this first leg local: the native
+    // navigator rejects destinations beyond 128 blocks, while frontiers are
+    // deliberately farther away so searches keep a stable heading.
+    const destination =
+      !field.seeing && horizontal(p, frontier) > APPROACH_LEG
+        ? field.explore(frontier, APPROACH_LEG)
+        : { x: frontier.x, y: frontier.y, z: frontier.z, horizontalOnly: true, arrivalRadius: 4 };
+    let result = await field.walk(destination, this.pause);
     // The far view shows no way there (under trees, in a dip): walk a short leg that way on what
     // memory knows and look again from there, the way a player walks on through a wood. Standing
     // still choosing frontiers is not looking.
