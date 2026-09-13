@@ -51,7 +51,7 @@ export const eat: Concern = {
     if (
       s.hunger !== null &&
       s.hunger < 0.1 &&
-      ctx.now < (memory.notes.cookUntil ?? 0) &&
+      (memory.notes.cookUntil ?? 0) > 0 &&
       !ctx.tried.has(ctx.job) &&
       !memory.notes.deferredCooking?.length &&
       !danger &&

@@ -30,6 +30,19 @@ export function food(ctx: Context, keep: number): Decision {
   const { k, memory, now, state, reading } = ctx;
   const count = (item: string) => k.slots.reduce((n, slot) => n + (slot.code === item ? slot.quantity : 0), 0);
   const roots = count(ROOT);
+  // Both forage and cooking need room for their outputs. Reserve two slots
+  // before the trip; incidental native pickups can otherwise consume the
+  // single slot between cutting a reed and collecting its root.
+  if (!roots && k.free < 2 && (ctx.s.foodRecovery || (ctx.s.hunger !== null && ctx.s.hunger < 0.2))) {
+    const soil = k.slots
+      .filter(s => /^game:soil-(low|verylow)-/.test(s.code ?? '') && k.dirt - s.quantity >= 4)
+      .sort((a, b) => a.quantity - b.quantity)[0];
+    if (soil)
+      return {
+        act: [{ action: 'drop', from: { inventory: soil.inventory, slot: soil.slot }, quantity: soil.quantity, expectedState: k.state }],
+        why: 'make room for food while retaining shelter sealing blocks',
+      };
+  }
   const deferred = nearbyCooking(ctx);
   if (deferred) {
     const { x, y, z, count: pendingCount, needsFuel } = deferred;
@@ -60,7 +73,7 @@ export function food(ctx: Context, keep: number): Decision {
   if (
     ctx.tried.has(ctx.job) ||
     (now >= (memory.notes.cookUntil ?? 0) && k.reserve > 0) ||
-    (!roots && !memory.notes.cooking && (!recovering || now >= (memory.notes.cookUntil ?? 0)))
+    (!roots && !memory.notes.cooking && (!recovering || !(memory.notes.cookUntil > 0)))
   )
     return {
       start: 'forage',
@@ -84,18 +97,6 @@ export function food(ctx: Context, keep: number): Decision {
       // Equip or weave carried supplies. Even a full pack must not send food
       // recovery on a second reed expedition for an additional basket.
       if (bag.start !== 'harvest') return bag;
-    }
-    // Loading a carried root frees its slot for the cooked result. Before
-    // gathering a new root, make room from expendable soil, retaining a seal.
-    if (emergency && !roots && k.free === 0) {
-      const soil = k.slots
-        .filter(s => /^game:soil-(low|verylow)-/.test(s.code ?? '') && k.dirt - s.quantity >= 4)
-        .sort((a, b) => a.quantity - b.quantity)[0];
-      if (soil)
-        return {
-          act: [{ action: 'drop', from: { inventory: soil.inventory, slot: soil.slot }, quantity: soil.quantity, expectedState: k.state }],
-          why: 'make room for emergency food while retaining shelter sealing blocks',
-        };
     }
     if (!count('game:firestarter')) {
       if (k.sticks < 2)

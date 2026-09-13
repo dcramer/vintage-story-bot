@@ -43,9 +43,14 @@ cells remain, and its materials and lighting supplies are available, finish it
 instead of travelling at least 32 blocks farther to an older home at night. This exception
 requires observed clear cells and does not apply during a temporal storm.
 
-New cattail roots are harvested only below 10% satiety after raw forage fails,
-one at a time: uprooting destroys the plant. Carried roots and pending food
-can still be cooked or retrieved above that threshold. A carried log ends
+After raw forage fails, the cattail fallback remains available until recovery
+reaches half satiety, including across interrupted work and controller restarts.
+Below 10% satiety harvest one root at a time; otherwise prepare batches of four.
+Uprooting destroys the plant. A new recovery episode tries raw forage again.
+Reserve two ordinary inventory slots before a food trip; shed expendable soil
+while keeping four sealing blocks, and stop harvesting if incidental pickups
+fill the pack. Food recovery does not detour for other kit materials.
+Carried roots and pending food can still be cooked or retrieved. A carried log ends
 urgent fuel gathering; an empty firepit more than 48 blocks away is replaced
 locally instead of spending the remaining health returning to it. Pending
 food in an owned firepit is still retrieved. A failed route defers that cooking

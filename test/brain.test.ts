@@ -1083,11 +1083,19 @@ test('brain: failed forage keeps its cattail fallback through the recovery episo
   const supplies = kitted();
   supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 8));
   for (const current of [149, 150, 299, 300, 600, 749]) {
-    const choice = decide(reading({ state: state({ vitals: { hunger: { current, max: 1500 } } }), inventory: supplies, now: 2000 }), memory);
+    const choice = decide(reading({ state: state({ vitals: { hunger: { current, max: 1500 } } }), inventory: supplies, now: 20_000 }), memory);
     assert.equal(choice.start, 'harvest');
     assert.equal(choice.args.item, 'game:cattailroot');
     assert.equal(choice.args.count, current < 150 ? 1 : 4);
   }
+  decide(reading({ state: state({ vitals: { hunger: { current: 750, max: 1500 } } }), inventory: supplies, now: 21_000 }), memory);
+  assert.equal(memory.notes.cookUntil, undefined, 'recovery completion retires its failed-forage evidence');
+  memory.job = null;
+  const nextEpisode = decide(
+    reading({ state: state({ vitals: { hunger: { current: 225, max: 1500 } } }), inventory: supplies, now: 22_000 }),
+    memory,
+  );
+  assert.equal(nextEpisode.start, 'forage', 'a new hunger episode tries ordinary food again');
 });
 
 test('brain: active recovery forage yields to emergency roots below ten percent', () => {
@@ -1453,6 +1461,8 @@ test('brain: basket crafting leaves spare stacks for the craft goal to place its
   const crowded = decide(reading({ state: state({ vitals: { hunger: { current: 0, max: 1500 } } }), inventory: short, now: 2000 }), crowdedMemory);
   assert.equal(crowded.act[0].action, 'drop');
   assert.equal(crowded.act[0].from.slot, 6);
+  const beforeForage = decide(reading({ state: state({ vitals: { hunger: { current: 225, max: 1500 } } }), inventory: short, now: 2000 }), fresh());
+  assert.equal(beforeForage.act[0].action, 'drop', 'make food room before the first forage pass, not only after it fails');
   assert.equal(crowded.act[0].quantity, 2, 'retain four soil blocks while freeing one slot for the root');
 });
 

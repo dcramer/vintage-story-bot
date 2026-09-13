@@ -238,7 +238,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
   const storm = temporalStormUnsafe(state);
   const k = kit(inventory);
   if (satiety !== null && satiety < 0.2) memory.notes.foodRecovery = true;
-  else if (satiety !== null && satiety >= 0.5) delete memory.notes.foodRecovery;
+  else if (satiety !== null && satiety >= 0.5) {
+    if (memory.notes.foodRecovery) delete memory.notes.cookUntil;
+    delete memory.notes.foodRecovery;
+  }
   const home = memory.notes.home;
   const tried = triedNow(memory, state.position, now);
   const dwelling = memory.notes.dwelling;
