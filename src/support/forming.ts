@@ -10,6 +10,9 @@ export const kinds = {
   clayforming: { surface: 'clayform', materials: s => has({ kind: 'item', code: s.code }, 'clayformable') },
 };
 
+export const formingGround = selection =>
+  selection?.key?.startsWith('block:') && selection.face === 'up' && !replaceablePlant(selection.code) && !has(selection, 'pickup');
+
 const voxelPoint = (cell, [vx, vy, vz], top = true) => ({
   x: cell.x + (vx + 0.5) / 16,
   y: cell.y + (vy + (top ? 0.95 : 0.5)) / 16,
@@ -51,7 +54,9 @@ async function aimGround(field) {
       tried.add(id);
       const sel = await selectCell(field, { x, y, z }, { face: 'up', clearPlants: true });
       if (!sel) continue;
-      if (!sel.key?.startsWith('block:') || sel.face !== 'up' || replaceablePlant(sel.code)) continue;
+      // Loose stones have a selectable top face but are resources sitting on the
+      // ground, not the solid ground a forming surface can replace.
+      if (!formingGround(sel)) continue;
       const hit = parseBlockKey(sel.key);
       if (hit.x !== x || hit.y !== y || hit.z !== z) continue; // occluded or grazed a neighbour
       const above = field.env.map.get(hit.x, hit.y + 1, hit.z);
