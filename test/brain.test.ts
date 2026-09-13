@@ -1109,6 +1109,34 @@ test('brain: failed forage keeps its cattail fallback through the recovery episo
   assert.equal(nextEpisode.start, 'forage', 'a new hunger episode tries ordinary food again');
 });
 
+test('brain: cooked food retrieval frees incidental drops while preserving the last soil stack', () => {
+  for (const roots of [0, 4]) {
+    const memory = fresh();
+    memory.startupChecked = true;
+    memory.notes.foodRecovery = true;
+    memory.notes.cooking = { count: 1 };
+    memory.notes.firepit = { x: 2, y: 100, z: 0 };
+    const contents = inventory(
+      slot('game:soil-low-none', 64),
+      slot('game:seeds-rye', 4),
+      slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }),
+      slot('game:treeseed-maple'),
+      ...(roots ? [slot('game:cattailroot', roots)] : []),
+    );
+    const choice = decide(
+      reading({
+        state: state({ vitals: { hunger: { current: 180, max: 1500 } } }),
+        inventory: contents,
+      }),
+      memory,
+    );
+    assert.equal(choice.act?.[0].action, 'drop');
+    assert.deepEqual(choice.act[0].from, { inventory: 'hotbar', slot: 3 });
+    assert.equal(choice.act[0].quantity, 1);
+    assert.deepEqual(memory.notes.cooking, { count: 1 }, 'keep ownership of the waiting meal');
+  }
+});
+
 test('brain: active recovery forage yields to emergency roots below ten percent', () => {
   const memory = fresh();
   memory.startupChecked = true;

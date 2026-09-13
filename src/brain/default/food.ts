@@ -33,13 +33,17 @@ export function food(ctx: Context, keep: number): Decision {
   // Both forage and cooking need room for their outputs. Reserve two slots
   // before the trip; incidental native pickups can otherwise consume the
   // single slot between cutting a reed and collecting its root.
-  if (!roots && k.free < 2 && (ctx.s.foodRecovery || (ctx.s.hunger !== null && ctx.s.hunger < 0.2))) {
+  if ((!roots || memory.notes.cooking) && k.free < 2 && (ctx.s.foodRecovery || (ctx.s.hunger !== null && ctx.s.hunger < 0.2))) {
     const soil = k.slots
       .filter(s => /^game:soil-(low|verylow)-/.test(s.code ?? '') && k.dirt - s.quantity >= 4)
       .sort((a, b) => a.quantity - b.quantity)[0];
-    if (soil)
+    // A single remaining soil stack cannot be dropped while keeping sealing
+    // blocks. Roof clearing also collects tree seeds and flowers: these can
+    // make room without discarding crop seeds, tools or the emergency seal.
+    const discard = soil ?? k.slots.find(s => !s.nutrition && /^game:(treeseed-|flower-)/.test(s.code ?? ''));
+    if (discard)
       return {
-        act: [{ action: 'drop', from: { inventory: soil.inventory, slot: soil.slot }, quantity: soil.quantity, expectedState: k.state }],
+        act: [{ action: 'drop', from: { inventory: discard.inventory, slot: discard.slot }, quantity: discard.quantity, expectedState: k.state }],
         why: 'make room for food while retaining shelter sealing blocks',
       };
   }

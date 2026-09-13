@@ -53,6 +53,9 @@ Uprooting destroys the plant. A new recovery episode tries raw forage again.
 Reserve two ordinary inventory slots before a food trip; shed expendable soil
 while keeping four sealing blocks, and stop harvesting if incidental pickups
 fill the pack. Food recovery does not detour for other kit materials.
+When only the sealing-soil stack remains, discard incidental tree seeds or
+flowers to free food slots, preserving crop seeds and tools. Pending cooked
+food needs room even when raw roots are already carried.
 Carried roots and pending food can still be cooked or retrieved. A carried log ends
 urgent fuel gathering; an empty firepit more than 48 blocks away is replaced
 locally instead of spending the remaining health returning to it. Pending
