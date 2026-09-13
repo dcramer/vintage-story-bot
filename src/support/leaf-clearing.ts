@@ -1,6 +1,6 @@
 import { angle, distance, horizontal, lookAt } from '../runtime/navigation/terrain.ts';
 import { changeBlock } from './blocks.ts';
-import { emptyHand } from './food.ts';
+import { ownedSlots } from './inventory.ts';
 import { nearestThreat } from './threats.ts';
 import { has, traitsOf } from './traits.ts';
 
@@ -88,8 +88,22 @@ export async function clearLeaf(field, toward) {
   if (!target) return false;
   field.report('clearing_leaves', { target: target.key });
   try {
-    const slot = await emptyHand(field);
-    const result = await changeBlock(field, 'dig', { target: target.key, point: target.point, slot, expectedItem: null, timeoutMs: 8000 });
+    const slots = ownedSlots(await field.send({ action: 'inventory' })).filter(s => s.inventory === 'hotbar');
+    // Breaking leaves does not require an empty hand. Keep recovery usable when
+    // gathering has filled the pack; a knife or axe also cuts leaves faster.
+    const hand =
+      slots.find(s => ['Knife', 'Axe'].includes(s.tool) && s.durability > 0) ??
+      slots.find(s => !s.code) ??
+      slots.find(s => s.slot === field.latest.activeSlot);
+    if (!hand) return false;
+    await field.send({ action: 'select', slot: hand.slot });
+    const result = await changeBlock(field, 'dig', {
+      target: target.key,
+      point: target.point,
+      slot: hand.slot,
+      expectedItem: hand.code ?? null,
+      timeoutMs: 8000,
+    });
     if (result.ok) {
       field.seen.delete(target.key);
       field.skip(target, 300000);
