@@ -21,15 +21,16 @@ internal sealed class ContextSensor(ICoreClientAPI api)
         var system = temporalStability;
         var storm = system?.StormData;
         if (storm == null) return null;
+        bool enabled = api.World.Config.GetString("temporalStorms", null) != "off";
         double startsInDays = storm.nextStormTotalDays - api.World.Calendar.TotalDays;
         return new
         {
-            active = storm.nowStormActive,
-            phase = storm.nowStormActive ? "active" : startsInDays <= .02 ? "imminent" : startsInDays <= .35 ? "approaching" : "clear",
-            strength = system!.StormStrength,
-            nextStrength = storm.nextStormStrength.ToString(),
-            startsInDays,
-            remainingDays = storm.nowStormActive ? (double?)Math.Max(0, storm.stormActiveTotalDays - api.World.Calendar.TotalDays) : null
+            active = enabled && storm.nowStormActive,
+            phase = !enabled ? "clear" : storm.nowStormActive ? "active" : startsInDays <= .02 ? "imminent" : startsInDays <= .35 ? "approaching" : "clear",
+            strength = enabled ? system!.StormStrength : 0,
+            nextStrength = enabled ? storm.nextStormStrength.ToString() : null,
+            startsInDays = enabled ? (double?)startsInDays : null,
+            remainingDays = enabled && storm.nowStormActive ? (double?)Math.Max(0, storm.stormActiveTotalDays - api.World.Calendar.TotalDays) : null
         };
     }
 
