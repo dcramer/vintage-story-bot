@@ -78,6 +78,17 @@ test('shelter refuses unknown ground, unsupported floors and blocked interiors',
     nodeAt: () => ({ y: 100 }),
   };
   assert.ok(shelterSite(terrain, position));
+  assert.ok(
+    shelterSite(
+      {
+        ...terrain,
+        get: (x, y, z) =>
+          y === 100 ? { code: 'game:snowlayer-3', boxes: [[x, y, z, x + 1, y + 0.375, z + 1]], hazard: null } : terrain.get(x, y, z),
+      },
+      position,
+    ),
+    'observed removable snow can be cleared from supported ground',
+  );
   assert.equal(shelterSite({ ...terrain, get: () => undefined }, position), null);
   assert.equal(shelterSite({ ...terrain, get: () => ({ boxes: [], hazard: null }) }, position), null);
   assert.equal(shelterSite({ ...terrain, get: (x, y, z) => ({ boxes: [[x, y, z, x + 1, y + 1, z + 1]], hazard: null }) }, position), null);

@@ -3,10 +3,11 @@ import { defineGoal } from '../runtime/define.ts';
 import { ownedSlots } from '../support/inventory.ts';
 import { shelter as shelterCells, shelterCenter, shelterDoor } from '../support/structures.ts';
 import { cleanName, runField } from '../support/task.ts';
-import { build } from './build.ts';
+import { build, digArea } from './build.ts';
 import { travel } from './travel.ts';
 
 // A complete dry footprint and a walkable doorway; unknown cells cannot support a home.
+const surfaceCover = cell => /^game:(tallgrass-|snowlayer-)/.test(cell?.code ?? '');
 export function shelterSite(map, position) {
   const candidates = [];
   for (const y of [0, 1, -1, 2, -2].map(dy => Math.floor(position.y) + dy))
@@ -24,10 +25,10 @@ export function shelterSite(map, position) {
             }
             for (let h = 0; h <= 2; h++) {
               const cell = map.get(origin.x + x, y + h, origin.z + z);
-              if (!cell || cell.hazard || cell.boxes.length) fits = false;
+              if (!cell || cell.hazard || (cell.boxes.length && !(h === 0 && surfaceCover(cell)))) fits = false;
             }
           }
-        if (fits && map.nodeAt(origin.x + 1, origin.z + 3, y, 0.1, 0.1)) candidates.push(origin);
+        if (fits && map.nodeAt(origin.x + 1, origin.z + 3, y, 0.6, 0.1)) candidates.push(origin);
       }
   return (
     candidates.sort(
@@ -78,6 +79,17 @@ export default defineGoal({
       if (!origin) return { ok: false, goal: 'shelter', reason: 'no_level_site' };
       const center = shelterCenter(origin);
       const home = { x: center.x, y: origin.y, z: center.z };
+      const cover = [];
+      for (let x = 0; x < 3; x++)
+        for (let z = 0; z < 3; z++) {
+          const cell = { x: origin.x + x, y: origin.y, z: origin.z + z };
+          if (surfaceCover(field.env.map.get(cell.x, cell.y, cell.z))) cover.push(cell);
+        }
+      if (cover.length) {
+        field.report('clearing_site', { origin });
+        const cleared = await digArea(field, survival, { cells: cover, tool: undefined });
+        if (!cleared.ok) return { ...cleared, goal: 'shelter', phase: 'site', origin };
+      }
       field.report('walls', { origin });
       const walls: any = await build(field, survival, { cells: assign(shelterCells(origin, item)) });
       if (!walls.ok) return { ok: false, goal: 'shelter', reason: walls.reason ?? 'walls', phase: 'walls', origin, walls };
