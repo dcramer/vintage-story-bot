@@ -1223,6 +1223,23 @@ test('brain: opening a morning burrow is followed by digging steps to the surfac
   assert.deepEqual([outside.args.x, outside.args.z], [8.5, 0.5]);
 });
 
+test('brain: a failed burrow opening keeps the seal location for another attempt', () => {
+  const memory = fresh();
+  memory.burrow = { x: 0, y: 2, z: 0 };
+  memory.job = 'unburrow';
+  const retry = decide(
+    reading({
+      state: state({ position: { x: 0.5, y: 0, z: 0.5 }, vitals: { hunger: { current: 299, max: 1500 } } }),
+      last: { id: 'mouth', kind: 'dig_area', ok: false, reason: 'cannot_dig' },
+    }),
+    memory,
+  );
+  assert.deepEqual(memory.burrow, { x: 0, y: 2, z: 0 });
+  assert.equal(memory.pit, null);
+  assert.equal(retry.start, 'dig_area');
+  assert.deepEqual(retry.args.cells, [memory.burrow]);
+});
+
 test('brain: hunger, not morning, explains opening a burrow at night', () => {
   const memory = fresh();
   memory.burrow = { x: 0, y: 102, z: 0 };

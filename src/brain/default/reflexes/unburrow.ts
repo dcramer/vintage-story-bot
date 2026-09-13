@@ -20,8 +20,12 @@ export const unburrow: Concern = {
     // Removing the seal opens the shaft but does not put the body back on
     // the surface. Hand the existing dig-out goal an arbitrary direction
     // for its staircase before resuming food or kit work.
-    // A burrow that could not be opened is not the place to keep coming back to either.
-    memory.burrow = null;
-    if (last.ok) memory.pit = { x: state.position.x + 8, y: state.position.y, z: state.position.z };
+    // A failed attempt leaves the same physical seal overhead. Keep its
+    // coordinates so a transient targeting or tool failure cannot strand the
+    // player underground and send ordinary forage into an unreachable loop.
+    if (last.ok) {
+      memory.burrow = null;
+      memory.pit = { x: state.position.x + 8, y: state.position.y, z: state.position.z };
+    }
   },
 };
