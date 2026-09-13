@@ -51,11 +51,18 @@ export const lighting: Concern = {
   title: 'lit shelter torches, refreshed daily',
   done: s => s.lit === true,
   after: ['shelter'],
+  running: ({ active, s, hurt, classifyingHurt }) =>
+    s.sheltered && !hurt && !classifyingHurt && ['light_shelter', 'craft_item'].includes(active?.kind ?? '')
+      ? { wait: 'finishing lighting inside the sealed shelter' }
+      : null,
   run: ctx => {
     const missing = torchCells(ctx.memory.notes).length - shelterLight(ctx.reading, ctx.memory.notes).installed;
-    if (ctx.k.torches < missing) return torches.run(ctx);
-    const prepare = prepareFirestarter(ctx);
-    if (prepare) return prepare;
+    const prepare = ctx.k.torches < missing ? torches.run(ctx) : prepareFirestarter(ctx);
+    if (prepare) {
+      if (ctx.s.sheltered && (ctx.danger || ctx.s.night) && (!('start' in prepare) || prepare.start !== 'craft_item'))
+        return { wait: 'lighting needs materials outside; remain sealed until safe to leave' };
+      return prepare;
+    }
     if (!ctx.s.atHome) return goHome.run(ctx);
     const cells = torchCells(ctx.memory.notes);
     return { start: 'light_shelter', args: { cells, refresh: true }, why: 'freshly placed, lit torches for the shelter' };

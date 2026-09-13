@@ -1981,3 +1981,35 @@ test('brain: a shelter has to be entered and sealed, and opens before morning wo
   assert.deepEqual(snowy.args.cells.at(-1), { x: 0, y: 100, z: 2 }, 'clear the snowy doorstep that traps movement under a low roof');
   assert.deepEqual(fresh(brain.notes!(memory)).notes.dwelling, dwelling);
 });
+
+test('brain: finish indoor torch refresh despite an outside threat, but stop on a hit', () => {
+  const home = { x: 0.5, y: 100, z: 0.5 };
+  const memory = fresh({ home, dwelling: { door: { x: 0, y: 100, z: 1 }, item: 'soil-' }, lightingDay: 0 });
+  memory.startupChecked = true;
+  const outside = state({
+    position: home,
+    nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'heard', at: 1 }],
+  });
+  const indoors = reading({
+    state: outside,
+    inventory: inventory(slot('game:firestarter'), slot('game:torch-basic-extinct-up')),
+    environment: { calendar: { totalDays: 1.25, hourOfDay: 6, daylight: 1 } },
+    terrain: {
+      get: (_x, _y, z) => ({ code: z === 1 ? 'game:soil-low-none' : 'game:torch-basic-extinct-up', boxes: z === 1 ? [{}] : [], hazard: null }),
+    },
+  });
+  assert.equal(decide(indoors, memory).start, 'light_shelter', 'do not sit beside an unlit torch because a threat is outside');
+  const active = { id: 'light', kind: 'light_shelter', state: 'running', by: 'brain' };
+  assert.deepEqual(decide({ ...indoors, active }, memory), { wait: 'finishing lighting inside the sealed shelter' });
+  const hit = decide({ ...indoors, active, events: [{ type: 'hurt', at: 1000, health: 10, amount: 5 }] }, memory);
+  assert.equal(hit.stop, 'hurt', 'actual damage proves the shelter is unsafe');
+  const absent = decide(
+    {
+      ...indoors,
+      inventory: inventory(slot('game:firestarter'), slot('game:stick'), slot('game:cattailtops')),
+      terrain: { get: (_x, _y, z) => ({ code: z === 1 ? 'game:soil-low-none' : 'game:air', boxes: z === 1 ? [{}] : [], hazard: null }) },
+    },
+    fresh({ home, dwelling: { door: { x: 0, y: 100, z: 1 }, item: 'soil-' } }),
+  );
+  assert.equal(absent.start, 'craft_item', 'replace a missing torch from carried materials while staying sealed');
+});

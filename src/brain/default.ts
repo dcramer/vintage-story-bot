@@ -110,6 +110,7 @@ const ALONGSIDE: Alongside[] = [copper, homeMarker, suppliesMarker];
 // tried again at once either. A completed burrow exit is always retried: it
 // was sealed with a block the bot itself carried, so an opening failure is transient.
 export const LADDER: Rung[] = [
+  { job: 'lighting', when: s => !!s.sheltered && s.lit === false && !s.hurt && !hungry(s) },
   { job: 'wait', when: s => !!s.sheltered && s.threat && !s.hurt && !hungry(s) },
   { job: 'unburrow', when: s => s.burrowed && s.hurt },
   { job: 'tunnel', when: (s, tried) => s.burrowed && s.threat && !s.hurt && s.besieged && !tried.has('tunnel') },
@@ -370,7 +371,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       ('start' in decision &&
         (['craft_item', 'light_shelter', 'eat'].includes(decision.start) ||
           (decision.start === 'build' && (job === 'repair_home' || job === 'storage')))) ||
-      (job === 'repair_home' && 'wait' in decision);
+      'wait' in decision;
     if (!indoors && !('act' in decision)) {
       memory.job = 'leave_shelter';
       return leaveShelter.run(ctx);

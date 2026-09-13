@@ -65,6 +65,8 @@ out of routine surplus deposits. Torches are lit through native firestarter
 use. Installed torches are picked up and replaced one at a time after 05:00
 each day; observed missing or extinguished torches invalidate the lighting
 state immediately. Indoor lighting work does not open the shelter door.
+Threats outside an intact sealed shelter do not interrupt lighting; actual
+damage does. Missing supplies never cause a nighttime lighting task to leave.
 
 The starter's 3×3 interior reserves six chest slots along the side walls,
 one torch at the back center, and a clear center aisle to the front entrance.
