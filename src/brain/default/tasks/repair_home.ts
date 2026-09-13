@@ -6,7 +6,7 @@ import type { Concern, Notes } from '../concern.ts';
 // terrain or a different occupied block is never permission to demolish it.
 export function homeDamage(reading, notes: Notes) {
   const cells = notes.house
-    ? [houseScaffold(notes.house, SHELTER_MATERIAL), ...house(notes.house, SHELTER_MATERIAL)]
+    ? [...houseScaffold(notes.house, SHELTER_MATERIAL), ...house(notes.house, SHELTER_MATERIAL)]
     : notes.starter
       ? [...shelterScaffold(notes.starter, SHELTER_MATERIAL), ...shelter(notes.starter, SHELTER_MATERIAL)]
       : [];

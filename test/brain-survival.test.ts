@@ -15,7 +15,15 @@ import buildHouse from '../src/goals/house.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
 import { findRoute } from '../src/runtime/navigation/planner.ts';
 import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
-import { houseScaffold, shelterDoor, shelterScaffold, shelterStorage, shelterTorches, shelter as template } from '../src/support/structures.ts';
+import {
+  houseScaffold,
+  house as houseTemplate,
+  shelterDoor,
+  shelterScaffold,
+  shelterStorage,
+  shelterTorches,
+  shelter as template,
+} from '../src/support/structures.ts';
 
 test('starter template stays enclosed with reachable interior torch positions', () => {
   const origin = { x: 0, y: 100, z: 0 };
@@ -32,7 +40,7 @@ test('starter template stays enclosed with reachable interior torch positions', 
     { x: 1, y: 100, z: 5, item: 'earth' },
     { x: 1, y: 101, z: 5, item: 'earth' },
   ]);
-  assert.deepEqual(houseScaffold(origin, 'earth'), { x: 3, y: 100, z: 7, item: 'earth' });
+  assert.equal(houseScaffold(origin, 'earth').length, 3);
   const storage = shelterStorage(origin);
   assert.equal(storage.length, 6);
   for (const cell of storage) {
@@ -57,6 +65,22 @@ test('the front staircase still reaches the roof after the walls are covered', (
   for (const { x, y, z } of [shelterScaffold(origin, 'earth')[0], shelterScaffold(origin, 'earth')[2]])
     map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [] });
   assert.equal(findRoute(map, start, goal, 0.3, 1.85, { partial: false }), null, 'one front block cannot reach a roof-covered wall');
+});
+
+test('the larger house retains a legal route from the ground to its completed ridge', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const map = new TerrainMemory();
+  for (let x = -2; x <= 11; x++)
+    for (let z = -2; z <= 10; z++)
+      for (let y = 99; y <= 107; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [] });
+  for (const { x, y, z } of [...houseTemplate(origin, 'earth'), ...houseScaffold(origin, 'earth')])
+    map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [[x, y, z, x + 1, y + 1, z + 1]] });
+  const start = { x: 3.5, y: 100, z: 9.5 },
+    goal = { x: 4.5, y: 105, z: 3.5 };
+  assert.ok(findRoute(map, start, goal, 0.3, 1.85, { partial: false }));
+  for (const { x, y, z } of [houseScaffold(origin, 'earth')[0], houseScaffold(origin, 'earth')[2]])
+    map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [] });
+  assert.equal(findRoute(map, start, goal, 0.3, 1.85, { partial: false }), null, 'one step leaves the finished eaves two blocks above the player');
 });
 
 test('torch refresh begins at 05:00 and an observed missing torch invalidates the same-day check', () => {

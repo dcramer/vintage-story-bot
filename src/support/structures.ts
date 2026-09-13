@@ -54,7 +54,11 @@ export const shelterStorage = origin => [1, 2, 3].flatMap(z => [1, 3].map(x => (
 
 // The larger house uses the same front-step technique. Its sloped roof then
 // remains traversable one course at a time all the way to the ridge.
-export const houseScaffold = (origin, item) => ({ x: origin.x + 3, y: origin.y, z: origin.z + 7, item });
+export const houseScaffold = (origin, item) => [
+  { x: origin.x + 3, y: origin.y, z: origin.z + 8, item },
+  { x: origin.x + 3, y: origin.y, z: origin.z + 7, item },
+  { x: origin.x + 3, y: origin.y + 1, z: origin.z + 7, item },
+];
 
 export const presets = { house, pit_kiln: pitKiln, shelter };
 

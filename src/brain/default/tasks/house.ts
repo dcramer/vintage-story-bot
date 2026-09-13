@@ -1,12 +1,12 @@
 import { supportedFloor, surfaceCover } from '../../../support/sites.ts';
-import { house as blueprint } from '../../../support/structures.ts';
+import { house as blueprint, houseScaffold } from '../../../support/structures.ts';
 import type { Cell, Concern } from '../concern.ts';
 import { failedOnItsOwn, goTo, setHome } from '../concern.ts';
 
 export type Construction = { origin: Cell; phase: 'walls' | 'floor' | 'enter' };
 export const RAMMED = 'game:rammed-light-plain';
 export const HAY = 'game:hay-normal-ud';
-export const HOUSE_BLOCKS = blueprint({ x: 0, y: 0, z: 0 }, RAMMED).length;
+export const HOUSE_BLOCKS = blueprint({ x: 0, y: 0, z: 0 }, RAMMED).length + houseScaffold({ x: 0, y: 0, z: 0 }, RAMMED).length;
 
 // Choose only a level footprint the surroundings actually show, with a dry margin.
 export function houseSite(terrain: any, position: Cell): Cell | null {
@@ -31,7 +31,16 @@ export function houseSite(terrain: any, position: Cell): Cell | null {
               }
             }
           }
-        if (fits) return origin;
+        if (fits) {
+          const step = houseScaffold(origin, RAMMED)[0];
+          const ground = terrain.get(step.x, y - 1, step.z);
+          if (!supportedFloor(ground, y)) continue;
+          for (let h = 0; h < 4; h++) {
+            const air = terrain.get(step.x, y + h, step.z);
+            if (!air || air.hazard || (air.boxes.length && !(h === 0 && surfaceCover(air)))) fits = false;
+          }
+          if (fits) return origin;
+        }
       }
   return null;
 }

@@ -33,12 +33,14 @@ export default defineGoal({
           }
         const outside = { x: origin.x + 4, y: origin.y, z: origin.z + 7 };
         if (surfaceCover(field.env.map.get(outside.x, outside.y, outside.z))) cover.push(outside);
+        for (const step of houseScaffold(origin, 'game:rammed-light-plain'))
+          if (surfaceCover(field.env.map.get(step.x, step.y, step.z))) cover.push(step);
         if (cover.length) {
           const cleared = await digArea(field, survival, { cells: cover, tool: undefined });
           if (!cleared.ok) return { ...cleared, goal: 'house', phase: 'site', origin };
         }
         const item = 'game:rammed-light-plain';
-        const result = await build(field, survival, { cells: [houseScaffold(origin, item), ...houseCells(origin, item)], verifyExisting: true });
+        const result = await build(field, survival, { cells: [...houseScaffold(origin, item), ...houseCells(origin, item)], verifyExisting: true });
         return { ...result, goal: 'house', phase, origin };
       }
       const cells = [];
