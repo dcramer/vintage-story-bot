@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { selectCell } from '../support/blocks.ts';
+import { ignite } from '../support/fire.ts';
 import { ownedSlots } from '../support/inventory.ts';
 import { runField } from '../support/task.ts';
 import { build, digArea } from './build.ts';
-import { useOnBlock } from './use_block.ts';
 
 export default defineGoal({
   name: 'light_shelter',
@@ -45,12 +45,10 @@ export default defineGoal({
         }
         if (!selected?.key.includes(':game:torch-basic-')) return { ok: false, goal: 'light_shelter', reason: 'torch_not_observed' };
         if (!selected.key.includes('torch-basic-lit-')) {
-          const lit = await useOnBlock(field, {
+          const lit = await ignite(field, {
             target: selected.key,
-            item: 'game:firestarter',
-            sneak: true,
             holdMs: 2000,
-            expectAfter: 'torch-basic-lit-',
+            lit: 'torch-basic-lit-',
           });
           if (!lit.ok) return { ...lit, goal: 'light_shelter' };
         }
