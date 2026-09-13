@@ -8,30 +8,32 @@ import { travel } from './travel.ts';
 
 // A complete dry footprint and a walkable doorway; unknown cells cannot support a home.
 export function shelterSite(map, position) {
-  const y = Math.floor(position.y);
   const candidates = [];
-  for (let dx = -5; dx <= 5; dx++)
-    for (let dz = -5; dz <= 5; dz++) {
-      const origin = { x: Math.floor(position.x) + dx, y, z: Math.floor(position.z) + dz };
-      if (position.x >= origin.x && position.x < origin.x + 3 && position.z >= origin.z && position.z < origin.z + 3) continue;
-      let fits = true;
-      for (let x = 0; x < 3 && fits; x++)
-        for (let z = 0; z < 3 && fits; z++) {
-          const floor = map.get(origin.x + x, y - 1, origin.z + z);
-          if (!floor || floor.hazard || !floor.boxes.some(b => b[4] >= y && b[3] - b[0] >= 0.99 && b[5] - b[2] >= 0.99)) {
-            fits = false;
-            break;
+  for (const y of [0, 1, -1, 2, -2].map(dy => Math.floor(position.y) + dy))
+    for (let dx = -5; dx <= 5; dx++)
+      for (let dz = -5; dz <= 5; dz++) {
+        const origin = { x: Math.floor(position.x) + dx, y, z: Math.floor(position.z) + dz };
+        if (position.x >= origin.x && position.x < origin.x + 3 && position.z >= origin.z && position.z < origin.z + 3) continue;
+        let fits = true;
+        for (let x = 0; x < 3 && fits; x++)
+          for (let z = 0; z < 3 && fits; z++) {
+            const floor = map.get(origin.x + x, y - 1, origin.z + z);
+            if (!floor || floor.hazard || !floor.boxes.some(b => b[4] >= y && b[3] - b[0] >= 0.99 && b[5] - b[2] >= 0.99)) {
+              fits = false;
+              break;
+            }
+            for (let h = 0; h <= 2; h++) {
+              const cell = map.get(origin.x + x, y + h, origin.z + z);
+              if (!cell || cell.hazard || cell.boxes.length) fits = false;
+            }
           }
-          for (let h = 0; h <= 2; h++) {
-            const cell = map.get(origin.x + x, y + h, origin.z + z);
-            if (!cell || cell.hazard || cell.boxes.length) fits = false;
-          }
-        }
-      if (fits && map.nodeAt(origin.x + 1, origin.z + 3, y, 0.1, 0.1)) candidates.push(origin);
-    }
+        if (fits && map.nodeAt(origin.x + 1, origin.z + 3, y, 0.1, 0.1)) candidates.push(origin);
+      }
   return (
     candidates.sort(
-      (a, b) => Math.hypot(a.x + 1.5 - position.x, a.z + 1.5 - position.z) - Math.hypot(b.x + 1.5 - position.x, b.z + 1.5 - position.z),
+      (a, b) =>
+        Math.hypot(a.x + 1.5 - position.x, (a.y - position.y) * 2, a.z + 1.5 - position.z) -
+        Math.hypot(b.x + 1.5 - position.x, (b.y - position.y) * 2, b.z + 1.5 - position.z),
     )[0] ?? null
   );
 }
