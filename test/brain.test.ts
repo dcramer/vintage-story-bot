@@ -848,6 +848,34 @@ test('brain: failed forage prepares cooking and resumes roots left in an owned f
   assert.equal(retry.args.count, 2);
 });
 
+test('brain: failed travel abandons an unreachable firepit and prepares a local replacement', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'eat';
+  memory.notes.cookUntil = 10_000;
+  memory.notes.firepit = { x: 20, y: 110, z: 20 };
+  memory.notes.cooking = { count: 4 };
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 12), slot('game:cattailroot', 4));
+
+  const choice = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 100, max: 1500 } } }),
+      inventory: supplies,
+      terrain: { get: () => undefined },
+      now: 2000,
+      last: { id: 'walk', kind: 'travel', ok: false, outcome: 'failed', reason: 'no_observed_route' },
+    }),
+    memory,
+  );
+
+  assert.equal(memory.notes.firepit, null);
+  assert.equal(memory.notes.cooking, null);
+  assert.equal(memory.tried.eat, undefined, 'an unreachable old firepit does not set food aside');
+  assert.equal(choice.start, 'harvest');
+  assert.match(choice.why, /grass to build a firepit/);
+});
+
 test('brain: cooking makes inventory room before felling fuel', () => {
   const memory = fresh();
   memory.notes.cookUntil = 10_000;

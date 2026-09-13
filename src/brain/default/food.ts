@@ -106,6 +106,14 @@ export function food(ctx: Context, keep: number): Decision {
 export const foodEnded: Concern['ended'] = (last, memory, reading) => {
   if (last.kind === 'forage' && !last.ok && last.outcome !== 'interrupted' && last.outcome !== 'refused')
     memory.notes.cookUntil = reading.now + COOK_MS;
+  // A remembered firepit is only useful while the bot can still reach it. If
+  // that walk fails, abandon both the site and any assumed contents so the
+  // next food decision prepares a complete local cooking attempt instead of
+  // walking back to the same unreachable ledge forever.
+  if (last.kind === 'travel' && failedOnItsOwn(last)) {
+    memory.notes.firepit = null;
+    memory.notes.cooking = null;
+  }
   if (last.kind === 'firepit' && ['site_not_empty', 'unsupported_site'].includes(last.reason ?? last.result?.reason ?? '') && !memory.notes.cooking)
     memory.notes.firepit = null;
   if (last.kind === 'cook') {
@@ -115,4 +123,4 @@ export const foodEnded: Concern['ended'] = (last, memory, reading) => {
   }
 };
 
-export const foodSetAside: Concern['setAside'] = last => last.kind !== 'forage' && failedOnItsOwn(last);
+export const foodSetAside: Concern['setAside'] = last => last.kind !== 'forage' && last.kind !== 'travel' && failedOnItsOwn(last);
