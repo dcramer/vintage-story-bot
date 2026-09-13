@@ -80,7 +80,7 @@ export function food(ctx: Context, keep: number): Decision {
         memory.notes.firepit = cell;
         return { start: 'firepit', args: cell, why: 'build an owned cooking firepit' };
       }
-    return { start: 'look_around', args: {}, why: 'look for supported ground for a firepit' };
+    return { start: 'explore', args: { legs: 1, manageFood: false, timeoutMs: 120000 }, why: 'find supported ground for a cooking firepit' };
   }
   if (horizontal(state.position, pit) > 3 || Math.abs(state.position.y - pit.y) > 1)
     return { start: 'travel', args: { ...pit, arrivalRadius: 2, manageFood: false, timeoutMs: 300000 }, why: 'return to the cooking firepit' };
