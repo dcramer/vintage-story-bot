@@ -16,6 +16,7 @@ import {
   type Context,
   cell,
   failedOnItsOwn,
+  insideHome,
   type Job,
   type Memory,
   type Notes,
@@ -43,10 +44,11 @@ import { bags } from './default/tasks/bags.ts';
 import { dirt } from './default/tasks/dirt.ts';
 import { grass } from './default/tasks/grass.ts';
 import { house } from './default/tasks/house.ts';
-import { lighting } from './default/tasks/lighting.ts';
+import { lighting, shelterLight } from './default/tasks/lighting.ts';
 import { logs } from './default/tasks/logs.ts';
 import { provisions } from './default/tasks/provisions.ts';
 import { recover, recoverableBody } from './default/tasks/recover.ts';
+import { homeDamage, repairHome } from './default/tasks/repair_home.ts';
 import { resupply, resupplyOf } from './default/tasks/resupply.ts';
 import { shelter } from './default/tasks/shelter.ts';
 import { spareKnife } from './default/tasks/spare_knife.ts';
@@ -64,21 +66,22 @@ export type { Job, Memory, Notes, Situation };
 
 // Dependencies are checked against the current kit; interrupted work is re-derived.
 export const TASKS: Concern[] = [
+  repairHome,
   resupply,
-  provisions,
   recover,
   knife,
   axe,
   bags,
   storage,
+  stash,
+  provisions,
   shovel,
   dirt,
-  shelter,
-  stash,
-  sticks,
   grass,
   torches,
+  shelter,
   lighting,
+  sticks,
   spareKnife,
   logs,
   house,
@@ -116,6 +119,8 @@ export const LADDER: Rung[] = [
   { job: 'hide', when: (s, tried) => s.hurt || (s.threat && !tried.has('hide')) },
   { job: 'unburrow', when: s => hungry(s) && s.burrowed && s.reserve <= 0 },
   { job: 'eat', when: s => hungry(s) },
+  { job: 'repair_home', when: (s, tried) => s.atHome && !!s.homeDamaged && !tried.has('repair_home') },
+  { job: 'lighting', when: s => s.atHome && s.lit === false && s.torches > 0 },
   { job: 'go_home', when: (s, tried) => s.storm && s.home && !s.atHome && !tried.has('go_home') },
   { job: 'wait', when: s => s.storm && ((s.home && s.atHome) || s.burrowed) },
   { job: 'shift', when: (s, tried) => s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow') },
@@ -222,21 +227,16 @@ export function decide(reading: Reading, memory: Memory): Decision {
   const tried = triedNow(memory, state.position, now);
   const dwelling = memory.notes.dwelling;
   const houseOrigin = memory.notes.house;
-  const inside =
-    !!home &&
-    Math.abs(state.position.y - home.y) < 1 &&
-    (houseOrigin
-      ? state.position.x > houseOrigin.x + 1.3 &&
-        state.position.x < houseOrigin.x + 8.7 &&
-        state.position.z > houseOrigin.z + 1.3 &&
-        state.position.z < houseOrigin.z + 5.7
-      : horizontal(state.position, home) < 0.7);
+  const starter = memory.notes.starter;
+  const light = shelterLight(reading, memory.notes);
+  const inside = insideHome(memory.notes, state.position);
   const sealed =
     !!dwelling &&
     [0, 1].every(dy => {
       const block = reading.terrain?.get(dwelling.door.x, dwelling.door.y + dy, dwelling.door.z);
       return !!block && !block.hazard && block.boxes.length > 0;
     });
+  const damaged = inside && homeDamage(reading, memory.notes).length > 0;
   const s: Situation = {
     threat: !!danger,
     threatNear: !!danger && horizontal(state.position, danger.point) <= THREAT_NEAR,
@@ -251,7 +251,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
         environment.calendar.hourOfDay >= 17 - Math.min(3, horizontal(state.position, home) / 120)),
     home: !!home,
     atHome: dwelling ? inside && sealed : !!home && horizontal(state.position, home) < 0.7 && Math.abs(state.position.y - home.y) < 1,
-    sheltered: !!dwelling && inside && sealed,
+    sheltered: !!dwelling && inside && sealed && !damaged,
+    homeDamaged: damaged,
     burrowed: !!memory.burrow && horizontal(state.position, memory.burrow) <= 8,
     besieged: !isNight(environment) && memory.besiegedAt !== null && now - memory.besiegedAt >= SIEGE_MS,
     dangerHere: dangerHere(memory, state.position),
@@ -261,14 +262,19 @@ export function decide(reading: Reading, memory: Memory): Decision {
     axe: k.axe,
     shovel: k.shovel,
     stone: k.stone,
-    torches: k.torches,
+    torches: k.torches + light.installed,
     grass: k.grass,
     dirt: k.dirt,
+    buildingMaterials: k.buildingMaterials,
+    rammedShelter: !!starter || !!houseOrigin,
     logs: k.logs,
     storage: !!memory.notes.stash,
     bags: k.bags,
     full: k.free <= FULL_SLOTS,
-    surplus: surplusOf(k, { home: !!home, torches: k.torches, building: !!memory.notes.construction }).reduce((n, i) => n + i.count, 0),
+    surplus: surplusOf(k, { home: !!home, torches: k.torches, building: !!memory.notes.construction || !!memory.notes.shelter }).reduce(
+      (n, i) => n + i.count,
+      0,
+    ),
     short: resupplyOf(k, { home: !!home, torches: k.torches }, memory.notes.stash).reduce((n, i) => n + i.count, 0),
     moreStorage:
       allStashes(memory.notes).length < 3 &&
@@ -276,7 +282,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       allStashes(memory.notes).every(stash => stash.full) &&
       suppliesMissing(allStashes(memory.notes)).length > 0,
     house: !!memory.notes.house,
-    lit: memory.notes.lightingDay === Math.floor(environment?.calendar?.totalDays ?? 0),
+    lit: light.lit,
     stocked:
       allStashes(memory.notes).length > 0 &&
       allStashes(memory.notes).every(stash => stash.seen && now - stash.seen.at < STOCK_CHECK_MS) &&
@@ -340,9 +346,18 @@ export function decide(reading: Reading, memory: Memory): Decision {
     memory.job = 'dig_out';
     return digOut.run(ctx);
   }
-  if (dwelling && inside && sealed && job !== 'wait' && job !== 'go_home' && !(job === 'eat' && k.reserve > 0)) {
-    memory.job = 'leave_shelter';
-    return leaveShelter.run(ctx);
+  let decision: Decision | undefined;
+  if (dwelling && inside && sealed && job !== 'wait' && job !== 'go_home') {
+    decision = concern(job).run(ctx);
+    const indoors =
+      ('start' in decision &&
+        (['craft_item', 'light_shelter', 'eat'].includes(decision.start) ||
+          (decision.start === 'build' && (job === 'repair_home' || job === 'storage')))) ||
+      (job === 'repair_home' && 'wait' in decision);
+    if (!indoors && !('act' in decision)) {
+      memory.job = 'leave_shelter';
+      return leaveShelter.run(ctx);
+    }
   }
   if (job === 'wait' && s.atHome && !danger && !hurt && !storm) {
     for (const task of [knife, axe, shovel, torches, lighting, spareKnife]) {
@@ -354,7 +369,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       }
     }
   }
-  const decision = concern(job).run(ctx);
+  decision ??= concern(job).run(ctx);
   if ('start' in decision) memory.job = job;
   return decision;
 }
@@ -375,6 +390,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
         : {}),
       home: cell(kept?.home),
       ...(cell(kept?.shelter) ? { shelter: cell(kept?.shelter) } : {}),
+      ...(cell(kept?.starter) ? { starter: cell(kept?.starter) } : {}),
       ...(Number.isFinite(kept?.lightingDay) ? { lightingDay: kept!.lightingDay } : {}),
       ...(cell(kept?.firepit) ? { firepit: cell(kept?.firepit) } : {}),
       ...(Number.isInteger(kept?.cooking?.count) && kept!.cooking!.count > 0 && kept!.cooking!.count <= 4

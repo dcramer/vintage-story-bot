@@ -1,11 +1,11 @@
-// The reed chest (getting-started, day 1): cattail tops cut with the knife (by
-// hand they drop too, but the knife keeps the roots so the reeds grow back),
-// woven into the chest the game calls a stationary basket, put down where the
-// bot stands once it is made: near the cattails, and that spot is the site the
-// house goes up beside. Its observed key is the note every store and take uses;
-// a chest found gone is forgotten and made again.
+// Cut cattail tops, weave a reed chest, and place it in a reserved side-wall
+// slot of the above-ground shelter. The first chest fixes the planned origin.
+
+import { shelterSite } from '../../../goals/shelter.ts';
+import { shelterStorage } from '../../../support/structures.ts';
 import type { Concern } from '../concern.ts';
 import { goTo, selectStash } from '../concern.ts';
+import { goHome } from '../reflexes/go_home.ts';
 
 // The recipe (the game calls it a reed chest): eight lots of three cattail tops.
 export const CHEST_TOPS = 24;
@@ -19,7 +19,31 @@ export const storage: Concern = {
   run: ctx => {
     const { k, state } = ctx;
     if (k.chest) {
+      const starter = ctx.memory.notes.starter;
+      if (starter) {
+        if (!ctx.s.atHome) return goHome.run(ctx);
+        const spot = shelterStorage(starter).find(cell => {
+          const block = ctx.reading.terrain?.get(cell.x, cell.y, cell.z);
+          return block && !block.hazard && !block.boxes.length && (!block.code || block.code === 'game:air');
+        });
+        if (!spot) return { wait: 'reserved indoor chest slots are occupied or not observed' };
+        return {
+          start: 'build',
+          args: { cells: [{ ...spot, item: k.chest }], timeoutMs: 600000 },
+          why: 'a chest along the shelter wall, keeping the aisle clear',
+        };
+      }
       const old = ctx.memory.notes.stash;
+      if (!old) {
+        const origin = ctx.memory.notes.shelter ?? shelterSite(ctx.reading.terrain, state.position);
+        if (!origin) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'level ground for the chest and above-ground shelter' };
+        ctx.memory.notes.shelter = origin;
+        return {
+          start: 'build',
+          args: { cells: [{ ...shelterStorage(origin)[0], item: k.chest }], timeoutMs: 600000 },
+          why: 'the first chest marks its reserved place inside the planned shelter',
+        };
+      }
       if (old) {
         const walk = goTo(ctx, old, 'adding storage beside the supplies', 3);
         if (walk) return walk;

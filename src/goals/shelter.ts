@@ -2,9 +2,10 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { ownedSlots } from '../support/inventory.ts';
 import { supportedFloor, surfaceCover } from '../support/sites.ts';
-import { shelter as shelterCells, shelterCenter, shelterDoor } from '../support/structures.ts';
+import { SHELTER_MATERIAL, SHELTER_SIZE, shelter as shelterCells, shelterCenter, shelterDoor, shelterTorches } from '../support/structures.ts';
 import { cleanName, runField } from '../support/task.ts';
 import { build, digArea } from './build.ts';
+import { lightShelter } from './light_shelter.ts';
 import { travel } from './travel.ts';
 
 // A complete dry footprint and a walkable doorway; unknown cells cannot support a home.
@@ -14,10 +15,11 @@ export function shelterSite(map, position) {
     for (let dx = -5; dx <= 5; dx++)
       for (let dz = -5; dz <= 5; dz++) {
         const origin = { x: Math.floor(position.x) + dx, y, z: Math.floor(position.z) + dz };
-        if (position.x >= origin.x && position.x < origin.x + 3 && position.z >= origin.z && position.z < origin.z + 3) continue;
+        if (position.x >= origin.x && position.x < origin.x + SHELTER_SIZE && position.z >= origin.z && position.z < origin.z + SHELTER_SIZE)
+          continue;
         let fits = true;
-        for (let x = 0; x < 3 && fits; x++)
-          for (let z = 0; z < 3 && fits; z++) {
+        for (let x = 0; x < SHELTER_SIZE && fits; x++)
+          for (let z = 0; z < SHELTER_SIZE && fits; z++) {
             const floor = map.get(origin.x + x, y - 1, origin.z + z);
             if (!supportedFloor(floor, y)) {
               fits = false;
@@ -28,18 +30,18 @@ export function shelterSite(map, position) {
               if (!cell || cell.hazard || (cell.boxes.length && !(h === 0 && surfaceCover(cell)))) fits = false;
             }
           }
-        if (fits && map.nodeAt(origin.x + 1, origin.z + 3, y, 0.6, 0.1)) candidates.push(origin);
+        if (fits && map.nodeAt(origin.x + 2, origin.z + SHELTER_SIZE, y, 0.6, 0.1)) candidates.push(origin);
       }
   return (
     candidates.sort(
       (a, b) =>
-        Math.hypot(a.x + 1.5 - position.x, (a.y - position.y) * 2, a.z + 1.5 - position.z) -
-        Math.hypot(b.x + 1.5 - position.x, (b.y - position.y) * 2, b.z + 1.5 - position.z),
+        Math.hypot(a.x + 2.5 - position.x, (a.y - position.y) * 2, a.z + 2.5 - position.z) -
+        Math.hypot(b.x + 2.5 - position.x, (b.y - position.y) * 2, b.z + 2.5 - position.z),
     )[0] ?? null
   );
 }
 
-// Four walls before dark: build the tiny shelter beside where the bot stands,
+// Four walls before dark: build the starter shelter beside where the bot stands,
 // walk in, seal the door from inside, light it. The spot becomes home.
 export default defineGoal({
   name: 'shelter',
@@ -50,21 +52,21 @@ export default defineGoal({
         .strict()
         .optional()
         .describe('Resume an owned partial shelter at this origin.'),
-      item: z.string().min(1).max(160).default('soil-').describe('Carried block item code substring for the walls.'),
-      torch: z.boolean().default(true).describe('Place a carried torch on the floor once sealed in.'),
+      item: z.string().min(1).max(160).default(SHELTER_MATERIAL).describe('Carried block item code substring for the walls.'),
+      torch: z.boolean().default(true).describe('Light the interior torch once sealed in; bring a torch and a firestarter if it is unlit.'),
       manageFood: z.boolean().default(false),
       timeoutMs: z.number().int().min(1000).max(3600000).default(1800000),
     })
     .strict(),
   destructive: true,
   description:
-    'Build the tiny shelter (3x3, walls 2 high, flat roof, 25 blocks) on nearby observed level ground, walk in, seal the ' +
-    'door from inside and place a torch if one is carried. Fails fast with not_enough_material; walls, cannot_enter and seal ' +
+    'Build the starter shelter (5x5, 3x3 interior, walls 2 high, flat roof, 57 blocks) on nearby observed level ground, walk in, seal the ' +
+    'door from inside and light the interior torch. Fails fast with not_enough_material; walls, cannot_enter and seal ' +
     'report which phase stopped. Result home is the spot to return to. Returns START; poll goal_status.',
   title: args => `Build a ${cleanName(args.item)} shelter`,
   announce: args => `Putting up a little ${cleanName(args.item)} shelter.`,
   run: (env, { origin: planned, item, torch, ...options }) =>
-    runField(env, options, ['inventory', 'block_actions'], async (field, survival) => {
+    runField(env, options, ['inventory', 'block_actions', 'sneak'], async (field, survival) => {
       const origin = planned ?? shelterSite(field.env.map, field.latest.position);
       if (!origin) return { ok: false, goal: 'shelter', reason: 'no_level_site' };
       const existing = cell => {
@@ -90,12 +92,12 @@ export default defineGoal({
       const center = shelterCenter(origin);
       const home = { x: center.x, y: origin.y, z: center.z };
       const cover = [];
-      for (let x = 0; x < 3; x++)
-        for (let z = 0; z < 3; z++) {
+      for (let x = 0; x < SHELTER_SIZE; x++)
+        for (let z = 0; z < SHELTER_SIZE; z++) {
           const cell = { x: origin.x + x, y: origin.y, z: origin.z + z };
           if (surfaceCover(field.env.map.get(cell.x, cell.y, cell.z))) cover.push(cell);
         }
-      const outside = { x: origin.x + 1, y: origin.y, z: origin.z + 3 };
+      const outside = { x: origin.x + 2, y: origin.y, z: origin.z + SHELTER_SIZE };
       if (surfaceCover(field.env.map.get(outside.x, outside.y, outside.z))) cover.push(outside);
       if (cover.length) {
         field.report('clearing_site', { origin });
@@ -112,12 +114,10 @@ export default defineGoal({
       const seal: any = await build(field, survival, { cells: assign(shelterDoor(origin, item)) });
       if (!seal.ok) return { ok: false, goal: 'shelter', reason: seal.reason ?? 'seal', phase: 'seal', origin, seal };
       let lit = false;
-      const torchCode = torch ? slots.find(s => s.code?.includes('torch-basic'))?.code : null;
-      if (torchCode) {
-        field.report('lighting', { origin });
-        lit =
-          (await build(field, survival, { cells: [{ x: origin.x + 1, y: origin.y, z: origin.z + 1, item: torchCode }] })).ok &&
-          torchCode.includes('torch-basic-lit-');
+      if (torch) {
+        const lighting = await lightShelter(field, survival, { cells: shelterTorches(origin) });
+        if (!lighting.ok) return { ...lighting, goal: 'shelter', phase: 'lighting', origin, home };
+        lit = true;
       }
       return { ok: true, goal: 'shelter', origin, home, item, placed: walls.placed + seal.placed, lit, verification: 'client_observed' };
     }),

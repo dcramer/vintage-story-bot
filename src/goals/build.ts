@@ -27,7 +27,7 @@ async function standNear(field, survival, cell, force = false) {
 
 function known(field, cell) {
   const entry = field.env.map.get(cell.x, cell.y, cell.z);
-  return entry ? (entry.hazard ? 'hazard' : entry.boxes.length ? 'solid' : 'air') : 'unknown';
+  return entry ? (entry.hazard ? 'hazard' : entry.boxes.length || (entry.code && entry.code !== 'game:air') ? 'solid' : 'air') : 'unknown';
 }
 
 export async function digArea(field, survival, { cells, tool, minTier = 0 }) {

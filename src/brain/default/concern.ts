@@ -41,7 +41,8 @@ export type Job =
   | 'stockpile'
   | 'house'
   | 'provisions'
-  | 'lighting';
+  | 'lighting'
+  | 'repair_home';
 // The container the bot keeps things in: its observed key (cell and block code), and what it
 // held when last closed. Unknown until opened; stale once anyone else has been at it.
 export type Stash = {
@@ -57,6 +58,7 @@ export type Stash = {
 // left in its own chest (re-verified when it is opened); what the eye saw of the world is Knowledge.
 export type Notes = {
   shelter?: Cell | null;
+  starter?: Cell | null;
   recovery?: { guid: string; until: number } | null;
   home: Cell | null;
   house?: Cell | null;
@@ -106,6 +108,18 @@ export type Memory = {
   // Sighting keys already marked on the map, so one nugget is announced once.
   marked: Set<string>;
 };
+
+export function insideHome(notes: Notes, position: Cell): boolean {
+  if (!notes.home || Math.abs(position.y - notes.home.y) >= 1) return false;
+  const origin = notes.house ?? notes.starter;
+  if (!origin) return horizontal(position, notes.home) < 0.7;
+  return (
+    position.x > origin.x + 1 &&
+    position.x < origin.x + (notes.house ? 9 : 4) &&
+    position.z > origin.z + 1 &&
+    position.z < origin.z + (notes.house ? 6 : 4)
+  );
+}
 export type Ended = NonNullable<Reading['last']>;
 // One tick's reading, digested: what every concern decides on.
 export type Context = {

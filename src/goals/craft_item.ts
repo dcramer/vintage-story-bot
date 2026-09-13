@@ -35,12 +35,12 @@ export async function clearGrid(field) {
 }
 
 // Allocate owned stacks to recipe ingredients without double-spending a stack.
-export function allocate(recipe) {
+export function allocate(recipe, crafts = 1) {
   const remaining = new Map();
   const plan = [];
   for (const ingredient of recipe.ingredients ?? []) {
     if (!ingredient) continue;
-    let needed = ingredient.quantity;
+    let needed = ingredient.quantity * (ingredient.consume === false ? 1 : crafts);
     const inPlace = match => match.inventory === 'craftinggrid' && match.slot === ingredient.slot;
     for (const match of [...(ingredient.matches ?? [])].sort((a, b) => Number(inPlace(b)) - Number(inPlace(a)))) {
       const id = `${match.inventory}:${match.slot}`;
@@ -85,7 +85,12 @@ export async function craftItem(field, { output, count = 1 }) {
       const recipes = await search();
       let recipe, plan;
       for (const candidate of recipes) {
-        plan = allocate(candidate);
+        // Stage the requested batch together: consuming a whole ingredient
+        // stack frees its slot even when the pack had no empty slot to start.
+        for (let batch = Math.ceil((count - gained()) / candidate.output.quantity); batch >= 1; batch--) {
+          plan = allocate(candidate, batch);
+          if (plan) break;
+        }
         if (plan) {
           recipe = candidate;
           break;

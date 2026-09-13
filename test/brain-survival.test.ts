@@ -2,13 +2,48 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { recoverBurrow } from '../src/brain/default/reflexes/burrow.ts';
 import { house, houseSite } from '../src/brain/default/tasks/house.ts';
+import { lightingDay, shelterLight } from '../src/brain/default/tasks/lighting.ts';
 import { recoverableBody } from '../src/brain/default/tasks/recover.ts';
+import { homeDamage, repairHome } from '../src/brain/default/tasks/repair_home.ts';
 import { shelter } from '../src/brain/default/tasks/shelter.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { fresh, kit } from '../src/brain/default.ts';
 import craft from '../src/goals/craft_item.ts';
 import buildHouse from '../src/goals/house.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
+import { shelterDoor, shelterStorage, shelterTorches, shelter as template } from '../src/support/structures.ts';
+
+test('starter template stays enclosed with reachable interior torch positions', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const walls = [...template(origin, 'game:rammed-light-plain'), ...shelterDoor(origin, 'game:rammed-light-plain')];
+  const keys = new Set(walls.map(c => `${c.x},${c.y},${c.z}`));
+  assert.equal(keys.size, 57);
+  assert.ok(
+    walls.every(c => c.y >= origin.y),
+    'all construction is above the natural floor',
+  );
+  assert.deepEqual(shelterTorches(origin), [{ x: 2, y: 100, z: 1 }]);
+  const storage = shelterStorage(origin);
+  assert.equal(storage.length, 6);
+  for (const cell of storage) {
+    assert.ok(cell.x === 1 || cell.x === 3, 'chests leave the center aisle clear');
+    assert.ok(!keys.has(`${cell.x},${cell.y},${cell.z}`), 'chest slots are inside the shell');
+  }
+  for (let x = 0; x < 5; x++) for (let z = 0; z < 5; z++) assert.ok(keys.has(`${x},102,${z}`), 'sealed roof');
+  for (const torch of shelterTorches(origin)) assert.ok(!keys.has(`${torch.x},${torch.y},${torch.z}`), 'torch is inside clear space');
+});
+
+test('torch refresh begins at 05:00 and an observed missing torch invalidates the same-day check', () => {
+  const environment = hour => ({ calendar: { totalDays: 100 + hour / 24 } });
+  assert.equal(lightingDay(environment(0)), lightingDay({ calendar: { totalDays: 99 + 23 / 24 } }));
+  const notes = { home: { x: 2.5, y: 100, z: 2.5 }, starter: { x: 0, y: 100, z: 0 }, lightingDay: 99 };
+  const terrain = { get: () => ({ code: 'game:torch-basic-lit-up' }) };
+  assert.equal(shelterLight({ terrain, environment: environment(4.99) }, notes).lit, true);
+  assert.equal(shelterLight({ terrain, environment: environment(5) }, notes).lit, false);
+  notes.lightingDay = 100;
+  assert.equal(shelterLight({ terrain, environment: environment(5) }, notes).lit, true);
+  assert.equal(shelterLight({ terrain: { get: () => ({ code: 'game:air' }) }, environment: environment(5) }, notes).lit, false);
+});
 
 const inventory = (items: Record<string, number>) => ({
   inventories: [{ name: 'hotbar', slots: Object.entries(items).map(([code, quantity], slot) => ({ code, quantity, slot })) }],
@@ -108,7 +143,12 @@ test('shelter refuses unknown ground, unsupported floors and blocked interiors',
 test('partial shelter resumes its owned site after a controller restart', () => {
   const origin = { x: 10, y: 100, z: 20 };
   const memory = fresh(fresh({ shelter: origin }).notes);
-  const ctx: any = { memory, state: { position: { x: 11.5, y: 100, z: 23.5 } }, k: { dirt: 6 } };
+  const ctx: any = {
+    memory,
+    state: { position: { x: 12.5, y: 100, z: 25.5 } },
+    k: kit(inventory({ 'game:rammed-light-plain': 6, 'game:torch-basic-extinct-up': 2, 'game:firestarter': 1 })),
+    reading: { terrain: { get: (_x, y, z) => ({ code: y === 102 && z === 20 ? 'game:air' : 'game:rammed-light-plain' }) } },
+  };
   const work: any = shelter.run(ctx);
   assert.equal(work.start, 'shelter');
   assert.deepEqual(work.args.origin, origin);
@@ -150,4 +190,27 @@ test('stockpile: remembered supplies survive changing to an additional chest', (
   assert.equal(work.start, 'gather');
   assert.equal(work.args.item, 'game:flint', 'sticks already stored in the first chest are not gathered again');
   assert.deepEqual(fresh(memory.notes).notes.stores?.[0].seen, first.seen);
+});
+
+test('home maintenance repairs observed shell gaps, never unknown cells or the open doorway', () => {
+  const notes = { home: { x: 2.5, y: 100, z: 2.5 }, starter: { x: 0, y: 100, z: 0 }, stash: null };
+  const reading = {
+    terrain: {
+      get: (x, y, z) => {
+        if (x === 0 && y === 100 && z === 1) return { code: null, boxes: [], hazard: null };
+        if (x === 2 && z === 4 && y < 102) return { code: 'game:air', boxes: [], hazard: null };
+        if (x === 4) return { code: 'game:stone-granite', boxes: [[0, 0, 0, 1, 1, 1]], hazard: null };
+        return undefined;
+      },
+    },
+  };
+  const cells = homeDamage(reading, notes);
+  assert.deepEqual(cells, [{ x: 0, y: 100, z: 1, item: 'game:rammed-light-plain' }]);
+  const ctx = { reading, memory: { notes }, k: { slots: [{ code: 'game:rammed-light-plain', quantity: 1 }] }, s: {} };
+  const decision: any = repairHome.run(ctx as any);
+  assert.equal(decision.start, 'build');
+  assert.deepEqual(decision.args.cells, cells);
+  ctx.k.slots = [];
+  ctx.s = { night: true };
+  assert.ok('wait' in repairHome.run(ctx as any), 'no nighttime gathering for repairs');
 });

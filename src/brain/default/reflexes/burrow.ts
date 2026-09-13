@@ -7,6 +7,7 @@ import { dugInState } from '../../../goals/burrow.ts';
 import type { Decision, Reading } from '../../../runtime/brain.ts';
 import { temporalStormUnsafe } from '../../../support/fieldwork.ts';
 import type { Concern, Memory } from '../concern.ts';
+import { insideHome } from '../concern.ts';
 import { isNight } from '../situation.ts';
 
 const STARTUP_TERRAIN_MS = 10000;
@@ -30,12 +31,7 @@ export function recoverBurrow(reading: Reading, memory: Memory): Decision | null
   const { state, environment } = reading;
   const home = memory.notes.home;
   // A known shelter's roof is not the mouth of an emergency burrow.
-  if (
-    home &&
-    memory.notes.dwelling &&
-    Math.abs(state.position.y - home.y) < 1 &&
-    Math.hypot(state.position.x - home.x, state.position.z - home.z) < 0.7
-  ) {
+  if (home && memory.notes.dwelling && insideHome(memory.notes, state.position)) {
     memory.startupChecked = true;
     memory.startupAt = null;
     return null;

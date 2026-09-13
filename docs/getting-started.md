@@ -21,6 +21,33 @@ Survival baseline for the first five in-game days. Source for core goal definiti
 | Spears | Thrown spears are picked up by walking over them. Carry 4–5. |
 | Multi-use structures | Kiln covers and the A-frame roof double as lookout platforms and cover. |
 
+## Starter shelter template
+
+5×5 outside, 3×3 usable interior, two-block-high walls and a solid flat roof.
+Use rammed earth for walls, roof and the two removable door-seal blocks;
+retain the supported natural ground as the floor. The template requires 57
+rammed-earth blocks (30 wall, 25 roof, 2 door). Prepare 60 in six-block
+crafting batches and retain four soil for emergency cover.
+
+Top view below the roof; `#` rammed earth, `D` two-high seal, `T` torch, `C` reserved chest slot:
+
+```text
+#####
+#CTC#
+#C.C#
+#C.C#
+##D##
+```
+
+The doorway faces +z. From the floor-level northwest origin, the door is
+(2,0,4), the standing center is (2.5,0,2.5), and the torch occupies (2,0,1). Six chest slots line the side walls at
+x=1/3, z=1/2/3; keep the middle aisle clear. Build the first chest in a
+reserved slot, then build the shelter around it. Bring a torch and a firestarter before construction. Build
+walls and roof, enter, seal, then verify the interior torch lit before completion.
+Keep at least one torch inside every occupied shelter. Starting at 05:00
+each day, pick up and replace installed torches one at a time; repair missing
+or extinguished lighting immediately when safe. Verify pickup and lit placement.
+
 ## House spec
 
 Internal 8×5, foundation 10×7, rammed earth (dirt → packed dirt → rammed earth). Shiver-proof even with roof gaps; hay-bale door seals it as a cellar.

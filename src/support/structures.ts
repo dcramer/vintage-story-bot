@@ -24,22 +24,27 @@ export function pitKiln(origin, item) {
   ].map(([dx, dz]) => ({ x: origin.x + dx, y: origin.y + 1, z: origin.z + dz, item }));
 }
 
-// The tiny shelter of docs/brain.md: a one-door box 3 wide by 3 deep, walls 2 high, flat roof.
+export const SHELTER_SIZE = 5;
+export const SHELTER_MATERIAL = 'game:rammed-light-plain';
+// Starter template: 5x5 outside, 3x3 inside, walls two high and a sealed flat roof.
 // origin is the floor-level corner; the door gap is 1 wide and 2 high in the middle of the +z wall.
 export function shelter(origin, item) {
   const cells = [];
   for (let dy = 0; dy < 2; dy++)
-    for (let dx = 0; dx < 3; dx++)
-      for (let dz = 0; dz < 3; dz++) {
-        if (dx !== 0 && dx !== 2 && dz !== 0 && dz !== 2) continue;
-        if (dz === 2 && dx === 1) continue;
+    for (let dx = 0; dx < SHELTER_SIZE; dx++)
+      for (let dz = 0; dz < SHELTER_SIZE; dz++) {
+        if (dx !== 0 && dx !== 4 && dz !== 0 && dz !== 4) continue;
+        if (dz === 4 && dx === 2) continue;
         cells.push({ x: origin.x + dx, y: origin.y + dy, z: origin.z + dz, item });
       }
-  for (let dx = 0; dx < 3; dx++) for (let dz = 0; dz < 3; dz++) cells.push({ x: origin.x + dx, y: origin.y + 2, z: origin.z + dz, item });
+  for (let dx = 0; dx < SHELTER_SIZE; dx++)
+    for (let dz = 0; dz < SHELTER_SIZE; dz++) cells.push({ x: origin.x + dx, y: origin.y + 2, z: origin.z + dz, item });
   return cells;
 }
-export const shelterDoor = (origin, item) => [0, 1].map(dy => ({ x: origin.x + 1, y: origin.y + dy, z: origin.z + 2, item }));
-export const shelterCenter = origin => ({ x: origin.x + 1.5, z: origin.z + 1.5 });
+export const shelterDoor = (origin, item) => [0, 1].map(dy => ({ x: origin.x + 2, y: origin.y + dy, z: origin.z + 4, item }));
+export const shelterCenter = origin => ({ x: origin.x + 2.5, z: origin.z + 2.5 });
+export const shelterTorches = origin => [{ x: origin.x + 2, y: origin.y, z: origin.z + 1 }];
+export const shelterStorage = origin => [1, 2, 3].flatMap(z => [1, 3].map(x => ({ x: origin.x + x, y: origin.y, z: origin.z + z })));
 
 export const presets = { house, pit_kiln: pitKiln, shelter };
 

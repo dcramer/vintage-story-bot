@@ -39,7 +39,7 @@ accounts for distance from home, and dawn light never permits leaving before
 05:00. At night only crafting with carried ingredients and shelter lighting
 may replace the indoor wait; no sleeping.
 
-A small dirt shelter provides initial cover while the full rammed-earth house
+The starter shelter is a freestanding, above-ground building, never an emergency burrow. Its natural floor stays at ground level. A 5×5 rammed-earth starter shelter follows the [template](getting-started.md#starter-shelter-template) while the full rammed-earth house
 is built. A house site requires observed level ground and clear space; unknown
 terrain is rejected. Construction keeps its chosen origin and phase across
 interruptions and restarts. Existing shell blocks must match the material;
@@ -47,13 +47,41 @@ out-of-material results request another batch without abandoning the site.
 The house becomes home only after its shell, lowered floor, entry and seal
 are verified. These goals report client-observed changes, not server ACKs.
 
-Notes include `home`, `dwelling` (door and sealing material), `construction`,
+Notes include `home`, `starter` (the verified starter-template origin), `dwelling` (door and sealing material), `construction`,
 `house`, `lightingDay`, `stash`, and additional `stores`. Being near home does not mean indoors:
 the body must be inside and both door cells observed solid. Entry opens the
 door, walks in, and seals it; departure opens it first. Failed re-entry falls
 back to emergency cover. Carried sealing blocks and building materials stay
 out of routine surplus deposits. Torches are lit through native firestarter
-use and replaced daily.
+use. Installed torches are picked up and replaced one at a time after 05:00
+each day; observed missing or extinguished torches invalidate the lighting
+state immediately. Indoor lighting work does not open the shelter door.
+
+The starter's 3×3 interior reserves six chest slots along the side walls,
+one torch at the back center, and a clear center aisle to the front entrance.
+Capacity comes before bulk materials: gather ten cattail tops, weave and equip
+one hand basket, repeat for the second, then gather 24 tops for the first reed
+chest. Place that chest in a reserved slot of the planned shelter and build
+around it. Additional chests use the remaining side-wall slots.
+
+Maintenance is recurring work, not a construction-complete flag. While at the
+structure, each brain reading compares observed walls and roof with its recorded
+template. Confirmed empty shell cells request rammed-earth repairs through
+`build`; its normal block-delta verification applies. Recheck after each repair
+and interruption. Unknown cells remain unknown, and different occupied blocks
+are preserved. The entry/exit goals maintain the two-cell seal; lighting checks
+maintain the interior torch. Craft repair blocks from carried materials first;
+material gathering waits for safe daylight. Keep repairs ahead of ordinary
+stockpiling, while immediate danger and hunger retain priority.
+
+Planned entrance upgrade: two wattle gates stacked vertically, one gate per
+1×1 cell of the two-high front opening, instead of a conventional door that can
+break off. This is an advanced design target; the current implementation uses
+removable sealing blocks. Before adopting gates, verify native placement,
+orientation, independent opening/closing, passage, and persistence on the
+multiplayer server. Entry and departure must operate both gates and verify the
+result; maintenance must detect and replace either missing gate without
+mistaking an intentionally open gate for structural damage.
 
 Shared supplies have explicit stored targets and a map marker. Full storage
 adds another chest, up to three; targets count all their observed contents. Container

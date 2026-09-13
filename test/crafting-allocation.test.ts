@@ -2,6 +2,22 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { allocate } from '../src/goals/craft_item.ts';
 
+test('a repeated craft stages consumables together without duplicating a retained tool', () => {
+  const plan = allocate(
+    {
+      ingredients: [
+        { slot: 0, quantity: 1, consume: false, matches: [{ inventory: 'hotbar', slot: 9, quantity: 1 }] },
+        { slot: 3, quantity: 1, consume: true, matches: [{ inventory: 'hotbar', slot: 2, quantity: 2 }] },
+      ],
+    },
+    2,
+  );
+  assert.deepEqual(
+    plan?.map(move => move.quantity),
+    [1, 2],
+  );
+});
+
 test('repeated tool recipes reuse the retained tool before choosing another carried tool', () => {
   assert.deepEqual(
     allocate({

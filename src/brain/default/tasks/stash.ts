@@ -20,6 +20,9 @@ export function surplusOf(
 ): { item: string; count: number }[] {
   const keep = (code: string) => {
     if (code === 'game:stick') return STICK_MIN;
+    if (code === 'game:firestarter') return 1;
+    if (code === 'game:firewood') return 8;
+    if (code === 'game:cattailroot') return 4;
     if (code.includes('log-')) return LOG_MIN;
     if (code.includes('soil-')) return home && !building ? 4 : SHELTER_DIRT;
     if (/^game:(rammed-|packeddirt|hay-|basket-normal-)/.test(code)) return Infinity;
@@ -50,7 +53,11 @@ export const stash: Concern = {
   after: ['storage'],
   run: ctx => {
     const note = ctx.memory.notes.stash as Stash;
-    const items = surplusOf(ctx.k, { home: !!ctx.home, torches: ctx.k.torches, building: !!ctx.memory.notes.construction });
+    const items = surplusOf(ctx.k, {
+      home: !!ctx.home,
+      torches: ctx.k.torches,
+      building: !!ctx.memory.notes.construction || !!ctx.memory.notes.shelter,
+    });
     return (
       goTo(ctx, note, 'pack full, going home to put things away') ?? {
         start: 'store_items',

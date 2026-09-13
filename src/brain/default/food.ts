@@ -3,7 +3,7 @@ import { horizontal } from '../../runtime/navigation/terrain.ts';
 import { supportedFloor, surfaceCover } from '../../support/sites.ts';
 import type { Concern, Context } from './concern.ts';
 import { failedOnItsOwn } from './concern.ts';
-import { BAG, BAG_TOPS } from './tasks/bags.ts';
+import { BAG, BAG_TOPS, makeBag } from './tasks/bags.ts';
 import { makeTool } from './tasks/tools.ts';
 
 const ROOT = 'game:cattailroot';
@@ -28,6 +28,7 @@ export function food(ctx: Context, keep: number): Decision {
   const pending = memory.notes.cooking;
   if (!pending) {
     if (!k.knife) return makeTool(k, 'knife', 'knifeblade', k.knifeBlade, 'game:knife-generic');
+    if (k.emptyBagSlot && (k.bagItem || (k.free < 2 && (k.cattailtops > 0 || k.free > 0)))) return makeBag(ctx);
     if (!k.axe) return makeTool(k, 'axe', 'axehead', k.axeBlade, 'game:axe');
     if (!count('game:firestarter')) {
       if (k.sticks < 2)
