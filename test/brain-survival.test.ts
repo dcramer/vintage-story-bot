@@ -186,6 +186,7 @@ test('partial shelter resumes its owned site after a controller restart', () => 
   };
   const shellBlock = ctx.reading.terrain.get;
   ctx.reading.terrain.get = (x, y, z) => {
+    if (x === 12 && y === 100 && z === 22) return { code: 'game:flower-horsetail-free', traits: ['plant'], boxes: [] };
     if (x === 12 && y === 101 && z === 22) return { code: 'game:leaves-grown5-birch', traits: ['leaves'], boxes: [] };
     if (x === 11 && y === 100 && z === 21) return { code: 'game:stationarybasket-east', boxes: [{}] };
     if (x === 12 && y === 100 && z === 21) return { code: 'game:torch-basic-lit-up', boxes: [] };
