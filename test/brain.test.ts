@@ -910,6 +910,37 @@ test('brain: partial provisions do not restart forage during its cooking fallbac
   assert.match(prepare.why, /firestarter/);
 });
 
+test('brain: a productive partial root harvest cooks what it found', () => {
+  const memory = fresh();
+  memory.startupChecked = true;
+  memory.job = 'eat';
+  memory.notes.cookUntil = 10_000;
+  memory.notes.firepit = { x: 2, y: 100, z: 0 };
+  const supplies = kitted();
+  supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 6), slot('game:cattailroot', 3));
+  const terrain = { get: (x, y, z) => (x === 2 && y === 100 && z === 0 ? { code: 'game:firepit-cold' } : null) };
+  const cooking = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 299, max: 1500 } } }),
+      inventory: supplies,
+      terrain,
+      now: 1000,
+      last: {
+        id: 'roots',
+        kind: 'harvest',
+        ok: false,
+        outcome: 'failed',
+        reason: 'none_found',
+        result: { item: 'game:cattailroot', gained: 3 },
+      },
+    }),
+    memory,
+  );
+  assert.equal(memory.tried.eat, undefined);
+  assert.equal(cooking.start, 'cook');
+  assert.equal(cooking.args.count, 3);
+});
+
 test('brain: an interrupted firepit load carries fuel before resuming', () => {
   const memory = fresh();
   memory.startupChecked = true;

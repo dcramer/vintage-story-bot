@@ -162,6 +162,10 @@ export const foodEnded: Concern['ended'] = (last, memory, reading) => {
 
 export const foodSetAside: Concern['setAside'] = last => {
   const reason = last.reason ?? last.result?.reason;
+  // A bounded root search may exhaust the area after collecting part of its
+  // batch. Those roots are already a useful result; cook them instead of
+  // setting aside the whole food concern and starting raw forage again.
+  if (last.kind === 'harvest' && last.result?.item === ROOT && (last.result?.gained ?? 0) > 0) return false;
   const recoverableFuelLoad =
     last.kind === 'cook' &&
     last.result?.phase === 'loading' &&
