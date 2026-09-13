@@ -125,9 +125,10 @@ public sealed class InventoryAdapter(ICoreClientAPI api)
             if (!request.TryGetProperty("expectedOutput", out var output) || output.ValueKind != JsonValueKind.String ||
                 output.GetString() != source.Itemstack.Collectible.Code.ToString()) return Error("Crafting output changed; inspect inventory.");
             quantity = source.StackSize;
-            // Avoid partial output extraction and implicit drops/merges; one complete craft into an empty slot.
-            if (!target.Empty || target.GetRemainingSlotSpace(source.Itemstack) < quantity || !target.CanTakeFrom(source))
-                return Error("Craft needs an empty destination with room for the entire output.");
+            // One complete craft into a compatible slot; the native transfer
+            // merges matching stacks, with no partial extraction or drops.
+            if (target.GetRemainingSlotSpace(source.Itemstack) < quantity || !target.CanTakeFrom(source))
+                return Error("Craft needs a compatible destination with room for the entire output.");
         }
         else if (!request.TryGetProperty("quantity", out var count) || count.ValueKind != JsonValueKind.Number ||
             !count.TryGetInt32(out quantity) || quantity < 1 || quantity > 64 || quantity > source.StackSize)

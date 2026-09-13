@@ -16,7 +16,7 @@ export default defineAction({
   destructive: true,
   description:
     'Craft once from prepared 3x3 grid via normal inventory transfer. Require fresh ' +
-    'inventory.state/output code and empty non-grid destination fitting whole output. Server ' +
+    'inventory.state/output code and compatible non-grid destination fitting whole output. Server ' +
     'validates ingredients/traits/tool wear. Submitted is not confirmed; inspect input/output ' +
     'deltas afterward.',
 });

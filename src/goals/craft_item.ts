@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
+import { learn } from '../support/facts.ts';
 import { itemCount, ownedSlots } from '../support/inventory.ts';
 import { cleanName, runField } from '../support/task.ts';
 
 const gridSlots = inventory => inventory.inventories.find(i => i.name === 'craftinggrid')?.slots.filter(s => s.slot < 9) ?? [];
-const emptyOwned = (inventory, exclude = new Set()) => ownedSlots(inventory).find(s => !s.code && !exclude.has(`${s.inventory}:${s.slot}`));
+const emptyOwned = (inventory, exclude = new Set()) => ownedSlots(inventory).find(s => !s.bag && !s.code && !exclude.has(`${s.inventory}:${s.slot}`));
 
 async function transfer(field, from, to, quantity) {
   await field.observe();
@@ -18,7 +19,9 @@ async function transfer(field, from, to, quantity) {
 export async function clearGrid(field) {
   let inventory = await field.send({ action: 'inventory' });
   for (const slot of gridSlots(inventory).filter(s => s.code)) {
-    const destination = emptyOwned(inventory);
+    const maximum = (await learn(field, slot.code))?.maxStackSize ?? 1;
+    const destination =
+      ownedSlots(inventory).find(s => !s.bag && s.code === slot.code && s.quantity + slot.quantity <= maximum) ?? emptyOwned(inventory);
     if (!destination) throw Error('Crafting grid holds items and no empty owned slot can receive them');
     await transfer(
       field,
@@ -72,6 +75,7 @@ export async function craftItem(field, { output, count = 1 }) {
   await field.observe();
   if (!(await search()).length) throw Error('No known 3x3 grid recipe with that exact output code');
   let inventory = await clearGrid(field);
+  const maximum = (await learn(field, output))?.maxStackSize ?? 1;
   const initial = itemCount(inventory, output);
   const gained = () => itemCount(inventory, output) - initial;
   let crafts = 0;
@@ -103,7 +107,8 @@ export async function craftItem(field, { output, count = 1 }) {
         await clearGrid(field);
         return { ok: false, reason: 'grid_not_matching', output, recipe: recipe.id, gained: gained(), crafts };
       }
-      const destination = emptyOwned(inventory);
+      const destination =
+        ownedSlots(inventory).find(s => !s.bag && s.code === output && s.quantity + recipe.output.quantity <= maximum) ?? emptyOwned(inventory);
       if (!destination) {
         await clearGrid(field);
         return { ok: false, reason: 'no_empty_slot_for_output', output, gained: gained(), crafts };
@@ -145,9 +150,9 @@ export default defineGoal({
   destructive: true,
   description:
     'Craft from own inventory via the 3x3 grid: pick a known recipe whose ingredients are carried, transfer them, craft into an ' +
-    'empty owned slot, verify the inventory gain, repeat until count. Clears the grid first and afterwards. No knapping/clay/' +
+    'compatible owned slot with room for the full output, verify the inventory gain, repeat until count. Clears the grid first and afterwards. No knapping/clay/' +
     'container access, no gathering. missing_ingredients lists candidate recipes. Returns START; poll goal_status.',
   title: args => `Craft ${args.count} × ${cleanName(args.output)}`,
   announce: args => `Crafting ${cleanName(args.output)}.`,
-  run: (env, options) => runField(env, options, ['inventory', 'grid_craft'], (field, _, o) => craftItem(field, o)),
+  run: (env, options) => runField(env, options, ['inventory', 'grid_craft', 'craft_merge', 'item_info'], (field, _, o) => craftItem(field, o)),
 });
