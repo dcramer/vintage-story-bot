@@ -31,6 +31,11 @@ export const stockpile: Concern = {
       .sort((a, b) => horizontal(a, ctx.state.position) - horizontal(b, ctx.state.position));
     let stash = stale[0] ?? ctx.memory.notes.stash!;
     if (stash !== ctx.memory.notes.stash) selectStash(ctx.memory, stash);
+    // Home storage sits against an interior wall. A loose proximity check can
+    // stop outside that wall, where the container is close but occluded. Enter
+    // the owned dwelling first so the following inspect/store has native line
+    // of sight to the basket.
+    if (ctx.home && !ctx.s.atHome && horizontal(stash, ctx.home) <= 8) return { handoff: 'go_home' };
     if (!stash.seen || ctx.now - stash.seen.at >= STOCK_CHECK_MS) {
       return (
         goTo(ctx, stash, 'checking shared supplies', 3) ?? {

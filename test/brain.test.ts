@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { eat as eating } from '../src/brain/default/reflexes/eat.ts';
 import { SIEGE_MS } from '../src/brain/default/reflexes/tunnel.ts';
+import { stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { storage } from '../src/brain/default/tasks/storage.ts';
 import brain, {
   decide as decision,
@@ -2014,6 +2015,31 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
   assert.equal(carrying.notes.stash, null, 'a chest missed twice where its note says is forgotten');
   assert.deepEqual(fresh({ stash: { key, x: 4, y: 100, z: 2, code: 'game:stationarybasket-north', seen: null } }).notes.stash?.key, key);
   assert.equal(fresh({ stash: { key } } as any).notes.stash, null, 'a damaged note is not a chest');
+});
+
+test('brain: shared supplies are approached from inside the owned home', () => {
+  const home = { x: 13.5, y: 99, z: 23.5 };
+  const memory = fresh({
+    home,
+    house: { x: 10, y: 100, z: 20 },
+    dwelling: { door: { x: 14, y: 99, z: 26 }, item: 'game:hay-normal-ud' },
+    stash: {
+      key: 'block:0:11:99:21:game:stationarybasket-west',
+      x: 11,
+      y: 99,
+      z: 21,
+      code: 'game:stationarybasket-west',
+      seen: null,
+    },
+  });
+  const enter = stockpile.run({
+    home,
+    memory,
+    now: 1000,
+    s: { atHome: false },
+    state: { position: { x: 8.5, y: 99, z: 21.5 } },
+  } as any);
+  assert.deepEqual(enter, { handoff: 'go_home' }, 'proximity outside a wall is not usable container reach');
 });
 
 test('brain: a shelter has to be entered and sealed, and opens before morning work', () => {
