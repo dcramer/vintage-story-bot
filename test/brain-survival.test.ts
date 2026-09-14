@@ -307,6 +307,34 @@ test('house: known level ground near camp is used even when an errand left the b
   assert.ok(Math.hypot(memory.notes.construction!.origin.x - home.x, memory.notes.construction!.origin.z - home.z) < 30);
 });
 
+test('house: a camp on lake ice does not anchor replacement-site search to the lake', () => {
+  const home = { x: 0.5, y: 100, z: 0.5 };
+  const terrain = {
+    get: (x: number, y: number, z: number) => {
+      const land = x >= 96 && x <= 125 && z >= 96 && z <= 125;
+      if (y < 99 || y > 104) return undefined;
+      if (y === 99)
+        return {
+          code: land ? 'game:soil-low-none' : 'game:lakeice',
+          traits: land ? ['diggable'] : [],
+          boxes: [[x, y, z, x + 1, y + 1, z + 1]],
+          hazard: null,
+        };
+      return { code: 'game:air', traits: [], boxes: [], hazard: null };
+    },
+  };
+  const memory = fresh({ home, construction: { origin: { x: -4, y: 100, z: -3 }, phase: 'walls' } });
+  const next: any = house.run({
+    memory,
+    reading: { terrain },
+    state: { position: { x: 110.5, y: 100, z: 110.5 } },
+    k: kit(inventory({})),
+  } as any);
+  assert.equal(memory.notes.construction?.phase, 'site');
+  assert.ok((memory.notes.construction?.origin.x ?? 0) > 80, 'the new plan is centered on the surveyed land, not the frozen camp');
+  assert.equal(next.start, 'house');
+});
+
 test('shelter refuses unknown ground, unsupported floors and blocked interiors', () => {
   const position = { x: 0.5, y: 100, z: 0.5 };
   const terrain = {

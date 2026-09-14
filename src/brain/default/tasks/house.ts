@@ -1,5 +1,6 @@
 import { FARM_SOIL } from '../../../support/crops.ts';
 import { houseFoundationSafe, houseGroundwork } from '../../../support/house-site.ts';
+import { supportedFloor } from '../../../support/sites.ts';
 import { house as blueprint, houseScaffold } from '../../../support/structures.ts';
 import type { Cell, Concern } from '../concern.ts';
 import { allStashes, failedOnItsOwn, goTo, noteContents, selectStash, setHome } from '../concern.ts';
@@ -43,8 +44,13 @@ export const house: Concern = {
     if (!plan) {
       // Prefer known terrain around the established camp. An earlier errand
       // may have left the body far away, but that should not move the planned
-      // permanent home or send site search farther from its storage.
-      const origin = houseSite(ctx.reading.terrain, memory.notes.home ?? ctx.state.position);
+      // permanent home or send site search farther from its storage. A camp
+      // itself founded on seasonal ice is not an anchor: search around the
+      // currently surveyed position until the bot reaches real land.
+      const home = memory.notes.home;
+      const homeY = home ? Math.floor(home.y) : 0;
+      const permanentCamp = home && supportedFloor(ctx.reading.terrain?.get(Math.floor(home.x), homeY - 1, Math.floor(home.z)), homeY);
+      const origin = houseSite(ctx.reading.terrain, permanentCamp ? home : ctx.state.position);
       if (!origin) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'looking for level ground for the house' };
       plan = memory.notes.construction = { origin, phase: 'site' };
     }
