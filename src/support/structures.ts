@@ -22,7 +22,10 @@ export function house(origin, item) {
     // only after both neighboring roof blocks exist. If that span is placed
     // while standing on its sole lateral support, the support face is hidden
     // under the player's feet.
-    const xs = dz === 6 ? [3, 2, 1, 5, 6, 7, 8, 4] : Array.from({ length: 8 }, (_, i) => ((6 - dz) % 2 === 0 ? i + 1 : 8 - i));
+    const leftFirst = (6 - dz) % 2 === 0;
+    const fromOneEnd = Array.from({ length: 8 }, (_, i) => (leftFirst ? i + 1 : 8 - i));
+    const fromBothGables = leftFirst ? [1, 2, 3, 4, 8, 7, 6, 5] : [8, 7, 6, 5, 1, 2, 3, 4];
+    const xs = dz === 6 ? [3, 2, 1, 5, 6, 7, 8, 4] : gable[dz] === gable[dz + 1] ? fromOneEnd : fromBothGables;
     for (const dx of xs) cells.push(at(dx, gable[dz], dz));
   }
   return cells;

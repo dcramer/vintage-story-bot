@@ -212,6 +212,7 @@ test('the larger house roofs outward from its access stairs and keeps every comp
   for (const { x, y, z } of [...houseScaffold(origin, 'earth'), ...shell.slice(0, -roof.length)])
     map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [[x, y, z, x + 1, y + 1, z + 1]] });
   const start = { x: 3.5, y: 100, z: 9.5 };
+  let previousHeight = null;
   for (let course = 0; course < 7; course++) {
     const cells = roof.slice(course * 8, course * 8 + 8);
     assert.ok(
@@ -224,6 +225,17 @@ test('the larger house roofs outward from its access stairs and keeps every comp
         [3, 2, 1, 5, 6, 7, 8, 4],
         'the scaffold block starts the eave and the unsupported doorway span closes last',
       );
+    } else if (previousHeight !== cells[0].y) {
+      assert.deepEqual(
+        cells.slice(0, 4).map(cell => cell.x),
+        course % 2 === 0 ? [1, 2, 3, 4] : [8, 7, 6, 5],
+        'a changing-height course grows inward from its first gable',
+      );
+      assert.deepEqual(
+        cells.slice(4).map(cell => cell.x),
+        course % 2 === 0 ? [8, 7, 6, 5] : [1, 2, 3, 4],
+        'the opposite half starts from the other gable instead of depending on a missed middle cell',
+      );
     }
     for (const { x, y, z } of cells) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [[x, y, z, x + 1, y + 1, z + 1]] });
     const middle = cells.find(cell => cell.x === 3)!;
@@ -231,6 +243,7 @@ test('the larger house roofs outward from its access stairs and keeps every comp
       findRoute(map, start, { x: middle.x + 0.5, y: middle.y + 1, z: middle.z + 0.5 }, 0.3, 1.85, { partial: false }),
       `roof course z=${middle.z} must remain reachable from the access stairs`,
     );
+    previousHeight = cells[0].y;
   }
 });
 
