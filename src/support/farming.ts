@@ -25,7 +25,9 @@ export const farmMargin = (farm: Farm) => {
   for (let x = -2; x < 8; x++) for (let z = -2; z < 6; z++) cells.push(farmCell(farm, x, z));
   return cells;
 };
-export const freshwater = block => /^game:water-/.test(block?.code ?? '');
+// Lake ice is observed frozen freshwater: it can site winter preparation and
+// becomes the same irrigation row when it thaws. Saltwater remains excluded.
+export const freshwater = block => /^game:(?:water-|lakeice$)/.test(block?.code ?? '');
 export const farmWatered = (map, farm: Farm) =>
   [1, 2, 3, 4].every(x => {
     const p = farmCell(farm, x, -1, -1);

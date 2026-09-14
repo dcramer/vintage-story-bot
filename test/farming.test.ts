@@ -52,6 +52,10 @@ test('all farm orientations keep eight dry beds irrigated behind a complete 15-f
   map.put({ ...water, seenAt: Date.now(), traits: ['water'], code: 'game:saltwater-still-7', boxes: [] });
   assert.equal(farmWatered(map, plan), false, 'saltwater cannot irrigate');
   assert.equal(farmSite(map, farmApproach(plan)), null);
+  for (let x = 1; x <= 4; x++)
+    map.put({ ...farmCell(plan, x, -1, -1), seenAt: Date.now(), traits: [], code: 'game:lakeice', boxes: [[0, 0, 0, 1, 1, 1]] });
+  assert.equal(farmWatered(map, plan), true, 'observed lake ice authorizes winter preparation beside future irrigation');
+  assert.deepEqual(farmSite(map, farmApproach(plan)), { origin: plan.origin, turn: 0 });
   assert.equal(farmSite(new TerrainMemory(), plan.origin), null, 'unknown ground never authorizes a farm');
   assert.equal(fertileBed('game:farmland-moist-low'), false);
   assert.equal(fertileBed('game:farmland-moist-medium'), true);
