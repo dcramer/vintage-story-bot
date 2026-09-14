@@ -125,6 +125,16 @@ test('an established farm rescans a transiently unknown changed floor before aba
   assert.equal(decision.start, 'look_around');
   assert.equal(decision.why, 'confirming recently changed farm cells before revalidation');
   assert.deepEqual(memory.notes.farm.origin, plan.origin, 'durable work is retained until the missing cell is actually observed');
+  farm.ended({ kind: 'look_around', ok: true } as any, memory, { now: 1, terrain: map } as any);
+  const rejected: any = farm.run({
+    k: kit({ state: 'test', inventories: [] }),
+    memory,
+    reading: { now: 2, terrain: map },
+    state: { position: { ...center, x: center.x + 0.5, z: center.z + 0.5 } },
+  } as any);
+  assert.equal(rejected.start, 'explore', 'an identical scan is not repeated when the missing cell cannot be seen from the work position');
+  assert.equal(memory.notes.farm, null);
+  assert.equal(memory.notes.failedFarms.length, 1);
 });
 
 test('farm grading clears rises and fills shoreline cells from existing support', () => {

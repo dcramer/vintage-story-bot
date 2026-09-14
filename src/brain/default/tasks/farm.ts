@@ -125,13 +125,25 @@ export const farm: Concern = {
         if (unobserved.some(p => !reading.terrain?.get(p.x, p.y, p.z))) {
           const center = farmCell(plan, 2, 2);
           const trip = goTo(ctx, { x: center.x + 0.5, y: plan.origin.y, z: center.z + 0.5 }, 'rechecking the changed farm footprint', 8, 6);
-          return (
-            trip ?? {
-              start: 'look_around',
-              args: { radius: 16, limit: 16, timeoutMs: 60000 },
-              why: 'confirming recently changed farm cells before revalidation',
-            }
-          );
+          if (trip) return trip;
+          // A close survey is the only new evidence another identical scan can
+          // produce here. If cells are still unknown afterwards they are not
+          // visible from this work position, so repeating look_around forever
+          // cannot validate the site.
+          if (plan.surveyed) {
+            rejectSite(memory, plan, now);
+            memory.notes.farm = null;
+            return {
+              start: 'explore',
+              args: { legs: 1, timeoutMs: 180000 },
+              why: 'moving on from a farm footprint that remained partly unseen after a close survey',
+            };
+          }
+          return {
+            start: 'look_around',
+            args: { radius: 16, limit: 16, timeoutMs: 60000 },
+            why: 'confirming recently changed farm cells before revalidation',
+          };
         }
         if (farmSurveyGroundwork(reading.terrain, plan)) {
           const center = farmCell(plan, 2, 2);
