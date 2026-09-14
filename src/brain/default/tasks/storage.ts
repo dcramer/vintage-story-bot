@@ -34,6 +34,21 @@ export const storage: Concern = {
   title: 'a chest at home to keep things in',
   done: s => s.storage && !s.moreStorage,
   after: ['knife'],
+  running: ctx => {
+    const source = ctx.memory.notes.stash;
+    const target = (ctx.active as any)?.args;
+    if (
+      ctx.active?.kind === 'travel' &&
+      source &&
+      (source.seen?.items['game:cattailtops'] ?? 0) > 0 &&
+      Number.isFinite(target?.x) &&
+      Number.isFinite(target?.z) &&
+      horizontal(source, target) < 0.1 &&
+      guarded(ctx, source)
+    )
+      return { stop: 'stored cattail tops are inside a hostile perimeter' };
+    return null;
+  },
   run: ctx => {
     const { k, state } = ctx;
     if (k.chest) {

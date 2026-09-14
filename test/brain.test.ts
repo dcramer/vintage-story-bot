@@ -1701,6 +1701,50 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
     'a predator guarding stored tops sends storage through the existing harvest fallback',
   );
   assert.notEqual(guardedTops.notes.stash?.key, topStore.key, 'a guarded source is not promoted to the active container');
+  const discoveredEnRoute = settled();
+  discoveredEnRoute.notes.stash = topStore;
+  discoveredEnRoute.notes.stores = [{ ...chestNote(), full: true, seen: { at: 1000, items: {} } }];
+  discoveredEnRoute.job = 'storage';
+  const sourceTrip = {
+    id: 'source-trip',
+    kind: 'travel',
+    state: 'running',
+    by: 'brain',
+    args: { x: topStore.x, y: topStore.y, z: topStore.z, arrivalRadius: 3 },
+  };
+  const guardedReading = settledReading({
+    state: state({
+      position: { x: 100, y: 100, z: 0 },
+      nearbyEntities: [
+        {
+          code: 'game:wolf-eurasian-adult-female',
+          point: { x: topStore.x + 28, y: topStore.y, z: topStore.z },
+        },
+      ],
+    }),
+    inventory: inventory(slot('game:stick', 10), ...tools),
+    active: sourceTrip,
+  });
+  assert.equal(decide(guardedReading, discoveredEnRoute).stop, 'stored cattail tops are inside a hostile perimeter');
+  const afterStoppingGuardedSource = decide(
+    {
+      ...guardedReading,
+      active: null,
+      last: {
+        id: sourceTrip.id,
+        kind: 'travel',
+        ok: false,
+        reason: 'brain: stored cattail tops are inside a hostile perimeter',
+        outcome: 'interrupted',
+      },
+    },
+    discoveredEnRoute,
+  );
+  assert.deepEqual(
+    [afterStoppingGuardedSource.start, afterStoppingGuardedSource.args.match, afterStoppingGuardedSource.args.item],
+    ['harvest', 'coopersreed', 'cattailtops'],
+    'a source discovered to be guarded during travel falls back immediately',
+  );
   const unreachableTops = settled();
   unreachableTops.notes.stash = { ...chestNote(), full: true, seen: { at: 1000, items: {} } };
   unreachableTops.notes.stores = [topStore];
