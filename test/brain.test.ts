@@ -1876,7 +1876,7 @@ test('brain: keeps a damaged house sealed until daylight', () => {
       }),
     },
   });
-  assert.equal(decide(indoors, memory).wait, 'night, nowhere to go', 'a roof gap does not make the bot open its sealed door in the dark');
+  assert.equal(decide(indoors, memory).wait, 'night, sheltered at home', 'a roof gap does not make the bot open its sealed door in the dark');
 });
 
 test('brain: finish indoor torch refresh despite an outside threat, but stop on a hit', () => {

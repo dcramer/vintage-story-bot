@@ -9,6 +9,8 @@ export const wait: Concern = {
       return { wait: 'dug in, something prowling outside' };
     }
     memory.besiegedAt = null;
-    return { wait: storm ? 'storm' : memory.burrow ? 'night, dug in' : 'night, nowhere to go' };
+    return {
+      wait: storm ? 'storm' : memory.burrow ? 'night, dug in' : s.atHome ? 'night, sheltered at home' : 'night, nowhere to go',
+    };
   },
 };
