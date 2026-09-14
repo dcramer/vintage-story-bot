@@ -215,6 +215,28 @@ export function installMod({ build = true } = {}) {
   return { installed: modFiles, modDirectory, bytes: statSync(`${modDirectory}/VintageStoryAI.dll`).size, built };
 }
 
+// Installed mod state: missing, stale (a source is newer than it), or current.
+export function modInstallState() {
+  const installed = [];
+  for (const file of modFiles) {
+    try {
+      installed.push(statSync(`${modDirectory}/${file}`).mtimeMs);
+    } catch {
+      return 'missing';
+    }
+  }
+  const newestSource = dir => {
+    let newest = 0;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'bin' || entry.name === 'obj') continue;
+      const full = `${dir}/${entry.name}`;
+      newest = Math.max(newest, entry.isDirectory() ? newestSource(full) : statSync(full).mtimeMs);
+    }
+    return newest;
+  };
+  return Math.min(...installed) >= newestSource(`${root}/mod`) ? 'current' : 'stale';
+}
+
 // Build, stop the running client the way it saves, install, and start it
 // again on the same world or server. A failed build stops nothing.
 export async function reinstallMod({ build = true, wait = true } = {}) {

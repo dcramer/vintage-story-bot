@@ -154,7 +154,7 @@ Linux, headless, one bot client per profile; flags, phases and constraints in [R
 3. `pnpm game start --world <save>` (or `--new <name> --play-style surviveandbuild`, `--server host:port`); returns at `world_ready`. `pnpm game status` any time.
 4. Blocking dialogs (character creation, death): `node scripts/control.ts dialogs`, then `activate_dialog --json '{"dialog":"…","element":"…"}'` until `observe` reports `controlReady`.
 5. Play through `node scripts/control.ts <action> [--json …]`; goals via `pnpm goal:*`.
-6. `pnpm game stop` (the game's own saving exit path; never kill a loaded world), then redeploy the mod if rebuilt.
+6. `pnpm game stop` (the game's own saving exit path; never kill a loaded world), then redeploy the mod if rebuilt. Day to day, `pnpm restart` (stop, rebuild-if-stale, start) and `pnpm status` manage the bot.
 
 ## Working baseline
 
