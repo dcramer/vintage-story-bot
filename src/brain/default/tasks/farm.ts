@@ -115,12 +115,16 @@ export const farm: Concern = {
       // A solid block occupying a fill cell still has to be removed first.
       const fillKeys = new Set(groundwork.fill.map(cell => `${cell.x}:${cell.y}:${cell.z}`));
       const clearing = groundwork.fill.length ? groundwork.clear.filter(cell => fillKeys.has(`${cell.x}:${cell.y}:${cell.z}`)) : groundwork.clear;
-      if (clearing.length)
-        return {
-          start: 'dig_area',
-          args: { cells: clearing.slice(0, 12), order: 'given', timeoutMs: 600000 },
-          why: 'clearing vegetation and one-block rises from the farm site',
-        };
+      if (clearing.length) {
+        const returnTrip = goTo(ctx, farmApproach(plan), 'returning to the farm site before grading', 12, 6);
+        return (
+          returnTrip ?? {
+            start: 'dig_area',
+            args: { cells: clearing.slice(0, 12), order: 'given', timeoutMs: 600000 },
+            why: 'clearing vegetation and one-block rises from the farm site',
+          }
+        );
+      }
       if (groundwork.fill.length) {
         const foundations = ['game:soil-low-none', 'game:soil-verylow-none']
           .map(item => ({ item, count: count(item) }))
@@ -147,6 +151,8 @@ export const farm: Concern = {
             why: 'ordinary earth to grade the farm platform',
           };
         }
+        const returnTrip = goTo(ctx, farmApproach(plan), 'returning to the farm site before grading', 12, 6);
+        if (returnTrip) return returnTrip;
         return {
           start: 'build',
           args: { cells: groundwork.fill.slice(0, batch).map(cell => ({ ...cell, item: foundation.item })), timeoutMs: 600000 },

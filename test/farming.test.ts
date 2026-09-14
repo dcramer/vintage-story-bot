@@ -135,6 +135,11 @@ test('farm grading clears rises and fills shoreline cells from existing support'
     reading: { terrain: map },
     state: { position: farmApproach(plan) },
   } as any;
+  context.state.position = { x: 200, y: plan.origin.y, z: 200 };
+  const returnTrip: any = farm.run(context);
+  assert.equal(returnTrip.start, 'travel', 'grading returns to its fixed farm after a distant respawn');
+  assert.deepEqual(returnTrip.args, { ...farmApproach(plan), arrivalRadius: 6, manageFood: false, timeoutMs: 900000 });
+  context.state.position = farmApproach(plan);
   const platform: any = farm.run(context);
   assert.equal(platform.start, 'build', 'the dry platform is placed before clearing work that is only reachable across it');
   assert.deepEqual(platform.args.cells, [{ ...fill, item: 'game:soil-low-none' }]);
