@@ -361,11 +361,20 @@ test('house: survey clearing works upward from reachable ground cover', () => {
   );
   const memory = fresh();
   memory.notes.construction = { origin: { x: 0, y: 100, z: 0 }, phase: 'survey', surveyed: true };
+  const terrain = { get: (x, y, z) => blocks.get(`${x}:${y}:${z}`) };
+  const elevated: any = house.run({
+    memory,
+    k: kit(inventory({})),
+    state: { position: { x: 4.5, y: 105, z: 3.5 } },
+    reading: { terrain },
+  } as any);
+  assert.equal(elevated.start, 'travel', 'a bot stranded in the canopy first returns to the planned ground elevation');
+  assert.equal(elevated.args.y, 100);
   const decision: any = house.run({
     memory,
     k: kit(inventory({})),
     state: { position: { x: 4.5, y: 100, z: 3.5 } },
-    reading: { terrain: { get: (x, y, z) => blocks.get(`${x}:${y}:${z}`) } },
+    reading: { terrain },
   } as any);
   assert.equal(decision.start, 'dig_area');
   assert.equal(digAreaGoal.schema.parse(decision.args).order, 'given', 'the generic excavator must not reverse the survey sequence');
