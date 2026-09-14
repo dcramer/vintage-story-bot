@@ -113,27 +113,31 @@ export function houseSurveyGroundwork(terrain: any, origin: HouseCell): HouseGro
   return assessGroundwork(terrain, origin, { allowUnknownClearance: true, allowUnknownFoundation: true });
 }
 
-// Surface-only work that can safely reveal a surveyed foundation. It never
-// guesses at soil, stone or unknown cells: only vegetation, snow and wood the
-// client has actually observed are returned.
+// Work that can safely reveal and grade a surveyed foundation. Prefer the
+// assessor's exact clear list so observed trunks and raised natural earth are
+// not lost when persisted terrain carries only geometry, mining tier and a
+// block code. The fallback remains surface-only for older, sparse surveys.
 export function houseSurveyClearing(terrain: any, origin: HouseCell): HouseCell[] {
   if (!terrain) return [];
-  const cells: HouseCell[] = [];
-  for (let x = 0; x < 10; x++)
-    for (let z = 0; z < 7; z++) for (let y = origin.y - 1; y <= origin.y + 4; y++) cells.push({ x: origin.x + x, y, z: origin.z + z });
-  for (const floor of floorCells(origin)) for (let y = floor.y; y <= origin.y + 1; y++) cells.push({ ...floor, y });
+  const assessed = houseSurveyGroundwork(terrain, origin)?.clear;
+  const cells: HouseCell[] = assessed ?? [];
+  if (!assessed) {
+    for (let x = 0; x < 10; x++)
+      for (let z = 0; z < 7; z++) for (let y = origin.y - 1; y <= origin.y + 4; y++) cells.push({ x: origin.x + x, y, z: origin.z + z });
+    for (const floor of floorCells(origin)) for (let y = floor.y; y <= origin.y + 1; y++) cells.push({ ...floor, y });
+  }
   const unique = new Map(cells.map(cell => [`${cell.x}:${cell.y}:${cell.z}`, cell]));
   return (
     [...unique.values()]
       .filter(cell => {
         const seen = terrain.get(cell.x, cell.y, cell.z);
-        return (
-          !!seen &&
-          !seen.hazard &&
-          !seasonal(seen) &&
-          !has(seen, 'container') &&
-          (shelterCover(seen, 0) || replaceablePlant(seen.code) || has(seen, 'choppable') || has(seen, 'leaves'))
-        );
+        return assessed
+          ? !!seen && !seen.hazard && !seasonal(seen) && !has(seen, 'container') && !empty(seen) && !loose(seen) && natural(seen)
+          : !!seen &&
+              !seen.hazard &&
+              !seasonal(seen) &&
+              !has(seen, 'container') &&
+              (shelterCover(seen, 0) || replaceablePlant(seen.code) || has(seen, 'choppable') || has(seen, 'leaves'));
       })
       // Work upward from reachable ground cover. Starting with the canopy makes
       // dig_area climb through the same obstructing leaves it is trying to

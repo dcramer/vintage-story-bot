@@ -400,6 +400,30 @@ test('house: survey clearing works upward from reachable ground cover', () => {
   );
 });
 
+test('house: a viable survey clears persisted trunks and raised natural earth', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const obstacles = new Map([
+    ['0:100:0', { code: 'game:log-grown-pine-ud', traits: ['tier1'], boxes: [[0, 100, 0, 1, 101, 1]], hazard: null }],
+    ['1:100:0', { code: 'game:forestfloor-1', traits: [], boxes: [[1, 100, 0, 2, 101, 1]], hazard: null }],
+  ]);
+  const terrain = {
+    get: (x: number, y: number, z: number) => {
+      const obstacle = obstacles.get(`${x}:${y}:${z}`);
+      if (obstacle) return obstacle;
+      const footprint = x >= 0 && x < 10 && z >= 0 && z < 7;
+      const steps = (x === 3 || x === 4) && z >= 7 && z <= 8;
+      if ((footprint || steps) && y === 99)
+        return { code: 'game:soil-low-none', traits: ['diggable'], boxes: [[x, y, z, x + 1, y + 1, z + 1]], hazard: null };
+      if ((footprint && y >= 100 && y <= 104) || (steps && y >= 100 && y <= 101)) return { code: 'game:air', traits: [], boxes: [], hazard: null };
+      return undefined;
+    },
+  };
+  assert.deepEqual(houseSurveyClearing(terrain, origin), [
+    { x: 0, y: 100, z: 0 },
+    { x: 1, y: 100, z: 0 },
+  ]);
+});
+
 test('house: known level ground near camp is used even when an errand left the body far away', () => {
   const home = { x: 50.5, y: 100, z: 50.5 };
   const terrain = {
