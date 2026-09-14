@@ -23,8 +23,16 @@ export const farm: Concern = {
     const { k, memory, reading } = ctx;
     let plan = memory.notes.farm;
     if (!plan) {
-      const site = farmSite(reading.terrain, ctx.home ?? ctx.state.position);
-      if (!site) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'observed level shoreline for an irrigated fenced farm' };
+      const center = ctx.home ?? ctx.state.position;
+      const site = farmSite(reading.terrain, center);
+      if (!site)
+        return (
+          goTo(ctx, { x: center.x, z: center.z }, 'returning to the farm search area', 48, 24) ?? {
+            start: 'explore',
+            args: { legs: 1, timeoutMs: 180000 },
+            why: 'observed level shoreline for an irrigated fenced farm',
+          }
+        );
       const carriedWood = k.slots.map(s => s.code?.match(/^game:log-(?:grown|placed)-([a-z]+)-/)?.[1]).find(w => woods.has(w));
       if (!carriedWood)
         return {

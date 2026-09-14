@@ -97,6 +97,20 @@ test('farm supplies come from the chest before gathering, and stay in the workin
   assert.ok(!surplus.some(s => s.item.includes('roughhewnfence')));
 });
 
+test('farm shoreline exploration stays inside the home search area', () => {
+  const home = { x: 0, y: 100, z: 0 };
+  const choice = farm.run({
+    k: kit({ state: 'test', inventories: [] }),
+    memory: { notes: {} },
+    reading: { terrain: new TerrainMemory() },
+    state: { position: { x: 100, y: 100, z: 0 } },
+    home,
+  } as any);
+  assert.ok('start' in choice && choice.start === 'travel');
+  assert.deepEqual(choice.args, { x: 0, z: 0, arrivalRadius: 24, manageFood: false, timeoutMs: 900000 });
+  assert.equal(choice.why, 'returning to the farm search area, 100 blocks away');
+});
+
 test('farm rotation follows a verified completed harvest, and observed fence damage triggers repair', () => {
   const { map, plan } = shoreline();
   const memory = { notes: { farm: plan } } as any;
