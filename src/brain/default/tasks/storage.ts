@@ -36,7 +36,7 @@ export const storage: Concern = {
   after: ['knife'],
   running: ctx => {
     const source = ctx.memory.notes.stash;
-    const target = (ctx.active as any)?.args;
+    const target = ctx.active?.args;
     if (
       ctx.active?.kind === 'travel' &&
       source &&

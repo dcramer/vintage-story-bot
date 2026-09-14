@@ -7,6 +7,39 @@ import { runGoalPlan } from '../src/runtime/goal-script.ts';
 
 const turn = () => new Promise<void>(resolve => setImmediate(resolve));
 
+test('brain readings preserve the active goal arguments', async () => {
+  let seen: Record<string, unknown> | undefined;
+  const controller = {
+    active: { id: 'trip', kind: 'travel', state: 'running', by: 'brain', args: { x: 12, y: 3, z: 45 } },
+    last: null,
+    brain: null,
+    history: new Map(),
+    wants: [],
+    send: async request =>
+      request.action === 'observe'
+        ? { ok: true, alive: true, capabilities: [] }
+        : request.action === 'inventory'
+          ? { ok: true, inventories: [] }
+          : { ok: true },
+    request: async () => ({ ok: true }),
+    stop: async () => {},
+    goalView: () => null,
+  };
+  const loop = new BrainLoop(controller as any, {
+    name: 'test',
+    description: 'test',
+    fresh: () => ({}),
+    decide: reading => {
+      seen = reading.active?.args;
+      return { wait: 'test' };
+    },
+  });
+  loop.start();
+  while (!seen) await turn();
+  await loop.stop();
+  assert.deepEqual(seen, { x: 12, y: 3, z: 45 });
+});
+
 test('failure outcomes survive message changes and composed goal context', async () => {
   for (const message of ['Start grounded', 'The player needs solid footing']) {
     const controller = new Controller(async () => ({ ok: true }));
