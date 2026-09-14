@@ -61,9 +61,9 @@ internal sealed class BlockActions(ICoreClientAPI api)
             var destinationFluid = blocks.GetBlock(destination, BlockLayersAccess.Fluid);
             if (!PlacementPolicy.DestinationAvailable(
                 blocks.GetChunkAtBlockPos(destination) != null,
-                destinationBlock.Id == 0,
+                destinationBlock.IsReplacableBy(stack.Block),
                 destinationFluid.LiquidCode))
-                return Error("Placement destination must be loaded, empty and outside lava.");
+                return Error("Placement destination must be loaded, replaceable by the held block and outside lava.");
         }
         else
         {
