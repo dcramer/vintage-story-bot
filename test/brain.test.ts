@@ -15,6 +15,7 @@ import brain, {
   wants,
 } from '../src/brain/default.ts';
 import { schema as knapSchema } from '../src/goals/knap.ts';
+import { parseGoalScript } from '../src/runtime/goal-script.ts';
 import { shelter as shelterCells, shelterScaffold } from '../src/support/structures.ts';
 
 const decide = (reading, memory): any => decision(reading, memory);
@@ -1871,8 +1872,18 @@ test('brain: a shelter has to be entered and sealed, and opens before morning wo
   });
   assert.ok('wait' in decide(inside, memory));
   const opened = decide({ ...inside, environment: { calendar: { daylight: 0.1, hourOfDay: 5 } } }, memory);
-  assert.equal(opened.start, 'dig_area');
-  assert.deepEqual(opened.args.cells, [dwelling.door, { ...dwelling.door, y: 101 }]);
+  assert.equal(opened.start, 'goal_script');
+  const exit = parseGoalScript(opened.args.goalScript);
+  assert.deepEqual(
+    exit.map(step => step.name),
+    ['dig_area', 'move_to'],
+    'opening and crossing the threshold stay in one uninterruptible exit goal',
+  );
+  assert.deepEqual(
+    exit[0].args.cells.map(cell => ({ ...cell })),
+    [dwelling.door, { ...dwelling.door, y: 101 }],
+  );
+  assert.deepEqual({ ...exit[1].args }, { x: 0.5, y: 100, z: 2.5, dimension: 0, arrivalRadius: 0.35 });
   const snowy = decide(
     {
       ...inside,
@@ -1883,7 +1894,11 @@ test('brain: a shelter has to be entered and sealed, and opens before morning wo
     },
     memory,
   );
-  assert.deepEqual(snowy.args.cells.at(-1), { x: 0, y: 100, z: 2 }, 'clear the snowy doorstep that traps movement under a low roof');
+  assert.deepEqual(
+    { ...parseGoalScript(snowy.args.goalScript)[0].args.cells.at(-1) },
+    { x: 0, y: 100, z: 2 },
+    'clear the snowy doorstep that traps movement under a low roof',
+  );
   assert.deepEqual(fresh(brain.notes!(memory)).notes.dwelling, dwelling);
 });
 
@@ -1904,8 +1919,11 @@ test('brain: opens a damaged house and repairs its exterior in daylight', () => 
   const inv = inventory(slot('game:rammed-light-plain', 1));
   const sealed = reading({ state: state({ position: home }), inventory: inv, terrain });
   const opening = decide(sealed, memory);
-  assert.equal(opening.start, 'dig_area', 'open the sealed door instead of attempting an unreachable roof repair from inside');
-  assert.deepEqual(opening.args.cells, [door, { ...door, y: door.y + 1 }]);
+  assert.equal(opening.start, 'goal_script', 'open the sealed door instead of attempting an unreachable roof repair from inside');
+  assert.deepEqual(
+    parseGoalScript(opening.args.goalScript)[0].args.cells.map(cell => ({ ...cell })),
+    [door, { ...door, y: door.y + 1 }],
+  );
 
   memory.job = null;
   const outside = reading({ state: state({ position: { x: 4.5, y: 100, z: 7.5 } }), inventory: inv, terrain, now: 2000 });
