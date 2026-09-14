@@ -107,7 +107,7 @@ test('farm shoreline exploration stays inside the home search area', () => {
     home,
   } as any);
   assert.ok('start' in choice && choice.start === 'travel');
-  assert.deepEqual(choice.args, { x: 0, z: 0, arrivalRadius: 24, manageFood: false, timeoutMs: 900000 });
+  assert.deepEqual(choice.args, { x: 0, z: 0, arrivalRadius: 8, manageFood: false, timeoutMs: 900000 });
   assert.equal(choice.why, 'returning to the farm search area, 100 blocks away');
 });
 

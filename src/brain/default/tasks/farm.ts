@@ -27,7 +27,7 @@ export const farm: Concern = {
       const site = farmSite(reading.terrain, center);
       if (!site)
         return (
-          goTo(ctx, { x: center.x, z: center.z }, 'returning to the farm search area', 48, 24) ?? {
+          goTo(ctx, { x: center.x, z: center.z }, 'returning to the farm search area', 48, 8) ?? {
             start: 'explore',
             args: { legs: 1, timeoutMs: 180000 },
             why: 'observed level shoreline for an irrigated fenced farm',
