@@ -1812,6 +1812,18 @@ test('brain: a failed shelter relight is set aside instead of relaunched every t
   );
   assert.notEqual(afterFailure.start, 'light_shelter');
   assert.ok(memory.tried.lighting, 'the failed lighting job is retained by ordinary set-aside bookkeeping');
+  memory.job = null;
+  const away = decide(
+    {
+      ...indoors,
+      state: state({ position: { x: 100, y: 100, z: 0 } }),
+      last: null,
+      now: 2000,
+    },
+    memory,
+  );
+  assert.notEqual(memory.job, 'lighting', 'walking away does not reactivate a failed job at the one fixed shelter');
+  assert.notEqual(away.start, 'enter_shelter', 'another task is not dragged home to retry the same shelter light');
 });
 
 test('brain: a ready shelter takes precedence over errands and an empty stomach, but not night', () => {

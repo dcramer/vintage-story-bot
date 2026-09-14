@@ -50,6 +50,9 @@ export function shelterLight(reading, notes) {
 
 export const lighting: Concern = {
   id: 'lighting',
+  // This concern owns one fixed shelter. Walking beyond the generic local
+  // failure radius must not reactivate it and drag an unrelated trip home.
+  setAsideEverywhere: true,
   cuts: ({ s, active }) => s.atHome && !s.lit && active?.kind !== 'craft_item',
   title: 'lit shelter torches, refreshed daily',
   // There is nothing to light while a replacement permanent home is only a
