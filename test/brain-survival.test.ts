@@ -174,6 +174,11 @@ test('house: partial material batches resume the same site without claiming a ho
   assert.equal(soil.start, 'harvest', 'incompatible stacks cannot be counted as a packed-dirt batch');
   assert.equal(soil.args.item, 'soil-low-none');
   assert.equal(soil.args.count, 23);
+  ctx.reading = {
+    terrain: { cells: new Map([['forest', { x: 5, z: 7, code: 'game:forestfloor-1' }]]) },
+  };
+  const forestFloor: any = house.run(ctx);
+  assert.equal(forestFloor.args.match, 'forestfloor-', 'observed local forest floor supplies the low soil its handbook says it drops');
   ctx.k = kit(inventory({ 'game:rammed-light-plain': 6 }));
   const walls: any = house.run(ctx);
   assert.equal(walls.start, 'house');

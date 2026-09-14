@@ -111,9 +111,25 @@ export const house: Concern = {
           args: { output: 'game:packeddirt', count: Math.min(24, Math.floor((soil.count - 4) / 6) * 6), exclude: FARM_SOIL, timeoutMs: 300000 },
           why: 'packing soil for rammed earth',
         };
+      // The game's forest-floor block is the common exposed form of low soil
+      // and its live handbook page says it drops soil-low-none. Use it only
+      // when the surroundings actually show it beside the bot; otherwise keep
+      // searching for the requested soil block itself.
+      const localForestFloor =
+        soil.grade === 'low' &&
+        [...(ctx.reading?.terrain?.cells?.values() ?? [])].some(
+          (cell: any) =>
+            cell.code?.startsWith('game:forestfloor-') && Math.hypot(cell.x + 0.5 - ctx.state.position.x, cell.z + 0.5 - ctx.state.position.z) <= 8,
+        );
       return {
         start: 'harvest',
-        args: { match: `soil-${soil.grade}-`, item: `soil-${soil.grade}-none`, count: 28 - soil.count, tool: 'Shovel', timeoutMs: 600000 },
+        args: {
+          match: localForestFloor ? 'forestfloor-' : `soil-${soil.grade}-`,
+          item: `soil-${soil.grade}-none`,
+          count: 28 - soil.count,
+          tool: 'Shovel',
+          timeoutMs: 600000,
+        },
         why: 'soil for the house, keeping its door reserve',
       };
     }
