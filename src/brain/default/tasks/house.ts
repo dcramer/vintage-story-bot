@@ -162,7 +162,10 @@ export const house: Concern = {
       }
     );
   },
-  setAside: last => failedOnItsOwn(last) && last.reason !== 'out_of_material',
+  // Site preparation is incremental: snow or vegetation cleared before one
+  // awkward cell failed remains cleared. Retry the same owned construction
+  // site instead of blacklisting the house and wandering off to another job.
+  setAside: last => failedOnItsOwn(last) && last.reason !== 'out_of_material' && last.result?.phase !== 'site',
   ended: (last, memory, { now }) => {
     if (last.kind === 'take_items') noteContents(memory, last, now);
     const plan = memory.notes.construction;

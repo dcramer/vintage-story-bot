@@ -199,6 +199,8 @@ test('house: partial material batches resume the same site without claiming a ho
   const partial: any = { kind: 'house', ok: false, reason: 'out_of_material' };
   house.ended!(partial, memory, {} as any);
   assert.equal(house.setAside!(partial, memory, {} as any), false);
+  const site: any = { kind: 'house', ok: false, reason: 'not_selectable', result: { phase: 'site' } };
+  assert.equal(house.setAside!(site, memory, {} as any), false, 'incremental site clearing retries the owned house');
   assert.equal(memory.notes.home, null);
   assert.equal(fresh(memory.notes).notes.construction?.phase, 'walls');
   house.ended!({ kind: 'house', ok: true } as any, memory, {} as any);
