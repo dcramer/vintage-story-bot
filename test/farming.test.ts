@@ -124,6 +124,31 @@ test('farm grading clears rises and fills shoreline cells from existing support'
   const work = farmGroundwork(map, plan);
   assert.ok(work?.clear.some(cell => cell.x === raised.x && cell.y === raised.y && cell.z === raised.z));
   assert.ok(work?.fill.some(cell => cell.x === fill.x && cell.y === fill.y && cell.z === fill.z));
+
+  const inventory = {
+    state: 'test',
+    inventories: [{ name: 'hotbar', slots: [{ slot: 0, code: 'game:soil-low-none', quantity: 8 }] }],
+  };
+  const context = {
+    k: kit(inventory),
+    memory: { notes: { farm: plan } },
+    reading: { terrain: map },
+    state: { position: farmApproach(plan) },
+  } as any;
+  const platform: any = farm.run(context);
+  assert.equal(platform.start, 'build', 'the dry platform is placed before clearing work that is only reachable across it');
+  assert.deepEqual(platform.args.cells, [{ ...fill, item: 'game:soil-low-none' }]);
+
+  map.put({
+    ...fill,
+    seenAt: Date.now(),
+    traits: [],
+    code: 'game:lakeice',
+    boxes: [[fill.x, fill.y, fill.z, fill.x + 1, fill.y + 1, fill.z + 1]],
+  });
+  const blocker: any = farm.run(context);
+  assert.equal(blocker.start, 'dig_area', 'solid seasonal footing is removed before its platform cell is filled');
+  assert.deepEqual(blocker.args.cells, [fill]);
 });
 
 test('farm supplies come from the chest before gathering, and stay in the working kit', () => {

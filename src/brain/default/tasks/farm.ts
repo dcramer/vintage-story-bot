@@ -91,10 +91,16 @@ export const farm: Concern = {
         return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'refreshing terrain for a farm site that can be graded' };
       }
       delete plan.surveyed;
-      if (groundwork.clear.length)
+      // Build the dry platform before clearing the enclosure beyond it. On a
+      // shoreline, those distant cells may only be reachable by swimming until
+      // the planned fill exists; block work correctly refuses wet footing.
+      // A solid block occupying a fill cell still has to be removed first.
+      const fillKeys = new Set(groundwork.fill.map(cell => `${cell.x}:${cell.y}:${cell.z}`));
+      const clearing = groundwork.fill.length ? groundwork.clear.filter(cell => fillKeys.has(`${cell.x}:${cell.y}:${cell.z}`)) : groundwork.clear;
+      if (clearing.length)
         return {
           start: 'dig_area',
-          args: { cells: groundwork.clear.slice(0, 12), order: 'given', timeoutMs: 600000 },
+          args: { cells: clearing.slice(0, 12), order: 'given', timeoutMs: 600000 },
           why: 'clearing vegetation and one-block rises from the farm site',
         };
       if (groundwork.fill.length) {
