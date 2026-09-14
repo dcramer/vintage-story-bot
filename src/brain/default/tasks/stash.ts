@@ -54,6 +54,10 @@ export function surplusOf(
 
 export const stash: Concern = {
   id: 'stash',
+  // A known chest does not gain room when the bot walks away from it. Keep a
+  // failed store attempt set aside globally so another trip cannot reactivate
+  // the same full destination and drag unrelated fieldwork back home.
+  setAsideEverywhere: true,
   title: 'the surplus put away',
   done: s => !s.storage || !s.full || s.surplus === 0,
   after: ['storage'],

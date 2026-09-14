@@ -1704,6 +1704,22 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
     carrying,
   );
   assert.deepEqual(carrying.notes.stash?.seen?.items, { 'game:stick': 10 }, 'what the chest held when closed is remembered');
+  carrying.job = 'stash';
+  const afterNoRoom = decide(
+    settledReading({
+      inventory: heavy,
+      last: { id: 's-full', kind: 'store_items', ok: false, reason: 'no_room', outcome: 'failed' },
+    }),
+    carrying,
+  );
+  assert.ok(carrying.tried.stash, 'a full destination sets the stash task aside');
+  assert.notEqual(afterNoRoom.start, 'store_items', 'the full destination is not retried immediately');
+  carrying.job = null;
+  const farFromFullChest = decide(settledReading({ inventory: heavy, state: state({ position: { x: 100, y: 100, z: 0 } }), now: 2000 }), carrying);
+  assert.ok(carrying.tried_now.includes('stash'), 'walking away does not reactivate the same full destination');
+  assert.notEqual(carrying.job, 'stash');
+  assert.notEqual(farFromFullChest.start, 'store_items');
+  delete carrying.tried.stash;
   const roomy = inventory(slot('game:stick', 20), slot('game:log-placed-oak-ud', 12), ...tools, slot(null, 0), slot(null, 0));
   assert.notEqual(decide(settledReading({ inventory: roomy }), carrying).start, 'store_items', 'with room to spare nothing is put away');
 
