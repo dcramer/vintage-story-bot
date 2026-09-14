@@ -4,7 +4,7 @@ import { goTo } from '../src/brain/default/concern.ts';
 import { recoverBurrow } from '../src/brain/default/reflexes/burrow.ts';
 import { goHome } from '../src/brain/default/reflexes/go_home.ts';
 import { makeBag } from '../src/brain/default/tasks/bags.ts';
-import { house, houseSite } from '../src/brain/default/tasks/house.ts';
+import { house, houseSite, houseSurveySite } from '../src/brain/default/tasks/house.ts';
 import { lightingDay, shelterLight } from '../src/brain/default/tasks/lighting.ts';
 import { recover, recoverableBody } from '../src/brain/default/tasks/recover.ts';
 import { homeDamage, repairHome } from '../src/brain/default/tasks/repair_home.ts';
@@ -265,6 +265,16 @@ test('house: unknown terrain and hazards never qualify as a building site', () =
   assert.equal(houseSite(occupied('game:stationarybasket-east'), p), null, 'non-colliding occupied cells are not empty construction space');
 });
 
+test('house: known ground with unseen headroom is surveyed before it is accepted', () => {
+  const p = { x: 0.5, y: 100, z: 0.5 };
+  const terrain = {
+    get: (x: number, y: number, z: number) =>
+      y === 99 ? { code: 'game:soil-low-none', boxes: [[x, y, z, x + 1, y + 1, z + 1]], hazard: null } : undefined,
+  };
+  assert.equal(houseSite(terrain, p), null, 'unknown headroom cannot authorize construction');
+  assert.ok(houseSurveySite(terrain, p), 'fully known real ground is enough to authorize a close survey');
+});
+
 test('house: a one-block rough natural site is leveled instead of requiring a frozen flat surface', () => {
   const terrain = {
     get: (x: number, y: number, z: number) => {
@@ -284,6 +294,40 @@ test('house: a one-block rough natural site is leveled instead of requiring a fr
   const work = houseGroundwork(terrain, { x: 0, y: 100, z: 0 });
   assert.equal(work?.clear.length, 21, 'the three high columns are cut down');
   assert.equal(work?.fill.length, 21, 'the three low columns are filled up');
+});
+
+test('house: vegetation and trees in shallow foundation dips are cleared and replaced with earth', () => {
+  const terrain = {
+    get: (x: number, y: number, z: number) => {
+      if (y < 96 || y > 104) return undefined;
+      if (x === 0 && z === 0 && y === 99) return { code: 'game:tallgrass-short-free', traits: ['plant', 'replaceable'], boxes: [], hazard: null };
+      if (x === 1 && z === 0 && y === 99)
+        return { code: 'game:log-pine-ud', traits: ['choppable'], boxes: [[x, y, z, x + 1, y + 1, z + 1]], hazard: null };
+      const top = x === 0 && z === 0 ? 98 : x === 1 && z === 0 ? 97 : 99;
+      return y <= top
+        ? { code: 'game:soil-low-none', traits: ['diggable'], boxes: [[x, y, z, x + 1, y + 1, z + 1]], hazard: null }
+        : { code: 'game:air', traits: [], boxes: [], hazard: null };
+    },
+  };
+  const work = houseGroundwork(terrain, { x: 0, y: 100, z: 0 });
+  assert.ok(work);
+  assert.deepEqual(
+    work.fill.filter(cell => cell.z === 0 && cell.x <= 1),
+    [
+      { x: 0, y: 99, z: 0 },
+      { x: 1, y: 98, z: 0 },
+      { x: 1, y: 99, z: 0 },
+    ],
+    'deeper fill is emitted from supported ground upward',
+  );
+  assert.ok(
+    work.clear.some(cell => cell.x === 0 && cell.y === 99 && cell.z === 0),
+    'grass is cleared before filling',
+  );
+  assert.ok(
+    work.clear.some(cell => cell.x === 1 && cell.y === 99 && cell.z === 0),
+    'a trunk is not mistaken for permanent ground',
+  );
 });
 
 test('house: known level ground near camp is used even when an errand left the body far away', () => {

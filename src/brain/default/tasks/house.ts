@@ -1,11 +1,11 @@
 import { FARM_SOIL } from '../../../support/crops.ts';
-import { houseFoundationSafe, houseGroundwork } from '../../../support/house-site.ts';
+import { houseFoundationSafe, houseGroundwork, houseSurveyClearing, houseSurveyGroundwork } from '../../../support/house-site.ts';
 import { supportedFloor } from '../../../support/sites.ts';
 import { house as blueprint, houseScaffold } from '../../../support/structures.ts';
 import type { Cell, Concern } from '../concern.ts';
 import { allStashes, failedOnItsOwn, goTo, noteContents, selectStash, setHome } from '../concern.ts';
 
-export type Construction = { origin: Cell; phase: 'site' | 'walls' | 'floor' | 'enter' };
+export type Construction = { origin: Cell; phase: 'survey' | 'site' | 'walls' | 'floor' | 'enter'; surveyed?: boolean };
 export const RAMMED = 'game:rammed-light-plain';
 export const HAY = 'game:hay-normal-ud';
 export const HOUSE_BLOCKS = blueprint({ x: 0, y: 0, z: 0 }, RAMMED).length + houseScaffold({ x: 0, y: 0, z: 0 }, RAMMED).length;
@@ -23,6 +23,16 @@ export function houseSite(terrain: any, position: Cell): Cell | null {
     for (const { dx, dz } of SITE_OFFSETS) {
       const origin = { x: Math.floor(position.x) - 4 + dx, y, z: Math.floor(position.z) - 3 + dz };
       if (houseGroundwork(terrain, origin)) return origin;
+    }
+  return null;
+}
+
+export function houseSurveySite(terrain: any, position: Cell): Cell | null {
+  if (!terrain) return null;
+  for (const y of [0, 1, -1, 2, -2].map(dy => Math.floor(position.y) + dy))
+    for (const { dx, dz } of SITE_OFFSETS) {
+      const origin = { x: Math.floor(position.x) - 4 + dx, y, z: Math.floor(position.z) - 3 + dz };
+      if (houseSurveyGroundwork(terrain, origin)) return origin;
     }
   return null;
 }
@@ -50,9 +60,34 @@ export const house: Concern = {
       const home = memory.notes.home;
       const homeY = home ? Math.floor(home.y) : 0;
       const permanentCamp = home && supportedFloor(ctx.reading.terrain?.get(Math.floor(home.x), homeY - 1, Math.floor(home.z)), homeY);
-      const origin = houseSite(ctx.reading.terrain, permanentCamp ? home : ctx.state.position);
+      const center = permanentCamp ? home : ctx.state.position;
+      const ready = houseSite(ctx.reading.terrain, center);
+      const origin = ready ?? houseSurveySite(ctx.reading.terrain, center);
       if (!origin) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'looking for level ground for the house' };
-      plan = memory.notes.construction = { origin, phase: 'site' };
+      plan = memory.notes.construction = { origin, phase: ready ? 'site' : 'survey' };
+    }
+    if (plan.phase === 'survey') {
+      if (houseGroundwork(ctx.reading.terrain, plan.origin)) plan.phase = 'site';
+      else {
+        const viewpoint = { x: plan.origin.x + 4.5, y: plan.origin.y, z: plan.origin.z + 3.5 };
+        const trip = goTo(ctx, viewpoint, 'surveying the house footprint', 2, 1);
+        if (trip) return trip;
+        if (!plan.surveyed)
+          return {
+            start: 'look_around',
+            args: { radius: 16, limit: 16, timeoutMs: 60000 },
+            why: 'checking the whole house footprint before clearing it',
+          };
+        const clearing = houseSurveyClearing(ctx.reading.terrain, plan.origin);
+        if (clearing.length)
+          return {
+            start: 'dig_area',
+            args: { cells: clearing.slice(0, 12), timeoutMs: 600000 },
+            why: 'removing snow, vegetation and trees from the house footprint',
+          };
+        memory.notes.construction = null;
+        return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'looking beyond the rejected house footprint' };
+      }
     }
     const count = (item: string) => k.slots.reduce((n, s) => n + (s.code?.includes(item) ? s.quantity : 0), 0);
     if (plan.phase === 'site') {
@@ -187,10 +222,19 @@ export const house: Concern = {
   // awkward cell failed remains cleared. Retry the same owned construction
   // site instead of blacklisting the house and wandering off to another job.
   setAside: last => failedOnItsOwn(last) && last.reason !== 'out_of_material' && last.result?.phase !== 'site',
-  ended: (last, memory, { now }) => {
+  ended: (last, memory, { now, terrain }) => {
     if (last.kind === 'take_items') noteContents(memory, last, now);
     const plan = memory.notes.construction;
     if (!plan || !last.ok) return;
+    if (last.kind === 'look_around' && plan.phase === 'survey') {
+      if (houseGroundwork(terrain, plan.origin)) plan.phase = 'site';
+      else plan.surveyed = true;
+      return;
+    }
+    if (last.kind === 'dig_area' && plan.phase === 'survey') {
+      plan.surveyed = false;
+      return;
+    }
     if (last.kind === 'house') plan.phase = plan.phase === 'site' ? 'walls' : plan.phase === 'walls' ? 'floor' : 'enter';
     if (last.kind === 'enter_shelter' && plan.phase === 'enter') {
       setHome(memory, last.result.home);
