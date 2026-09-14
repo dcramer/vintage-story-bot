@@ -872,6 +872,20 @@ test('brain: hunger does not interrupt a flight; danger outranks it', () => {
   );
 });
 
+test('brain: ordinary travel keeps its own threat evasion instead of launching a second flight', () => {
+  const memory = fresh();
+  memory.job = 'resupply';
+  const wolf = state({ nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }] });
+  assert.deepEqual(decide(reading({ state: wolf, active: { id: 'supply-trip', kind: 'travel', state: 'running', by: 'brain' } }), memory), {
+    wait: 'letting travel evade threat',
+  });
+  assert.deepEqual(
+    decide(reading({ state: wolf, active: { id: 'operator-trip', kind: 'travel', state: 'running', by: 'operator' } }), fresh()),
+    { stop: 'threat' },
+    'operator travel retains the conservative interruption policy',
+  );
+});
+
 test('brain: forage keeps its own threat evasion instead of being cancelled', () => {
   const memory = fresh();
   memory.job = 'eat';
