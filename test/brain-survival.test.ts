@@ -219,8 +219,10 @@ test('house: partial material batches resume the same site without claiming a ho
   const forestFloor: any = house.run(ctx);
   assert.equal(forestFloor.args.match, 'forestfloor-', 'observed local forest floor supplies the low soil its handbook says it drops');
   ctx.k = kit(inventory({ 'game:rammed-light-plain': 6 }));
+  memory.notes.construction!.foundationVerified = true;
   const walls: any = house.run(ctx);
   assert.equal(walls.start, 'house');
+  assert.equal(walls.args.foundationVerified, undefined, 'internal ownership evidence is not sent through the public goal schema');
   buildHouse.schema.parse(walls.args);
   const partial: any = { kind: 'house', ok: false, reason: 'out_of_material' };
   house.ended!(partial, memory, {} as any);
