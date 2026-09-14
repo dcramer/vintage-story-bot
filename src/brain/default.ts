@@ -129,7 +129,7 @@ export const LADDER: Rung[] = [
   { job: 'wait', when: s => s.storm && ((s.home && s.atHome) || s.burrowed) },
   { job: 'shift', when: (s, tried) => s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow') },
   { job: 'burrow', when: s => s.storm },
-  { job: 'relocate', when: s => s.dangerHere && !s.burrowed },
+  { job: 'relocate', when: s => s.dangerHere && !establishingHouse(s) && !s.burrowed },
   { job: 'go_home', when: (s, tried) => s.night && !establishingHouse(s) && s.home && !s.atHome && !tried.has('go_home') },
   { job: 'wait', when: s => s.night && !establishingHouse(s) && ((s.home && s.atHome) || s.burrowed) },
   // A burrow that failed here (rock, nothing to seal it): walk on and dig in elsewhere, never stand in the dark.

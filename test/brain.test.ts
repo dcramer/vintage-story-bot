@@ -182,6 +182,11 @@ test('brain: danger and carried food come before progress, and the kit comes in 
   assert.equal(pickJob(situation({ hunger: 0.35, reserve: 0 })), 'provisions', 'food is prepared once durable work is complete');
   assert.equal(pickJob(situation({ hunger: 0.35, reserve: 200 })), 'provisions', 'a small reserve is replenished once durable work is complete');
   assert.equal(pickJob(situation({ dangerHere: true, night: true })), 'relocate', 'a place full of scares is left');
+  assert.equal(
+    pickJob(situation({ dangerHere: true, rammedShelter: true, house: false })),
+    'house',
+    'old scares do not abandon a camp with a permanent house underway',
+  );
   assert.equal(pickJob(situation({ night: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ night: true, home: false, dirt: 0 })), 'burrow', 'night without a home: dig in where it stands');
   assert.equal(pickJob(situation({ night: true, home: false, dirt: 3 })), 'burrow');
