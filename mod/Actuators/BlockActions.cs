@@ -57,9 +57,16 @@ internal sealed class BlockActions(ICoreClientAPI api)
             if (block.IsReplacableBy(stack.Block)) return Error("Use a non-replaceable support block.");
             destination.Add(selection.Face);
             var blocks = api.World.BlockAccessor;
-            if (blocks.GetChunkAtBlockPos(destination) == null || blocks.GetBlock(destination).Id != 0 ||
-                blocks.GetBlock(destination, BlockLayersAccess.Fluid).Id != 0)
-                return Error("Placement destination must be loaded, empty and dry.");
+            var destinationBlock = blocks.GetBlock(destination);
+            var destinationFluid = blocks.GetBlock(destination, BlockLayersAccess.Fluid);
+            bool displacesWater = destinationFluid.BlockMaterial == EnumBlockMaterial.Water &&
+                stack.Block.DisplacesLiquids(blocks, destination);
+            if (!PlacementPolicy.DestinationAvailable(
+                blocks.GetChunkAtBlockPos(destination) != null,
+                destinationBlock.Id == 0,
+                destinationFluid.Id == 0,
+                displacesWater))
+                return Error("Placement destination must be loaded and empty, or contain water displaced by this block.");
         }
         else
         {

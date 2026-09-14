@@ -47,3 +47,4 @@ Console.WriteLine("8 fire-hazard checks passed.");
 LifeTests.Run();
 ControlHoldTests.Run();
 StepTrackerTests.Run();
+PlacementPolicyTests.Run();

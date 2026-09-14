@@ -17,5 +17,7 @@
     <Compile Include="ControlHoldTests.cs" />
     <Compile Include="../../mod/Bridge/StepTracker.cs" Link="StepTracker.cs" />
     <Compile Include="StepTrackerTests.cs" />
+    <Compile Include="../../mod/Actuators/PlacementPolicy.cs" Link="PlacementPolicy.cs" />
+    <Compile Include="PlacementPolicyTests.cs" />
   </ItemGroup>
 </Project>
