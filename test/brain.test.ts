@@ -113,6 +113,7 @@ test('brain: a positively observed lake-ice shelter cannot pull durable work bac
     starter: { x: -2, y: 100, z: -2 },
     dwelling: { door: { x: 0, y: 100, z: 2 }, item: 'game:rammed-light-plain' },
     construction: { origin: { x: 20, y: 100, z: 20 }, phase: 'survey' },
+    stash: { ...chestNote(), seen: { at: 0, items: { 'game:soil-low-none': 9 } } },
   });
   decide(
     reading({
@@ -139,6 +140,7 @@ test('brain: a positively observed lake-ice shelter cannot pull durable work bac
   assert.ok(memory.notes.construction, 'the inland permanent-house plan remains active');
   assert.equal(memory.situation?.rammedShelter, true, 'the permanent build suppresses a duplicate starter shelter');
   assert.equal(memory.situation?.shelterReady, false, 'carried materials do not start a second temporary shelter');
+  assert.equal(memory.situation?.short, 0, 'starter-shelter dirt is no longer a resupply need');
 });
 const situation = (extra = {}) => ({
   burrowed: false,

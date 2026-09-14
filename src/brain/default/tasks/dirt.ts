@@ -5,8 +5,11 @@ import { SHELTER_DIRT } from './shelter.ts';
 export const dirt: Concern = {
   id: 'dirt',
   title: `${SHELTER_DIRT} dirt for a shelter`,
-  done: s => s.home || (s.buildingMaterials ?? s.dirt) >= SHELTER_DIRT,
-  short: (k, s) => (!s.home && k.buildingMaterials < SHELTER_DIRT ? { item: 'game:soil-low-none', count: SHELTER_DIRT - k.buildingMaterials } : null),
+  done: s => s.home || s.rammedShelter === true || (s.buildingMaterials ?? s.dirt) >= SHELTER_DIRT,
+  short: (k, s) =>
+    !s.home && !s.rammedShelter && k.buildingMaterials < SHELTER_DIRT
+      ? { item: 'game:soil-low-none', count: SHELTER_DIRT - k.buildingMaterials }
+      : null,
   run: ({ k }) => ({
     start: 'harvest',
     args: {

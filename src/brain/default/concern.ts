@@ -182,7 +182,7 @@ export type Concern = {
   // Code substrings worth picking up on the way while this concern has a shortfall.
   wants?: (k: Kit) => string[];
   // What the kit is short of for this task, as an item code substring and a count; storage may hold it.
-  short?: (k: Kit, s: Pick<Situation, 'home' | 'torches'>) => { item: string; count: number } | null;
+  short?: (k: Kit, s: Pick<Situation, 'home' | 'torches' | 'rammedShelter'>) => { item: string; count: number } | null;
 };
 // Something done alongside any job through tools that only talk: a marker, a chat line.
 export type Alongside = { id: string; act: (ctx: Context) => Decision | null };

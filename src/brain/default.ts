@@ -296,6 +296,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
   const dwelling = memory.notes.dwelling;
   const houseOrigin = memory.notes.house;
   const starter = memory.notes.starter;
+  const rammedShelter = !!starter || !!houseOrigin || !!memory.notes.construction;
   const light = shelterLight(reading, memory.notes);
   const inside = insideHome(memory.notes, state.position);
   const sealed =
@@ -337,7 +338,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     grass: k.grass,
     dirt: k.dirt,
     buildingMaterials: k.buildingMaterials,
-    rammedShelter: !!starter || !!houseOrigin || !!memory.notes.construction,
+    rammedShelter,
     shelterReady:
       !starter &&
       !houseOrigin &&
@@ -354,7 +355,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
       building: !!memory.notes.construction || !!memory.notes.shelter,
       farming: !!memory.notes.farm,
     }).reduce((n, i) => n + i.count, 0),
-    short: resupplyOf(k, { home: !!home, torches: k.torches }, memory.notes.stash).reduce((n, i) => n + i.count, 0),
+    short: resupplyOf(k, { home: !!home, torches: k.torches, rammedShelter }, memory.notes.stash).reduce((n, i) => n + i.count, 0),
     moreStorage:
       allStashes(memory.notes).length < 3 &&
       allStashes(memory.notes).length > 0 &&

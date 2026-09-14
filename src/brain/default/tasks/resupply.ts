@@ -13,7 +13,11 @@ import { torches } from './torches.ts';
 const FEEDS: Concern[] = [knife, axe, shovel, sticks, dirt, grass, torches, logs];
 
 // The shortfalls the chest can fill, by what it was last seen holding.
-export function resupplyOf(k: Kit, s: { home: boolean; torches: number }, stash: Stash | null): { item: string; count: number }[] {
+export function resupplyOf(
+  k: Kit,
+  s: { home: boolean; torches: number; rammedShelter?: boolean },
+  stash: Stash | null,
+): { item: string; count: number }[] {
   if (!stash?.seen) return [];
   const held = (item: string) =>
     Object.entries(stash.seen!.items)
@@ -32,7 +36,7 @@ export const resupply: Concern = {
   done: s => s.short === 0,
   run: ctx => {
     const note = ctx.memory.notes.stash as Stash;
-    const items = resupplyOf(ctx.k, { home: !!ctx.home, torches: ctx.k.torches }, note);
+    const items = resupplyOf(ctx.k, { home: !!ctx.home, torches: ctx.k.torches, rammedShelter: ctx.s.rammedShelter }, note);
     return (
       goTo(ctx, note, 'going home for what the chest holds') ?? {
         start: 'take_items',
