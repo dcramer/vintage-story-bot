@@ -132,8 +132,16 @@ export async function diggingSlot(field, selected, inventory) {
   const usable = s => s.tool === tool && s.toolTier >= tier && s.durability > 0 && s.quantity > 0;
   const held = slots.find(s => s.inventory === 'hotbar' && usable(s));
   if (held) return held.slot;
-  if (!slots.some(usable) || !slots.some(s => s.inventory === 'hotbar' && !s.code)) return tier > 0 ? null : field.latest.activeSlot;
-  return (await equip(field, { tool, minTier: tier })).slot;
+  if (!slots.some(usable)) return tier > 0 ? null : field.latest.activeSlot;
+  // equip can free a full hotbar by moving a non-tool stack into empty bag
+  // storage, or by rotating it through the cursor. Do not reject a usable
+  // backpack tool merely because there is no empty hotbar slot right now.
+  try {
+    return (await equip(field, { tool, minTier: tier })).slot;
+  } catch (error) {
+    if (/Equip needs an empty ordinary hotbar slot/i.test(error.message)) return tier > 0 ? null : field.latest.activeSlot;
+    throw error;
+  }
 }
 
 // Dig stairs toward a point until there is room to roam again.

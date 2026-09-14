@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 import { diggingSlot, digOut, pitLimit, reachable, stairStep, supportedSteps } from '../src/support/digging.ts';
+import { until } from '../src/support/fieldwork.ts';
 
 // A block world: floor at y=-1, air above, plus solid cells from `solid`.
 function world(width, solid) {
@@ -338,4 +339,55 @@ test('burrow digging uses a carried shovel while respecting required mining tier
   assert.equal(await diggingSlot(field, { material: 'Stone', requiredMiningTier: 3 }, inventory), null);
   inventory.inventories[0].slots[1].durability = 0;
   assert.equal(await diggingSlot(field, { material: 'Soil' }, inventory), 0, 'broken shovel falls back to the current slot');
+});
+
+test('digging equips a required tool from a basket even when the hotbar is full', async () => {
+  let activeSlot = 1;
+  let packState = 0;
+  const inventories: any[] = [
+    {
+      name: 'hotbar',
+      slots: [
+        { slot: 0, code: 'game:stick', quantity: 4, tool: null },
+        { slot: 1, code: 'game:shovel-flint', quantity: 1, tool: 'Shovel', toolTier: 0, durability: 40 },
+      ],
+    },
+    {
+      name: 'backpack',
+      slots: [
+        { slot: 0, code: 'game:axe-flint', quantity: 1, tool: 'Axe', toolTier: 1, durability: 120, bag: false },
+        { slot: 1, code: null, quantity: 0, tool: null, bag: false },
+      ],
+    },
+  ];
+  const contents = () => ({ state: 'pack-' + packState, inventories: structuredClone(inventories) });
+  const field: any = {
+    latest: { activeSlot },
+    report: () => {},
+    observe: async () => structuredClone(field.latest),
+    send: async request => {
+      if (request.action === 'inventory') return contents();
+      if (request.action === 'inventory_move') {
+        assert.equal(request.expectedState, 'pack-' + packState);
+        const from = inventories.find(i => i.name === request.from.inventory).slots[request.from.slot];
+        const to = inventories.find(i => i.name === request.to.inventory).slots[request.to.slot];
+        Object.assign(to, structuredClone(from), { slot: request.to.slot });
+        Object.assign(from, { code: null, quantity: 0, tool: null, toolTier: null, durability: null });
+        packState++;
+        return { ok: true };
+      }
+      if (request.action === 'select') {
+        activeSlot = request.slot;
+        field.latest.activeSlot = activeSlot;
+        return { ok: true };
+      }
+      throw Error('Unexpected action: ' + request.action);
+    },
+    until: (condition, options) => until(field, condition, options),
+  };
+
+  const selected = { code: 'game:log-grown-maple-ud', material: 'Wood', requiredMiningTier: 1, traits: ['choppable', 'tier:1'] };
+  assert.equal(await diggingSlot(field, selected, contents()), 0);
+  assert.equal(inventories[0].slots[0].code, 'game:axe-flint');
+  assert.equal(inventories[1].slots[1].code, 'game:stick');
 });
