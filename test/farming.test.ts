@@ -156,6 +156,23 @@ test('farm grading clears rises and fills shoreline cells from existing support'
   assert.deepEqual(blocker.args.cells, [fill]);
 });
 
+test('farm grading builds observed shallow footing before bridging deeper cells', () => {
+  const { map, plan } = shoreline();
+  const deep = farmCell(plan, 0, 0, -1);
+  const shallow = farmCell(plan, 0, 1, -1);
+  for (const cell of [deep, shallow]) map.put({ ...cell, seenAt: Date.now(), traits: ['water'], code: 'game:water-still-7', boxes: [] });
+  map.put({
+    ...shallow,
+    y: shallow.y - 1,
+    seenAt: Date.now(),
+    traits: [],
+    code: 'game:muddygravel',
+    boxes: [[shallow.x, shallow.y - 1, shallow.z, shallow.x + 1, shallow.y, shallow.z + 1]],
+  });
+  const work = farmGroundwork(map, plan);
+  assert.deepEqual(work?.fill.slice(0, 2), [shallow, deep]);
+});
+
 test('farm construction is set aside while its footprint is guarded', () => {
   const { plan } = shoreline();
   const center = farmCell(plan, 2, 2);

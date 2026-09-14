@@ -102,7 +102,14 @@ function assessFarmGroundwork(map, farm: Farm, { allowUnknownClearance = false }
 
   const fill: { x: number; y: number; z: number }[] = [];
   while (pending.size) {
-    const next = [...pending.values()].find(cell => sides.some(([dx, dz]) => reached.has(key({ x: cell.x + dx, y: cell.y, z: cell.z + dz }))));
+    const candidates = [...pending.values()].filter(cell =>
+      sides.some(([dx, dz]) => reached.has(key({ x: cell.x + dx, y: cell.y, z: cell.z + dz }))),
+    );
+    // A cell over an observed solid bed can be placed straight down from dry
+    // ground. Build those before extending sideways over deeper water, so the
+    // side placements have a wider, reachable platform to work from.
+    candidates.sort((a, b) => Number(supportedFloor(map.get(b.x, b.y - 1, b.z), b.y)) - Number(supportedFloor(map.get(a.x, a.y - 1, a.z), a.y)));
+    const next = candidates[0];
     if (!next) return null;
     pending.delete(key(next));
     reached.add(key(next));

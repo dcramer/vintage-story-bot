@@ -40,6 +40,28 @@ function facePoints(cell, offset) {
   ];
 }
 
+// A solid block hides its far face from a ray. Do not spend a placement retry
+// aiming through that block; first stand on the side of a support face that a
+// player could actually see.
+export function placementFaceVisible(viewpoint, support, offset) {
+  const faceCenter = {
+    x: support.x + 0.5 + offset[0] * 0.5,
+    y: support.y + 0.5 + offset[1] * 0.5,
+    z: support.z + 0.5 + offset[2] * 0.5,
+  };
+  return (viewpoint.x - faceCenter.x) * offset[0] + (viewpoint.y - faceCenter.y) * offset[1] + (viewpoint.z - faceCenter.z) * offset[2] >= -0.01;
+}
+
+function hasVisiblePlacementSupport(field, cell, q) {
+  const map = field.env?.map;
+  if (!map?.get) return true;
+  const viewpoint = { x: q.x, y: q.y + field.latest.body.eyeHeight, z: q.z };
+  const supports = Object.values(faces)
+    .map(offset => ({ offset, cell: { x: cell.x - offset[0], y: cell.y - offset[1], z: cell.z - offset[2] } }))
+    .filter(({ cell: support }) => stablePlacementSupport(map.get(support.x, support.y, support.z)));
+  return !supports.length || supports.some(({ cell: support, offset }) => placementFaceVisible(viewpoint, support, offset));
+}
+
 async function eye(field) {
   const state = await field.observe();
   return { x: state.position.x, y: state.position.y + state.body.eyeHeight, z: state.position.z };
@@ -55,7 +77,8 @@ export async function standNear(field, survival, cell, force = false, placing = 
     !force &&
     blockWorkReady(field.latest) &&
     distance(from, center(cell)) <= (placing ? 3 : reach) &&
-    !(placing && bodyOverlapsCell(field.latest, cell))
+    !(placing && bodyOverlapsCell(field.latest, cell)) &&
+    (!placing || hasVisiblePlacementSupport(field, cell, field.latest.position))
   )
     return true;
   // Look over the work before seeking another viewpoint. From the access
@@ -68,6 +91,7 @@ export async function standNear(field, survival, cell, force = false, placing = 
       !dryBlockWorkPosition(q) ||
       (sameColumn(q, cell) && Math.abs(q.y - cell.y) < 2.5) ||
       (placing && standsOnHorizontalSupport(field, cell, q)) ||
+      (placing && !hasVisiblePlacementSupport(field, cell, q)) ||
       q.y + field.latest.body.eyeHeight < minimumEye ||
       distance({ ...q, y: q.y + field.latest.body.eyeHeight }, center(cell)) > reach,
     // Roof-access stairs can be three columns from the unfinished roof cell,
@@ -307,11 +331,17 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
         const support = offset => field.env.map.get(cell.x - offset[0], cell.y - offset[1], cell.z - offset[2]);
         return Number(stablePlacementSupport(support(b))) - Number(stablePlacementSupport(support(a)));
       });
+      const viewpoint = {
+        x: field.latest.position.x,
+        y: field.latest.position.y + field.latest.body.eyeHeight,
+        z: field.latest.position.z,
+      };
       let knownSupport = false;
       for (const [face, offset] of faceOrder) {
         const support = { x: cell.x - offset[0], y: cell.y - offset[1], z: cell.z - offset[2] };
         const rememberedSupport = field.env.map.get(support.x, support.y, support.z);
         knownSupport ||= stablePlacementSupport(rememberedSupport);
+        if (!placementFaceVisible(viewpoint, support, offset)) continue;
         let selected, point;
         for (const candidate of facePoints(support, offset)) {
           selected = await selectCell(field, support, { point: candidate, face, clearPlants: true });

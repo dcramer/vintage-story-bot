@@ -16,6 +16,7 @@ import { shovel } from '../src/brain/default/tasks/tools.ts';
 import { torchStep } from '../src/brain/default/tasks/torches.ts';
 import { fresh, kit } from '../src/brain/default.ts';
 import {
+  placementFaceVisible,
   selectExistingPlacementCell,
   selectedPlacementCell,
   selectedPlacementSupport,
@@ -150,6 +151,29 @@ test('roof placement leaves an overlapping target without standing on its only s
   };
   assert.equal(await standNear(field, null, cell, false, true), true);
   assert.deepEqual(destination, lateral, 'the retry uses the adjacent roof course where the support face remains visible');
+});
+
+test('shoreline placement approaches the exposed side of a known support', async () => {
+  const cell = { x: 1, y: 0, z: 0 };
+  const support = { code: 'game:soil-low-none', boxes: [[0, 0, 0, 1, 1, 1]], hazard: null, traits: [] };
+  const state = { position: { x: -2.5, y: 1, z: 0.5 }, body: { height: 1.85, eyeHeight: 1.7 }, motion: { onGround: true } };
+  const hiddenSide = { x: -0.5, y: 1, z: 0.5 };
+  const exposedSide = { x: 2.5, y: 1, z: 0.5 };
+  let destination;
+  const field = {
+    latest: state,
+    env: { map: { get: (x, y, z) => (x === 0 && y === 0 && z === 0 ? support : null) } },
+    observe: async () => state,
+    look: async () => {},
+    approach: (_object, exclude) => [hiddenSide, exposedSide].find(q => !exclude(q)),
+    walk: async q => {
+      destination = q;
+      return { state: 'arrived' };
+    },
+  };
+  assert.equal(placementFaceVisible({ x: -0.5, y: 2.7, z: 0.5 }, { x: 0, y: 0, z: 0 }, [1, 0, 0]), false);
+  assert.equal(await standNear(field, null, cell, true, true), true);
+  assert.deepEqual(destination, exposedSide, 'the solid support cannot be clicked through from its hidden side');
 });
 
 test('an occluded existing roof obstruction retries from another build viewpoint', async () => {
