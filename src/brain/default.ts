@@ -157,7 +157,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // priorities take over again as soon as the body reaches dry footing.
     if ((state.motion?.swimming || state.motion?.feetInLiquid) && active.by === 'brain' && active.kind === 'travel')
       return { wait: 'letting shore travel finish' };
-    const mine = memory.job ? concern(memory.job) : null;
+    // An operator may start the permanent house before the brain adopts it as
+    // its current job. Preserve the house concern's construction policy in
+    // that handoff window instead of treating it as arbitrary outside work.
+    const mine = memory.job ? concern(memory.job) : active.by === 'operator' && active.kind === 'house' ? house : null;
     const own = mine?.running?.(ctx);
     if (own) return own;
     // A hostile that cannot be run from (a flight just failed here) does not cut work short either: the

@@ -482,6 +482,22 @@ test('brain: danger interrupts body recovery and backs it off across a flight', 
   assert.ok(clusteredDanger.tried.recover, 'relocating from a dangerous grave also backs recovery off');
 });
 
+test('brain: an operator-started house keeps its construction policy around threats', () => {
+  const wolf = state({
+    nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }],
+  });
+  assert.deepEqual(
+    decide(reading({ state: wolf, active: { id: 'house', kind: 'house', state: 'running', by: 'operator' } }), fresh()),
+    { wait: 'letting house finish (operator)' },
+    'permanent construction survives the operator-to-brain handoff',
+  );
+  assert.deepEqual(
+    decide(reading({ state: wolf, active: { id: 'walk', kind: 'travel', state: 'running', by: 'operator' } }), fresh()),
+    { stop: 'threat' },
+    'unrelated operator work remains interruptible',
+  );
+});
+
 test('brain: a hit from nowhere is danger, and copper seen in passing is marked once and told', () => {
   const memory = fresh();
   const hurt = [{ id: 1, at: 1, type: 'hurt', health: 10 }];
