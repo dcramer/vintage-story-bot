@@ -69,8 +69,11 @@ export const house: Concern = {
     if (plan.phase === 'survey') {
       if (houseGroundwork(ctx.reading.terrain, plan.origin)) plan.phase = 'site';
       else {
-        const viewpoint = { x: plan.origin.x + 4.5, y: plan.origin.y, z: plan.origin.z + 3.5 };
-        const trip = goTo(ctx, viewpoint, 'surveying the house footprint', 2, 1);
+        // The exact center may itself be a tree or a ledge. Any nearby
+        // viewpoint is enough for the full head sweep; only later block work
+        // uses exact cells and verified approaches.
+        const viewpoint = { x: plan.origin.x + 4.5, z: plan.origin.z + 3.5 };
+        const trip = goTo(ctx, viewpoint, 'surveying the house footprint', 8, 6);
         if (trip) return trip;
         if (!plan.surveyed)
           return {
