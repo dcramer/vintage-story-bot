@@ -5,7 +5,7 @@ import { ignite } from '../support/fire.ts';
 import { Gleaner } from '../support/gleaning.ts';
 import { ownedSlots } from '../support/inventory.ts';
 import { runField } from '../support/task.ts';
-import { build, digArea } from './build.ts';
+import { build, digArea, standNear } from './build.ts';
 
 // What a shelter cell needs from what stands there: a lit torch is only
 // replaced on refresh, resetting its burn clock; an extinguished one relights
@@ -20,6 +20,10 @@ export function torchCellPlan(code: string | null | undefined, refresh: boolean)
 
 export async function lightShelter(field, survival, { cells, refresh = false }) {
   for (const cell of cells) {
+    // The two permanent-house lights are farther apart than native picking
+    // range. Classifying an out-of-reach selection as an empty cell makes the
+    // builder try to place a torch into the existing one.
+    if (!(await standNear(field, survival, cell))) return { ok: false, goal: 'light_shelter', reason: 'no_stand_position', cell };
     let selected = await selectCell(field, cell);
     if (torchCellPlan(selected?.code, refresh) === 'replace') {
       const burnedout = !!selected?.code?.includes('torch-basic-burnedout-');
