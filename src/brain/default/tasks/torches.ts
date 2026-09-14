@@ -1,9 +1,32 @@
 // One torch for the starter shelter; two for the larger house.
+import type { Decision } from '../../../runtime/brain.ts';
 import type { Concern } from '../concern.ts';
+import type { Kit, Situation } from '../situation.ts';
 
 export const TORCH_MIN = 1;
 const needed = s => (s.house ? 2 : TORCH_MIN);
 export const TORCH = 'game:torch-basic-extinct-up';
+
+// The next step toward torches, from the kit alone. Shelter and lighting reuse
+// it so their torch shortfall is decided one way, not three.
+export function torchStep(k: Kit, s: Situation): Decision {
+  const need = Math.max(1, needed(s) - k.torches);
+  if (k.sticks < need)
+    return { start: 'gather', args: { match: 'stick', item: 'game:stick', count: need - k.sticks, timeoutMs: 300000 }, why: 'sticks for torches' };
+  const grass = k.slots.filter(s => s.code === 'game:drygrass').reduce((n, s) => n + s.quantity, 0);
+  const missing = Math.max(0, need - k.cattailtops) * 2 - grass;
+  if (missing > 0)
+    return {
+      start: 'harvest',
+      args: { match: 'tallgrass', item: 'drygrass', count: missing, timeoutMs: 300000 },
+      why: 'enough grass to finish the torches',
+    };
+  return {
+    start: 'craft_item',
+    args: { output: TORCH, count: need, timeoutMs: 300000 },
+    why: `${k.torches}/${needed(s)} torches`,
+  };
+}
 
 export const torches: Concern = {
   id: 'torches',
@@ -11,22 +34,5 @@ export const torches: Concern = {
   done: s => s.torches >= needed(s),
   after: ['grass'],
   short: k => (k.torches < TORCH_MIN ? { item: 'torch-basic', count: TORCH_MIN - k.torches } : null),
-  run: ({ k, s }) => {
-    const need = Math.max(1, needed(s) - k.torches);
-    if (k.sticks < need)
-      return { start: 'gather', args: { match: 'stick', item: 'game:stick', count: need - k.sticks, timeoutMs: 300000 }, why: 'sticks for torches' };
-    const grass = k.slots.filter(s => s.code === 'game:drygrass').reduce((n, s) => n + s.quantity, 0);
-    const missing = Math.max(0, need - k.cattailtops) * 2 - grass;
-    if (missing > 0)
-      return {
-        start: 'harvest',
-        args: { match: 'tallgrass', item: 'drygrass', count: missing, timeoutMs: 300000 },
-        why: 'enough grass to finish the torches',
-      };
-    return {
-      start: 'craft_item',
-      args: { output: TORCH, count: need, timeoutMs: 300000 },
-      why: `${k.torches}/${needed(s)} torches`,
-    };
-  },
+  run: ({ k, s }) => torchStep(k, s),
 };

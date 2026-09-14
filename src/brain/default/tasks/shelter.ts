@@ -8,7 +8,7 @@ import { shelter as blueprint, SHELTER_MATERIAL, shelterDoor, shelterScaffold, s
 import type { Concern } from '../concern.ts';
 import { goTo, setHome } from '../concern.ts';
 import { lightingDay, prepareFirestarter } from './lighting.ts';
-import { TORCH_MIN, torches } from './torches.ts';
+import { TORCH_MIN, torchStep } from './torches.ts';
 
 // 57 shell blocks and three stairs; six-block batches plus four emergency soil.
 export const SHELTER_DIRT = 64;
@@ -97,7 +97,7 @@ export const shelter: Concern = {
     }
     const installedTorch =
       pending && shelterTorches(pending).every(c => ctx.reading.terrain?.get(c.x, c.y, c.z)?.code?.startsWith('game:torch-basic-'));
-    if (ctx.k.torches < TORCH_MIN && !installedTorch) return torches.run(ctx);
+    if (ctx.k.torches < TORCH_MIN && !installedTorch) return torchStep(ctx.k, ctx.s);
     const prepare = prepareFirestarter(ctx);
     if (prepare) return prepare;
     const site = ctx.memory.notes.stash;

@@ -8,6 +8,7 @@ import type { Decision, Reading } from '../../../runtime/brain.ts';
 import { temporalStormUnsafe } from '../../../support/fieldwork.ts';
 import type { Concern, Memory } from '../concern.ts';
 import { insideHome } from '../concern.ts';
+import type { BrainState } from '../reading.ts';
 import { isNight } from '../situation.ts';
 
 const STARTUP_TERRAIN_MS = 10000;
@@ -28,7 +29,8 @@ export const burrow: Concern = {
 // A wait while the surroundings are still unknown; null once checked.
 export function recoverBurrow(reading: Reading, memory: Memory): Decision | null {
   if (memory.startupChecked) return null;
-  const { state, environment } = reading;
+  const { environment } = reading;
+  const state = reading.state as BrainState;
   const home = memory.notes.home;
   // A known shelter's roof is not the mouth of an emergency burrow.
   if (home && memory.notes.dwelling && insideHome(memory.notes, state.position)) {

@@ -23,6 +23,7 @@ export const recover: Concern = {
   id: 'recover',
   title: 'my things from where I died',
   done: s => !s.body,
+  // Interrupted by the brain's own flight, hurt or relocate stops (its own wording, echoed back).
   setAside: last => failedOnItsOwn(last) || /^brain: (threat|hurt|relocate)$/.test(last.reason ?? ''),
   setAsideEverywhere: true,
   running: ({ s }) => (s.body ? null : { stop: 'recovery budget exhausted' }),

@@ -1,7 +1,6 @@
 import { shelterTorches } from '../../../support/structures.ts';
 import type { Concern } from '../concern.ts';
-import { goHome } from '../reflexes/go_home.ts';
-import { torches } from './torches.ts';
+import { torchStep } from './torches.ts';
 
 export function prepareFirestarter(ctx) {
   const count = (item: string) => ctx.k.slots.reduce((n, s) => n + (s.code === item ? s.quantity : 0), 0);
@@ -60,13 +59,19 @@ export const lighting: Concern = {
       : null,
   run: ctx => {
     const missing = torchCells(ctx.memory.notes).length - shelterLight(ctx.reading, ctx.memory.notes).installed;
-    const prepare = ctx.k.torches < missing ? torches.run(ctx) : prepareFirestarter(ctx);
+    if (ctx.k.torches < missing) {
+      const step = torchStep(ctx.k, ctx.s);
+      if (ctx.s.sheltered && (ctx.danger || ctx.s.night) && (!('start' in step) || step.start !== 'craft_item'))
+        return { wait: 'lighting needs materials outside; remain sealed until safe to leave' };
+      return step;
+    }
+    const prepare = prepareFirestarter(ctx);
     if (prepare) {
       if (ctx.s.sheltered && (ctx.danger || ctx.s.night) && (!('start' in prepare) || prepare.start !== 'craft_item'))
         return { wait: 'lighting needs materials outside; remain sealed until safe to leave' };
       return prepare;
     }
-    if (!ctx.s.atHome) return goHome.run(ctx);
+    if (!ctx.s.atHome) return { handoff: 'go_home' };
     const cells = torchCells(ctx.memory.notes);
     return { start: 'light_shelter', args: { cells, refresh: true }, why: 'freshly placed, lit torches for the shelter' };
   },

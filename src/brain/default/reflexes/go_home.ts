@@ -27,7 +27,7 @@ export const goHome: Concern = {
           block && (!block.code || block.code === 'game:air' || block.code === SHELTER_MATERIAL || shelterCover(block, cells[i].y - pending.y)),
       );
       const torch = k.torches > 0 || shelterTorches(pending).every(c => reading.terrain?.get(c.x, c.y, c.z)?.code?.startsWith('game:torch-basic-'));
-      if (clear && missing <= 8 && supplies(SHELTER_MATERIAL) >= missing && torch && supplies('game:firestarter') > 0) return shelter.run(ctx);
+      if (clear && missing <= 8 && supplies(SHELTER_MATERIAL) >= missing && torch && supplies('game:firestarter') > 0) return { handoff: 'shelter' };
     }
     const dwelling = memory.notes.dwelling;
     if (dwelling) {

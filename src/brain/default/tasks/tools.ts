@@ -63,8 +63,9 @@ const toolTask = (id: 'knife' | 'axe' | 'shovel' | 'hoe', head: string, blades: 
   wants: k => (!k[id] && k.knappables < 2 ? KNAPPABLE_WANTS : []),
   short: k => (!k[id] && flintShort(k) > 0 ? { item: 'game:flint', count: flintShort(k) } : null),
   // A vanished forming surface may have consumed its placed stone but leaves
-  // the tool unfinished. Re-derive the missing material and retry instead of
-  // setting the prerequisite aside and running unrelated downstream work.
+  // the tool unfinished (support/forming.ts: 'surface_gone_without_output').
+  // Re-derive the missing material and retry instead of setting the
+  // prerequisite aside and running unrelated downstream work.
   setAside: last => failedOnItsOwn(last) && last.reason !== 'surface_gone_without_output',
 });
 

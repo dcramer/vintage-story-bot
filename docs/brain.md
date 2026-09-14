@@ -22,11 +22,11 @@ Later brains (roles) differ only in `decide`. Behavior sources: [getting-started
 
 Three tiers, each a list in order of concern, all re-derived from the reading every tick; nothing is queued or stored as a plan, so a change in the world reorders the work for free and nothing has to be repaired after a flight, a death or a restart:
 
-- **Reflexes**: pressing conditions checked first (danger, a storm, hunger, night). A reflex may cut a running job short; a few jobs (a flight, a dig-in, a dig-out) are never cut.
+- **Reflexes**: pressing conditions checked first (danger, a storm, hunger, night). A running job keeps going unless the ladder picks a job allowed to cut in (`cuts`: flights, dig-ins, going home, relocating, shifting ground, food or light in hand) or a hit or a fresh threat lands; jobs marked `uncuttable` (flights, dig-ins, dig-outs, toolmaking, house raising, leaving shelter) finish regardless. Only danger stops a goal someone else started.
 - **Tasks**: wants, not steps. Each says when the kit or the notes show it done, what it waits on, and which goal reaches it; the first not done, not waiting and not set aside is the one worked on. A one-shot task stays done (a knife exists); a recurring one flips back (the pack is heavy again). A task with a place (home, a chest) travels there first.
 - **Alongside**: what runs beside any job through tools that only talk: marking a find, a chat line, `wants` picked up on the way.
 
-Each concern owns its predicate, the goal it starts, its say while that goal runs, and the bookkeeping when it ends; adding one is a file and a line in a list. The contract is `Concern` in `src/brain/default/concern.ts`; the default brain's parts live in `src/brain/default/{reflexes,tasks,alongside}/`, its ladder and lists in `src/brain/default.ts`.
+Each concern owns its predicate, the goal it starts, its say while that goal runs, and the bookkeeping when it ends; adding one is a file and a line in a list. The contract is `Concern` in `src/brain/default/concern.ts`; the default brain's parts live in `src/brain/default/{reflexes,tasks,alongside}/`, its ladder in `src/brain/default/ladder.ts`, its lists in `src/brain/default.ts`.
 
 ## Default brain: early survival
 

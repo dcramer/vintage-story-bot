@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { goTo } from '../src/brain/default/concern.ts';
+import { goTo, workOn } from '../src/brain/default/concern.ts';
 import { recoverBurrow } from '../src/brain/default/reflexes/burrow.ts';
 import { goHome } from '../src/brain/default/reflexes/go_home.ts';
 import { makeBag } from '../src/brain/default/tasks/bags.ts';
@@ -734,9 +734,9 @@ test('night finishes a nearby almost complete owned shelter before a distant old
     },
   };
   const next = context => {
-    const decision = goHome.run(context);
+    const decision = workOn('go_home', context, id => (id === 'shelter' ? shelter : goHome));
     assert.ok('start' in decision);
-    return decision.start;
+    return (decision as { start: string }).start;
   };
   assert.equal(next(ctx), 'shelter');
   const approach = { ...ctx, state: { position: { x: 12.5, y: 94, z: -20 } } };

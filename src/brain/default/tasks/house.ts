@@ -4,6 +4,7 @@ import { supportedFloor } from '../../../support/sites.ts';
 import { house as blueprint, houseScaffold } from '../../../support/structures.ts';
 import type { Cell, Concern } from '../concern.ts';
 import { allStashes, failedOnItsOwn, goTo, noteContents, selectStash, setHome } from '../concern.ts';
+import type { BrainSeenCell, BrainTerrain } from '../reading.ts';
 
 export type Construction = {
   origin: Cell;
@@ -13,6 +14,9 @@ export type Construction = {
 };
 export const RAMMED = 'game:rammed-light-plain';
 export const HAY = 'game:hay-normal-ud';
+// The game's forest-floor block is the common exposed form of low soil nearby.
+const forestFloorNear = (cells: BrainSeenCell[], origin: { x: number; z: number }) =>
+  cells.some(cell => cell.code?.startsWith('game:forestfloor-') && Math.hypot(cell.x + 0.5 - origin.x, cell.z + 0.5 - origin.z) <= 64);
 export const HOUSE_BLOCKS = blueprint({ x: 0, y: 0, z: 0 }, RAMMED).length + houseScaffold({ x: 0, y: 0, z: 0 }, RAMMED).length;
 const SITE_OFFSETS = Array.from({ length: 25 }, (_, ix) => ix * 2 - 24)
   .flatMap(dx => Array.from({ length: 25 }, (_, iz) => ({ dx, dz: iz * 2 - 24 })))
@@ -108,6 +112,10 @@ export const house: Concern = {
       }
     }
     const count = (item: string) => k.slots.reduce((n, s) => n + (s.code?.includes(item) ? s.quantity : 0), 0);
+    // The remembered cells, spread once per decision at most: copying the whole
+    // terrain memory on every branch costs more the longer the bot has looked around.
+    let seen: BrainSeenCell[] | null = null;
+    const cells = () => (seen ??= [...((ctx.reading?.terrain as BrainTerrain | undefined)?.cells?.values() ?? [])]);
     if (plan.phase === 'site') {
       const groundwork = houseGroundwork(ctx.reading.terrain, plan.origin);
       if (!groundwork) {
@@ -119,12 +127,7 @@ export const house: Concern = {
         .sort((a, b) => b.count - a.count);
       const soil = soils[0];
       if (groundwork.fill.length > soil.count) {
-        const forestFloor =
-          soil.grade === 'low' &&
-          [...(ctx.reading?.terrain?.cells?.values() ?? [])].some(
-            (cell: any) =>
-              cell.code?.startsWith('game:forestfloor-') && Math.hypot(cell.x + 0.5 - plan!.origin.x, cell.z + 0.5 - plan!.origin.z) <= 64,
-          );
+        const forestFloor = soil.grade === 'low' && forestFloorNear(cells(), plan.origin);
         return {
           start: 'harvest',
           args: {
@@ -165,14 +168,19 @@ export const house: Concern = {
       soils.sort((a, b) => b.count - a.count);
       let soil = soils[0];
       if (!soil.count) {
-        const seen = [...(ctx.reading?.terrain?.cells?.values() ?? [])]
-          .filter((c: any) => /^game:soil-(verylow|low)-/.test(c.code ?? '') && !c.hazard)
-          .sort(
-            (a: any, b: any) =>
-              Math.hypot(a.x - ctx.state.position.x, a.y - ctx.state.position.y, a.z - ctx.state.position.z) -
-              Math.hypot(b.x - ctx.state.position.x, b.y - ctx.state.position.y, b.z - ctx.state.position.z),
-          )[0] as any;
-        soil = soils.find(s => seen?.code?.startsWith(`game:soil-${s.grade}-`)) ?? soils.find(s => s.grade === 'low')!;
+        // The nearest remembered low soil decides the grade to dig; a single
+        // pass, first wins on ties, exactly what the sort picked before.
+        let nearest: BrainSeenCell | null = null;
+        let best = Infinity;
+        for (const c of cells()) {
+          if (!/^game:soil-(verylow|low)-/.test(c.code ?? '') || c.hazard) continue;
+          const far = Math.hypot(c.x - ctx.state.position.x, c.y - ctx.state.position.y, c.z - ctx.state.position.z);
+          if (far < best) {
+            best = far;
+            nearest = c;
+          }
+        }
+        soil = soils.find(s => nearest?.code?.startsWith(`game:soil-${s.grade}-`)) ?? soils.find(s => s.grade === 'low')!;
       }
       if (count('game:packeddirt') >= 6)
         return {
@@ -186,15 +194,10 @@ export const house: Concern = {
           args: { output: 'game:packeddirt', count: Math.min(24, Math.floor((soil.count - 4) / 6) * 6), exclude: FARM_SOIL, timeoutMs: 300000 },
           why: 'packing soil for rammed earth',
         };
-      // The game's forest-floor block is the common exposed form of low soil
-      // and its live handbook page says it drops soil-low-none. Use it only
+      // Its live handbook page says forest floor drops soil-low-none. Use it only
       // when the surroundings actually show it beside the bot; otherwise keep
       // searching for the requested soil block itself.
-      const localForestFloor =
-        soil.grade === 'low' &&
-        [...(ctx.reading?.terrain?.cells?.values() ?? [])].some(
-          (cell: any) => cell.code?.startsWith('game:forestfloor-') && Math.hypot(cell.x + 0.5 - plan.origin.x, cell.z + 0.5 - plan.origin.z) <= 64,
-        );
+      const localForestFloor = soil.grade === 'low' && forestFloorNear(cells(), plan.origin);
       return {
         start: 'harvest',
         args: {
@@ -239,6 +242,7 @@ export const house: Concern = {
   // Site preparation is incremental: snow or vegetation cleared before one
   // awkward cell failed remains cleared. Retry the same owned construction
   // site instead of blacklisting the house and wandering off to another job.
+  // 'out_of_material' is the build goal asking for another batch (goals/build.ts).
   setAside: last => failedOnItsOwn(last) && last.kind !== 'dig_area' && last.reason !== 'out_of_material' && last.result?.phase !== 'site',
   ended: (last, memory, { now, terrain }) => {
     if (last.kind === 'take_items') noteContents(memory, last, now);

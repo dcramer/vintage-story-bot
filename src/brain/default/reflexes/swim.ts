@@ -1,8 +1,9 @@
 // In water: face the nearest dry ground and move with the jump key held, one stroke per decision.
 import type { Decision } from '../../../runtime/brain.ts';
 import type { Cell } from '../concern.ts';
+import type { BrainState } from '../reading.ts';
 
-export function surfacing(state: any, ground: Cell | null): Decision {
+export function surfacing(state: BrainState, ground: Cell | null): Decision {
   const oxygen = Math.round(((state.vitals?.oxygen?.current ?? 0) / (state.vitals?.oxygen?.max || 1)) * 100);
   const movement = state.motion?.swimming ? 'swimming' : 'wading';
   if (ground)

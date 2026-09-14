@@ -5,7 +5,6 @@ import { shelterSite } from '../../../goals/shelter.ts';
 import { shelterStorage } from '../../../support/structures.ts';
 import type { Concern } from '../concern.ts';
 import { goTo, selectStash } from '../concern.ts';
-import { goHome } from '../reflexes/go_home.ts';
 
 // The recipe (the game calls it a reed chest): eight lots of three cattail tops.
 export const CHEST_TOPS = 24;
@@ -21,7 +20,7 @@ export const storage: Concern = {
     if (k.chest) {
       const starter = ctx.memory.notes.starter;
       if (starter) {
-        if (!ctx.s.atHome) return goHome.run(ctx);
+        if (!ctx.s.atHome) return { handoff: 'go_home' };
         const spot = shelterStorage(starter).find(cell => {
           const block = ctx.reading.terrain?.get(cell.x, cell.y, cell.z);
           return block && !block.hazard && !block.boxes.length && (!block.code || block.code === 'game:air');

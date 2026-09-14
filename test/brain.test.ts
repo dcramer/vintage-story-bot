@@ -1311,7 +1311,7 @@ test('brain: home is a note that outlives the process and is mirrored once on th
     (first.memory as any).notes.home = { x: 7, y: 100, z: 9 };
     await first.stop();
     const file = first.notes.status().file;
-    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).notes, { home: { x: 7, y: 100, z: 9 }, stash: null, dwelling: null });
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).notes, { home: { x: 7, y: 100, z: 9 }, stash: null, dwelling: null, version: 1 });
     const second = new BrainLoop(controller as any, brain, 5);
     second.start();
     await new Promise(resolve => setTimeout(resolve, 30));

@@ -6,6 +6,7 @@
 // re-derived from the Situation every tick: nothing is queued.
 import type { Decision, Reading } from '../../runtime/brain.ts';
 import { horizontal } from '../../runtime/navigation/terrain.ts';
+import type { BrainEvent, BrainState } from './reading.ts';
 import type { Kit, Situation } from './situation.ts';
 import type { FarmNote } from './tasks/farm.ts';
 import type { Construction } from './tasks/house.ts';
@@ -60,6 +61,7 @@ export type Stash = {
 // What is kept between runs: the decisions made about this world, and what the bot itself last
 // left in its own chest (re-verified when it is opened); what the eye saw of the world is Knowledge.
 export type Notes = {
+  version?: number;
   shelter?: Cell | null;
   starter?: Cell | null;
   recovery?: { guid: string; until: number } | null;
@@ -138,8 +140,8 @@ export type Ended = NonNullable<Reading['last']>;
 // One tick's reading, digested: what every concern decides on.
 export type Context = {
   reading: Reading;
-  state: any;
-  events: any[];
+  state: BrainState;
+  events: BrainEvent[];
   markers: Reading['markers'];
   active: Reading['active'];
   now: number;
@@ -167,8 +169,8 @@ export type Concern = {
   cuts?: boolean | ((ctx: Context) => boolean);
   // Its goal is never cut short, not by danger and not by a pressing job.
   uncuttable?: boolean;
-  // The goal (or wait) that works on it.
-  run: (ctx: Context) => Decision;
+  // The goal (or wait) that works on it, or a handoff to another concern's work.
+  run: (ctx: Context) => Decision | Handoff;
   // Its own say while its goal runs, before the generic rules; null to let them decide.
   running?: (ctx: Context) => Decision | null;
   // Bookkeeping when its goal ended, whatever the outcome.
@@ -184,8 +186,23 @@ export type Concern = {
   // What the kit is short of for this task, as an item code substring and a count; storage may hold it.
   short?: (k: Kit, s: Pick<Situation, 'home' | 'torches' | 'rammedShelter'>) => { item: string; count: number } | null;
 };
+// A concern that needs another concern's work first hands off to it instead of
+// calling it directly; the dispatcher below runs the target through the same
+// path, so ordering and bookkeeping stay in one place.
+export type Handoff = { handoff: Job };
 // Something done alongside any job through tools that only talk: a marker, a chat line.
 export type Alongside = { id: string; act: (ctx: Context) => Decision | null };
+// Run one job, following handoffs to their decision. The bookkeeping stays
+// with the job the ladder picked; a handoff loop waits a tick and retries.
+export function workOn(job: Job, ctx: Context, lookup: (job: Job) => Concern): Decision {
+  let target = job;
+  for (let hop = 0; hop < 4; hop++) {
+    const decision = lookup(target).run(ctx);
+    if (!('handoff' in decision)) return decision;
+    target = decision.handoff;
+  }
+  return { wait: `handoff loop around ${target}; trying again next tick` };
+}
 // One rung of the ladder: the reflex to turn to when its condition holds, in order of concern.
 export type Rung = { job: Job; when: (s: Situation, tried: Set<Job>) => boolean };
 
@@ -194,13 +211,14 @@ export type Rung = { job: Job; when: (s: Situation, tried: Set<Job>) => boolean 
 export const TRIED_RADIUS = 24;
 export const TRIED_MS = 5 * 60 * 1000;
 // A job the surroundings refused before it began (water, lost controls) or that the brain
-// itself cut short is not the job's fault; any other failure sets it aside. The controller
-// names the outcome; the pattern is only for a reading that has none.
-// A walk the navigator would not begin (no footing, not ready) is a refusal whatever the outcome says.
+// itself cut short is not the job's fault; a job that tried and failed, or got nowhere,
+// sets itself aside. The controller names the outcome on every live record; the footing
+// refusal below still overrules it, and the patterns are the fallback for a synthetic
+// reading that has no outcome at all.
 const refusedToStart = (last: Ended) => /^Start grounded$|^Navigation needs/.test(last.reason ?? '');
 export const failedOnItsOwn = (last: Ended) =>
   !refusedToStart(last) &&
-  (last.outcome ? last.outcome !== 'refused' && last.outcome !== 'interrupted' : !/interruption|^brain:/.test(last.reason ?? ''));
+  (last.outcome ? last.outcome === 'failed' || last.outcome === 'no_progress' : !/interruption|^brain:/.test(last.reason ?? ''));
 
 export type TaskState = 'done' | 'next' | 'open' | 'set aside' | 'waiting';
 // The list as the brain sees it now: what is done, what is next, what waits.
@@ -229,19 +247,6 @@ export function pickJob(ladder: Rung[], list: Concern[], idle: Job, s: Situation
 }
 
 export const cell = (c: any): Cell | null => (c && [c.x, c.y, c.z].every(Number.isFinite) ? { x: c.x, y: c.y, z: c.z } : null);
-export const stashNote = (n: any): Stash | null =>
-  n && typeof n.key === 'string' && typeof n.code === 'string' && cell(n)
-    ? {
-        key: n.key,
-        ...(typeof n.full === 'boolean' ? { full: n.full } : {}),
-        ...cell(n)!,
-        code: n.code,
-        seen:
-          n.seen && Number.isFinite(n.seen.at) && n.seen.items && typeof n.seen.items === 'object'
-            ? { at: n.seen.at, items: { ...n.seen.items } }
-            : null,
-      }
-    : null;
 // A task with a place goes there first: a walk when the place is farther than the goal itself would go, else null.
 export function goTo(ctx: Context, place: { x: number; y?: number; z: number }, why: string, radius = 12, arrival = 3): Decision | null {
   const far = horizontal(place, ctx.state.position);
@@ -254,6 +259,7 @@ export function goTo(ctx: Context, place: { x: number; y?: number; z: number }, 
 }
 // The goal stood where the note says and found no chest to open there: not the same as a walk that
 // never got there. Twice in a row and the note is dropped, and a new chest is made.
+// Both wordings are the container goals' own (goals/store_items.ts, goals/use_block.ts).
 export const containerMissing = (last: Ended) => /changed or obstructed|No container dialog/i.test(last.reason ?? '');
 export const STASH_MISSES = 2;
 // What the container held when the goal closed it, remembered until the next look.
@@ -267,6 +273,7 @@ export function noteContents(memory: Memory, last: Ended, now: number) {
     return;
   }
   if (last.ok) memory.stashMisses = 0;
+  // The store goal's own word for a chest with no room left (goals/store_items.ts).
   if (last.reason === 'no_room') memory.notes.stash.full = true;
   if (Number.isInteger(last.result?.free)) memory.notes.stash.full = last.result.free === 0;
   const contents = last.result?.contents;

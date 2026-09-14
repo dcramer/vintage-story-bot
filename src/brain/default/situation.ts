@@ -7,6 +7,7 @@ import { kinds } from '../../support/forming.ts';
 import { ownedSlots } from '../../support/inventory.ts';
 import { nearestThreat } from '../../support/threats.ts';
 import type { Cell, Memory } from './concern.ts';
+import type { BrainEvent, BrainSlot, BrainState } from './reading.ts';
 
 // Night from dusk (the sun's light under 0.4, when drifters come out and the eye
 // sees little) to dawn; unknown light counts as day, since
@@ -42,7 +43,8 @@ export function knapMaterial(slots: any[]): string | null {
 }
 // What the bot carries, in plain counts.
 export function kit(inventory: any) {
-  const slots = ownedSlots(inventory) as any[];
+  // The reply stays loose (callers pass full mod payloads); the slots are what the kit reads.
+  const slots = ownedSlots(inventory) as BrainSlot[];
   const exact = (code: string) => slots.filter(s => s.code === code).reduce((n, s) => n + s.quantity, 0);
   const part = (piece: string) => slots.filter(s => s.code?.includes(piece)).reduce((n, s) => n + s.quantity, 0);
   const tool = (name: string) => slots.some(s => s.tool === name && (s.durability ?? 1) > 0);
@@ -158,12 +160,15 @@ export type Danger = { point: Cell; code: string };
 // explains it (gravity, or what the running job did to itself), and an unexplained hit
 // waits a moment for the cause notification before it counts.
 export function senseDanger(reading: Reading, memory: Memory, explainedByJob: boolean) {
-  const { state, last, now, events = [] } = reading;
+  const { last, now } = reading;
+  const state = reading.state as BrainState;
+  const events = (reading.events ?? []) as BrainEvent[];
   const threat = nearestThreat(state);
   if (threat) memory.lastThreat = { point: threat.point, code: threat.code, at: now };
   // A predator can leave the observation radius while its cancellation is
   // completing. Carry that exact threat through the next decision so the
   // cancelled job becomes a flight instead of immediately restarting work.
+  // 'brain: ...' is the brain's own stop wording, echoed back by the controller.
   const rememberedThreat =
     last?.reason === 'brain: threat' && memory.lastThreat && now - memory.lastThreat.at < SAFE_MS
       ? { point: memory.lastThreat.point, code: memory.lastThreat.code }
