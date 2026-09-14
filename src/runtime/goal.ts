@@ -21,7 +21,7 @@ export interface GoalEnvironment {
   navigate: (
     goal: Record<string, unknown>,
     pauseWhen?: (state: any) => string | null,
-    safety?: { allowStarvingRecovery?: boolean },
+    safety?: { allowStarvingRecovery?: boolean; avoidThreats?: boolean },
   ) => ReturnType<Controller['navigate']>;
   log: Log;
   report(progress: GoalProgress): void;

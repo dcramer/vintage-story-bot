@@ -81,17 +81,19 @@ export class Navigation {
   threat = null;
   threats = [];
   avoid = [];
+  avoidThreats: boolean;
   startSupported = false;
   // Keep the last observed threat position briefly after escaping its immediate perimeter.
   // Otherwise resuming the destination sends the body straight back into the same threat.
   rememberedThreats = new Map<string, any>();
-  constructor(map, state, goal, now = Date.now()) {
+  constructor(map, state, goal, now = Date.now(), { avoidThreats = true } = {}) {
     this.map = map;
     this.rememberedThreats = threatMemories.get(map) ?? new Map();
     threatMemories.set(map, this.rememberedThreats);
     this.blocked = failedEdges(map, now);
     this.visits = visitedFrontiers(map, now);
     this.primaryTarget = this.target = goal;
+    this.avoidThreats = avoidThreats;
     this.width = state.body.halfWidth;
     this.height = state.body.height;
     this.eyeHeight = state.body.eyeHeight;
@@ -229,7 +231,7 @@ export class Navigation {
       this.movedAt = now;
     } else if (now - this.movedAt >= NO_PROGRESS_MS) return this.finish('blocked', 'no_progress');
     const from = wet ? { ...p, afloat: true } : p;
-    const threats = this.evading ? nearbyUnclearedThreats(state) : nearbyThreats(state);
+    const threats = this.avoidThreats ? (this.evading ? nearbyUnclearedThreats(state) : nearbyThreats(state)) : [];
     const nearby = threats[0] ?? null;
     if (!this.evading && nearby) {
       this.evading = true;
@@ -259,30 +261,33 @@ export class Navigation {
       };
       this.routeReaches = this.reaches(this.route.at(-1));
     }
-    for (const entity of state.nearbyEntities ?? []) {
-      if (!hostileEntity(entity)) continue;
-      const until = now + 60000 - (entity.ageMs ?? 0);
-      if (until > now)
-        this.rememberedThreats.set(entity.key, {
-          point: { ...entity.point },
-          minimumDistance: threatStartDistance(entity.code) + 2,
-          verticalRange: threatVerticalRange(entity.code),
-          until,
-        });
-    }
+    if (this.avoidThreats)
+      for (const entity of state.nearbyEntities ?? []) {
+        if (!hostileEntity(entity)) continue;
+        const until = now + 60000 - (entity.ageMs ?? 0);
+        if (until > now)
+          this.rememberedThreats.set(entity.key, {
+            point: { ...entity.point },
+            minimumDistance: threatStartDistance(entity.code) + 2,
+            verticalRange: threatVerticalRange(entity.code),
+            until,
+          });
+      }
     for (const [id, entity] of this.rememberedThreats) if (entity.until <= now) this.rememberedThreats.delete(id);
     while (this.rememberedThreats.size > 128) this.rememberedThreats.delete(this.rememberedThreats.keys().next().value!);
     const activeKeys = new Set(threats.map(entity => entity.key));
     const activeAvoid = threats.map(entity => ({ point: entity.point, minimumDistance: Math.max(0, horizontal(p, entity.point) - 0.5) }));
-    this.avoid = [
-      ...activeAvoid,
-      ...[...this.rememberedThreats.entries()]
-        .filter(([id]) => !activeKeys.has(id))
-        .map(([, entity]) => ({
-          ...entity,
-          strict: horizontal(p, entity.point) >= entity.minimumDistance,
-        })),
-    ];
+    this.avoid = this.avoidThreats
+      ? [
+          ...activeAvoid,
+          ...[...this.rememberedThreats.entries()]
+            .filter(([id]) => !activeKeys.has(id))
+            .map(([, entity]) => ({
+              ...entity,
+              strict: horizontal(p, entity.point) >= entity.minimumDistance,
+            })),
+        ]
+      : [];
     if (
       grounded &&
       // A step ends on its point or just past it (within about half a block); the destination is met the same way.

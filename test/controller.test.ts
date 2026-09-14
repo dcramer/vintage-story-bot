@@ -403,6 +403,24 @@ test('navigation temporarily routes away from an explicit nearby hostile', () =>
   assert.equal(nav.target, goal);
 });
 
+test('goal-owned movement can finish a recovery step without navigator threat takeover', () => {
+  const map = new TerrainMemory();
+  map.apply(terrain());
+  const state = {
+    position: { x: 0.5, y: 0, z: 0.5 },
+    body: { halfWidth: 0.3, height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true },
+    orientation: { yawDegrees: 90 },
+    vitals: { hunger: { current: 1000, max: 1500 } },
+    nearbyEntities: [{ key: 'entity:1', code: 'game:drifter-normal', point: { x: -0.5, y: 0, z: 0.5 } }],
+  };
+  const goal = { x: 2.5, y: 0, z: 0.5, timeoutMs: 10000 };
+  const nav = new Navigation(map, state, goal, 0, { avoidThreats: false });
+  assert.ok(nav.tick(state, 0));
+  assert.equal(nav.evading, false);
+  assert.equal(nav.target, goal);
+});
+
 test('evasion route does not approach another visible hostile', () => {
   const map = new TerrainMemory();
   map.apply(terrain());

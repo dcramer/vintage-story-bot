@@ -24,5 +24,7 @@ export default defineGoal({
   title: () => 'Dig a way out',
   announce: () => 'Digging my way out of this hole.',
   run: (env, options) =>
-    runField(env, options, ['inventory', 'block_actions'], (field, _, o) => digOut(field, { x: o.x, z: o.z }, { steps: o.steps, force: o.force })),
+    runField(env, { ...options, avoidThreats: false }, ['inventory', 'block_actions'], (field, _, o) =>
+      digOut(field, { x: o.x, z: o.z }, { steps: o.steps, force: o.force }),
+    ),
 });

@@ -570,7 +570,7 @@ export class Controller {
       await control.release();
     }
   }
-  async navigate(goal, record, started?, pauseWhen?, { allowStarvingRecovery = false } = {}, signal?: AbortSignal) {
+  async navigate(goal, record, started?, pauseWhen?, { allowStarvingRecovery = false, avoidThreats = true } = {}, signal?: AbortSignal) {
     const initial = await this.snapshot(signal);
     if (goal.sprint && !initial.capabilities.includes('background_sprint'))
       throw new GoalError('capability_missing', 'Update mod: background_sprint required');
@@ -602,7 +602,7 @@ export class Controller {
       { allowStarvingRecovery },
       signal,
     );
-    const nav = (record.nav = new Navigation(this.map, initial, goal));
+    const nav = (record.nav = new Navigation(this.map, initial, goal, Date.now(), { avoidThreats }));
     let state = initial;
     try {
       if (started) {

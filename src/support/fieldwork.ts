@@ -77,6 +77,7 @@ export class Fieldwork {
   skipped = new Map();
   events: any[] = [];
   alertsAt = '';
+  avoidThreats: any;
   // The last full look around, shared by every goal of the session when the controller keeps it.
   get lookedAround() {
     return this.env.looks?.last ?? this.ownLook;
@@ -93,6 +94,7 @@ export class Fieldwork {
     {
       signal,
       timeoutMs,
+      avoidThreats = true,
       sprint = undefined,
       swim = true,
       stopWhenHurt = false,
@@ -108,6 +110,7 @@ export class Fieldwork {
     this.places = env.places ?? new Places();
     this.signal = signal;
     this.timeoutMs = timeoutMs;
+    this.avoidThreats = avoidThreats;
     this.sprint = sprint;
     this.swim = swim;
     this.stopWhenHurt = stopWhenHurt;
@@ -464,7 +467,7 @@ export class Fieldwork {
         this.guard(state);
         return pauseWhen?.(state);
       },
-      { allowStarvingRecovery: this.recoveringFood },
+      { allowStarvingRecovery: this.recoveringFood, avoidThreats: this.avoidThreats },
     );
     const after = await this.observe(true);
     this.moved += horizontal(before.position, after.position);
