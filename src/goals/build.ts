@@ -68,6 +68,12 @@ export const stablePlacementSupport = cell =>
   !has(cell, 'replaceable') &&
   !has({ kind: 'block', code: cell.code }, 'replaceable');
 
+// Native selection is newer evidence than terrain memory. A previous build can
+// leave the map cache describing snow where a wall now stands, so validate the
+// block under the crosshair rather than rejecting that face from stale traits.
+export const selectedPlacementSupport = (remembered, selected) =>
+  stablePlacementSupport(selected ? { ...remembered, ...selected, hazard: selected.hazard ?? null } : remembered);
+
 export async function digArea(field, survival, { cells, tool, minTier = 0 }) {
   const done = [],
     failed = [];
@@ -211,14 +217,15 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
       }
       for (const [face, offset] of Object.entries(faces)) {
         const support = { x: cell.x - offset[0], y: cell.y - offset[1], z: cell.z - offset[2] };
-        if (!stablePlacementSupport(field.env.map.get(support.x, support.y, support.z))) continue;
+        const rememberedSupport = field.env.map.get(support.x, support.y, support.z);
         let selected, point;
         for (const candidate of facePoints(support, offset)) {
           selected = await selectCell(field, support, { point: candidate, face, clearPlants: true });
-          if (selected) {
+          if (selectedPlacementSupport(rememberedSupport, selected)) {
             point = candidate;
             break;
           }
+          selected = null;
         }
         if (!selected) {
           reason = 'support_not_selectable';
