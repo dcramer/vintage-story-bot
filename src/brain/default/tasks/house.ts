@@ -42,6 +42,10 @@ export const house: Concern = {
   title: 'an 8x5 home with rammed-earth walls and an A-frame roof',
   done: s => s.house === true,
   after: ['shelter', 'storage', 'shovel'],
+  // Site work and placed blocks survive death. Running away from every nearby
+  // creature costs more progress than a keep-inventory respawn, so finish the
+  // current construction action and let death itself interrupt if necessary.
+  uncuttable: true,
   run: ctx => {
     const { k, memory } = ctx;
     let plan = memory.notes.construction;
