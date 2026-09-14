@@ -419,6 +419,12 @@ test('ordinary errands and body recovery do not turn into food searches', () => 
   assert.equal(body.args.manageFood, false);
 });
 
+test('place errands accept the same final reach margin as travel', () => {
+  const place = { x: 0, y: 100, z: 0 };
+  const arrived = { state: { position: { x: 3.1, y: 100, z: 0 } } } as any;
+  assert.equal(goTo(arrived, place, 'checking shared supplies', 3), null);
+});
+
 test('dry-grass work always uses the knife required by its handbook drop', () => {
   const origin = { x: 0, y: 100, z: 0 };
   const memory = fresh({

@@ -213,6 +213,10 @@ export type Rung = { job: Job; when: (s: Situation, tried: Set<Job>) => boolean 
 // minutes at most; the ladder goes on to the next job meanwhile, so nothing ever idles on it.
 export const TRIED_RADIUS = 24;
 export const TRIED_MS = 5 * 60 * 1000;
+// `travel` may finish one final StepTracker reach beyond the requested radius.
+// Treat that same margin as arrived here so a place-bound concern does not
+// instant-restart an already-successful trip forever.
+export const TRAVEL_ARRIVAL_MARGIN = 0.36;
 // A job the surroundings refused before it began (water, lost controls) or that the brain
 // itself cut short is not the job's fault; a job that tried and failed, or got nowhere,
 // sets itself aside. The controller names the outcome on every live record; the footing
@@ -253,7 +257,7 @@ export const cell = (c: any): Cell | null => (c && [c.x, c.y, c.z].every(Number.
 // A task with a place goes there first: a walk when the place is farther than the goal itself would go, else null.
 export function goTo(ctx: Context, place: { x: number; y?: number; z: number }, why: string, radius = 12, arrival = 3): Decision | null {
   const far = horizontal(place, ctx.state.position);
-  if (far <= radius && (place.y === undefined || Math.abs(place.y - ctx.state.position.y) < 1.5)) return null;
+  if (far <= radius + TRAVEL_ARRIVAL_MARGIN && (place.y === undefined || Math.abs(place.y - ctx.state.position.y) < 1.5)) return null;
   return {
     start: 'travel',
     args: { x: place.x, ...(place.y === undefined ? {} : { y: place.y }), z: place.z, arrivalRadius: arrival, manageFood: false, timeoutMs: 900000 },
