@@ -46,12 +46,18 @@ export function reachableAscent(map, state, goal, radius = 16, limit = 512) {
   return best.y > origin.y + 0.6 ? { x: best.x, y: best.y, z: best.z, arrivalRadius: 0.35 } : null;
 }
 
-const coveredAscent = (map, state, goal) =>
-  Number.isFinite(goal?.y) &&
-  goal.y > state.position.y + 1.5 &&
-  map?.get &&
-  solid(map, Math.floor(state.position.x), Math.floor(state.position.y) + 2, Math.floor(state.position.z)) &&
-  !reachableAscent(map, state, goal);
+const coveredAscent = (map, state, goal) => {
+  const { position, body = {} } = state;
+  const standing = map?.nodeAt?.(Math.floor(position.x), Math.floor(position.z), position.y, body.halfWidth ?? 0.3, body.height ?? 1.85);
+  const feetY = standing?.y ?? position.y;
+  return (
+    Number.isFinite(goal?.y) &&
+    goal.y > feetY + 1.5 &&
+    map?.get &&
+    solid(map, Math.floor(position.x), Math.floor(feetY) + 2, Math.floor(position.z)) &&
+    !reachableAscent(map, state, goal)
+  );
+};
 
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
 export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { x: number; y?: number; z: number; arrivalRadius?: number }) {

@@ -1236,12 +1236,15 @@ test('an upward trip stalled beneath a verified cave roof asks existing dig-out 
 });
 
 test('the no-progress bound preserves a verified roofed-cave diagnosis', async () => {
-  const position = { x: 0.5, y: 1, z: 0.5 };
+  // The live failure expired midway through a jump at y=108.7 beneath a roof
+  // two blocks over the verified y=109 standing node.
+  const position = { x: 0.5, y: 0.7, z: 0.5 };
+  const standing = { ...position, y: 1 };
   const state = { position, body: { halfWidth: 0.3, height: 1.85 }, condition: {}, capabilities: [] };
   const floor = Array.from({ length: 49 }, (_, i) => ({ x: (i % 7) + 1.5, y: 1, z: Math.floor(i / 7) + 0.5 }));
   const map = {
-    nodeAt: () => position,
-    moves: node => (node === position ? floor.map(node => ({ node })) : []),
+    nodeAt: () => standing,
+    moves: node => (node === standing ? floor.map(node => ({ node })) : []),
     gapMoves: () => [],
     get: (_x, y) => (y === 3 ? { hazard: null, boxes: [[0, 0, 0, 1, 1, 1]] } : null),
   };
