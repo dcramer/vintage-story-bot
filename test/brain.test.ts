@@ -1657,6 +1657,23 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
   assert.deepEqual([cut.start, cut.args.match, cut.args.tool], ['harvest', 'coopersreed', 'Knife'], 'no chest: cut cattail tops first');
   const weave = decide(settledReading({ inventory: inventory(slot('game:stick', 10), slot('game:cattailtops', 24), ...tools) }), settled());
   assert.deepEqual([weave.start, weave.args.output], ['craft_item', 'game:stationarybasket-east']);
+  const storedTops = settled();
+  storedTops.notes.stash = { ...chestNote(), full: true, seen: { at: 1000, items: {} } };
+  const topStore = {
+    ...chestNote(),
+    key: 'block:0:1:100:2:game:stationarybasket-east',
+    x: 1,
+    full: true,
+    seen: { at: 1000, items: { 'game:cattailtops': 63 } },
+  };
+  storedTops.notes.stores = [topStore];
+  const fetchTops = decide(settledReading({ inventory: inventory(slot('game:stick', 10), ...tools) }), storedTops);
+  assert.deepEqual(
+    [fetchTops.start, fetchTops.args.target, fetchTops.args.items],
+    ['take_items', topStore.key, [{ item: 'game:cattailtops', count: 24 }]],
+    'additional storage uses remembered cattail tops before cutting more reeds',
+  );
+  assert.equal(storedTops.notes.stash?.key, topStore.key, 'the source basket becomes the current container for result bookkeeping');
   const carrying = settled();
   const put = decide(settledReading({ inventory: inventory(slot('game:stick', 10), slot('game:stationarybasket-east', 1), ...tools) }), carrying);
   assert.deepEqual(

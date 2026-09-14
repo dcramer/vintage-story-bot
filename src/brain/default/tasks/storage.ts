@@ -4,7 +4,7 @@
 import { shelterSite } from '../../../goals/shelter.ts';
 import { shelterStorage } from '../../../support/structures.ts';
 import type { Concern } from '../concern.ts';
-import { goTo, selectStash } from '../concern.ts';
+import { allStashes, goTo, noteContents, selectStash } from '../concern.ts';
 
 // The recipe (the game calls it a reed chest): eight lots of three cattail tops.
 export const CHEST_TOPS = 24;
@@ -80,6 +80,18 @@ export const storage: Concern = {
       };
     }
     if (k.cattailtops >= CHEST_TOPS) return { start: 'craft_item', args: { output: CHEST, count: 1, timeoutMs: 300000 }, why: 'weaving a chest' };
+    const stored = allStashes(ctx.memory.notes).find(stash => (stash.seen?.items['game:cattailtops'] ?? 0) > 0);
+    if (stored) {
+      selectStash(ctx.memory, stored);
+      const count = Math.min(CHEST_TOPS - k.cattailtops, stored.seen!.items['game:cattailtops']);
+      return (
+        goTo(ctx, stored, 'fetching stored cattail tops for another chest') ?? {
+          start: 'take_items',
+          args: { target: stored.key, items: [{ item: 'game:cattailtops', count }], manageFood: false, timeoutMs: 600000 },
+          why: 'use stored cattail tops before cutting more reeds',
+        }
+      );
+    }
     return {
       start: 'harvest',
       args: { match: 'coopersreed', item: 'cattailtops', count: CHEST_TOPS - k.cattailtops, tool: 'Knife', timeoutMs: 900000 },
@@ -87,6 +99,10 @@ export const storage: Concern = {
     };
   },
   ended: (last, memory, { now, state }) => {
+    if (last.kind === 'take_items') {
+      noteContents(memory, last, now);
+      return;
+    }
     if (last.kind !== 'build') return;
     const built = last.ok ? last.result?.built?.find((c: any) => typeof c.code === 'string' && c.code.includes('stationarybasket')) : null;
     if (built) {
