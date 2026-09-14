@@ -150,6 +150,7 @@ export type Situation = {
   stashKnife: boolean;
   stocked?: boolean;
   house?: boolean;
+  door?: boolean;
   lit?: boolean;
   moreStorage?: boolean;
 };

@@ -31,6 +31,12 @@ export const goHome: Concern = {
     }
     const dwelling = memory.notes.dwelling;
     if (dwelling) {
+      if (dwelling.kind === 'gates')
+        return {
+          start: 'shelter_access',
+          args: { door: dwelling.door, home, direction: 'enter', timeoutMs: 600000 },
+          why: storm ? 'storm coming' : 'night falling',
+        };
       const have = k.slots.filter(s => s.code?.includes(dwelling.item)).reduce((n, s) => n + s.quantity, 0);
       if (have < 2 && dwelling.item === 'game:hay-normal-ud') {
         const grass = k.slots.filter(s => s.code === 'game:drygrass').reduce((n, s) => n + s.quantity, 0);

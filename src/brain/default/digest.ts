@@ -6,6 +6,7 @@ import type { Reading } from '../../runtime/brain.ts';
 import { horizontal } from '../../runtime/navigation/terrain.ts';
 import { temporalStormUnsafe } from '../../support/fieldwork.ts';
 import { hunger } from '../../support/food.ts';
+import { SHELTER_GATE, shelterDoorCells, shelterGate, shelterGateState } from '../../support/shelter-door.ts';
 import { allStashes, type Concern, insideHome, type Job, type Memory, TRIED_MS, TRIED_RADIUS } from './concern.ts';
 import type { BrainState, BrainTerrain } from './reading.ts';
 import { dangerHere } from './reflexes/relocate.ts';
@@ -42,7 +43,7 @@ export type Digest = {
   satiety: number | null;
   storm: boolean;
   home: { x: number; y: number; z: number } | null;
-  dwelling: { door: { x: number; y: number; z: number }; item: string } | null | undefined;
+  dwelling: { door: { x: number; y: number; z: number }; item: string; kind?: 'gates' } | null | undefined;
   inside: boolean;
   sealed: boolean;
 };
@@ -82,18 +83,24 @@ export function digestReading(reading: Reading, memory: Memory, lookup: (job: Jo
   }
   const home = memory.notes.home;
   const tried = triedNow(memory, state.position, now, lookup);
-  const dwelling = memory.notes.dwelling;
+  let dwelling = memory.notes.dwelling;
   const houseOrigin = memory.notes.house;
   const starter = memory.notes.starter;
   const rammedShelter = !!starter || !!houseOrigin || !!memory.notes.construction;
   const light = shelterLight(reading, memory.notes);
   const inside = insideHome(memory.notes, state.position);
+  const doorway = dwelling ? shelterDoorCells(dwelling.door).map(cell => terrain?.get(cell.x, cell.y, cell.z)) : [];
+  const observedGates = !!dwelling && doorway.length === 2 && doorway.every(block => shelterGate(block?.code));
+  // Adopt gates installed by an operator or an older run before deciding how
+  // to enter. Otherwise a legacy hay note would make go_home dig them out.
+  if (observedGates && dwelling?.kind !== 'gates') dwelling = memory.notes.dwelling = { ...dwelling, item: SHELTER_GATE, kind: 'gates' };
+  const gated = dwelling?.kind === 'gates';
+  const door = gated && doorway.every(block => shelterGate(block?.code));
   const sealed =
     !!dwelling &&
-    [0, 1].every(dy => {
-      const block = terrain?.get(dwelling.door.x, dwelling.door.y + dy, dwelling.door.z);
-      return !!block && !block.hazard && block.boxes.length > 0;
-    });
+    (gated
+      ? doorway.every(block => shelterGateState(block?.code, 'closed'))
+      : doorway.every(block => !!block && !block.hazard && block.boxes.length > 0));
   // Shell repair has to survive opening the door and stepping outside. Limiting
   // damage to `inside` made the repair disappear on the very tick that exposed
   // a usable exterior work position, so the bot could only try (and fail) from
@@ -155,6 +162,7 @@ export function digestReading(reading: Reading, memory: Memory, lookup: (job: Jo
     short: resupplyOf(k, { home: !!home, torches: k.torches, rammedShelter }, memory.notes.stash).reduce((n, i) => n + i.count, 0),
     moreStorage: stashes.length < 3 && stashes.length > 0 && stashes.every(stash => stash.full) && missing.length > 0,
     house: !!memory.notes.house,
+    door,
     lit: light.lit,
     stocked: stashes.length > 0 && stashes.every(stash => stash.seen && now - stash.seen.at < STOCK_CHECK_MS) && missing.length === 0,
     stashKnife: stashes.some(stash => Object.keys(stash.seen?.items ?? {}).some(code => code.includes('knife-'))),

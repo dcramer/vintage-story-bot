@@ -123,6 +123,9 @@ export function parseNotes(kept: unknown): Notes {
             .slice(0, 2),
         }
       : {}),
-    dwelling: door && typeof dwelling?.item === 'string' ? { door, item: dwelling.item } : null,
+    dwelling:
+      door && typeof dwelling?.item === 'string'
+        ? { door, item: dwelling.item, ...(dwelling.kind === 'gates' ? { kind: 'gates' as const } : {}) }
+        : null,
   };
 }

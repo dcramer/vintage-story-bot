@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { eat as eating } from '../src/brain/default/reflexes/eat.ts';
 import { SIEGE_MS } from '../src/brain/default/reflexes/tunnel.ts';
+import { door as permanentDoor } from '../src/brain/default/tasks/door.ts';
 import { stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { storage } from '../src/brain/default/tasks/storage.ts';
 import brain, {
@@ -18,6 +19,7 @@ import brain, {
 } from '../src/brain/default.ts';
 import { schema as knapSchema } from '../src/goals/knap.ts';
 import { parseGoalScript } from '../src/runtime/goal-script.ts';
+import { SHELTER_GATE, shelterGateState } from '../src/support/shelter-door.ts';
 import { shelter as shelterCells, shelterScaffold } from '../src/support/structures.ts';
 
 const decide = (reading, memory): any => decision(reading, memory);
@@ -199,6 +201,7 @@ const situation = (extra = {}) => ({
   stashKnife: true,
   stocked: true,
   house: true,
+  door: true,
   lit: true,
   ...extra,
 });
@@ -1904,7 +1907,11 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
   );
   const guardedPlacement = fresh({
     home: { x: 13.5, y: 99, z: 23.5 },
-    dwelling: { door: { x: 14, y: 100, z: 26 }, item: 'game:hay-normal-ud' },
+    dwelling: {
+      door: { x: 14, y: 100, z: 26 },
+      item: 'game:wattlegate-sticks-n-closed-left-free',
+      kind: 'gates',
+    },
     house: { x: 10, y: 100, z: 20 },
   });
   guardedPlacement.notes.stash = { ...chestNote(), full: true, seen: { at: 1000, items: { 'game:cattailtops': 63 } } };
@@ -2067,7 +2074,11 @@ test('brain: shared supplies are approached from inside the owned home', () => {
   const inside = fresh({
     home,
     house: { x: 10, y: 100, z: 20 },
-    dwelling: { door: { x: 14, y: 100, z: 26 }, item: 'game:hay-normal-ud' },
+    dwelling: {
+      door: { x: 14, y: 100, z: 26 },
+      item: 'game:wattlegate-sticks-n-closed-left-free',
+      kind: 'gates',
+    },
     stash: memory.notes.stash,
     farm: {
       origin: { x: 40, y: 100, z: 40 },
@@ -2101,13 +2112,18 @@ test('brain: shared supplies are approached from inside the owned home', () => {
         get: (x, _y, z) => ({
           hazard: null,
           boxes: [{}],
-          code: (x === 11 || x === 18) && z === 23 ? 'game:torch-basic-lit-up' : 'game:rammed-light-plain',
+          code:
+            x === 14 && z === 26
+              ? 'game:wattlegate-sticks-n-closed-left-free'
+              : (x === 11 || x === 18) && z === 23
+                ? 'game:torch-basic-lit-up'
+                : 'game:rammed-light-plain',
         }),
       },
     }),
     inside,
   );
-  assert.ok(['inspect_container', 'store_items', 'take_items'].includes(inspect.start));
+  assert.ok(['inspect_container', 'store_items', 'take_items'].includes(inspect.start), JSON.stringify(inspect));
   assert.equal(inspect.args.target, memory.notes.stash?.key, 'a sealed house stays closed while its interior storage is used');
 
   const partial = fresh(inside.notes);
@@ -2133,7 +2149,55 @@ test('brain: shared supplies are approached from inside the owned home', () => {
     }),
     partial,
   );
-  assert.equal(leave.start, 'goal_script', 'a partial door is opened before starting outdoor farm work');
+  assert.equal(leave.start, 'shelter_access', 'a damaged permanent doorway is crossed before its outside repair');
+  assert.equal(leave.args.direction, 'leave');
+});
+
+test('permanent homes replace removable seals with a durable two-gate door', () => {
+  const door = { x: 4, y: 100, z: 6 };
+  const memory = fresh({
+    home: { x: 4.5, y: 99, z: 3.5 },
+    house: { x: 0, y: 100, z: 0 },
+    dwelling: { door, item: 'game:hay-normal-ud' },
+  });
+  const block = code => ({ code, boxes: code === 'game:air' ? [] : [{}], hazard: null });
+  const ctx = (codes: string[], items: Record<string, number> = {}) =>
+    ({
+      memory,
+      state: { position: { x: 4.5, y: 100, z: 7.5 } },
+      reading: { terrain: { get: (_x, y) => block(codes[y - door.y]) } },
+      k: kit(inventory(...Object.entries(items).map(([code, quantity]) => slot(code, quantity)))),
+    }) as any;
+  const clear: any = permanentDoor.run(ctx(['game:hay-normal-ud', 'game:hay-normal-ud']));
+  assert.deepEqual(clear.args.cells, [door, { ...door, y: door.y + 1 }]);
+  const craft: any = permanentDoor.run(ctx(['game:air', 'game:air'], { 'game:stick': 6 }));
+  assert.deepEqual([craft.start, craft.args.output, craft.args.count], ['craft_item', SHELTER_GATE, 2]);
+  const install: any = permanentDoor.run(ctx(['game:air', 'game:air'], { [SHELTER_GATE]: 2 }));
+  assert.equal(install.start, 'build');
+  permanentDoor.ended!({ id: 'door', kind: 'build', ok: true, outcome: 'done' } as any, memory, {} as any);
+  assert.equal(memory.notes.dwelling?.kind, 'gates');
+  assert.deepEqual(fresh(brain.notes!(memory)).notes.dwelling, memory.notes.dwelling, 'gate mode survives a controller restart');
+  assert.equal(shelterGateState('game:wattlegate-sticks-w-closed-right-free', 'closed'), true);
+  assert.equal(shelterGateState('game:wattlegate-sticks-w-opened-right-free', 'closed'), false);
+
+  const adopted = fresh({
+    home: { x: 4.5, y: 99, z: 3.5 },
+    house: { x: 0, y: 100, z: 0 },
+    dwelling: { door, item: 'game:hay-normal-ud' },
+  });
+  adopted.startupChecked = true;
+  decide(
+    reading({
+      state: state({ position: adopted.notes.home }),
+      inventory: kitted(),
+      terrain: {
+        get: (x, y, z) => block(x === door.x && z === door.z && (y === door.y || y === door.y + 1) ? SHELTER_GATE : 'game:rammed-light-plain'),
+      },
+    }),
+    adopted,
+  );
+  assert.equal(adopted.notes.dwelling?.kind, 'gates', 'observed gates replace a legacy temporary-seal note');
+  assert.equal(adopted.notes.dwelling?.item, SHELTER_GATE);
 });
 
 test('brain: a shelter has to be entered and sealed, and opens before morning work', () => {

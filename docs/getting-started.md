@@ -24,7 +24,7 @@ Survival baseline for the first five in-game days. Source for core goal definiti
 ## Starter shelter template
 
 5×5 outside, 3×3 usable interior, two-block-high walls and a solid flat roof.
-Use rammed earth for walls, roof and the two removable door-seal blocks;
+Use rammed earth for walls and roof, and removable blocks for the initial door seal;
 retain the supported natural ground as the floor. The template requires 57
 rammed-earth blocks (30 wall, 25 roof, 2 door), plus three blocks forming
 two front stair rises for roof access. Prepare 60 in six-block crafting
@@ -53,15 +53,15 @@ or extinguished lighting immediately when safe. Verify pickup and lit placement.
 
 ## House spec
 
-Internal 8×5, foundation 10×7, rammed earth (dirt → packed dirt → rammed earth). Shiver-proof even with roof gaps; hay-bale door seals it as a cellar.
+Internal 8×5, foundation 10×7, rammed earth (dirt → packed dirt → rammed earth). Shiver-proof even with roof gaps; hay bales seal the doorway during construction, then two stacked wattle gates provide a durable entrance.
 
-1. Walls: 10×7 rectangle, 2 high. Leave a 1-wide door gap centered on a long wall; close with 2 hay bales stacked.
+1. Walls: 10×7 rectangle, 2 high. Leave a 1-wide door gap centered on a long wall; close it temporarily with 2 stacked hay bales, then replace them with 2 stacked wattle gates.
 2. Narrow end walls (7 wide) rise to a gable: heights per column `2,2,3,4,3,2,2`.
 3. Torch + firestarter before sunset; place torch on a wall once enclosed.
 4. Once enclosed, dig the interior floor down 1 layer (that is the floor).
 5. Roof: A-frame spanning the long axis following the gable profile. Gaps are acceptable.
 
-Materials: rammed earth ≈ 2×(10+7)×2 walls + 8 gable + ~40 roof; 2 hay bales (16 grass).
+Materials: rammed earth ≈ 2×(10+7)×2 walls + 8 gable + ~40 roof; 2 hay bales (16 grass) for the construction seal; 2 wattle gates (6 sticks and a knife) for the permanent entrance.
 
 ## Pit kiln spec
 

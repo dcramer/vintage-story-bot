@@ -36,6 +36,7 @@ import { wait } from './default/reflexes/wait.ts';
 import { kit, type Situation } from './default/situation.ts';
 import { bags } from './default/tasks/bags.ts';
 import { dirt } from './default/tasks/dirt.ts';
+import { door } from './default/tasks/door.ts';
 import { farm } from './default/tasks/farm.ts';
 import { grass } from './default/tasks/grass.ts';
 import { house } from './default/tasks/house.ts';
@@ -70,6 +71,9 @@ export const TASKS: Concern[] = [
   knife,
   axe,
   bags,
+  // Once a permanent shell exists, replace its temporary seal before expanding
+  // storage. The dependency keeps this dormant during the starter sequence.
+  door,
   storage,
   stash,
   shovel,

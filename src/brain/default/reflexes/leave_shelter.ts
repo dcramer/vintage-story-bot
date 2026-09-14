@@ -9,7 +9,14 @@ export const leaveShelter: Concern = {
   id: 'leave_shelter',
   uncuttable: true,
   run: ({ memory, reading }) => {
-    const door = memory.notes.dwelling!.door;
+    const dwelling = memory.notes.dwelling!;
+    const door = dwelling.door;
+    if (dwelling.kind === 'gates')
+      return {
+        start: 'shelter_access',
+        args: { door, home: memory.notes.home!, direction: 'leave', timeoutMs: 600000 },
+        why: 'opening the door, crossing its threshold and closing it behind me',
+      };
     const cells = [door, { ...door, y: door.y + 1 }];
     const outside = { ...door, z: door.z + 1 };
     if (surfaceCover(reading.terrain?.get(outside.x, outside.y, outside.z))) cells.push(outside);

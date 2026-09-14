@@ -46,6 +46,7 @@ export type Job =
   | 'house'
   | 'provisions'
   | 'lighting'
+  | 'door'
   | 'repair_home';
 // The container the bot keeps things in: its observed key (cell and block code), and what it
 // held when last closed. Unknown until opened; stale once anyone else has been at it.
@@ -77,7 +78,7 @@ export type Notes = {
   failedFirepits?: (Cell & { until: number })[];
   foodRecovery?: boolean;
   construction?: Construction | null;
-  dwelling?: { door: Cell; item: string } | null;
+  dwelling?: { door: Cell; item: string; kind?: 'gates' } | null;
   stash: Stash | null;
   stores?: Stash[];
 };

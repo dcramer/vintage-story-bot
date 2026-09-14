@@ -72,10 +72,13 @@ they do not invalidate a partial shelter. Obstructions in the shell or aisle do.
 The house becomes home only after its shell, lowered floor, entry and seal
 are verified. These goals report client-observed changes, not server ACKs.
 
-Notes include `home`, `starter` (the verified starter-template origin), `dwelling` (door and sealing material), `construction`,
+Notes include `home`, `starter` (the verified starter-template origin), `dwelling` (door, closure material and permanent-gate mode), `construction`,
 `house`, `lightingDay`, `stash`, and additional `stores`. Being near home does not mean indoors:
 the body must be inside and both door cells observed solid. Entry opens the
-door, walks in, and seals it; departure opens it first. Failed re-entry falls
+door, walks in, and closes it; departure opens it first and closes it behind the
+bot. A starter shelter still uses removable sealing blocks. A completed permanent
+house replaces those blocks with two vertically stacked wattle gates and repairs
+either missing gate before other routine work. Failed re-entry falls
 back to emergency cover. Carried sealing blocks and building materials stay
 out of routine surplus deposits. Torches are lit through native firestarter
 use. Installed torches are picked up and replaced one at a time after 05:00
@@ -104,14 +107,12 @@ maintain the interior torch. Craft repair blocks from carried materials first;
 material gathering waits for safe daylight. Keep repairs ahead of ordinary
 stockpiling, while immediate danger and hunger retain priority.
 
-Planned entrance upgrade: two wattle gates stacked vertically, one gate per
-1×1 cell of the two-high front opening, instead of a conventional door that can
-break off. This is an advanced design target; the current implementation uses
-removable sealing blocks. Before adopting gates, verify native placement,
-orientation, independent opening/closing, passage, and persistence on the
-multiplayer server. Entry and departure must operate both gates and verify the
-result; maintenance must detect and replace either missing gate without
-mistaking an intentionally open gate for structural damage.
+Permanent entrances use two wattle gates stacked vertically, one gate per 1×1
+cell of the two-high front opening. The crude wooden door is not used because it
+can fall apart when operated. Entry and departure operate both gates, cross the
+threshold, close both gates and verify their observed state. Maintenance detects
+and replaces either missing gate without mistaking an intentionally open gate
+for structural damage.
 
 Shared supplies have explicit stored targets and a map marker. Full storage
 adds another chest, up to three; targets count all their observed contents. Container
