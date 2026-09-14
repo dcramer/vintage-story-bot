@@ -121,6 +121,28 @@ test('building closes from maximum reach before selecting a placement face', asy
   assert.equal(approaches, 1, 'digging keeps the full native reach');
 });
 
+test('roof placement leaves an overlapping target without standing on its only side support', async () => {
+  const cell = { x: 4, y: 102, z: 2 };
+  const inside = { x: 4.5, y: 102, z: 2.5 };
+  const supportTop = { x: 3.5, y: 103, z: 2.5 };
+  const lateral = { x: 4.5, y: 102, z: 3.5 };
+  const state = { position: inside, body: { height: 1.85, eyeHeight: 1.7 } };
+  const support = { code: 'game:rammed-light-plain', boxes: [[3, 102, 2, 4, 103, 3]], traits: [] };
+  let destination;
+  const field = {
+    latest: state,
+    env: { map: { get: (x, y, z) => (x === 3 && y === 102 && z === 2 ? support : null) } },
+    observe: async () => state,
+    approach: (_object, exclude) => [inside, supportTop, lateral].find(q => !exclude(q)),
+    walk: async q => {
+      destination = q;
+      return { state: 'arrived' };
+    },
+  };
+  assert.equal(await standNear(field, null, cell, false, true), true);
+  assert.deepEqual(destination, lateral, 'the retry uses the adjacent roof course where the support face remains visible');
+});
+
 test('an occluded existing roof obstruction retries from another build viewpoint', async () => {
   const cell = { x: 4, y: 102, z: 0 };
   const state = { position: { x: 2.5, y: 100, z: 0.5 }, body: { eyeHeight: 1.7 } };

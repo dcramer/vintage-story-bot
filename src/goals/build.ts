@@ -15,6 +15,21 @@ const center = c => ({ x: c.x + 0.5, y: c.y + 0.5, z: c.z + 0.5 });
 const sameColumn = (q, c) => Math.floor(q.x) === c.x && Math.floor(q.z) === c.z;
 const reach = 4.2;
 
+function bodyOverlapsCell(state, cell) {
+  if (!sameColumn(state.position, cell)) return false;
+  const bottom = state.position.y;
+  const top = bottom + (state.body?.height ?? 0);
+  return bottom < cell.y + 1 && top > cell.y;
+}
+
+function standsOnHorizontalSupport(field, cell, q) {
+  if (Math.abs(q.y - (cell.y + 1)) > 0.2) return false;
+  const x = Math.floor(q.x),
+    z = Math.floor(q.z);
+  if (Math.abs(x - cell.x) + Math.abs(z - cell.z) !== 1) return false;
+  return stablePlacementSupport(field.env?.map?.get(x, cell.y, z));
+}
+
 function facePoints(cell, offset) {
   const axes = ['x', 'y', 'z'];
   const tangent = axes.filter((_, i) => offset[i] === 0);
@@ -36,7 +51,7 @@ export async function standNear(field, survival, cell, force = false, placing = 
   // Placement face selection becomes unreliable at the very edge of native
   // reach. Digging can use the full range, but building first closes enough
   // distance to see a useful side of the support block.
-  if (!force && distance(from, center(cell)) <= (placing ? 3 : reach)) return true;
+  if (!force && distance(from, center(cell)) <= (placing ? 3 : reach) && !(placing && bodyOverlapsCell(field.latest, cell))) return true;
   // Look over the work before seeking another viewpoint. From the access
   // stairs this reveals the roof's headroom, which was hidden from below.
   if (placing && force) await field.look({ ...center(cell), y: cell.y + 2 });
@@ -45,6 +60,7 @@ export async function standNear(field, survival, cell, force = false, placing = 
     { point: { ...center(cell), y: preferredStandY ?? cell.y + 0.5 }, kind: 'block' },
     q =>
       (sameColumn(q, cell) && Math.abs(q.y - cell.y) < 2.5) ||
+      (placing && standsOnHorizontalSupport(field, cell, q)) ||
       q.y + field.latest.body.eyeHeight < minimumEye ||
       distance({ ...q, y: q.y + field.latest.body.eyeHeight }, center(cell)) > reach,
     // Roof-access stairs can be three columns from the unfinished roof cell,
