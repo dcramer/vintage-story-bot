@@ -1394,7 +1394,7 @@ test('travel stops a detour when it crosses the real destination', async () => {
 });
 
 test('travel accepts the same arrival-boundary tolerance as navigation', async () => {
-  const latest = { position: { x: 3.005, y: 1, z: 0 }, condition: {}, nearbyEntities: [] };
+  const latest = { position: { x: 3.35, y: 1, z: 0 }, condition: {}, nearbyEntities: [] };
   const field = {
     moved: 0,
     latest,
@@ -1406,7 +1406,7 @@ test('travel accepts the same arrival-boundary tolerance as navigation', async (
   };
   const result = await travel(field, null, { x: 0, z: 0, arrivalRadius: 3 });
   assert.equal(result.ok, true);
-  assert.equal(result.remaining, 3);
+  assert.equal(result.remaining, 3.4);
 });
 
 test('travel bounds regression from its best observed destination distance', () => {

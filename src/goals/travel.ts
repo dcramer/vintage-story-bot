@@ -9,6 +9,9 @@ import { nearestThreat } from '../support/threats.ts';
 
 export const routeRegressed = (best, current, margin = 12) => current > best + margin;
 export const elevationDetourDistance = verticalRemaining => (verticalRemaining < 1.5 ? 0 : Math.min(24, Math.max(12, verticalRemaining * 2)));
+// Navigator may finish up to its final StepTracker reach from the last route
+// cell. That cell itself can sit on the requested arrival boundary.
+const arrivalMargin = 0.36;
 
 // A flat exploration bearing can repeatedly walk down from a cave ledge even
 // though the destination is above it. After the direct route fails, prefer the
@@ -111,11 +114,10 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
         };
       return { ok: false, goal: 'travel', reason: 'no_progress', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
     }
-    // Match Navigator.reaches(): its one-centimetre tolerance absorbs floating
-    // point settling at an arrival boundary. Without it, navigation can report
-    // arrival forever while this outer composed goal keeps restarting the same
-    // already-finished leg.
-    if (remaining <= arrivalRadius + 0.01 && (y === undefined || Math.abs(state.position.y - y) < 1.5))
+    // Match Navigator plus its final 0.35-block input reach. Without this,
+    // navigation can report arrival forever while this outer composed goal
+    // keeps restarting the same already-finished leg.
+    if (remaining <= arrivalRadius + arrivalMargin && (y === undefined || Math.abs(state.position.y - y) < 1.5))
       return { ok: true, goal: 'travel', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
     field.report('travelling', { remaining: +remaining.toFixed(1), legs, roughRoute: field.roughRouteStatus });
     const elevationDetour = y === undefined ? 0 : elevationDetourDistance(Math.abs(state.position.y - y));
@@ -140,7 +142,8 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
       // its way to a farther checkpoint. Stop that leg while the body is in
       // range; waiting for the leg to finish can carry it straight past the
       // requested point before the outer loop gets another observation.
-      if (currentRemaining <= arrivalRadius + 0.01 && (y === undefined || Math.abs(current.position.y - y) < 1.5)) return 'destination_reached';
+      if (currentRemaining <= arrivalRadius + arrivalMargin && (y === undefined || Math.abs(current.position.y - y) < 1.5))
+        return 'destination_reached';
       return !nearestThreat(current) && routeRegressed(bestRemaining, currentRemaining) ? 'route_regressed' : null;
     });
     legs++;
