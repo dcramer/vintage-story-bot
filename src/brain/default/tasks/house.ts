@@ -89,7 +89,10 @@ export const house: Concern = {
         if (clearing.length)
           return {
             start: 'dig_area',
-            args: { cells: clearing.slice(0, 12), timeoutMs: 600000 },
+            // The survey emits brush-to-canopy order. Generic excavation is
+            // top-down, so preserve this explicit sequence to open a reachable
+            // sight line before trying the tree crown.
+            args: { cells: clearing.slice(0, 12), order: 'given', timeoutMs: 600000 },
             why: 'removing snow, vegetation and trees from the house footprint',
           };
         memory.notes.construction = null;

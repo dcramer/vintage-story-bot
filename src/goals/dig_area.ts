@@ -14,6 +14,7 @@ export default defineGoal({
       box: z.object({ from: cell, to: cell }).strict().optional().describe('Inclusive cuboid, at most 64 cells; dug top layer first.'),
       tool: z.string().min(1).max(64).optional().describe('Tool class to hold, e.g. Shovel; equips the lowest adequate tier.'),
       minTier: z.number().int().min(0).max(20).optional(),
+      order: z.enum(['top-down', 'given']).default('top-down').describe('Top-down for excavations; given preserves an explicit clearing sequence.'),
       manageFood: z.boolean().default(false),
       sprint: z.boolean().default(false),
       timeoutMs: z.number().int().min(1000).max(3600000).default(600000),
@@ -28,7 +29,7 @@ export default defineGoal({
     ),
   destructive: true,
   description:
-    'Dig each cell in turn: walk to a standing spot off its column, aim, dig with normal mining rules, verify. Known-air cells ' +
+    'Dig each cell in top-down or supplied order: walk to a standing spot off its column, aim, dig with normal mining rules, verify. Known-air cells ' +
     'are skipped; drops are not collected (use harvest/collect_item). Reports failed cells with reasons instead of retrying. ' +
     'Never digs own footing. Returns START; poll goal_status.',
   title: () => 'Dig out an area',

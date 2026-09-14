@@ -15,6 +15,7 @@ import { shovel } from '../src/brain/default/tasks/tools.ts';
 import { fresh, kit } from '../src/brain/default.ts';
 import { selectedPlacementCell, selectedPlacementSupport, stablePlacementSupport, standNear } from '../src/goals/build.ts';
 import craft from '../src/goals/craft_item.ts';
+import digAreaGoal from '../src/goals/dig_area.ts';
 import buildHouse from '../src/goals/house.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
 import { findRoute } from '../src/runtime/navigation/planner.ts';
@@ -357,6 +358,20 @@ test('house: survey clearing works upward from reachable ground cover', () => {
     clearing.map(cell => cell.y),
     [99, 100, 101],
     'brush and low foliage open a sight line before the bot attempts the canopy',
+  );
+  const memory = fresh();
+  memory.notes.construction = { origin: { x: 0, y: 100, z: 0 }, phase: 'survey', surveyed: true };
+  const decision: any = house.run({
+    memory,
+    k: kit(inventory({})),
+    state: { position: { x: 4.5, y: 100, z: 3.5 } },
+    reading: { terrain: { get: (x, y, z) => blocks.get(`${x}:${y}:${z}`) } },
+  } as any);
+  assert.equal(decision.start, 'dig_area');
+  assert.equal(digAreaGoal.schema.parse(decision.args).order, 'given', 'the generic excavator must not reverse the survey sequence');
+  assert.deepEqual(
+    decision.args.cells.map(cell => cell.y),
+    [99, 100, 101],
   );
 });
 

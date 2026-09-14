@@ -77,7 +77,7 @@ export const selectedPlacementSupport = (remembered, selected) =>
 export const selectedPlacementCell = (item, selected) =>
   !selected ? 'unknown' : selected.code === item ? 'placed' : replaceablePlant(selected.code) ? 'clear' : 'blocked';
 
-export async function digArea(field, survival, { cells, tool, minTier = 0 }) {
+export async function digArea(field, survival, { cells, tool, minTier = 0, order: requestedOrder = 'top-down' }) {
   const done = [],
     failed = [];
   const summary = () => ({ total: cells.length, dug: done.length, failed: failed.length, moved: +field.moved.toFixed(1) });
@@ -88,7 +88,10 @@ export async function digArea(field, survival, { cells, tool, minTier = 0 }) {
     if (current?.tool === tool && current.toolTier >= minTier && current.durability > 0) return current.slot;
     return (await equip(field, { tool, minTier })).slot;
   };
-  const order = [...cells].sort((a, b) => b.y - a.y || horizontal(center(a), field.latest.position) - horizontal(center(b), field.latest.position));
+  const order =
+    requestedOrder === 'given'
+      ? [...cells]
+      : [...cells].sort((a, b) => b.y - a.y || horizontal(center(a), field.latest.position) - horizontal(center(b), field.latest.position));
   for (const cell of order) {
     await field.observe(true);
     await survival?.tend();
