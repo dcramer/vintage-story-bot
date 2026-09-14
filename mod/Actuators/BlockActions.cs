@@ -59,14 +59,11 @@ internal sealed class BlockActions(ICoreClientAPI api)
             var blocks = api.World.BlockAccessor;
             var destinationBlock = blocks.GetBlock(destination);
             var destinationFluid = blocks.GetBlock(destination, BlockLayersAccess.Fluid);
-            bool displacesWater = destinationFluid.BlockMaterial == EnumBlockMaterial.Water &&
-                stack.Block.DisplacesLiquids(blocks, destination);
             if (!PlacementPolicy.DestinationAvailable(
                 blocks.GetChunkAtBlockPos(destination) != null,
                 destinationBlock.Id == 0,
-                destinationFluid.Id == 0,
-                displacesWater))
-                return Error("Placement destination must be loaded and empty, or contain water displaced by this block.");
+                destinationFluid.LiquidCode))
+                return Error("Placement destination must be loaded, empty and outside lava.");
         }
         else
         {
