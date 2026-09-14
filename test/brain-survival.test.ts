@@ -223,6 +223,7 @@ test('house: partial material batches resume the same site without claiming a ho
 });
 
 test('a lost knapping surface retries its unfinished tool prerequisite', () => {
+  assert.equal(shovel.uncuttable, true, 'tool acquisition owns its bounded threat avoidance');
   assert.equal(shovel.setAside?.({ kind: 'knap', ok: false, reason: 'surface_gone_without_output' } as any, {} as any, {} as any), false);
 });
 

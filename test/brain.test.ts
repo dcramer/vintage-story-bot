@@ -321,16 +321,18 @@ test('brain: danger and carried food come before progress, and the kit comes in 
   );
 });
 
-test('brain: a threat interrupts its own goal, a failed job is set aside, a finished shelter becomes home', () => {
+test('brain: tool work owns threat avoidance, a failed job is set aside, a finished shelter becomes home', () => {
   const memory = fresh();
   memory.notes.home = { x: 0, y: 100, z: 0 };
   memory.notes.stash = chestNote();
   const first = decide(reading({ inventory: inventory(slot('game:stick', 2)) }), memory);
   assert.deepEqual([first.start, first.args.match, memory.job], ['gather', 'looseflints', 'knife'], 'a stick in hand: flint for the knife next');
   const wolf = state({ nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }] });
-  assert.deepEqual(decide(reading({ state: wolf, active: { id: 'g1', kind: 'gather', state: 'running', by: 'brain' } }), memory), {
-    stop: 'threat',
-  });
+  assert.deepEqual(
+    decide(reading({ state: wolf, active: { id: 'g1', kind: 'gather', state: 'running', by: 'brain' } }), memory),
+    { wait: 'letting gather finish' },
+    'the gatherer pauses and routes around nearby threats without losing the tool job',
+  );
   const handoff = decide(
     reading({ last: { id: 'g1', kind: 'gather', ok: false, reason: 'brain: threat' }, state: state({ orientation: { yawDegrees: 0 } }), now: 1001 }),
     memory,
