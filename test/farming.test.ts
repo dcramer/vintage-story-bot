@@ -166,6 +166,15 @@ test('an established farm revalidates its own partial enclosure after restart', 
     !resumed.clear.some(cell => cell.x === bedSnow.x && cell.y === bedSnow.y && cell.z === bedSnow.z),
     'snow inside an established gate is deferred until the farm goal opens it',
   );
+  for (const bed of farmBeds(plan))
+    map.put({
+      ...bed,
+      seenAt: Date.now(),
+      traits: [],
+      code: 'game:farmland-dry-medium',
+      boxes: [[bed.x, bed.y, bed.z, bed.x + 1, bed.y + 0.9375, bed.z + 1]],
+    });
+  assert.ok(farmGroundwork(map, plan), 'tilled beds remain valid groundwork when an established farm resumes');
   assert.equal(
     farmGroundwork(map, { origin: plan.origin, turn: plan.turn }),
     null,

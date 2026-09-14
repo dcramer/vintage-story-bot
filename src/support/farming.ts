@@ -32,7 +32,10 @@ export const farmMargin = (farm: Farm) => {
 // The farm replaces its eight beds with fertile soil, so a naturally level
 // shovel-workable shore is enough. Requiring fertile soil here strands the
 // planner on common sand and gravel shores that it can terraform itself.
-export const workableFarmFloor = (cell, y) => supportedFloor(cell, y) && /^game:(?:soil-|forestfloor-|sand-|gravel-)/.test(cell?.code ?? '');
+export const workableFarmFloor = (cell, y) =>
+  !!cell &&
+  !cell.hazard &&
+  (fertileBed(cell.code) || (supportedFloor(cell, y) && /^game:(?:soil-|forestfloor-|sand-|gravel-)/.test(cell.code ?? '')));
 // Lake ice is observed frozen freshwater: it can site winter preparation and
 // becomes the same irrigation source when it thaws. Saltwater remains excluded.
 export const freshwater = block => /^game:(?:water-|lakeice$)/.test(block?.code ?? '');
