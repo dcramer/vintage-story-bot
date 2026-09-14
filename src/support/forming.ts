@@ -20,6 +20,8 @@ export const hasFormingOutputRoom = (inventory, output, maxStackSize = 1) =>
   ownedSlots(inventory).some(slot => !slot.bag && (!slot.code || (slot.code === output && slot.quantity < maxStackSize)));
 
 export const needsOpenRecipeSelection = (state, detail) => !state.controlReady && !detail?.forming?.recipe;
+export const finishedFormOnGround = (kind, detail) =>
+  kind === 'clayforming' && detail?.code === 'game:groundstorage' && detail.key?.startsWith('block:');
 
 const voxelPoint = (cell, [vx, vy, vz], top = true) => ({
   x: cell.x + (vx + 0.5) / 16,
@@ -220,6 +222,21 @@ export async function form(field, { kind, output, material }) {
       // Surface gone: finished (output given) or destroyed.
       if ((await field.until(async () => (await gained()) >= 1, { timeoutMs: 2000, everyMs: 200 })).met)
         return { ok: true, goal: kind === 'knapping' ? 'knap' : 'clayform', ...summary(), gained: await gained(), verification: 'inventory_delta' };
+      // Finished pottery remains as a ground-storage stack on the former clay-form cell.
+      // Pick up that exact observed stack normally, then require the requested output in inventory.
+      if (finishedFormOnGround(kind, detail)) {
+        const selected = await equip(field, { item: null });
+        inventory = await field.send({ action: 'inventory' });
+        await field.send({
+          action: 'interact',
+          durationMs: 250,
+          expectedTarget: detail.key,
+          expectedState: inventory.state,
+          expectedItem: { slot: selected.slot, code: null },
+        });
+        if ((await field.until(async () => (await gained()) >= 1, { timeoutMs: 2000, everyMs: 200 })).met)
+          return { ok: true, goal: 'clayform', ...summary(), gained: await gained(), verification: 'ground_pickup' };
+      }
       return { ok: false, reason: 'surface_gone_without_output', ...summary() };
     }
     const f = detail.forming;

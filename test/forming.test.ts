@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formingGround, hasFormingOutputRoom, inspectKnownFormingSurface, needsOpenRecipeSelection } from '../src/support/forming.ts';
+import {
+  finishedFormOnGround,
+  formingGround,
+  hasFormingOutputRoom,
+  inspectKnownFormingSurface,
+  needsOpenRecipeSelection,
+} from '../src/support/forming.ts';
 
 test('forming surfaces reject loose resources as ground', () => {
   assert.equal(formingGround({ key: 'block:0:1:2:3:game:soil-low-none', code: 'game:soil-low-none', face: 'up' }), true);
@@ -33,6 +39,14 @@ test('forming resumes a selected clay recipe without submitting it again', () =>
   assert.equal(needsOpenRecipeSelection({ controlReady: true }, selected), false);
   assert.equal(needsOpenRecipeSelection({ controlReady: false }, selected), false);
   assert.equal(needsOpenRecipeSelection({ controlReady: false }, { forming: { recipe: null } }), true);
+});
+
+test('finished pottery is recognized in ground storage on its former forming cell', () => {
+  const detail = { key: 'block:0:1:2:3:game:groundstorage', code: 'game:groundstorage' };
+
+  assert.equal(finishedFormOnGround('clayforming', detail), true);
+  assert.equal(finishedFormOnGround('knapping', detail), false);
+  assert.equal(finishedFormOnGround('clayforming', { ...detail, code: 'game:air' }), false);
 });
 
 test('forming retries a known surface after clearing a leaf obstruction', async () => {
