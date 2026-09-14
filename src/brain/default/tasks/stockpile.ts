@@ -1,3 +1,4 @@
+import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import type { Concern, Stash } from '../concern.ts';
 import { allStashes, goTo, noteContents, selectStash } from '../concern.ts';
 import type { Kit } from '../situation.ts';
@@ -25,7 +26,10 @@ export const stockpile: Concern = {
   after: ['storage', 'shelter', 'knife', 'axe'],
   run: ctx => {
     const stores = allStashes(ctx.memory.notes);
-    let stash = stores.find(s => !s.seen || ctx.now - s.seen.at >= STOCK_CHECK_MS) ?? ctx.memory.notes.stash!;
+    const stale = stores
+      .filter(s => !s.seen || ctx.now - s.seen.at >= STOCK_CHECK_MS)
+      .sort((a, b) => horizontal(a, ctx.state.position) - horizontal(b, ctx.state.position));
+    let stash = stale[0] ?? ctx.memory.notes.stash!;
     if (stash !== ctx.memory.notes.stash) selectStash(ctx.memory, stash);
     if (!stash.seen || ctx.now - stash.seen.at >= STOCK_CHECK_MS) {
       return (

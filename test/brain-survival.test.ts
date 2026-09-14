@@ -960,6 +960,17 @@ test('stockpile: remembered supplies survive changing to an additional chest', (
   assert.deepEqual(fresh(memory.notes).notes.stores?.[0].seen, first.seen);
 });
 
+test('stockpile: checks the nearest stale chest before an old primary one', () => {
+  const far = { ...chest, x: 100, key: 'block:0:100:100:0:game:stationarybasket-east' };
+  const near = { ...chest, x: 2, key: 'block:0:2:100:0:game:stationarybasket-west' };
+  const memory = fresh({ stash: far, stores: [near] });
+  const ctx: any = { memory, now: 400000, state: { position: { x: 1, y: 100, z: 0 } }, k: kit(inventory({ 'game:stick': 4 })) };
+  const work: any = stockpile.run(ctx);
+  assert.equal(work.start, 'inspect_container');
+  assert.equal(work.args.target, near.key);
+  assert.equal(memory.notes.stash?.key, near.key);
+});
+
 test('home maintenance repairs observed shell gaps, never unknown cells or the open doorway', () => {
   const notes = { home: { x: 2.5, y: 100, z: 2.5 }, starter: { x: 0, y: 100, z: 0 }, stash: null };
   const reading = {
