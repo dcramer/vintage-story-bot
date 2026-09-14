@@ -355,6 +355,9 @@ test('brain: tool work owns threat avoidance, a failed job is set aside, a finis
   memory.job = null;
   const fled = decide(reading({ state: wolf }), memory);
   assert.equal(fled.start, 'travel');
+  const belowHome = fresh({ home: { x: 0, y: 110, z: 0 } });
+  const upwardFlight = decide(reading({ state: { ...wolf, position: { x: 0, y: 100, z: 0 }, orientation: { yawDegrees: 0 } } }), belowHome);
+  assert.equal(upwardFlight.args.y, 110, 'a cave flight keeps the known surface elevation while moving away from danger');
   assert.equal(
     decide(reading({ active: { id: 'f', kind: 'travel', state: 'running', by: 'brain' }, now: 2600 }), memory).wait,
     'letting travel finish',

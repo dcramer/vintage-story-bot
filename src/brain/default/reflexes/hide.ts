@@ -22,7 +22,17 @@ export const hide: Concern = {
     const away = danger ? fleeTarget(state.position, danger) : escapePoint(state.position, state.orientation?.yawDegrees ?? 0, home);
     return {
       start: 'travel',
-      args: { x: away.x, z: away.z, arrivalRadius: 8, sprint: true, timeoutMs: 600000 },
+      // A bot trapped below its known home must be allowed to ratchet up
+      // reachable ledges while it moves horizontally away from the threat.
+      // Without an elevation, cave flights only probe their current floor.
+      args: {
+        x: away.x,
+        ...(home && home.y > state.position.y + 1 ? { y: home.y } : {}),
+        z: away.z,
+        arrivalRadius: 8,
+        sprint: true,
+        timeoutMs: 600000,
+      },
       why: danger ? `${danger.code} at ${Math.round(horizontal(state.position, danger.point))} blocks` : 'hurt by something unseen',
     };
   },
