@@ -488,7 +488,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
             },
           }
         : {}),
-      ...(cell(kept?.construction?.origin) && ['walls', 'floor', 'enter'].includes(kept?.construction?.phase ?? '')
+      ...(cell(kept?.construction?.origin) && ['site', 'walls', 'floor', 'enter'].includes(kept?.construction?.phase ?? '')
         ? { construction: { origin: cell(kept!.construction!.origin)!, phase: kept!.construction!.phase } }
         : {}),
       stash: stashNote(kept?.stash),

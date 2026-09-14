@@ -18,6 +18,7 @@ import buildHouse from '../src/goals/house.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
 import { findRoute } from '../src/runtime/navigation/planner.ts';
 import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
+import { houseGroundwork } from '../src/support/house-site.ts';
 import {
   houseScaffold,
   house as houseTemplate,
@@ -251,12 +252,38 @@ test('house: unknown terrain and hazards never qualify as a building site', () =
     ),
   );
   assert.equal(houseSite({ get: () => ({ boxes: [{}], hazard: 'water' }) }, p), null);
+  assert.equal(
+    houseSite({ get: (x, y, z) => ({ code: 'game:lakeice', boxes: [[x, y, z, x + 1, y + 1, z + 1]], hazard: null }) }, p),
+    null,
+    'seasonal lake ice is not permanent building ground',
+  );
   const occupied = (code, traits = []) => ({
     get: (x, y, z) => (y === 100 ? { code, traits, boxes: [], hazard: null } : terrain.get(x, y, z)),
   });
   assert.ok(houseSite(occupied('game:flower-horsetail-free'), p), 'ground plants are cleared before construction');
   assert.ok(houseSite(occupied('game:leaves-birch', ['leaves']), p), 'visible leaves are removable cover');
   assert.equal(houseSite(occupied('game:stationarybasket-east'), p), null, 'non-colliding occupied cells are not empty construction space');
+});
+
+test('house: a one-block rough natural site is leveled instead of requiring a frozen flat surface', () => {
+  const terrain = {
+    get: (x: number, y: number, z: number) => {
+      const high = x >= 0 && x < 3;
+      const low = x >= 7 && x < 10;
+      if (y < 98 || y > 104) return undefined;
+      if (y <= (high ? 100 : low ? 98 : 99))
+        return {
+          code: 'game:soil-low-none',
+          traits: ['diggable'],
+          boxes: [[x, y, z, x + 1, y + 1, z + 1]],
+          hazard: null,
+        };
+      return { code: 'game:air', traits: [], boxes: [], hazard: null };
+    },
+  };
+  const work = houseGroundwork(terrain, { x: 0, y: 100, z: 0 });
+  assert.equal(work?.clear.length, 21, 'the three high columns are cut down');
+  assert.equal(work?.fill.length, 21, 'the three low columns are filled up');
 });
 
 test('house: known level ground near camp is used even when an errand left the body far away', () => {

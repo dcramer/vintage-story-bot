@@ -1,10 +1,10 @@
 import { FARM_SOIL } from '../../../support/crops.ts';
-import { shelterCover, supportedFloor } from '../../../support/sites.ts';
+import { houseFoundationSafe, houseGroundwork } from '../../../support/house-site.ts';
 import { house as blueprint, houseScaffold } from '../../../support/structures.ts';
 import type { Cell, Concern } from '../concern.ts';
 import { allStashes, failedOnItsOwn, goTo, noteContents, selectStash, setHome } from '../concern.ts';
 
-export type Construction = { origin: Cell; phase: 'walls' | 'floor' | 'enter' };
+export type Construction = { origin: Cell; phase: 'site' | 'walls' | 'floor' | 'enter' };
 export const RAMMED = 'game:rammed-light-plain';
 export const HAY = 'game:hay-normal-ud';
 export const HOUSE_BLOCKS = blueprint({ x: 0, y: 0, z: 0 }, RAMMED).length + houseScaffold({ x: 0, y: 0, z: 0 }, RAMMED).length;
@@ -21,32 +21,7 @@ export function houseSite(terrain: any, position: Cell): Cell | null {
   for (const y of [0, 1, -1, 2, -2].map(dy => Math.floor(position.y) + dy))
     for (const { dx, dz } of SITE_OFFSETS) {
       const origin = { x: Math.floor(position.x) - 4 + dx, y, z: Math.floor(position.z) - 3 + dz };
-      let fits = true;
-      for (let x = -1; x <= 10 && fits; x++)
-        for (let z = -1; z <= 7 && fits; z++) {
-          const ground = terrain.get(origin.x + x, y - 1, origin.z + z);
-          if (!supportedFloor(ground, y)) {
-            fits = false;
-            break;
-          }
-          for (let h = 0; h <= 4; h++) {
-            const air = terrain.get(origin.x + x, y + h, origin.z + z);
-            if (!air || air.hazard || ((air.boxes.length || (air.code && air.code !== 'game:air')) && !shelterCover(air, h))) {
-              fits = false;
-              break;
-            }
-          }
-        }
-      if (fits) {
-        const step = houseScaffold(origin, RAMMED)[0];
-        const ground = terrain.get(step.x, y - 1, step.z);
-        if (!supportedFloor(ground, y)) continue;
-        for (let h = 0; h < 4; h++) {
-          const air = terrain.get(step.x, y + h, step.z);
-          if (!air || air.hazard || ((air.boxes.length || (air.code && air.code !== 'game:air')) && !shelterCover(air, h))) fits = false;
-        }
-        if (fits) return origin;
-      }
+      if (houseGroundwork(terrain, origin)) return origin;
     }
   return null;
 }
@@ -59,15 +34,56 @@ export const house: Concern = {
   run: ctx => {
     const { k, memory } = ctx;
     let plan = memory.notes.construction;
+    if (plan?.phase === 'walls' && typeof ctx.reading?.terrain?.get === 'function' && !houseFoundationSafe(ctx.reading.terrain, plan.origin)) {
+      // A winter collision surface may have fooled an older controller. Do not
+      // commit another material batch to seasonal water.
+      memory.notes.construction = null;
+      plan = null;
+    }
     if (!plan) {
       // Prefer known terrain around the established camp. An earlier errand
       // may have left the body far away, but that should not move the planned
       // permanent home or send site search farther from its storage.
       const origin = houseSite(ctx.reading.terrain, memory.notes.home ?? ctx.state.position);
       if (!origin) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'looking for level ground for the house' };
-      plan = memory.notes.construction = { origin, phase: 'walls' };
+      plan = memory.notes.construction = { origin, phase: 'site' };
     }
     const count = (item: string) => k.slots.reduce((n, s) => n + (s.code?.includes(item) ? s.quantity : 0), 0);
+    if (plan.phase === 'site') {
+      const groundwork = houseGroundwork(ctx.reading.terrain, plan.origin);
+      if (!groundwork) {
+        memory.notes.construction = null;
+        return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'refreshing terrain for a permanent house site' };
+      }
+      const soils = ['verylow', 'low']
+        .map(grade => ({ grade, item: `game:soil-${grade}-none`, count: count(`game:soil-${grade}-none`) }))
+        .sort((a, b) => b.count - a.count);
+      const soil = soils[0];
+      if (groundwork.fill.length > soil.count) {
+        const forestFloor =
+          soil.grade === 'low' &&
+          [...(ctx.reading?.terrain?.cells?.values() ?? [])].some(
+            (cell: any) =>
+              cell.code?.startsWith('game:forestfloor-') && Math.hypot(cell.x + 0.5 - plan!.origin.x, cell.z + 0.5 - plan!.origin.z) <= 64,
+          );
+        return {
+          start: 'harvest',
+          args: {
+            match: forestFloor ? 'forestfloor-' : `soil-${soil.grade}-`,
+            item: soil.item,
+            count: groundwork.fill.length - soil.count,
+            tool: 'Shovel',
+            timeoutMs: 600000,
+          },
+          why: 'earth to level the permanent house site',
+        };
+      }
+      return {
+        start: 'house',
+        args: { ...plan, foundationItem: soil.item, timeoutMs: 1800000 },
+        why: 'clearing and leveling the permanent house site',
+      };
+    }
     if (plan.phase === 'walls' && count(RAMMED) < 6) {
       for (const item of [RAMMED, 'game:packeddirt', 'game:soil-low-none', 'game:soil-verylow-none']) {
         if (count(item) >= (item.includes('soil-') ? 10 : 6)) break;
@@ -118,8 +134,7 @@ export const house: Concern = {
       const localForestFloor =
         soil.grade === 'low' &&
         [...(ctx.reading?.terrain?.cells?.values() ?? [])].some(
-          (cell: any) =>
-            cell.code?.startsWith('game:forestfloor-') && Math.hypot(cell.x + 0.5 - ctx.state.position.x, cell.z + 0.5 - ctx.state.position.z) <= 8,
+          (cell: any) => cell.code?.startsWith('game:forestfloor-') && Math.hypot(cell.x + 0.5 - plan.origin.x, cell.z + 0.5 - plan.origin.z) <= 64,
         );
       return {
         start: 'harvest',
@@ -170,7 +185,7 @@ export const house: Concern = {
     if (last.kind === 'take_items') noteContents(memory, last, now);
     const plan = memory.notes.construction;
     if (!plan || !last.ok) return;
-    if (last.kind === 'house') plan.phase = plan.phase === 'walls' ? 'floor' : 'enter';
+    if (last.kind === 'house') plan.phase = plan.phase === 'site' ? 'walls' : plan.phase === 'walls' ? 'floor' : 'enter';
     if (last.kind === 'enter_shelter' && plan.phase === 'enter') {
       setHome(memory, last.result.home);
       memory.notes.house = plan.origin;

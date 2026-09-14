@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
+import { houseGroundwork } from '../support/house-site.ts';
 import { shelterCover } from '../support/sites.ts';
 import { house as houseCells, houseScaffold } from '../support/structures.ts';
 import { runField } from '../support/task.ts';
@@ -11,7 +12,8 @@ export default defineGoal({
   schema: z
     .object({
       origin: z.object({ x: z.number().int(), y: z.number().int(), z: z.number().int() }).strict(),
-      phase: z.enum(['walls', 'floor']),
+      phase: z.enum(['site', 'walls', 'floor']),
+      foundationItem: z.string().min(1).max(160).optional(),
       timeoutMs: z.number().int().min(1000).max(3600000).default(1800000),
     })
     .strict(),
@@ -19,11 +21,29 @@ export default defineGoal({
   description:
     'Build the getting-started 10x7 rammed-earth house shell, or dig its 8x5 interior floor down one block. Origin is a chosen level site. Existing shell blocks must match; partial construction can be resumed. Returns START; poll goal_status.',
   title: args => `House ${args.phase}`,
-  announce: args => (args.phase === 'walls' ? 'Building the rammed-earth house.' : 'Lowering the interior floor.'),
-  run: (env, { origin, phase, ...options }) =>
+  announce: args =>
+    args.phase === 'site'
+      ? 'Clearing and leveling the house site.'
+      : args.phase === 'walls'
+        ? 'Building the rammed-earth house.'
+        : 'Lowering the interior floor.',
+  run: (env, { origin, phase, foundationItem, ...options }) =>
     runField(env, options, ['inventory', 'block_actions'], async (field, survival) => {
       const approach = await travel(field, survival, { x: origin.x + 4.5, y: origin.y, z: origin.z + 7.5, arrivalRadius: 0.6 });
       if (!approach.ok) return { ...approach, goal: 'house', phase, origin };
+      if (phase === 'site') {
+        const groundwork = houseGroundwork(field.env.map, origin);
+        if (!groundwork) return { ok: false, goal: 'house', phase, origin, reason: 'unsafe_or_unknown_site' };
+        const cleared = await digArea(field, survival, { cells: groundwork.clear, tool: undefined });
+        if (!cleared.ok) return { ...cleared, goal: 'house', phase, origin };
+        if (!groundwork.fill.length) return { ...cleared, ok: true, goal: 'house', phase, origin, filled: 0 };
+        if (!foundationItem) return { ok: false, goal: 'house', phase, origin, reason: 'foundation_item_required' };
+        const filled = await build(field, survival, {
+          cells: groundwork.fill.map(cell => ({ ...cell, item: foundationItem })),
+          verifyExisting: true,
+        });
+        return { ...filled, goal: 'house', phase, origin, cleared: cleared.dug, filled: filled.placed };
+      }
       if (phase === 'walls') {
         const cover = [];
         for (let x = 0; x < 10; x++)
