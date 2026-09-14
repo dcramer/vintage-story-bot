@@ -112,6 +112,8 @@ export type Situation = {
   hunger: number | null;
   foodRecovery?: boolean;
   reserve: number;
+  // Learned from an observed death boundary, never assumed from configuration.
+  keepInventory?: boolean;
   night: boolean;
   home: boolean;
   atHome: boolean;

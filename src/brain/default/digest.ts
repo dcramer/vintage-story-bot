@@ -110,6 +110,7 @@ export function digestReading(reading: Reading, memory: Memory, lookup: (job: Jo
     hunger: satiety,
     foodRecovery: memory.notes.foodRecovery,
     reserve: k.reserve,
+    keepInventory: memory.notes.keepInventory === true,
     night:
       isNight(environment) ||
       (!!home &&

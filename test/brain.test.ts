@@ -106,6 +106,7 @@ test('brain: learns a keep-inventory server across a death and skips its cosmeti
   const grave = [{ guid: 'death-keep', title: 'You died here', icon: 'gravestone', position: { x: 30, y: 100, z: 0 } }];
   const next = decide(reading({ state: state(), inventory: after, markers: grave, now: 2000 }), memory);
   assert.equal(memory.notes.keepInventory, true);
+  assert.equal(memory.situation?.keepInventory, true);
   assert.notEqual((next as any).start, 'retrieve_body');
 });
 
@@ -218,6 +219,11 @@ test('brain: danger and carried food come before progress, and the kit comes in 
     pickJob(situation({ hunger: 0.1, reserve: 0, night: true, atHome: false })),
     'go_home',
     'an empty pack does not start a food expedition at night',
+  );
+  assert.equal(
+    pickJob(situation({ hunger: 0.05, reserve: 0, night: true, atHome: false, keepInventory: true, moreStorage: true })),
+    'storage',
+    'verified keep-inventory worlds keep durable work moving when starvation is already unavoidable',
   );
   assert.equal(
     pickJob(situation({ hunger: 0.1, night: true, reserve: 100, burrowed: true })),

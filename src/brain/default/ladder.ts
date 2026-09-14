@@ -13,6 +13,10 @@ import type { Situation } from './situation.ts';
 // Below this satiety a burrow is opened whatever stands outside.
 export const STARVING = 0.1;
 const starving = (s: Situation) => s.hunger !== null && s.hunger < STARVING;
+// On a world that has returned a full carried inventory after death, sheltering
+// cannot save a starving bot with no food; it only spends the rest of the life
+// preventing durable progress. This is learned from play, never assumed.
+const progressThroughRespawn = (s: Situation) => s.keepInventory === true && starving(s) && s.reserve === 0;
 // The starter shelter is enough to recover from a failed night. Once it
 // exists, darkness alone should not consume half the run that could establish
 // the permanent house; threats and storms still keep their higher priority.
@@ -40,12 +44,13 @@ const stormWithCover = (s: Situation) => s.storm && ((s.home && s.atHome) || s.b
 const stormNowhereToDig = (s: Situation, tried: Tried) => s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow');
 const stormNoCover = (s: Situation) => s.storm;
 const badGround = (s: Situation) => s.dangerHere && !establishingHouse(s) && !s.burrowed;
-const nightAwayFromHome = (s: Situation, tried: Tried) => s.night && !establishingHouse(s) && s.home && !s.atHome && !tried.has('go_home');
-const nightWithCover = (s: Situation) => s.night && !establishingHouse(s) && ((s.home && s.atHome) || s.burrowed);
+const nightAwayFromHome = (s: Situation, tried: Tried) =>
+  s.night && !progressThroughRespawn(s) && !establishingHouse(s) && s.home && !s.atHome && !tried.has('go_home');
+const nightWithCover = (s: Situation) => s.night && !progressThroughRespawn(s) && !establishingHouse(s) && ((s.home && s.atHome) || s.burrowed);
 // A burrow that failed here (rock, nothing to seal it): walk on and dig in elsewhere, never stand in the dark.
 const nightNowhereToDig = (s: Situation, tried: Tried) =>
-  s.night && !establishingHouse(s) && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow');
-const nightNoCover = (s: Situation) => s.night && !establishingHouse(s);
+  s.night && !progressThroughRespawn(s) && !establishingHouse(s) && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow');
+const nightNoCover = (s: Situation) => s.night && !progressThroughRespawn(s) && !establishingHouse(s);
 const burrowedAndCalm = (s: Situation, tried: Tried) => s.burrowed && !tried.has('unburrow');
 const readyToBuildShelter = (s: Situation, tried: Tried) => !!s.shelterReady && !tried.has('shelter');
 
