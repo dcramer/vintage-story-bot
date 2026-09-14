@@ -1647,3 +1647,29 @@ test('a failed partial approach that walked away skips the elevated patch', asyn
   assert.ok(field.skipped.has(target.key));
   assert.ok(field.skipped.has(adjacent.key), 'the next crop on the same unreachable ledge must not restart the approach');
 });
+
+test('completed detours that orbit a lead eventually skip it', async () => {
+  const field = new Fieldwork({ places: new Places(() => 1000) }, { now: () => 1000 });
+  field.latest = {
+    position: { x: 0.5, y: 110, z: 0.5 },
+    orientation: { yawDegrees: 0 },
+    nearbyEntities: [],
+    body: { halfWidth: 0.3, height: 1.8 },
+  };
+  field.approach = () => undefined;
+  field.report = () => {};
+  field.observe = async () => field.latest;
+  field.scan = async () => [];
+  field.explore = () => ({ ...field.latest.position, z: field.latest.position.z + 1 });
+  field.walk = async target => {
+    field.latest = { ...field.latest, position: target };
+    return { state: 'arrived' };
+  };
+  const target = { key: 'shore-reed', point: { x: 10.5, y: 110, z: 0.5 } };
+  const search = new Search(field, { kind: 'coopersreed', match: ['coopersreed'], wanted: () => true, take: async () => false });
+
+  for (let attempt = 0; attempt < 3; attempt++) await search.approach(target, null);
+  assert.equal(field.skipped.has(target.key), false, 'a few detours are allowed to route around the obstacle');
+  await search.approach(target, null);
+  assert.equal(field.skipped.has(target.key), true, 'four completed detours without material progress quarantine the lead');
+});

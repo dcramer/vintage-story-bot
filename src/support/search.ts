@@ -160,6 +160,7 @@ export class Search {
   rangingFrom: any = null;
   emptyDistance = 0;
   budgetReason: string | null = null;
+  approachProgress = new Map<string, { best: number; misses: number }>();
   constructor(field, options: SearchOptions) {
     this.field = field;
     this.options = options;
@@ -382,6 +383,7 @@ export class Search {
     const destination = field.approach(target, exclude);
     if (destination) {
       const result = await field.walk(destination, this.pause);
+      if (result.state === 'arrived') this.approachProgress.delete(target.key);
       if (this.inPit(result, target.point)) return;
       // A leg that paused (a new lead in view, a bite, a threat) is not a leg that got nowhere.
       if (!['arrived', 'paused'].includes(result.state)) field.places.fail(target.point);
@@ -418,12 +420,25 @@ export class Search {
           : field.explore(target.point, APPROACH_LEG, detour);
       const result = await field.walk(leg, this.pause);
       if (this.inPit(result, target.point)) return;
-      const nearer = progressDistance(field.latest.position, target.point) + 2 < progressDistance(before, target.point);
+      const remaining = progressDistance(field.latest.position, target.point);
+      const progress = this.approachProgress.get(target.key) ?? { best: progressDistance(before, target.point), misses: 0 };
+      const nearer = remaining + 2 < progress.best;
+      if (nearer) {
+        progress.best = remaining;
+        progress.misses = 0;
+      } else if (result.state !== 'paused') progress.misses++;
+      this.approachProgress.set(target.key, progress);
       if (!['arrived', 'paused'].includes(result.state) && !nearer) field.places.fail(target.point);
       if (result.state === 'paused' && result.reason === 'route_threatened') this.avoidThreat(target);
-      else if (stuckLeg(result, before, field.latest.position) || unproductiveApproach(target, result, before, field.latest.position)) {
+      else if (
+        progress.misses >= 4 ||
+        stuckLeg(result, before, field.latest.position) ||
+        unproductiveApproach(target, result, before, field.latest.position)
+      ) {
         const elevated = Math.abs((target.point.y ?? before.y) - before.y) > 2;
         for (const object of elevated ? this.targets().filter(candidate => samePatch(target, candidate)) : [target]) field.skip(object, 120000);
+        if (progress.misses >= 4) field.report('lead_stalled', { target: target.key, remaining: +remaining.toFixed(1), attempts: progress.misses });
+        this.approachProgress.delete(target.key);
         await clearLeafPath(field, target.point);
       }
       return;
