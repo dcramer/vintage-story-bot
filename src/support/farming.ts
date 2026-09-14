@@ -72,6 +72,15 @@ const sides = [
 // still reject the site.
 function assessFarmGroundwork(map, farm: Farm, { allowUnknownClearance = false } = {}): FarmGroundwork | null {
   if (!map || !farmWatered(map, farm)) return null;
+  const wood = (farm as Farm & { wood?: unknown }).wood;
+  const enclosureWood = typeof wood === 'string' ? wood : null;
+  const fenceKeys = new Set(farmFence(farm).map(key));
+  const gateKey = key(farmGate(farm));
+  const establishedEnclosure = (at, cell) => {
+    if (!enclosureWood || at.y !== farm.origin.y || !cell?.code) return false;
+    if (key(at) === gateKey) return cell.code.startsWith(`game:roughhewnfencegate-${enclosureWood}-`);
+    return fenceKeys.has(key(at)) && cell.code.startsWith(`game:roughhewnfence-${enclosureWood}-`);
+  };
   const footprint = [];
   for (let x = 0; x < 6; x++) for (let z = 0; z < 4; z++) footprint.push(farmCell(farm, x, z, -1));
   const footprintKeys = new Set(footprint.map(key));
@@ -126,6 +135,12 @@ function assessFarmGroundwork(map, farm: Farm, { allowUnknownClearance = false }
       const cell = map.get(at.x, at.y, at.z);
       if (!cell && allowUnknownClearance) continue;
       if (empty(cell)) continue;
+      // Revalidating a persisted plan happens after construction may already
+      // have placed part or all of its enclosure. Those exact, planned blocks
+      // are proof of durable progress, not foreign structures that invalidate
+      // the shoreline. New site discovery has no wood on its candidate and
+      // therefore remains strict around every player-made block.
+      if (establishedEnclosure(at, cell)) continue;
       if (!clearable(cell)) return null;
       clear.set(key(at), at);
     }

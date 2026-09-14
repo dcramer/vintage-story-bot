@@ -139,6 +139,33 @@ test('an established farm rescans a transiently unknown changed floor before aba
   assert.equal(memory.notes.failedFarms.length, 1);
 });
 
+test('an established farm revalidates its own partial enclosure after restart', () => {
+  const { map, plan } = shoreline(1);
+  for (const p of farmFence(plan))
+    map.put({
+      ...p,
+      seenAt: Date.now(),
+      traits: [],
+      code: 'game:roughhewnfence-pine-ew-free',
+      boxes: [[p.x, p.y, p.z, p.x + 1, p.y + 1.5, p.z + 1]],
+    });
+  const gate = farmGate(plan);
+  map.put({
+    ...gate,
+    seenAt: Date.now(),
+    traits: [],
+    code: 'game:roughhewnfencegate-pine-n-closed-free',
+    boxes: [[gate.x, gate.y, gate.z, gate.x + 1, gate.y + 1.5, gate.z + 1]],
+  });
+
+  assert.ok(farmGroundwork(map, plan), 'the persisted farm accepts its own fence and even a gate awaiting orientation repair');
+  assert.equal(
+    farmGroundwork(map, { origin: plan.origin, turn: plan.turn }),
+    null,
+    'fresh site discovery still rejects an unexplained player-made enclosure',
+  );
+});
+
 test('farm grading clears rises and fills shoreline cells from existing support', () => {
   const { map, plan } = shoreline();
   const raised = farmCell(plan, 0, 0);
