@@ -29,7 +29,10 @@ export type FarmNote = Farm & {
 };
 export const FARM_CHECK_MS = 5 * 60 * 1000;
 export const FARM_SITE_FAILURES = 3;
-export const FARM_SITE_RETRY_MS = 15 * 60 * 1000;
+// Predators can patrol or idle around a shoreline for much longer than one
+// short errand. Keep rejected ground out of site selection for a full in-game
+// working session so the bot does not rebuild its plan around the same bear.
+export const FARM_SITE_RETRY_MS = 60 * 60 * 1000;
 // Moving the origin just past the old footprint still leaves the whole new
 // enclosure inside the same predator perimeter. Include half the farm margin
 // beyond the ordinary clear radius so a replacement is actually elsewhere.
