@@ -1831,6 +1831,54 @@ test('brain: a shelter has to be entered and sealed, and opens before morning wo
   assert.deepEqual(fresh(brain.notes!(memory)).notes.dwelling, dwelling);
 });
 
+test('brain: opens a damaged house and repairs its exterior in daylight', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const home = { x: 4.5, y: 99, z: 3.5 };
+  const door = { x: 4, y: 100, z: 6 };
+  const gap = { x: 4, y: 102, z: 6 };
+  const memory = fresh({ home, house: origin, dwelling: { door, item: 'game:hay-normal-ud' } });
+  memory.startupChecked = true;
+  const terrain = {
+    get: (x, y, z) => ({
+      code: x === gap.x && y === gap.y && z === gap.z ? 'game:air' : 'game:rammed-light-plain',
+      boxes: x === gap.x && y === gap.y && z === gap.z ? [] : [{}],
+      hazard: null,
+    }),
+  };
+  const inv = inventory(slot('game:rammed-light-plain', 1));
+  const sealed = reading({ state: state({ position: home }), inventory: inv, terrain });
+  const opening = decide(sealed, memory);
+  assert.equal(opening.start, 'dig_area', 'open the sealed door instead of attempting an unreachable roof repair from inside');
+  assert.deepEqual(opening.args.cells, [door, { ...door, y: door.y + 1 }]);
+
+  memory.job = null;
+  const outside = reading({ state: state({ position: { x: 4.5, y: 100, z: 7.5 } }), inventory: inv, terrain, now: 2000 });
+  const repair = decide(outside, memory);
+  assert.equal(repair.start, 'build', 'the observed gap remains actionable after stepping outside');
+  assert.deepEqual(repair.args.cells, [{ ...gap, item: 'game:rammed-light-plain' }]);
+});
+
+test('brain: keeps a damaged house sealed until daylight', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const home = { x: 4.5, y: 99, z: 3.5 };
+  const door = { x: 4, y: 100, z: 6 };
+  const memory = fresh({ home, house: origin, dwelling: { door, item: 'game:hay-normal-ud' } });
+  memory.startupChecked = true;
+  const indoors = reading({
+    state: state({ position: home }),
+    inventory: inventory(slot('game:rammed-light-plain', 1)),
+    environment: night,
+    terrain: {
+      get: (x, y, z) => ({
+        code: x === 4 && y === 102 && z === 6 ? 'game:air' : 'game:rammed-light-plain',
+        boxes: x === 4 && y === 102 && z === 6 ? [] : [{}],
+        hazard: null,
+      }),
+    },
+  });
+  assert.equal(decide(indoors, memory).wait, 'night, nowhere to go', 'a roof gap does not make the bot open its sealed door in the dark');
+});
+
 test('brain: finish indoor torch refresh despite an outside threat, but stop on a hit', () => {
   const home = { x: 0.5, y: 100, z: 0.5 };
   const memory = fresh({ home, dwelling: { door: { x: 0, y: 100, z: 1 }, item: 'soil-' }, lightingDay: 0 });

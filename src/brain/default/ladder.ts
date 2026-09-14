@@ -31,7 +31,9 @@ const tunnelsFailed = (s: Situation, tried: Tried) =>
 const threatWhileBurrowed = (s: Situation) => s.burrowed && s.threat && !s.hurt;
 const hurtOrThreat = (s: Situation, tried: Tried) => s.hurt || (s.threat && !tried.has('hide'));
 const hungryWithFood = (s: Situation, tried: Tried) => (hungry(s) || !!s.foodRecovery) && s.reserve > 0 && !tried.has('eat');
-const damageAtHome = (s: Situation, tried: Tried) => s.atHome && !!s.homeDamaged && !tried.has('repair_home');
+// Open the house and repair it from outside in daylight. At night the intact
+// seal is more valuable than immediately reaching an exterior wall or roof gap.
+const damageAtHome = (s: Situation, tried: Tried) => s.home && !!s.homeDamaged && !s.night && !s.storm && !tried.has('repair_home');
 const unlitAtHome = (s: Situation, tried: Tried) => !establishingHouse(s) && s.atHome && s.lit === false && s.torches > 0 && !tried.has('lighting');
 const stormAwayFromHome = (s: Situation, tried: Tried) => s.storm && s.home && !s.atHome && !tried.has('go_home');
 const stormWithCover = (s: Situation) => s.storm && ((s.home && s.atHome) || s.burrowed);

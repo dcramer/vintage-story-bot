@@ -94,7 +94,12 @@ export function digestReading(reading: Reading, memory: Memory, lookup: (job: Jo
       const block = terrain?.get(dwelling.door.x, dwelling.door.y + dy, dwelling.door.z);
       return !!block && !block.hazard && block.boxes.length > 0;
     });
-  const damaged = inside && homeDamage(reading, memory.notes).length > 0;
+  // Shell repair has to survive opening the door and stepping outside. Limiting
+  // damage to `inside` made the repair disappear on the very tick that exposed
+  // a usable exterior work position, so the bot could only try (and fail) from
+  // inside a sealed house. Keep the observation local to the owned home.
+  const damaged =
+    !!home && horizontal(state.position, home) <= 16 && Math.abs(state.position.y - home.y) < 8 && homeDamage(reading, memory.notes).length > 0;
   const stashes = allStashes(memory.notes);
   const missing = suppliesMissing(stashes);
   const s: Situation = {

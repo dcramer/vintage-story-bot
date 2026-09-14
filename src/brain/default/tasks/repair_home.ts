@@ -20,7 +20,7 @@ export function homeDamage(reading, notes: Notes) {
 export const repairHome: Concern = {
   id: 'repair_home',
   title: 'the home shell repaired',
-  done: s => !s.atHome || !s.homeDamaged,
+  done: s => !s.homeDamaged,
   run: ctx => {
     const cells = homeDamage(ctx.reading, ctx.memory.notes);
     if (!cells.length) return { wait: 'no observed gaps in the home shell' };
