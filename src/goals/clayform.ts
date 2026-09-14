@@ -9,7 +9,7 @@ export default defineGoal({
     .object({
       output: z.string().min(1).max(160).describe('Exact clay-forming output code, e.g. game:bowl-raw.'),
       material: z.string().min(1).max(160).optional().describe('Clay code, e.g. game:clay-blue; defaults to any owned clay.'),
-      timeoutMs: z.number().int().min(1000).max(1200000).default(600000),
+      timeoutMs: z.number().int().min(1000).max(1200000).optional(),
     })
     .strict(),
   destructive: true,
