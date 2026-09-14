@@ -332,7 +332,10 @@ export const farm: Concern = {
     if (memory.notes.farm && !memory.notes.farm.prepared && last.kind === 'dig_area') memory.notes.farm.surveyed = false;
     if (last.kind !== 'farm' || !memory.notes.farm) return;
     const wasPrepared = memory.notes.farm.prepared;
-    if (last.result?.prepared) memory.notes.farm.prepared = true;
+    // A failed farm run may still report that all beds are tilled while the
+    // enclosure, gate, or exit verification failed.  That is useful progress
+    // telemetry, but it must not promote the whole persisted plan to prepared.
+    if (last.ok && last.result?.prepared) memory.notes.farm.prepared = true;
     if (!last.ok) return;
     if (last.result.rotate) {
       memory.notes.farm.rotation = (memory.notes.farm.rotation + 1) % 4;

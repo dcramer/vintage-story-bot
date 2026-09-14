@@ -435,6 +435,8 @@ test('farm selection uses observed safe shoreline beyond the old local radius', 
 test('farm rotation follows a verified completed harvest, and observed fence damage triggers repair', () => {
   const { map, plan } = shoreline();
   const memory = { notes: { farm: plan } } as any;
+  farm.ended({ kind: 'farm', ok: false, result: { prepared: true } } as any, memory, { now: 1000 } as any);
+  assert.equal(plan.prepared, false, 'tilled beds from a failed run do not mark an incomplete enclosure prepared');
   farm.ended({ kind: 'farm', ok: false, result: { rotate: true } } as any, memory, { now: 1000 } as any);
   assert.equal(plan.rotation, 0);
   farm.ended({ kind: 'farm', ok: true, result: { prepared: true, rotate: true } } as any, memory, { now: 1000 } as any);
