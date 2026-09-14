@@ -328,6 +328,11 @@ test('house: vegetation and trees in shallow foundation dips are cleared and rep
     work.clear.some(cell => cell.x === 1 && cell.y === 99 && cell.z === 0),
     'a trunk is not mistaken for permanent ground',
   );
+  assert.equal(
+    house.setAside?.({ kind: 'dig_area', ok: false, reason: 'no_stand_position', result: {} } as any, {} as any, {} as any),
+    false,
+    'partial survey clearing remains incremental even when one cell has no current approach',
+  );
 });
 
 test('house: known level ground near camp is used even when an errand left the body far away', () => {
