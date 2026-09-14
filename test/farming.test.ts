@@ -161,6 +161,7 @@ test('farm construction is set aside while its footprint is guarded', () => {
   } as any;
   assert.deepEqual(farm.running?.(ctx), { stop: 'farm site is inside a hostile perimeter' });
   assert.equal(farm.setAside?.({ kind: 'build', reason: 'brain: farm site is inside a hostile perimeter' } as any, ctx.memory, {} as any), true);
+  assert.equal(farm.setAsideEverywhere, true, 'fleeing beyond the local retry radius must not restart the guarded site');
   ctx.state.nearbyEntities[0].point.x += 100;
   assert.equal(farm.running?.(ctx), null, 'construction resumes after the hostile perimeter clears');
 });

@@ -258,4 +258,7 @@ export const farm: Concern = {
   // Grading is incremental world state. A partial clear or fill is recomputed
   // from the next observation instead of discarding a viable farm site.
   setAside: last => last.reason === `brain: ${GUARDED_SITE}` || (failedOnItsOwn(last) && !['dig_area', 'build'].includes(last.kind)),
+  // A flight can carry the body outside the ordinary local retry radius while
+  // the fixed farm itself remains guarded. Give that site the full cooldown.
+  setAsideEverywhere: true,
 };
