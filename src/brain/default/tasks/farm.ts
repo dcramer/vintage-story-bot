@@ -14,7 +14,7 @@ import {
   farmSurveySite,
   fertileBed,
 } from '../../../support/farming.ts';
-import { hostileEntity, threatClearDistance, threatVerticalRange } from '../../../support/threats.ts';
+import { hostileEntity, threatClearDistance, threatClearRadius, threatVerticalRange } from '../../../support/threats.ts';
 import type { Concern } from '../concern.ts';
 import { allStashes, failedOnItsOwn, goTo, noteContents, selectStash } from '../concern.ts';
 
@@ -30,7 +30,10 @@ export type FarmNote = Farm & {
 export const FARM_CHECK_MS = 5 * 60 * 1000;
 export const FARM_SITE_FAILURES = 3;
 export const FARM_SITE_RETRY_MS = 15 * 60 * 1000;
-export const FARM_SITE_REJECT_RADIUS = 12;
+// Moving the origin just past the old footprint still leaves the whole new
+// enclosure inside the same predator perimeter. Include half the farm margin
+// beyond the ordinary clear radius so a replacement is actually elsewhere.
+export const FARM_SITE_REJECT_RADIUS = threatClearRadius + 4;
 const woods = new Set(['birch', 'oak', 'maple', 'pine', 'acacia', 'kapok', 'aged', 'baldcypress', 'larch', 'redwood', 'walnut']);
 const GUARDED_SITE = 'farm site is inside a hostile perimeter';
 
