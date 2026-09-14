@@ -61,7 +61,15 @@ export default defineGoal({
           if (!cleared.ok) return { ...cleared, goal: 'house', phase: 'site', origin };
         }
         const item = 'game:rammed-light-plain';
-        const result = await build(field, survival, { cells: [...houseScaffold(origin, item), ...houseCells(origin, item)], verifyExisting: true });
+        const cells = [...houseScaffold(origin, item), ...houseCells(origin, item)];
+        // A resumed material batch should reach unfinished work before paying
+        // to reselect every block the client already observed in the shell.
+        // Existing cells are still verified before the goal can succeed.
+        cells.sort((a, b) => {
+          const existing = cell => field.env.map.get(cell.x, cell.y, cell.z)?.code === cell.item;
+          return Number(existing(a)) - Number(existing(b));
+        });
+        const result = await build(field, survival, { cells, verifyExisting: true });
         return { ...result, goal: 'house', phase, origin };
       }
       const cells = [];

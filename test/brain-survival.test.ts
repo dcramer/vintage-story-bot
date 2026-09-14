@@ -146,6 +146,24 @@ test('the larger house retains a legal route from the ground to its completed ri
   assert.equal(findRoute(map, start, goal, 0.3, 1.85, { partial: false }), null, 'one step leaves the finished eaves two blocks above the player');
 });
 
+test('the larger house blueprint gives every placement an existing support', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const built = new Set<string>();
+  const cells = [...houseScaffold(origin, 'earth'), ...houseTemplate(origin, 'earth')];
+  const offsets = [
+    [0, -1, 0],
+    [1, 0, 0],
+    [-1, 0, 0],
+    [0, 0, 1],
+    [0, 0, -1],
+  ];
+  for (const cell of cells) {
+    const supported = cell.y === origin.y || offsets.some(([dx, dy, dz]) => built.has(`${cell.x + dx},${cell.y + dy},${cell.z + dz}`));
+    assert.ok(supported, `unsupported placement at ${cell.x},${cell.y},${cell.z}`);
+    built.add(`${cell.x},${cell.y},${cell.z}`);
+  }
+});
+
 test('torch refresh begins at 05:00 and an observed missing torch invalidates the same-day check', () => {
   const environment = hour => ({ calendar: { totalDays: 100 + hour / 24 } });
   assert.equal(lightingDay(environment(0)), lightingDay({ calendar: { totalDays: 99 + 23 / 24 } }));

@@ -6,11 +6,17 @@ export function house(origin, item) {
   const at = (dx, dy, dz) => ({ x: origin.x + dx, y: origin.y + dy, z: origin.z + dz, item });
   const cells = [];
   for (let dy = 0; dy < 2; dy++) {
-    for (let dx = 0; dx < 10; dx++) for (const dz of [0, 6]) if (!(dz === 6 && dx === 4)) cells.push(at(dx, dy, dz));
-    for (let dz = 1; dz < 6; dz++) for (const dx of [0, 9]) cells.push(at(dx, dy, dz));
+    for (let dx = 3; dx >= 0; dx--) cells.push(at(dx, dy, 6));
+    for (let dz = 5; dz >= 0; dz--) cells.push(at(0, dy, dz));
+    for (let dx = 1; dx < 10; dx++) cells.push(at(dx, dy, 0));
+    for (let dz = 1; dz <= 6; dz++) cells.push(at(9, dy, dz));
+    for (let dx = 8; dx >= 5; dx--) cells.push(at(dx, dy, 6));
   }
-  for (const dx of [0, 9]) for (let dz = 0; dz < 7; dz++) for (let dy = 2; dy < gable[dz]; dy++) cells.push(at(dx, dy, dz));
-  for (let dz = 0; dz < 7; dz++) for (let dx = 1; dx < 9; dx++) cells.push(at(dx, gable[dz], dz));
+  for (const dx of [0, 9]) for (let dy = 2; dy <= 4; dy++) for (let dz = 0; dz < 7; dz++) if (dy <= gable[dz]) cells.push(at(dx, dy, dz));
+  for (let dz = 0; dz < 7; dz++) {
+    const xs = Array.from({ length: 8 }, (_, i) => (dz % 2 === 0 ? i + 1 : 8 - i));
+    for (const dx of xs) cells.push(at(dx, gable[dz], dz));
+  }
   return cells;
 }
 
