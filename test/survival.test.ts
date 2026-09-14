@@ -1278,6 +1278,23 @@ test('leaf clearing selects only a reachable body-level leaf toward the goal', (
   assert.equal(threatAllowsLeafClearing(state, { point: { x: 12.49, z: 0.5 } }), false);
 });
 
+test('leaf clearing can open a shallow roof-support ray above the work course', () => {
+  const state = { position: { x: 39.5, y: 119, z: 65.5 }, body: { height: 1.85 } };
+  const overhead = {
+    kind: 'block',
+    key: 'block:0:38:120:65:game:leaves-grown4-pine',
+    code: 'game:leaves-grown4-pine',
+    point: { x: 38.5, y: 120.5, z: 65.5 },
+    withinPickingRange: true,
+    access: { buildOrBreak: true },
+  };
+  assert.equal(
+    leafClearCandidate([overhead], state, { x: 38.5, y: 119.5, z: 64.5 }),
+    overhead,
+    'construction may clear the observed canopy intercepting a supported roof cell',
+  );
+});
+
 test('a nearby elevated material lead keeps its observed height when no full approach is known', async () => {
   const field = new Fieldwork({ places: new Places(() => 1000) }, { now: () => 1000 });
   field.latest = { position: { x: 10.5, y: 123, z: 21.5 }, orientation: { yawDegrees: 0 }, nearbyEntities: [] };

@@ -300,9 +300,11 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
         const support = offset => field.env.map.get(cell.x - offset[0], cell.y - offset[1], cell.z - offset[2]);
         return Number(stablePlacementSupport(support(b))) - Number(stablePlacementSupport(support(a)));
       });
+      let knownSupport = false;
       for (const [face, offset] of faceOrder) {
         const support = { x: cell.x - offset[0], y: cell.y - offset[1], z: cell.z - offset[2] };
         const rememberedSupport = field.env.map.get(support.x, support.y, support.z);
+        knownSupport ||= stablePlacementSupport(rememberedSupport);
         let selected, point;
         for (const candidate of facePoints(support, offset)) {
           selected = await selectCell(field, support, { point: candidate, face, clearPlants: true });
@@ -329,6 +331,14 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
           break;
         }
         reason = result.reason;
+      }
+      // A roof cell can have a valid remembered support whose face is hidden
+      // by canopy just above the work course. Open at most one explicitly
+      // observed leaf per retry, toward this cell; two retries handle the
+      // shallow diagonal ray without turning construction into tree felling.
+      if (reason === 'support_not_selectable' && knownSupport && attempt < 2 && (await clearLeafPath(field, center(cell), 1))) {
+        await field.observe(true);
+        reason = 'leaf_cleared';
       }
     }
     if (reason) failed.push({ ...cell, reason });
