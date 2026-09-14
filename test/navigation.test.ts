@@ -67,6 +67,31 @@ test('roof placement reaches the access stairs while roof headroom is still unkn
   assert.equal(destination.y, 3, 'continue onto the newly observed roof instead of descending to the ground');
 });
 
+test('shoreline construction leaves the water before selecting a work viewpoint', async () => {
+  const target = { x: 4, y: -1, z: 0 };
+  const wet = { x: 3.5, y: -0.5, z: 1.5, swim: true };
+  const dry = { x: 2.5, y: 0, z: 1.5 };
+  let destination;
+  const field = {
+    latest: {
+      ...stateAt(wet),
+      motion: { onGround: false, feetInLiquid: true, swimming: true },
+    },
+    env: { map: { get: () => null } },
+    observe: async function () {
+      return this.latest;
+    },
+    look: async () => {},
+    approach: (_object, exclude) => [wet, dry].find(q => !exclude(q)),
+    walk: async q => {
+      destination = q;
+      return { state: 'arrived' };
+    },
+  };
+  assert.equal(await standNear(field, null, target, false, true), true);
+  assert.deepEqual(destination, dry, 'a close swimming body does not count as ready and wet candidates are excluded');
+});
+
 test('grounded player can leave a cell whose floor is hidden by a loose object', () => {
   const map = new TerrainMemory();
   column(map, 0, 0, false);

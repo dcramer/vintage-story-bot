@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { distance, horizontal } from '../runtime/navigation/terrain.ts';
-import { changeBlock, replaceablePlant, selectCell } from '../support/blocks.ts';
+import { blockWorkReady, changeBlock, dryBlockWorkPosition, replaceablePlant, selectCell } from '../support/blocks.ts';
 import { diggingSlot } from '../support/digging.ts';
 import { Gleaner, pickupBlock } from '../support/gleaning.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
@@ -51,7 +51,13 @@ export async function standNear(field, survival, cell, force = false, placing = 
   // Placement face selection becomes unreliable at the very edge of native
   // reach. Digging can use the full range, but building first closes enough
   // distance to see a useful side of the support block.
-  if (!force && distance(from, center(cell)) <= (placing ? 3 : reach) && !(placing && bodyOverlapsCell(field.latest, cell))) return true;
+  if (
+    !force &&
+    blockWorkReady(field.latest) &&
+    distance(from, center(cell)) <= (placing ? 3 : reach) &&
+    !(placing && bodyOverlapsCell(field.latest, cell))
+  )
+    return true;
   // Look over the work before seeking another viewpoint. From the access
   // stairs this reveals the roof's headroom, which was hidden from below.
   if (placing && force) await field.look({ ...center(cell), y: cell.y + 2 });
@@ -59,6 +65,7 @@ export async function standNear(field, survival, cell, force = false, placing = 
   const destination = field.approach(
     { point: { ...center(cell), y: preferredStandY ?? cell.y + 0.5 }, kind: 'block' },
     q =>
+      !dryBlockWorkPosition(q) ||
       (sameColumn(q, cell) && Math.abs(q.y - cell.y) < 2.5) ||
       (placing && standsOnHorizontalSupport(field, cell, q)) ||
       q.y + field.latest.body.eyeHeight < minimumEye ||
