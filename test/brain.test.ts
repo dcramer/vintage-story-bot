@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { eat as eating } from '../src/brain/default/reflexes/eat.ts';
+import { goHome } from '../src/brain/default/reflexes/go_home.ts';
 import { SIEGE_MS } from '../src/brain/default/reflexes/tunnel.ts';
 import { stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { storage } from '../src/brain/default/tasks/storage.ts';
@@ -2040,6 +2041,11 @@ test('brain: shared supplies are approached from inside the owned home', () => {
     state: { position: { x: 8.5, y: 99, z: 21.5 } },
   } as any);
   assert.deepEqual(enter, { handoff: 'go_home' }, 'proximity outside a wall is not usable container reach');
+  assert.deepEqual(
+    goHome.run({ memory, k: { slots: [slot('game:hay-normal-ud')] }, state: { position: home } } as any),
+    { handoff: 'leave_shelter' },
+    'a partial door is opened before going outside for the missing seal block',
+  );
   const use: any = stockpile.run({
     home,
     memory,

@@ -465,7 +465,7 @@ test('dry-grass work always uses the knife required by its handbook drop', () =>
     torchStep(k, { torches: 0, house: false } as any),
     prepareFirestarter({ k } as any),
     house.run({ memory, k } as any),
-    goHome.run({ memory, home: memory.notes.home, storm: false, k, state: { position: memory.notes.home } } as any),
+    goHome.run({ memory, home: memory.notes.home, storm: false, k, state: { position: { x: 10, y: 99, z: 3.5 } } } as any),
   ];
   assert.ok(decisions.every(decision => decision.start === 'harvest' && decision.args.tool === 'Knife'));
   assert.equal(SUPPLIES.find(supply => supply.item === 'drygrass')?.tool, 'Knife');
