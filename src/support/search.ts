@@ -349,6 +349,12 @@ export class Search {
     // cavity. There is deliberately no standing node in that full body cell;
     // it is still a pit that dig_out can recover from with explicit mod support.
     if (!here && (!map?.get || !solid(map, Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)))) return false;
+    // Search routing refuses irreversible drops. If the failed destination is
+    // materially below a normally standing body, a small reachable component
+    // can be the top of a ridge or pillar rather than a hole. Let the ordinary
+    // lead failure/frontier recovery choose another way; digging upward cannot
+    // make a lower destination reachable and falsely consumes the whole task.
+    if (here && typeof toward?.y === 'number' && toward.y < p.y - 1.5) return false;
     if (here && reachable(map, here) >= pitLimit) return false;
     this.pit = true;
     this.pitToward = { x: toward.x, z: toward.z };

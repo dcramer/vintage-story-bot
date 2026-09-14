@@ -46,7 +46,7 @@ test('harvest leaves high cliff blocks whose drops the body cannot reach', () =>
 
 test('a search reports the actual failed destination when it discovers a pit', () => {
   const position = { x: 40, y: 120, z: 30 };
-  const toward = { x: 10, y: 100, z: -20 };
+  const toward = { x: 10, y: 120, z: -20 };
   const reports = [];
   const field = {
     latest: { position },
@@ -58,6 +58,21 @@ test('a search reports the actual failed destination when it discovers a pit', (
   assert.equal(search.inPit({ state: 'blocked', reason: 'no_observed_route' }, toward), true);
   assert.deepEqual(search.pitToward, { x: 10, z: -20 });
   assert.deepEqual(reports, [{ phase: 'pit', position, toward: { x: 10, z: -20 } }]);
+});
+
+test('a search stranded above a lower destination does not call the ridge a pit', () => {
+  const position = { x: 40, y: 120, z: 30 };
+  const reports = [];
+  const field = {
+    latest: { position },
+    now: () => 0,
+    env: { map: { nodeAt: () => position, moves: () => [], gapMoves: () => [] } },
+    report: (phase, details) => reports.push({ phase, ...details }),
+  };
+  const search = new Search(field, { kind: 'material', match: ['coopersreed'], wanted: () => true, take: async () => true });
+  assert.equal(search.inPit({ state: 'blocked', reason: 'no_observed_route' }, { x: 10, y: 110, z: -20 }), false);
+  assert.equal(search.pit, false);
+  assert.deepEqual(reports, []);
 });
 
 test('a search reports a pit when a falling full block embeds the grounded body', () => {
