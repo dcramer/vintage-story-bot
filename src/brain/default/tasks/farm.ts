@@ -29,6 +29,11 @@ export type FarmNote = Farm & {
 };
 export const FARM_CHECK_MS = 5 * 60 * 1000;
 export const FARM_SITE_FAILURES = 3;
+// A pair of rejected predator perimeters can consume most of a 64-block
+// search around home. The eye and long-range travel already work beyond that;
+// retain enough room to choose the next observed shoreline instead of
+// repeatedly surveying and returning from it.
+export const FARM_SEARCH_RADIUS = 96;
 // Predators can patrol or idle around a shoreline for much longer than one
 // short errand. Keep rejected ground out of site selection for a full in-game
 // working session so the bot does not rebuild its plan around the same bear.
@@ -86,8 +91,8 @@ export const farm: Concern = {
       const center = ctx.home ?? ctx.state.position;
       const safe = (candidate: Farm) =>
         !guarded(ctx, candidate) && !failedFarms.some(failed => horizontal(failed.origin, candidate.origin) < FARM_SITE_REJECT_RADIUS);
-      const ready = farmSite(reading.terrain, center, 64, safe);
-      const site = ready ?? farmSurveySite(reading.terrain, center, 64, safe);
+      const ready = farmSite(reading.terrain, center, FARM_SEARCH_RADIUS, safe);
+      const site = ready ?? farmSurveySite(reading.terrain, center, FARM_SEARCH_RADIUS, safe);
       if (!site)
         return (
           goTo(ctx, { x: center.x, z: center.z }, 'returning to the farm search area', 48, 8) ?? {

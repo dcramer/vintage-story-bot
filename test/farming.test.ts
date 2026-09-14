@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseNotes } from '../src/brain/default/notes.ts';
 import { kit } from '../src/brain/default/situation.ts';
-import { FARM_SITE_FAILURES, FARM_SITE_RETRY_MS, farm, farmDue } from '../src/brain/default/tasks/farm.ts';
+import { FARM_SEARCH_RADIUS, FARM_SITE_FAILURES, FARM_SITE_RETRY_MS, farm, farmDue } from '../src/brain/default/tasks/farm.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { hoe } from '../src/brain/default/tasks/tools.ts';
 import { allocate } from '../src/goals/craft_item.ts';
@@ -297,6 +297,26 @@ test('farm shoreline exploration stays inside the home search area', () => {
   assert.ok('start' in choice && choice.start === 'travel');
   assert.deepEqual(choice.args, { x: 0, z: 0, arrivalRadius: 8, manageFood: false, timeoutMs: 900000 });
   assert.equal(choice.why, 'returning to the farm search area, 100 blocks away');
+});
+
+test('farm selection uses observed safe shoreline beyond the old local radius', () => {
+  const { map, plan } = shoreline();
+  const home = { x: plan.origin.x - 70, y: plan.origin.y, z: plan.origin.z };
+  const memory = { notes: {} } as any;
+  const choice: any = farm.run({
+    k: kit({
+      state: 'test',
+      inventories: [{ name: 'hotbar', slots: [{ slot: 0, code: 'game:log-grown-pine-ud', quantity: 8 }] }],
+    }),
+    memory,
+    reading: { now: 1, terrain: map },
+    state: { position: home, nearbyEntities: [] },
+    home,
+    now: 1,
+  } as any);
+  assert.ok(FARM_SEARCH_RADIUS > 64);
+  assert.ok(Math.hypot(memory.notes.farm.origin.x - home.x, memory.notes.farm.origin.z - home.z) > 64);
+  assert.equal(choice.start, 'harvest', 'the distant observed plot becomes active instead of another return-home survey loop');
 });
 
 test('farm rotation follows a verified completed harvest, and observed fence damage triggers repair', () => {
