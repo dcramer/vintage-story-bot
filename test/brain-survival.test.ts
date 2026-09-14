@@ -12,7 +12,7 @@ import { shelter } from '../src/brain/default/tasks/shelter.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { fresh, kit } from '../src/brain/default.ts';
-import { selectedPlacementSupport, stablePlacementSupport, standNear } from '../src/goals/build.ts';
+import { selectedPlacementCell, selectedPlacementSupport, stablePlacementSupport, standNear } from '../src/goals/build.ts';
 import craft from '../src/goals/craft_item.ts';
 import buildHouse from '../src/goals/house.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
@@ -106,6 +106,9 @@ test('building never uses replaceable snow as a support face', () => {
     false,
     'live replaceable cover is never accepted merely because memory was solid',
   );
+  assert.equal(selectedPlacementCell('game:rammed-light-plain', { code: 'game:rammed-light-plain' }), 'placed');
+  assert.equal(selectedPlacementCell('game:rammed-light-plain', { code: 'game:snowlayer-3' }), 'clear');
+  assert.equal(selectedPlacementCell('game:rammed-light-plain', { code: 'game:soil-low-none' }), 'blocked');
 });
 
 test('the larger house retains a legal route from the ground to its completed ridge', () => {

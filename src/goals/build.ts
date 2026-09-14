@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { distance, horizontal } from '../runtime/navigation/terrain.ts';
-import { changeBlock, selectCell } from '../support/blocks.ts';
+import { changeBlock, replaceablePlant, selectCell } from '../support/blocks.ts';
 import { diggingSlot } from '../support/digging.ts';
 import { Gleaner, pickupBlock } from '../support/gleaning.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
@@ -73,6 +73,9 @@ export const stablePlacementSupport = cell =>
 // block under the crosshair rather than rejecting that face from stale traits.
 export const selectedPlacementSupport = (remembered, selected) =>
   stablePlacementSupport(selected ? { ...remembered, ...selected, hazard: selected.hazard ?? null } : remembered);
+
+export const selectedPlacementCell = (item, selected) =>
+  !selected ? 'unknown' : selected.code === item ? 'placed' : replaceablePlant(selected.code) ? 'clear' : 'blocked';
 
 export async function digArea(field, survival, { cells, tool, minTier = 0 }) {
   const done = [],
@@ -175,18 +178,42 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
         continue;
       }
     }
-    if (known(field, cell) === 'solid') {
-      if (verifyExisting && field.env.map.get(cell.x, cell.y, cell.z)?.code !== cell.item) {
-        if (!(await standNear(field, survival, cell))) {
-          failed.push({ ...cell, reason: 'no_stand_position' });
-          continue;
-        }
-        const selected = await selectCell(field, cell);
-        if (!selected?.key.endsWith(`:${cell.item}`)) {
-          failed.push({ ...cell, reason: 'occupied' });
-          continue;
-        }
+    let occupied = known(field, cell) === 'solid';
+    if (occupied && verifyExisting && field.env.map.get(cell.x, cell.y, cell.z)?.code !== cell.item) {
+      if (!(await standNear(field, survival, cell))) {
+        failed.push({ ...cell, reason: 'no_stand_position' });
+        continue;
       }
+      const selected = await selectCell(field, cell);
+      const state = selectedPlacementCell(cell.item, selected);
+      if (state === 'placed') {
+        placed.push({ ...cell, skipped: 'occupied' });
+        continue;
+      }
+      if (state === 'clear') {
+        const inventory = await field.send({ action: 'inventory' });
+        const slot = await diggingSlot(field, selected, inventory);
+        let cleared;
+        try {
+          cleared =
+            slot === null
+              ? { ok: false, reason: 'cannot_dig' }
+              : await changeBlock(field, 'dig', { target: selected.key, slot, acceptTransform: true });
+        } catch (error) {
+          if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
+          cleared = { ok: false, reason: error.message };
+        }
+        if (!cleared.ok) {
+          failed.push({ ...cell, reason: cleared.reason });
+          continue;
+        }
+        occupied = false;
+      } else {
+        failed.push({ ...cell, reason: state === 'unknown' ? 'not_selectable' : 'occupied' });
+        continue;
+      }
+    }
+    if (occupied) {
       placed.push({ ...cell, skipped: 'occupied' });
       continue;
     }
