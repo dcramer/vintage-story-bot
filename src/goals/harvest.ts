@@ -80,7 +80,10 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
   const search = new Search(field, {
     kind: match,
     memoryRange: 256,
-    candidates: () => terrainTargets(field, [match]),
+    // Ground materials are bulk terrain rather than individual sightings.
+    // Follow remembered deposits, then require a fresh nearby observation
+    // before the block becomes actionable.
+    candidates: () => terrainTargets(field, [match], 256),
     match: [match.slice(0, 64), item.slice(0, 64)],
     wanted: o => blocks(o) || drops(o),
     // Drops lie nearby and vanish over time, so they come first. A player digs
