@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { eat as eating } from '../src/brain/default/reflexes/eat.ts';
 import { SIEGE_MS } from '../src/brain/default/reflexes/tunnel.ts';
+import { storage } from '../src/brain/default/tasks/storage.ts';
 import brain, {
   decide as decision,
   environmentalHurt,
@@ -1726,9 +1727,22 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
     active: sourceTrip,
   });
   assert.equal(decide(guardedReading, discoveredEnRoute).stop, 'stored cattail tops are inside a hostile perimeter');
+  storage.ended(
+    {
+      id: sourceTrip.id,
+      kind: 'travel',
+      ok: false,
+      reason: 'brain: stored cattail tops are inside a hostile perimeter',
+      outcome: 'interrupted',
+    },
+    discoveredEnRoute,
+    { ...guardedReading, now: 2000 },
+  );
   const afterStoppingGuardedSource = decide(
     {
       ...guardedReading,
+      state: state({ position: { x: 100, y: 100, z: 0 } }),
+      now: 2001,
       active: null,
       last: {
         id: sourceTrip.id,
@@ -1743,7 +1757,7 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
   assert.deepEqual(
     [afterStoppingGuardedSource.start, afterStoppingGuardedSource.args.match, afterStoppingGuardedSource.args.item],
     ['harvest', 'coopersreed', 'cattailtops'],
-    'a source discovered to be guarded during travel falls back immediately',
+    'a source discovered to be guarded during travel stays cooled down after the hostile leaves sight',
   );
   const unreachableTops = settled();
   unreachableTops.notes.stash = { ...chestNote(), full: true, seen: { at: 1000, items: {} } };

@@ -138,6 +138,10 @@ export const storage: Concern = {
     };
   },
   ended: (last, memory, { now, state }) => {
+    if (last.kind === 'travel' && last.reason === 'brain: stored cattail tops are inside a hostile perimeter' && memory.notes.stash) {
+      memory.tried.storage = { x: memory.notes.stash.x, z: memory.notes.stash.z, at: now };
+      return;
+    }
     if (last.kind === 'take_items') {
       noteContents(memory, last, now);
       return;
