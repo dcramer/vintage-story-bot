@@ -58,8 +58,18 @@ export const lighting: Concern = {
       ? { wait: 'finishing lighting inside the sealed shelter' }
       : null,
   run: ctx => {
-    const missing = torchCells(ctx.memory.notes).length - shelterLight(ctx.reading, ctx.memory.notes).installed;
-    if (ctx.k.torches < missing) {
+    const cells = torchCells(ctx.memory.notes);
+    // Cells needing a fresh torch from the pack: observed empty, obstructed or
+    // burnt out. Burnt-out torches drop nothing and cannot be relit;
+    // extinguished ones relight where they stand. Unknown cells count until
+    // the first lighting, then read as fine until observed otherwise.
+    const needSpare = cells.filter(cell => {
+      const block = ctx.reading.terrain?.get(cell.x, cell.y, cell.z);
+      if (!block) return !Number.isFinite(ctx.memory.notes.lightingDay);
+      const code = block.code ?? '';
+      return !code.includes('torch-basic-') || code.includes('torch-basic-burnedout-');
+    }).length;
+    if (ctx.k.torches < needSpare) {
       const step = torchStep(ctx.k, ctx.s);
       if (ctx.s.sheltered && (ctx.danger || ctx.s.night) && (!('start' in step) || step.start !== 'craft_item'))
         return { wait: 'lighting needs materials outside; remain sealed until safe to leave' };
@@ -72,10 +82,17 @@ export const lighting: Concern = {
       return prepare;
     }
     if (!ctx.s.atHome) return { handoff: 'go_home' };
-    const cells = torchCells(ctx.memory.notes);
-    return { start: 'light_shelter', args: { cells, refresh: true }, why: 'freshly placed, lit torches for the shelter' };
+    // The day's refresh replaces torches; after a failed refresh, relight what
+    // stands instead of digging it all up again.
+    const refresh = ctx.memory.notes.lightingDay !== lightingDay(ctx.reading.environment) && !ctx.memory.lightingFailed;
+    return {
+      start: 'light_shelter',
+      args: { cells, refresh },
+      why: refresh ? 'freshly placed, lit torches for the shelter' : 'relighting torches that went out',
+    };
   },
   ended: (last, memory, reading) => {
+    memory.lightingFailed = last.kind === 'light_shelter' && !last.ok;
     if (last.ok && last.kind === 'light_shelter') memory.notes.lightingDay = lightingDay(reading.environment);
   },
 };

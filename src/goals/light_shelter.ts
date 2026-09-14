@@ -7,24 +7,42 @@ import { ownedSlots } from '../support/inventory.ts';
 import { runField } from '../support/task.ts';
 import { build, digArea } from './build.ts';
 
+// What a shelter cell needs from what stands there: a lit torch is only
+// replaced on refresh, resetting its burn clock; an extinguished one relights
+// where it stands; a burnt-out one is always cleared (it drops nothing and
+// cannot be relit) and replaced.
+export function torchCellPlan(code: string | null | undefined, refresh: boolean): 'ok' | 'ignite' | 'place' | 'replace' {
+  if (!code || code === 'game:air' || !code.includes('torch-basic-')) return 'place';
+  if (code.includes('torch-basic-burnedout-')) return 'replace';
+  if (code.includes('torch-basic-lit-')) return refresh ? 'replace' : 'ok';
+  return 'ignite';
+}
+
 export async function lightShelter(field, survival, { cells, refresh = false }) {
   for (const cell of cells) {
     let selected = await selectCell(field, cell);
-    if (selected?.key.includes(':game:torch-basic-') && refresh) {
-      const before = ownedSlots(await field.send({ action: 'inventory' }));
-      if (!before.some(s => !s.bag && !s.code) && !before.some(s => s.code?.includes('torch-basic') && s.quantity < 64))
-        return { ok: false, goal: 'light_shelter', reason: 'no_room_for_recovered_torch' };
-      const count = slots => slots.filter(s => s.code?.includes('torch-basic')).reduce((n, s) => n + s.quantity, 0);
-      const held = count(before);
+    if (torchCellPlan(selected?.code, refresh) === 'replace') {
+      const burnedout = !!selected?.code?.includes('torch-basic-burnedout-');
+      let held = 0;
+      if (!burnedout) {
+        const before = ownedSlots(await field.send({ action: 'inventory' }));
+        if (!before.some(s => !s.bag && !s.code) && !before.some(s => s.code?.includes('torch-basic') && s.quantity < 64))
+          return { ok: false, goal: 'light_shelter', reason: 'no_room_for_recovered_torch' };
+        const count = slots => slots.filter(s => s.code?.includes('torch-basic')).reduce((n, s) => n + s.quantity, 0);
+        held = count(before);
+      }
       const removed = await digArea(field, survival, { cells: [cell], tool: undefined });
       if (!removed.ok) return { ...removed, goal: 'light_shelter' };
-      await new Gleaner(field, ['torch-basic']).tend(1);
-      const recovered = await field.until((_, inventory) => count(ownedSlots(inventory)) > held, {
-        timeoutMs: 2000,
-        everyMs: 200,
-        read: () => field.send({ action: 'inventory' }),
-      });
-      if (!recovered.met) return { ok: false, goal: 'light_shelter', reason: 'torch_pickup_unverified' };
+      if (!burnedout) {
+        const count = slots => slots.filter(s => s.code?.includes('torch-basic')).reduce((n, s) => n + s.quantity, 0);
+        await new Gleaner(field, ['torch-basic']).tend(1);
+        const recovered = await field.until((_, inventory) => count(ownedSlots(inventory)) > held, {
+          timeoutMs: 2000,
+          everyMs: 200,
+          read: () => field.send({ action: 'inventory' }),
+        });
+        if (!recovered.met) return { ok: false, goal: 'light_shelter', reason: 'torch_pickup_unverified' };
+      }
       selected = null;
     }
     if (!selected?.key.includes(':game:torch-basic-')) {
@@ -62,7 +80,7 @@ export default defineGoal({
     .strict(),
   destructive: true,
   description:
-    'Place carried torches at one or two owned shelter cells and light each with a firestarter. Refresh picks up and replaces each existing torch, verifying recovery before placement. Verify lit block codes. Returns START; poll goal_status.',
+    'Light one or two owned shelter cells with a firestarter: extinguished torches relight in place, empty cells take a carried torch, burnt-out torches are cleared (they drop nothing) and replaced. Refresh also replaces lit torches to reset their burn clock, verifying recovery. Returns START; poll goal_status.',
   title: () => 'Light the shelter',
   announce: () => 'Lighting the shelter.',
   run: (env, { cells, refresh, ...options }) =>

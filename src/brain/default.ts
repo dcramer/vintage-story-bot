@@ -241,6 +241,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
     besiegedAt: null,
     tunnelTries: 0,
     stashMisses: 0,
+    lightingFailed: false,
   };
 }
 

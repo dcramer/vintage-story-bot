@@ -80,7 +80,10 @@ back to emergency cover. Carried sealing blocks and building materials stay
 out of routine surplus deposits. Torches are lit through native firestarter
 use. Installed torches are picked up and replaced one at a time after 05:00
 each day; observed missing or extinguished torches invalidate the lighting
-state immediately. Indoor lighting work does not open the shelter door.
+state immediately. After a failed refresh the next attempt relights
+extinguished torches where they stand; burnt-out torches are cleared
+instead — they drop nothing and cannot be relit — and replaced from the
+pack. Indoor lighting work does not open the shelter door.
 Threats outside an intact sealed shelter do not interrupt lighting; actual
 damage does. Missing supplies never cause a nighttime lighting task to leave.
 

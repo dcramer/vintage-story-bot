@@ -5,7 +5,7 @@ import { recoverBurrow } from '../src/brain/default/reflexes/burrow.ts';
 import { goHome } from '../src/brain/default/reflexes/go_home.ts';
 import { makeBag } from '../src/brain/default/tasks/bags.ts';
 import { house, houseSite, houseSurveySite } from '../src/brain/default/tasks/house.ts';
-import { lightingDay, shelterLight } from '../src/brain/default/tasks/lighting.ts';
+import { lighting, lightingDay, shelterLight } from '../src/brain/default/tasks/lighting.ts';
 import { recover, recoverableBody } from '../src/brain/default/tasks/recover.ts';
 import { homeDamage, repairHome } from '../src/brain/default/tasks/repair_home.ts';
 import { shelter } from '../src/brain/default/tasks/shelter.ts';
@@ -23,6 +23,7 @@ import {
 import craft from '../src/goals/craft_item.ts';
 import digAreaGoal from '../src/goals/dig_area.ts';
 import buildHouse from '../src/goals/house.ts';
+import { torchCellPlan } from '../src/goals/light_shelter.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
 import { findRoute } from '../src/runtime/navigation/planner.ts';
 import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
@@ -261,6 +262,45 @@ test('torch refresh begins at 05:00 and an observed missing torch invalidates th
   notes.lightingDay = 100;
   assert.equal(shelterLight({ terrain, environment: environment(5) }, notes).lit, true);
   assert.equal(shelterLight({ terrain: { get: () => ({ code: 'game:air' }) }, environment: environment(5) }, notes).lit, false);
+});
+
+test('a shelter cell keeps its lit torch, relights when extinguished, and replaces when burnt out', () => {
+  assert.equal(torchCellPlan('game:air', false), 'place');
+  assert.equal(torchCellPlan(null, false), 'place');
+  assert.equal(torchCellPlan('game:torch-basic-lit-up', false), 'ok');
+  assert.equal(torchCellPlan('game:torch-basic-lit-up', true), 'replace', 'refresh resets the burn clock');
+  assert.equal(torchCellPlan('game:torch-basic-extinct-up', false), 'ignite');
+  assert.equal(torchCellPlan('game:torch-basic-extinct-up', true), 'ignite', 'an unlit torch needs no digging');
+  assert.equal(torchCellPlan('game:torch-basic-burnedout-up', false), 'replace', 'burnt-out torches cannot be relit');
+  assert.equal(torchCellPlan('game:torch-basic-burnedout-up', true), 'replace');
+});
+
+test('failed torch refresh falls back to relighting; burnt-out torches fetch a spare first', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const environment = { calendar: { totalDays: 100 + 6 / 24 } };
+  const ctxFor = (code: string, items: Record<string, number>, failed: boolean) => {
+    const memory = fresh({ home: { x: 2.5, y: 100, z: 2.5 }, starter: origin, lightingDay: 99 });
+    memory.lightingFailed = failed;
+    return {
+      memory,
+      s: { atHome: true, sheltered: false, danger: false, night: false },
+      k: kit(inventory({ ...items, 'game:firestarter': 1 })),
+      reading: { terrain: { get: () => ({ code }) }, environment },
+      danger: null,
+    } as any;
+  };
+  const refresh = lighting.run(ctxFor('game:torch-basic-lit-up', {}, false)) as any;
+  assert.deepEqual([refresh.start, refresh.args.refresh], ['light_shelter', true], 'a stale day replaces torches');
+  const relight = lighting.run(ctxFor('game:torch-basic-extinct-up', {}, true)) as any;
+  assert.deepEqual(
+    [relight.start, relight.args.refresh],
+    ['light_shelter', false],
+    'after a failed refresh, an extinguished torch is lit where it stands',
+  );
+  const spare = lighting.run(ctxFor('game:torch-basic-burnedout-up', {}, true)) as any;
+  assert.equal(spare.start, 'gather', 'a burnt-out torch drops nothing, so a spare is fetched before returning');
+  const replace = lighting.run(ctxFor('game:torch-basic-burnedout-up', { 'game:torch-basic-extinct-up': 1 }, false)) as any;
+  assert.deepEqual([replace.start, replace.args.refresh], ['light_shelter', true], 'spare in hand, the burnt-out torch is replaced');
 });
 
 const inventory = (items: Record<string, number>) => ({

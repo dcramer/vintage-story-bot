@@ -121,6 +121,8 @@ export type Memory = {
   tunnelTries: number;
   // Times in a row the chest could not be aimed at where its note says.
   stashMisses: number;
+  // The last shelter lighting failed: retry by relighting in place, not by digging up again.
+  lightingFailed: boolean;
   // Sighting keys already marked on the map, so one nugget is announced once.
   marked: Set<string>;
 };
