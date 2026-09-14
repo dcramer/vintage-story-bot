@@ -1,11 +1,30 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formingGround, inspectKnownFormingSurface } from '../src/support/forming.ts';
+import { formingGround, hasFormingOutputRoom, inspectKnownFormingSurface } from '../src/support/forming.ts';
 
 test('forming surfaces reject loose resources as ground', () => {
   assert.equal(formingGround({ key: 'block:0:1:2:3:game:soil-low-none', code: 'game:soil-low-none', face: 'up' }), true);
   assert.equal(formingGround({ key: 'block:0:1:2:3:game:loosestones-claystone-free', code: 'game:loosestones-claystone-free', face: 'up' }), false);
   assert.equal(formingGround({ key: 'block:0:1:2:3:game:looseflints-claystone-free', code: 'game:looseflints-claystone-free', face: 'up' }), false);
+});
+
+test('forming reserves carried room before consuming its surface material', () => {
+  const inventory = {
+    inventories: [
+      { name: 'hotbar', slots: [{ slot: 0, code: 'game:flint', quantity: 2 }] },
+      { name: 'backpack', slots: [{ slot: 0, code: 'game:log-placed-maple-ud', quantity: 4, bag: false }] },
+    ],
+  };
+  assert.equal(hasFormingOutputRoom(inventory, 'game:spearhead-flint'), false);
+  assert.equal(
+    hasFormingOutputRoom(
+      { ...inventory, inventories: [...inventory.inventories, { name: 'mouse', slots: [{ slot: 0, code: null }] }] },
+      'game:spearhead-flint',
+    ),
+    false,
+  );
+  inventory.inventories[1].slots[0] = { slot: 0, code: null, quantity: 0, bag: false };
+  assert.equal(hasFormingOutputRoom(inventory, 'game:spearhead-flint'), true);
 });
 
 test('forming retries a known surface after clearing a leaf obstruction', async () => {

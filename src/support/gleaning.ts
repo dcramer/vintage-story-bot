@@ -1,3 +1,4 @@
+import { GoalError } from '../runtime/failure.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { aimAtObject } from './blocks.ts';
 import { equip } from './inventory.ts';
@@ -85,6 +86,8 @@ export class Gleaner {
         await equip(field, { item: null });
       } catch (error) {
         if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
+        if (/No matching owned item\/tool or empty hand slot|Equip needs an empty ordinary hotbar slot/i.test(error.message))
+          throw new GoalError('no_room', 'Loose pickup needs one free carried slot');
         return false;
       }
     }

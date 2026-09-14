@@ -1,6 +1,8 @@
 import { useOnBlock } from '../goals/use_block.ts';
+import { GoalError } from '../runtime/failure.ts';
 import { lookAt, normalize } from '../runtime/navigation/terrain.ts';
 import { changeBlock, parseBlockKey, replaceablePlant, selectCell } from './blocks.ts';
+import { learn } from './facts.ts';
 import { equip, itemCount, ownedSlots } from './inventory.ts';
 import { clearLeafPath, leafBlock } from './leaf-clearing.ts';
 import { supportedFloor, surfaceCover } from './sites.ts';
@@ -13,6 +15,9 @@ export const kinds = {
 
 export const formingGround = selection =>
   selection?.key?.startsWith('block:') && selection.face === 'up' && !replaceablePlant(selection.code) && !has(selection, 'pickup');
+
+export const hasFormingOutputRoom = (inventory, output, maxStackSize = 1) =>
+  ownedSlots(inventory).some(slot => !slot.bag && (!slot.code || (slot.code === output && slot.quantity < maxStackSize)));
 
 const voxelPoint = (cell, [vx, vy, vz], top = true) => ({
   x: cell.x + (vx + 0.5) / 16,
@@ -109,6 +114,9 @@ export async function form(field, { kind, output, material }) {
   const surfaceCode = `game:${spec.surface}`;
   let inventory = await field.send({ action: 'inventory' });
   const initial = itemCount(inventory, output);
+  const outputFacts = await learn(field, output);
+  if (!hasFormingOutputRoom(inventory, output, outputFacts?.maxStackSize ?? 1))
+    throw new GoalError('no_room', 'Forming output needs one free carried slot');
   const gained = async () => {
     inventory = await field.send({ action: 'inventory' });
     return itemCount(inventory, output) - initial;

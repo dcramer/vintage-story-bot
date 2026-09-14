@@ -25,7 +25,7 @@ test('loose resources are approached from beside their floor column', () => {
   assert.equal(standsOnLooseBlock({ ...loose, kind: 'item' }, { x: 10.5, y: 5, z: 20.5 }), false);
 });
 
-function fixture({ gain = true, interruptAfter = Infinity, threatened = false, fullHotbar = false } = {}) {
+function fixture({ gain = true, interruptAfter = Infinity, threatened = false, fullHotbar = false, fullInventory = false } = {}) {
   const calls = [],
     reports = [];
   let walks = 0,
@@ -37,8 +37,8 @@ function fixture({ gain = true, interruptAfter = Infinity, threatened = false, f
     packState = 0,
     carriedBlock = 'game:rammed-light-plain',
     carriedBlockQuantity = 8,
-    storedBlock = null,
-    storedBlockQuantity = 0,
+    storedBlock = fullInventory ? 'game:log-placed-maple-ud' : null,
+    storedBlockQuantity = fullInventory ? 4 : 0,
     target;
   const cancellation = new AbortController();
   const state = () => ({
@@ -148,6 +148,16 @@ test('ground gathering frees an empty hand when the hotbar is full', async () =>
   assert.equal(result.gained, 1);
   assert.equal(f.calls.filter(c => c.action === 'inventory_move').length, 1);
   assert.equal(f.calls.filter(c => c.action === 'interact').length, 1);
+});
+
+test('ground gathering fails with no_room when every carried slot is occupied', async () => {
+  const f = fixture({ fullHotbar: true, fullInventory: true });
+  await assert.rejects(
+    gather(f.env, { count: 1, manageFood: false, wait: async () => {} }),
+    (error: any) => error?.code === 'no_room' && /free carried slot/.test(error.message),
+  );
+  assert.equal(f.calls.filter(c => c.action === 'interact').length, 0);
+  assert.equal(f.calls.at(-1).action, 'stop');
 });
 
 test('ground gathering actively leaves a predator perimeter before resuming its search', async () => {
