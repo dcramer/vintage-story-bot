@@ -191,7 +191,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
     decision = workOn(job, ctx, concern);
     const indoors =
       ('start' in decision &&
-        (['craft_item', 'light_shelter', 'eat'].includes(decision.start) || (decision.start === 'build' && job === 'storage'))) ||
+        (['craft_item', 'light_shelter', 'eat', 'inspect_container', 'store_items', 'take_items'].includes(decision.start) ||
+          (decision.start === 'build' && job === 'storage'))) ||
       'wait' in decision;
     if (!indoors && !('act' in decision)) {
       memory.job = 'leave_shelter';

@@ -2040,6 +2040,52 @@ test('brain: shared supplies are approached from inside the owned home', () => {
     state: { position: { x: 8.5, y: 99, z: 21.5 } },
   } as any);
   assert.deepEqual(enter, { handoff: 'go_home' }, 'proximity outside a wall is not usable container reach');
+
+  const inside = fresh({
+    home,
+    house: { x: 10, y: 100, z: 20 },
+    dwelling: { door: { x: 14, y: 100, z: 26 }, item: 'game:hay-normal-ud' },
+    stash: memory.notes.stash,
+    farm: {
+      origin: { x: 40, y: 100, z: 40 },
+      turn: 0,
+      soil: 'game:soil-medium-none',
+      wood: 'maple',
+      rotation: 0,
+      prepared: true,
+      checkedAt: 1000,
+    },
+    lightingDay: -1,
+  });
+  inside.startupChecked = true;
+  const supplies = inventory(
+    slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }),
+    slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 4 }),
+    slot('game:axe-flint', 1, { tool: 'Axe', durability: 5 }),
+    slot('game:shovel-flint', 1, { tool: 'Shovel', durability: 5 }),
+    slot('game:hoe-flint', 1, { tool: 'Hoe', durability: 5 }),
+    slot('game:stick', 4),
+    slot('game:log-placed-maple-ud', 8),
+    slot('game:torch-basic-lit-up', 2),
+    slot(null, 0),
+    slot(null, 0),
+  );
+  const inspect = decide(
+    reading({
+      state: state({ position: home }),
+      inventory: supplies,
+      terrain: {
+        get: (x, _y, z) => ({
+          hazard: null,
+          boxes: [{}],
+          code: (x === 11 || x === 18) && z === 23 ? 'game:torch-basic-lit-up' : 'game:rammed-light-plain',
+        }),
+      },
+    }),
+    inside,
+  );
+  assert.ok(['inspect_container', 'store_items', 'take_items'].includes(inspect.start));
+  assert.equal(inspect.args.target, memory.notes.stash?.key, 'a sealed house stays closed while its interior storage is used');
 });
 
 test('brain: a shelter has to be entered and sealed, and opens before morning work', () => {
