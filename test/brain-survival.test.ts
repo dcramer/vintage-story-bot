@@ -211,6 +211,11 @@ test('house: partial material batches resume the same site without claiming a ho
   assert.equal(house.setAside!(site, memory, {} as any), false, 'incremental site clearing retries the owned house');
   assert.equal(memory.notes.home, null);
   assert.equal(fresh(memory.notes).notes.construction?.phase, 'walls');
+  assert.deepEqual(
+    fresh({ construction: { origin: { x: 4, y: 101, z: 8 }, phase: 'survey', surveyed: true } }).notes.construction,
+    { origin: { x: 4, y: 101, z: 8 }, phase: 'survey' },
+    'an unfinished site survey survives a restart but requires a fresh panorama',
+  );
   house.ended!({ kind: 'house', ok: true } as any, memory, {} as any);
   assert.equal(memory.notes.construction?.phase, 'floor');
   assert.equal(memory.notes.home, null, 'a roof alone is not a finished home');
