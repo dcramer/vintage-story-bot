@@ -5,7 +5,12 @@ import { house as blueprint, houseScaffold } from '../../../support/structures.t
 import type { Cell, Concern } from '../concern.ts';
 import { allStashes, failedOnItsOwn, goTo, noteContents, selectStash, setHome } from '../concern.ts';
 
-export type Construction = { origin: Cell; phase: 'survey' | 'site' | 'walls' | 'floor' | 'enter'; surveyed?: boolean };
+export type Construction = {
+  origin: Cell;
+  phase: 'survey' | 'site' | 'walls' | 'floor' | 'enter';
+  surveyed?: boolean;
+  foundationVerified?: boolean;
+};
 export const RAMMED = 'game:rammed-light-plain';
 export const HAY = 'game:hay-normal-ud';
 export const HOUSE_BLOCKS = blueprint({ x: 0, y: 0, z: 0 }, RAMMED).length + houseScaffold({ x: 0, y: 0, z: 0 }, RAMMED).length;
@@ -49,11 +54,14 @@ export const house: Concern = {
   run: ctx => {
     const { k, memory } = ctx;
     let plan = memory.notes.construction;
-    if (plan?.phase === 'walls' && typeof ctx.reading?.terrain?.get === 'function' && !houseFoundationSafe(ctx.reading.terrain, plan.origin)) {
-      // A winter collision surface may have fooled an older controller. Do not
-      // commit another material batch to seasonal water.
-      memory.notes.construction = null;
-      plan = null;
+    if (plan?.phase === 'walls' && !plan.foundationVerified && typeof ctx.reading?.terrain?.get === 'function') {
+      if (houseFoundationSafe(ctx.reading.terrain, plan.origin)) plan.foundationVerified = true;
+      else {
+        // A winter collision surface may have fooled an older controller. Do
+        // not commit another material batch to a legacy, unverified plan.
+        memory.notes.construction = null;
+        plan = null;
+      }
     }
     if (!plan) {
       // Prefer known terrain around the established camp. An earlier errand
@@ -245,7 +253,10 @@ export const house: Concern = {
       plan.surveyed = false;
       return;
     }
-    if (last.kind === 'house') plan.phase = plan.phase === 'site' ? 'walls' : plan.phase === 'walls' ? 'floor' : 'enter';
+    if (last.kind === 'house') {
+      if (plan.phase === 'site') plan.foundationVerified = true;
+      plan.phase = plan.phase === 'site' ? 'walls' : plan.phase === 'walls' ? 'floor' : 'enter';
+    }
     if (last.kind === 'enter_shelter' && plan.phase === 'enter') {
       setHome(memory, last.result.home);
       memory.notes.house = plan.origin;

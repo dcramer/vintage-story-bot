@@ -229,6 +229,11 @@ test('house: partial material batches resume the same site without claiming a ho
   assert.equal(house.setAside!(site, memory, {} as any), false, 'incremental site clearing retries the owned house');
   assert.equal(memory.notes.home, null);
   assert.equal(fresh(memory.notes).notes.construction?.phase, 'walls');
+  assert.equal(
+    fresh({ construction: { origin: { x: 0, y: 100, z: 0 }, phase: 'walls', foundationVerified: true } }).notes.construction?.foundationVerified,
+    true,
+    'verified ownership survives a controller restart',
+  );
   assert.deepEqual(
     fresh({ construction: { origin: { x: 4, y: 101, z: 8 }, phase: 'survey', surveyed: true } }).notes.construction,
     { origin: { x: 4, y: 101, z: 8 }, phase: 'survey' },
@@ -237,6 +242,16 @@ test('house: partial material batches resume the same site without claiming a ho
   house.ended!({ kind: 'house', ok: true } as any, memory, {} as any);
   assert.equal(memory.notes.construction?.phase, 'floor');
   assert.equal(memory.notes.home, null, 'a roof alone is not a finished home');
+});
+
+test('house: successful site work records durable foundation verification', () => {
+  const memory = fresh({ construction: { origin: { x: 0, y: 100, z: 0 }, phase: 'site' } });
+  house.ended!({ kind: 'house', ok: true } as any, memory, {} as any);
+  assert.deepEqual(memory.notes.construction, {
+    origin: { x: 0, y: 100, z: 0 },
+    phase: 'walls',
+    foundationVerified: true,
+  });
 });
 
 test('house: an early-dug interior floor does not abandon the partial shell', () => {

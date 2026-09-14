@@ -503,7 +503,13 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
           }
         : {}),
       ...(cell(kept?.construction?.origin) && ['survey', 'site', 'walls', 'floor', 'enter'].includes(kept?.construction?.phase ?? '')
-        ? { construction: { origin: cell(kept!.construction!.origin)!, phase: kept!.construction!.phase } }
+        ? {
+            construction: {
+              origin: cell(kept!.construction!.origin)!,
+              phase: kept!.construction!.phase,
+              ...(kept!.construction!.foundationVerified === true ? { foundationVerified: true } : {}),
+            },
+          }
         : {}),
       stash: stashNote(kept?.stash),
       ...(Array.isArray(kept?.stores)
