@@ -20,9 +20,13 @@ const guarded = (ctx: Parameters<Concern['run']>[0], stash: { x: number; y: numb
     );
   });
 
+// A failed approach may end at the edge of a predator's clearance perimeter,
+// farther from the guarded container than the brain's ordinary local retry
+// radius. One normal travel leg still ties that failure to this source.
+const SOURCE_FAILURE_RADIUS = TRIED_RADIUS * 2;
 const recentlyUnreachable = (ctx: Parameters<Concern['run']>[0], stash: { x: number; z: number }) => {
   const failed = ctx.memory.tried.storage;
-  return !!failed && ctx.now - failed.at < TRIED_MS && horizontal(stash, failed) <= TRIED_RADIUS;
+  return !!failed && ctx.now - failed.at < TRIED_MS && horizontal(stash, failed) <= SOURCE_FAILURE_RADIUS;
 };
 
 export const storage: Concern = {

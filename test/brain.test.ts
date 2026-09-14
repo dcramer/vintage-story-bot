@@ -1704,7 +1704,7 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
   const unreachableTops = settled();
   unreachableTops.notes.stash = { ...chestNote(), full: true, seen: { at: 1000, items: {} } };
   unreachableTops.notes.stores = [topStore];
-  unreachableTops.tried.storage = { x: topStore.x + 10, z: topStore.z, at: 1000 };
+  unreachableTops.tried.storage = { x: topStore.x + 32, z: topStore.z, at: 1000 };
   const afterFailedSource = decide(
     settledReading({ state: state({ position: { x: 100, y: 100, z: 0 } }), inventory: inventory(slot('game:stick', 10), ...tools), now: 2000 }),
     unreachableTops,
