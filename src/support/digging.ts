@@ -127,6 +127,16 @@ export function stairStep(map, node, toward, miningTier = Infinity) {
   return ceiling.length ? { step: null, dig: ceiling, direction: null } : null;
 }
 
+// A small reachable component is not sufficient evidence of a pit: dense
+// foliage and incomplete local routes can isolate ordinary standing ground in
+// exactly the same way. Only hand control to dig_out when the observed shape
+// offers either a stair wall to cut/climb or support for its one-block bridge.
+export function recoverablePit(map, node, toward) {
+  if (!map?.get) return false;
+  if (stairStep(map, node, toward)) return true;
+  return typeof map.clearBetween === 'function' && supportedSteps(map, node, toward).length > 0;
+}
+
 // Whether the selected block can be broken with what is carried; picks the tool slot when one is needed.
 export async function diggingSlot(field, selected, inventory) {
   const tier = selected.requiredMiningTier ?? 0;

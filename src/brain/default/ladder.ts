@@ -17,7 +17,7 @@ const starving = (s: Situation) => s.hunger !== null && s.hunger < STARVING;
 // alone should not abandon durable work when no food can be eaten. This is
 // learned from play, never assumed. Once the home, storage, farm, and stockpile
 // are established, the ordinary night routine takes over again.
-const progressThroughRespawn = (s: Situation) =>
+export const progressThroughRespawn = (s: Situation) =>
   s.keepInventory === true &&
   s.reserve === 0 &&
   (starving(s) || !s.house || !s.storage || s.moreStorage === true || s.farmTended === false || s.stocked === false);
@@ -28,7 +28,7 @@ const establishingHouse = (s: Situation) => !!s.rammedShelter && !s.house;
 
 type Tried = Set<Job>;
 const sealedInTheDark = (s: Situation, tried: Tried) =>
-  !establishingHouse(s) && !!s.sheltered && s.lit === false && !s.hurt && !hungry(s) && !tried.has('lighting');
+  !progressThroughRespawn(s) && !establishingHouse(s) && !!s.sheltered && s.lit === false && !s.hurt && !hungry(s) && !tried.has('lighting');
 const threatWhileSealed = (s: Situation) => !!s.sheltered && s.threat && !s.hurt && !hungry(s);
 const hurtInBurrow = (s: Situation) => s.burrowed && s.hurt;
 const besiegedInBurrow = (s: Situation, tried: Tried) => s.burrowed && s.threat && !s.hurt && s.besieged && !tried.has('tunnel');
@@ -42,7 +42,8 @@ const hungryWithFood = (s: Situation, tried: Tried) => (hungry(s) || !!s.foodRec
 // Open the house and repair it from outside in daylight. At night the intact
 // seal is more valuable than immediately reaching an exterior wall or roof gap.
 const damageAtHome = (s: Situation, tried: Tried) => s.home && !!s.homeDamaged && !s.night && !s.storm && !tried.has('repair_home');
-const unlitAtHome = (s: Situation, tried: Tried) => !establishingHouse(s) && s.atHome && s.lit === false && s.torches > 0 && !tried.has('lighting');
+const unlitAtHome = (s: Situation, tried: Tried) =>
+  !progressThroughRespawn(s) && !establishingHouse(s) && s.atHome && s.lit === false && s.torches > 0 && !tried.has('lighting');
 const stormAwayFromHome = (s: Situation, tried: Tried) => s.storm && s.home && !s.atHome && !tried.has('go_home');
 const stormWithCover = (s: Situation) => s.storm && ((s.home && s.atHome) || s.burrowed);
 const stormNowhereToDig = (s: Situation, tried: Tried) => s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow');

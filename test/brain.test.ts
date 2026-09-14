@@ -236,6 +236,24 @@ test('brain: danger and carried food come before progress, and the kit comes in 
     'a keep-inventory respawn resumes the unfinished farm through the night',
   );
   assert.equal(
+    pickJob(
+      situation({
+        hunger: 0.05,
+        reserve: 0,
+        night: true,
+        atHome: false,
+        keepInventory: true,
+        lit: false,
+        moreStorage: true,
+        farmTended: false,
+        stocked: false,
+      }),
+      new Set(['storage'] as any),
+    ),
+    'provisions',
+    'a failed durable errand uses its cooldown for food work instead of a daily lighting trip',
+  );
+  assert.equal(
     pickJob(situation({ hunger: 0.5, reserve: 0, night: true, atHome: false, keepInventory: true })),
     'go_home',
     'night shelter returns after the durable camp is established',

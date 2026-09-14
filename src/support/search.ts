@@ -1,5 +1,5 @@
 import { distance, horizontal, lookAt, normalize } from '../runtime/navigation/terrain.ts';
-import { pitLimit, reachable, solid } from './digging.ts';
+import { pitLimit, reachable, recoverablePit, solid } from './digging.ts';
 import { navigationReach, sightRange } from './fieldwork.ts';
 import { type Habitat, habitatTargets } from './habitat.ts';
 import { clearLeafPath } from './leaf-clearing.ts';
@@ -355,7 +355,7 @@ export class Search {
     // lead failure/frontier recovery choose another way; digging upward cannot
     // make a lower destination reachable and falsely consumes the whole task.
     if (here && typeof toward?.y === 'number' && toward.y < p.y - 1.5) return false;
-    if (here && reachable(map, here) >= pitLimit) return false;
+    if (here && (reachable(map, here) >= pitLimit || !recoverablePit(map, here, toward))) return false;
     this.pit = true;
     this.pitToward = { x: toward.x, z: toward.z };
     this.field.report('pit', { position: p, toward: this.pitToward });

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { failedEdges } from '../runtime/navigation/failed-edges.ts';
 import { horizontal, key } from '../runtime/navigation/terrain.ts';
-import { pitLimit, reachable, solid } from '../support/digging.ts';
+import { pitLimit, reachable, recoverablePit, solid } from '../support/digging.ts';
 import { clearLeafPath } from '../support/leaf-clearing.ts';
 import { destinationName, runField } from '../support/task.ts';
 import { nearestThreat } from '../support/threats.ts';
@@ -194,7 +194,7 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
       // above a lower goal is therefore a ridge, not a hole: keep trying
       // alternate routes instead of asking dig_out to excavate upward.
       const strandedAbove = !!here && Number.isFinite(goal.y) && goal.y < position.y - 1.5;
-      if (embedded || (here && !strandedAbove && reachable(map, here) < pitLimit) || (covered && stuck >= 2))
+      if (embedded || (here && !strandedAbove && reachable(map, here) < pitLimit && recoverablePit(map, here, goal)) || (covered && stuck >= 2))
         return {
           ok: false,
           goal: 'travel',

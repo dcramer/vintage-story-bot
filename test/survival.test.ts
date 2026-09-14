@@ -1243,6 +1243,35 @@ test('travel detours from a ridge toward a lower destination instead of reportin
   assert.deepEqual(legs, [{ ...destination, arrivalRadius: 1 }, detour]);
 });
 
+test('travel does not call isolated ordinary ground a pit when dig-out has no recovery shape', async () => {
+  const position = { x: 0.5, y: 1, z: 0.5 };
+  const state = { position, condition: {}, capabilities: [] };
+  const air = { code: 'game:air', boxes: [], hazard: null, traits: [] };
+  let now = 0;
+  const map = {
+    nodeAt: () => position,
+    moves: () => [],
+    gapMoves: () => [],
+    get: () => air,
+    clearBetween: () => true,
+  };
+  const field = {
+    moved: 0,
+    latest: state,
+    env: { map },
+    now: () => (now += 30000),
+    observe: async () => state,
+    report: () => {},
+    explore: () => ({ x: 0.5, y: 1, z: 12.5, horizontalOnly: true, arrivalRadius: 1 }),
+    walk: async () => ({ state: 'blocked', reason: 'no_observed_route' }),
+    resetExploration: () => {},
+  };
+  const result = await travel(field, null, { x: 20.5, y: 2, z: 0.5 });
+  assert.equal(result.ok, false);
+  assert.ok('reason' in result);
+  assert.equal(result.reason, 'no_progress');
+});
+
 test('an upward trip stalled beneath a verified cave roof asks existing dig-out for one level', async () => {
   const position = { x: 0.5, y: 1, z: 0.5 };
   const state = { position, body: { halfWidth: 0.3, height: 1.85 }, condition: {}, capabilities: [] };

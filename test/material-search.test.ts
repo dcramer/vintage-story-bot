@@ -48,16 +48,50 @@ test('a search reports the actual failed destination when it discovers a pit', (
   const position = { x: 40, y: 120, z: 30 };
   const toward = { x: 10, y: 120, z: -20 };
   const reports = [];
+  const air = { code: 'game:air', boxes: [], hazard: null, traits: [] };
+  const wall = { code: 'game:soil-low-none', boxes: [[0, 0, 0, 1, 1, 1]], hazard: null, traits: ['diggable'] };
   const field = {
     latest: { position },
     now: () => 0,
-    env: { map: { nodeAt: () => position, moves: () => [], gapMoves: () => [] } },
+    env: {
+      map: {
+        nodeAt: () => position,
+        moves: () => [],
+        gapMoves: () => [],
+        get: (x, y, z) => (x === 39 && y === 120 && z === 30 ? wall : air),
+        clearBetween: () => true,
+      },
+    },
     report: (phase, details) => reports.push({ phase, ...details }),
   };
   const search = new Search(field, { kind: 'material', match: ['coopersreed'], wanted: () => true, take: async () => true });
   assert.equal(search.inPit({ state: 'blocked', reason: 'no_observed_route' }, toward), true);
   assert.deepEqual(search.pitToward, { x: 10, z: -20 });
   assert.deepEqual(reports, [{ phase: 'pit', position, toward: { x: 10, z: -20 } }]);
+});
+
+test('a search does not call isolated ordinary ground a pit when there is no recovery wall', () => {
+  const position = { x: 40, y: 120, z: 30 };
+  const air = { code: 'game:air', boxes: [], hazard: null, traits: [] };
+  const reports = [];
+  const field = {
+    latest: { position },
+    now: () => 0,
+    env: {
+      map: {
+        nodeAt: () => position,
+        moves: () => [],
+        gapMoves: () => [],
+        get: () => air,
+        clearBetween: () => true,
+      },
+    },
+    report: (phase, details) => reports.push({ phase, ...details }),
+  };
+  const search = new Search(field, { kind: 'material', match: ['coopersreed'], wanted: () => true, take: async () => true });
+  assert.equal(search.inPit({ state: 'blocked', reason: 'no_observed_route' }, { x: 10, y: 121, z: -20 }), false);
+  assert.equal(search.pit, false);
+  assert.deepEqual(reports, []);
 });
 
 test('a search stranded above a lower destination does not call the ridge a pit', () => {
