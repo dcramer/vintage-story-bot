@@ -166,6 +166,32 @@ test('the larger house retains a legal route from the ground to its completed ri
   assert.equal(findRoute(map, start, goal, 0.3, 1.85, { partial: false }), null, 'one step leaves the finished eaves two blocks above the player');
 });
 
+test('the larger house roofs outward from its access stairs and keeps every completed course reachable', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const map = new TerrainMemory();
+  for (let x = -2; x <= 11; x++)
+    for (let z = -2; z <= 10; z++)
+      for (let y = 99; y <= 107; y++) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: y === 99 ? [[x, y, z, x + 1, y + 1, z + 1]] : [] });
+  const shell = houseTemplate(origin, 'earth');
+  const roof = shell.slice(-7 * 8);
+  for (const { x, y, z } of [...houseScaffold(origin, 'earth'), ...shell.slice(0, -roof.length)])
+    map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [[x, y, z, x + 1, y + 1, z + 1]] });
+  const start = { x: 3.5, y: 100, z: 9.5 };
+  for (let course = 0; course < 7; course++) {
+    const cells = roof.slice(course * 8, course * 8 + 8);
+    assert.ok(
+      cells.every(cell => cell.z === 6 - course),
+      'roof courses must start beside the +z access stairs',
+    );
+    for (const { x, y, z } of cells) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [[x, y, z, x + 1, y + 1, z + 1]] });
+    const middle = cells.find(cell => cell.x === 3)!;
+    assert.ok(
+      findRoute(map, start, { x: middle.x + 0.5, y: middle.y + 1, z: middle.z + 0.5 }, 0.3, 1.85, { partial: false }),
+      `roof course z=${middle.z} must remain reachable from the access stairs`,
+    );
+  }
+});
+
 test('the larger house blueprint gives every placement an existing support', () => {
   const origin = { x: 0, y: 100, z: 0 };
   const built = new Set<string>();

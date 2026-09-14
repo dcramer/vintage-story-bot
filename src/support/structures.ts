@@ -13,8 +13,12 @@ export function house(origin, item) {
     for (let dx = 8; dx >= 5; dx--) cells.push(at(dx, dy, 6));
   }
   for (const dx of [0, 9]) for (let dy = 2; dy <= 4; dy++) for (let dz = 0; dz < 7; dz++) if (dy <= gable[dz]) cells.push(at(dx, dy, dz));
-  for (let dz = 0; dz < 7; dz++) {
-    const xs = Array.from({ length: 8 }, (_, i) => (dz % 2 === 0 ? i + 1 : 8 - i));
+  // The access stairs meet the +z eave. Lay the roof away from those stairs,
+  // one complete course at a time, so every next course is reachable from the
+  // roof already underfoot. Starting at the opposite eave makes a partial
+  // build strand the player on the stairs with no observed route to its work.
+  for (let dz = 6; dz >= 0; dz--) {
+    const xs = Array.from({ length: 8 }, (_, i) => ((6 - dz) % 2 === 0 ? i + 1 : 8 - i));
     for (const dx of xs) cells.push(at(dx, gable[dz], dz));
   }
   return cells;
