@@ -97,6 +97,65 @@ test('pit recovery explicitly digs a full block occupying the grounded body cell
   assert.equal(recoveryRequest.allowBodyCellDig, true);
 });
 
+test('pit recovery clears snow that occludes a full block occupying the body cell', async () => {
+  const map = world(3, (x, y, z) => x === 0 && y === 0 && z === 0);
+  map.put({ x: 0, y: 1, z: 0, seenAt: Date.now(), code: 'game:snowlayer-3', traits: [], boxes: [[0, 1, 0, 1, 1.375, 1]] });
+  const cover = 'block:0:0:1:0:game:snowlayer-3';
+  const body = 'block:0:0:0:0:game:lakeice';
+  const inventory = {
+    state: 'inventory-1',
+    inventories: [
+      {
+        name: 'hotbar',
+        slots: [{ slot: 0, code: 'game:shovel-flint', quantity: 1, tool: 'Shovel', toolTier: 1, durability: 50 }],
+      },
+    ],
+  };
+  let covered = true;
+  const requests = [];
+  const field = {
+    env: { map },
+    latest: {
+      position: { x: 0.5, y: 0, z: 0.5, dimension: 0 },
+      body: { eyeHeight: 1.7 },
+      motion: { onGround: true },
+      capabilities: ['body_cell_dig'],
+      activeSlot: 0,
+    },
+    observe: async () => field.latest,
+    send: async request => {
+      if (request.action === 'inventory') return inventory;
+      if (request.action === 'select' || request.action === 'aim_cell') return { ok: true };
+      if (request.action === 'inspect_target')
+        return covered
+          ? { key: cover, code: 'game:snowlayer-3', material: 'Snow', requiredMiningTier: 0 }
+          : { key: body, code: 'game:lakeice', material: 'Ice', requiredMiningTier: 0 };
+      if (request.action === 'block_action_begin') {
+        requests.push(request);
+        if (request.target === cover) {
+          covered = false;
+          map.put({ x: 0, y: 1, z: 0, seenAt: Date.now(), code: 'game:air', traits: [], boxes: [] });
+          return { state: 'changed', changedForMs: 1000, position: { x: 0, y: 1, z: 0 }, before: 'game:snowlayer-3', after: 'game:air' };
+        }
+        map.put({ x: 0, y: 0, z: 0, seenAt: Date.now(), code: 'game:air', traits: [], boxes: [] });
+        return { state: 'changed', changedForMs: 1000, position: { x: 0, y: 0, z: 0 }, before: 'game:lakeice', after: 'game:air' };
+      }
+      throw Error(`Unexpected action: ${request.action}`);
+    },
+    report: () => {},
+    wait: async () => {},
+  };
+  const result = await digOut(field, { x: 5, z: 0.5 }, { steps: 1 });
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    requests.map(request => [request.target, request.allowBodyCellDig]),
+    [
+      [cover, undefined],
+      [body, true],
+    ],
+  );
+});
+
 test('a pit is a place the search runs out of; open ground is not', () => {
   const pit = world(6, (x, y, z) => (Math.abs(x) >= 1 || Math.abs(z) >= 1) && y >= 0 && y <= 3);
   assert.equal(reachable(pit, { x: 0.5, y: 0, z: 0.5 }), 1);

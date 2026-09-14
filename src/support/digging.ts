@@ -163,7 +163,10 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       // remains in force everywhere else; this scoped request breaks only the
       // selected current body cell, just as direct player input can.
       const inventory = await field.send({ action: 'inventory' });
-      const selected = await selectCell(field, cell);
+      // Snow or surface plants above the embedded block can intercept the
+      // native selection ray. Clear that replaceable cover, then re-aim at
+      // the full body cell the scoped recovery request is allowed to break.
+      const selected = await selectCell(field, cell, { clearPlants: true });
       const slot = selected && (await diggingSlot(field, selected, inventory));
       if (!selected || slot === null) {
         reason = 'cannot_cut';
