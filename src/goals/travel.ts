@@ -46,6 +46,13 @@ export function reachableAscent(map, state, goal, radius = 16, limit = 512) {
   return best.y > origin.y + 0.6 ? { x: best.x, y: best.y, z: best.z, arrivalRadius: 0.35 } : null;
 }
 
+const coveredAscent = (map, state, goal) =>
+  Number.isFinite(goal?.y) &&
+  goal.y > state.position.y + 1.5 &&
+  map?.get &&
+  solid(map, Math.floor(state.position.x), Math.floor(state.position.y) + 2, Math.floor(state.position.z)) &&
+  !reachableAscent(map, state, goal);
+
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
 export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { x: number; y?: number; z: number; arrivalRadius?: number }) {
   let stuck = 0,
@@ -79,8 +86,25 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
     if (remaining < closest - 2) {
       closest = remaining;
       closestAt = clock();
-    } else if (clock() - closestAt > 120000)
+    } else if (clock() - closestAt > 120000) {
+      // The ordinary liveness bound can expire before a wide cave accrues two
+      // consecutive blocked legs: hostile evasion may keep moving between its
+      // floor and ledges. Preserve the stronger, directly observed diagnosis
+      // so the brain can use its existing one-level dig_out recovery.
+      const covered = coveredAscent(field.env?.map, state, goal);
+      if (covered)
+        return {
+          ok: false,
+          goal: 'travel',
+          reason: 'pit',
+          toward: { x: goal.x, z: goal.z },
+          covered: true,
+          ...summary(),
+          remaining: +remaining.toFixed(1),
+          position: state.position,
+        };
       return { ok: false, goal: 'travel', reason: 'no_progress', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
+    }
     if (remaining <= arrivalRadius && (y === undefined || Math.abs(state.position.y - y) < 1.5))
       return { ok: true, goal: 'travel', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
     field.report('travelling', { remaining: +remaining.toFixed(1), legs, roughRoute: field.roughRouteStatus });
@@ -154,12 +178,7 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
       // cell. There is deliberately no standing node in that case, but the
       // scoped body-cell RPC lets dig_out recover once travel reports a pit.
       const embedded = !here && map?.get && solid(map, Math.floor(position.x), Math.floor(position.y), Math.floor(position.z));
-      const covered =
-        y !== undefined &&
-        y > position.y + 1.5 &&
-        map?.get &&
-        solid(map, Math.floor(position.x), Math.floor(position.y) + 2, Math.floor(position.z)) &&
-        !reachableAscent(map, field.latest, goal);
+      const covered = coveredAscent(map, field.latest, goal);
       if (embedded || (here && reachable(map, here) < pitLimit) || (covered && stuck >= 2))
         return {
           ok: false,
