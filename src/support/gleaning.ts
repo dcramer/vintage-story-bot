@@ -81,9 +81,12 @@ export class Gleaner {
     // Select an empty hand before aiming; otherwise the click may place the
     // held material instead of collecting the loose resource.
     if (pickupBlock(object)) {
-      await field.observe();
-      if (!field.latest.hotbar.some(s => s.slot < 10 && !s.code)) return false;
-      await equip(field, { item: null });
+      try {
+        await equip(field, { item: null });
+      } catch (error) {
+        if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
+        return false;
+      }
     }
     if (horizontal(field.latest.position, object.point) > field.latest.pickingRange - 0.5) {
       // A cell beside it when memory routes there, else anywhere within two blocks of it.

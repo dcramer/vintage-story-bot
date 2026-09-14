@@ -25,7 +25,7 @@ test('loose resources are approached from beside their floor column', () => {
   assert.equal(standsOnLooseBlock({ ...loose, kind: 'item' }, { x: 10.5, y: 5, z: 20.5 }), false);
 });
 
-function fixture({ gain = true, interruptAfter = Infinity, threatened = false } = {}) {
+function fixture({ gain = true, interruptAfter = Infinity, threatened = false, fullHotbar = false } = {}) {
   const calls = [],
     reports = [];
   let walks = 0,
@@ -33,7 +33,12 @@ function fixture({ gain = true, interruptAfter = Infinity, threatened = false } 
     sweeps = 0,
     inventory = 0,
     picked = false,
-    activeSlot = 1,
+    activeSlot = fullHotbar ? 0 : 1,
+    packState = 0,
+    carriedBlock = 'game:rammed-light-plain',
+    carriedBlockQuantity = 8,
+    storedBlock = null,
+    storedBlockQuantity = 0,
     target;
   const cancellation = new AbortController();
   const state = () => ({
@@ -54,10 +59,10 @@ function fixture({ gain = true, interruptAfter = Infinity, threatened = false } 
     activeSlot,
     hotbar: [
       { slot: 0, code: 'game:stick', quantity: inventory },
-      { slot: 1, code: 'game:rammed-light-plain', quantity: 8 },
-      { slot: 2, code: null, quantity: 0 },
+      { slot: 1, code: carriedBlock, quantity: carriedBlockQuantity, tool: null },
+      { slot: 2, code: fullHotbar ? 'game:soil-low-none' : null, quantity: fullHotbar ? 4 : 0, tool: null },
     ],
-    backpack: [],
+    backpack: fullHotbar ? [{ slot: 0, code: storedBlock, quantity: storedBlockQuantity, bag: false }] : [],
     target,
   });
   // What the eye has seen, as memory answers a goal's look: leaves until the
@@ -89,13 +94,32 @@ function fixture({ gain = true, interruptAfter = Infinity, threatened = false } 
     send: async request => {
       calls.push(request);
       if (request.action === 'observe') return state();
-      if (request.action === 'inventory') return { ok: true, state: 'inventory-state', inventories: [{ name: 'hotbar', slots: state().hotbar }] };
+      if (request.action === 'inventory')
+        return {
+          ok: true,
+          state: `inventory-state-${packState}`,
+          inventories: [
+            { name: 'hotbar', slots: state().hotbar },
+            { name: 'backpack', slots: state().backpack },
+          ],
+        };
+      if (request.action === 'inventory_move') {
+        assert.equal(request.expectedState, `inventory-state-${packState}`);
+        assert.deepEqual(request.from, { inventory: 'hotbar', slot: 1 });
+        assert.deepEqual(request.to, { inventory: 'backpack', slot: 0 });
+        storedBlock = carriedBlock;
+        storedBlockQuantity = carriedBlockQuantity;
+        carriedBlock = null;
+        carriedBlockQuantity = 0;
+        packState++;
+        return { ok: true };
+      }
       if (request.action === 'select') {
         activeSlot = request.slot;
         return { ok: true };
       }
       if (request.action === 'interact') {
-        assert.equal(activeSlot, 2, 'native loose pickup requires an empty hand instead of the carried rammed earth');
+        assert.equal(activeSlot, fullHotbar ? 1 : 2, 'native loose pickup requires an empty hand instead of the carried rammed earth');
         picked = true;
         if (gain) inventory++;
         return { ok: true };
@@ -115,6 +139,15 @@ test('persistent ground-only goal reroutes and verifies ten inventory gains', as
   assert.equal(f.calls.filter(c => c.action === 'interact').length, 10);
   assert.ok(f.reports.some(p => p.phase === 'rerouting'));
   assert.equal(f.calls.at(-1).action, 'stop');
+});
+
+test('ground gathering frees an empty hand when the hotbar is full', async () => {
+  const f = fixture({ fullHotbar: true });
+  const result = await gather(f.env, { count: 1, manageFood: false, wait: async () => {} });
+  assert.equal(result.ok, true);
+  assert.equal(result.gained, 1);
+  assert.equal(f.calls.filter(c => c.action === 'inventory_move').length, 1);
+  assert.equal(f.calls.filter(c => c.action === 'interact').length, 1);
 });
 
 test('ground gathering actively leaves a predator perimeter before resuming its search', async () => {
