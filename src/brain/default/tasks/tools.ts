@@ -34,7 +34,6 @@ export function makeTool(k: Kit, tool: string, head: string, blades: number, out
       args: {
         output: `game:${head}-${k.material ?? 'flint'}`,
         material: k.material && k.material !== 'flint' ? `game:stone-${k.material}` : 'game:flint',
-        timeoutMs: 600000,
       },
       why: `no ${tool}`,
     };

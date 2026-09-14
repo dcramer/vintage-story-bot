@@ -14,6 +14,7 @@ import brain, {
   STICK_MIN,
   wants,
 } from '../src/brain/default.ts';
+import { schema as knapSchema } from '../src/goals/knap.ts';
 import { shelter as shelterCells, shelterScaffold } from '../src/support/structures.ts';
 
 const decide = (reading, memory): any => decision(reading, memory);
@@ -1405,6 +1406,8 @@ test('brain: knapping needs two flints, one for the surface and one in hand for 
   );
   const two = decide(reading({ inventory: inventory(slot('game:stick', 3), slot('game:flint', 2)) }), fresh());
   assert.deepEqual([two.start, two.args.output], ['knap', 'game:knifeblade-flint'], 'two flints: knap');
+  assert.equal(Object.hasOwn(two.args, 'timeoutMs'), false, 'tool work has no brain-imposed deadline');
+  assert.equal(knapSchema.parse({ output: two.args.output }).timeoutMs, undefined, 'knapping has no schema-imposed deadline');
 });
 
 test("brain: a flight refused for footing is not the flight's fault: it is tried again at once", () => {

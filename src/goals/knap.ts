@@ -7,7 +7,7 @@ export const schema = z
   .object({
     output: z.string().min(1).max(160).describe('Exact knapping output code, e.g. game:knifeblade-flint.'),
     material: z.string().min(1).max(160).optional().describe('Knappable stone code to use; defaults to owned flint, else any owned stone.'),
-    timeoutMs: z.number().int().min(1000).max(600000).default(180000),
+    timeoutMs: z.number().int().min(1000).max(600000).optional(),
   })
   .strict();
 
@@ -18,7 +18,8 @@ export default defineGoal({
   description:
     'Knap one item: equip the stone, sneak-place a knapping surface on the ground ahead (or reuse an unfinished own ' +
     'surface), select the recipe, then aim at each surplus voxel and left-click natively until the surface completes; ' +
-    'verifies inventory gain of output. Needs an empty flat block ahead and one spare stone. Returns START; poll goal_status.',
+    'verifies inventory gain of output. Needs an empty flat block ahead and one spare stone. No default deadline; stop the ' +
+    'goal to interrupt it. Returns START; poll goal_status.',
   title: args => `Knap ${cleanName(args.output)}`,
   announce: args => `Knapping ${cleanName(args.output)}.`,
   run: (env, options) => runField(env, options, ['inventory', 'sneak', 'forming'], (field, _, o) => form(field, { ...o, kind: 'knapping' })),
