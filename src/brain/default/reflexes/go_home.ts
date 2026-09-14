@@ -37,7 +37,7 @@ export const goHome: Concern = {
         if (grass < (2 - have) * 8)
           return {
             start: 'harvest',
-            args: { match: 'tallgrass', item: 'drygrass', count: (2 - have) * 8 - grass, timeoutMs: 300000 },
+            args: { match: 'tallgrass', item: 'drygrass', count: (2 - have) * 8 - grass, tool: 'Knife', timeoutMs: 300000 },
             why: 'grass to close the house',
           };
         return { start: 'craft_item', args: { output: dwelling.item, count: 2 - have, timeoutMs: 300000 }, why: 'closing the house with hay bales' };

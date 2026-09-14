@@ -4,14 +4,16 @@ import { goTo, workOn } from '../src/brain/default/concern.ts';
 import { recoverBurrow } from '../src/brain/default/reflexes/burrow.ts';
 import { goHome } from '../src/brain/default/reflexes/go_home.ts';
 import { makeBag } from '../src/brain/default/tasks/bags.ts';
+import { grass } from '../src/brain/default/tasks/grass.ts';
 import { house, houseSite, houseSurveySite } from '../src/brain/default/tasks/house.ts';
-import { lighting, lightingDay, shelterLight } from '../src/brain/default/tasks/lighting.ts';
+import { lighting, lightingDay, prepareFirestarter, shelterLight } from '../src/brain/default/tasks/lighting.ts';
 import { recover, recoverableBody } from '../src/brain/default/tasks/recover.ts';
 import { homeDamage, repairHome } from '../src/brain/default/tasks/repair_home.ts';
 import { shelter } from '../src/brain/default/tasks/shelter.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { shovel } from '../src/brain/default/tasks/tools.ts';
+import { torchStep } from '../src/brain/default/tasks/torches.ts';
 import { fresh, kit } from '../src/brain/default.ts';
 import {
   selectExistingPlacementCell,
@@ -355,6 +357,25 @@ test('ordinary errands and body recovery do not turn into food searches', () => 
   assert.equal(trip.args.manageFood, false);
   const body: any = recover.run({ memory: fresh({ recovery: { guid: 'death-one', until: 601000 } }), now: 1000 } as any);
   assert.equal(body.args.manageFood, false);
+});
+
+test('dry-grass work always uses the knife required by its handbook drop', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const memory = fresh({
+    home: { x: 4.5, y: 99, z: 3.5 },
+    dwelling: { door: { x: 4, y: 100, z: 6 }, item: 'game:hay-normal-ud' },
+    construction: { origin, phase: 'enter' },
+  });
+  const k = kit(inventory({ 'game:knife-generic-flint': 1, 'game:stick': 2 }));
+  const decisions: any[] = [
+    grass.run({} as any),
+    torchStep(k, { torches: 0, house: false } as any),
+    prepareFirestarter({ k } as any),
+    house.run({ memory, k } as any),
+    goHome.run({ memory, home: memory.notes.home, storm: false, k, state: { position: memory.notes.home } } as any),
+  ];
+  assert.ok(decisions.every(decision => decision.start === 'harvest' && decision.args.tool === 'Knife'));
+  assert.equal(SUPPLIES.find(supply => supply.item === 'drygrass')?.tool, 'Knife');
 });
 
 test('an old death marker cannot renew recovery after a controller restart', () => {

@@ -215,7 +215,7 @@ export const house: Concern = {
         if (count('drygrass') < 16)
           return {
             start: 'harvest',
-            args: { match: 'tallgrass', item: 'drygrass', count: 16 - count('drygrass'), timeoutMs: 600000 },
+            args: { match: 'tallgrass', item: 'drygrass', count: 16 - count('drygrass'), tool: 'Knife', timeoutMs: 600000 },
             why: 'grass for the two hay-bale door blocks',
           };
         return { start: 'craft_item', args: { output: HAY, count: 2 - count(HAY), timeoutMs: 300000 }, why: 'hay bales to seal the house' };

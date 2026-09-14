@@ -12,7 +12,11 @@ export function prepareFirestarter(ctx) {
         why: 'sticks for a firestarter',
       };
     if (!count('game:drygrass'))
-      return { start: 'harvest', args: { match: 'tallgrass', item: 'drygrass', count: 1, timeoutMs: 300000 }, why: 'dry grass for a firestarter' };
+      return {
+        start: 'harvest',
+        args: { match: 'tallgrass', item: 'drygrass', count: 1, tool: 'Knife', timeoutMs: 300000 },
+        why: 'dry grass for a firestarter',
+      };
     return { start: 'craft_item', args: { output: 'game:firestarter', count: 1, timeoutMs: 300000 }, why: 'a firestarter to light the shelter' };
   }
   return null;

@@ -7,7 +7,7 @@ export const SUPPLIES = [
   { item: 'game:stick', count: 32, keep: 4, goal: 'gather', match: 'stick' },
   { item: 'game:flint', count: 16, keep: 2, goal: 'gather', match: 'looseflints' },
   { item: 'log-', count: 16, keep: 8, goal: 'fell_tree', match: 'log-' },
-  { item: 'drygrass', count: 32, keep: 4, goal: 'harvest', match: 'tallgrass' },
+  { item: 'drygrass', count: 32, keep: 4, goal: 'harvest', match: 'tallgrass', tool: 'Knife' },
   { item: 'cattailtops', count: 24, keep: 0, goal: 'harvest', match: 'coopersreed', tool: 'Knife' },
 ] as const;
 export const STOCK_CHECK_MS = 5 * 60 * 1000;

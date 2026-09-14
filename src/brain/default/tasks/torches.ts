@@ -18,7 +18,7 @@ export function torchStep(k: Kit, s: Situation): Decision {
   if (missing > 0)
     return {
       start: 'harvest',
-      args: { match: 'tallgrass', item: 'drygrass', count: missing, timeoutMs: 300000 },
+      args: { match: 'tallgrass', item: 'drygrass', count: missing, tool: 'Knife', timeoutMs: 300000 },
       why: 'enough grass to finish the torches',
     };
   return {
