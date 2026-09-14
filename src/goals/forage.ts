@@ -36,7 +36,7 @@ export default defineGoal({
     'Nothing in sight: it takes what was seen before, else ranges toward the least-walked ground, carrying on in the same ' +
     'direction across restarts. Ranks observed habitats and food by search effort and expected satiety; checks a new viewpoint every 24 blocks. ' +
     'Redirects after 96 blocks without a lead; 384 blocks or six minutes without a verified harvest ends with none_found. No overall default deadline. Death/control loss cancels; never respawns or resumes automatically. ' +
-    'Returns START and goal.id; poll goal_status. Needs an empty hotbar slot for harvesting. ' +
+    'Returns START and goal.id; poll goal_status. Needs one free carried slot for an empty harvesting hand. ' +
     'Optional sprint=true permits straight level sprinting only while food is at least 60%.',
   title: args => (args.count ? `Forage for ${args.count} fresh food items` : 'Forage for food'),
   announce: () => 'Foraging for a bite to eat.',

@@ -7,6 +7,7 @@ import {
   consume,
   eatingLooks,
   edible,
+  emptyHand,
   foodHotbarRoom,
   foodRecoverySatisfied,
   foodTolerance,
@@ -275,6 +276,44 @@ test('equipping an empty hand puts away a non-tool when the hotbar is full', asy
 
   assert.equal(result.item, null);
   assert.equal(result.slot, 0);
+  assert.equal(inventories[0].slots[0].code, null);
+  assert.equal(inventories[1].slots[0].code, 'game:soil-medium-none');
+});
+
+test('food harvesting makes an empty hand when worn-basket storage has room', async () => {
+  let packState = 0;
+  const inventories: any[] = [
+    {
+      name: 'hotbar',
+      slots: [
+        { slot: 0, code: 'game:soil-medium-none', quantity: 8, tool: null },
+        { slot: 1, code: 'game:knife-flint', quantity: 1, tool: 'Knife', toolTier: 1, durability: 10 },
+      ],
+    },
+    { name: 'backpack', slots: [{ slot: 0, code: null, quantity: 0, bag: false }] },
+  ];
+  const contents = () => ({ state: `pack-${packState}`, inventories: structuredClone(inventories) });
+  const field: any = {
+    latest: { activeSlot: 1 },
+    report: () => {},
+    observe: async () => field.latest,
+    send: async request => {
+      if (request.action === 'inventory') return contents();
+      if (request.action === 'inventory_move') {
+        const from = inventories.find(i => i.name === request.from.inventory).slots[request.from.slot];
+        const to = inventories.find(i => i.name === request.to.inventory).slots[request.to.slot];
+        Object.assign(to, structuredClone(from), { slot: request.to.slot });
+        Object.assign(from, { code: null, quantity: 0, tool: null });
+        packState++;
+        return { ok: true };
+      }
+      if (request.action === 'select') field.latest.activeSlot = request.slot;
+      return { ok: true };
+    },
+    until: (condition, options) => until(field, condition, options),
+  };
+
+  assert.equal(await emptyHand(field), 0);
   assert.equal(inventories[0].slots[0].code, null);
   assert.equal(inventories[1].slots[0].code, 'game:soil-medium-none');
 });

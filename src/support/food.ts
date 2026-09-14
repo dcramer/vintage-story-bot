@@ -1,5 +1,5 @@
 import { known } from './facts.ts';
-import { ownedSlots } from './inventory.ts';
+import { equip, ownedSlots } from './inventory.ts';
 
 // Prior knowledge a player brings to a new world: what food tends to grow
 // on, so a food search picks those out of what the eye has seen. Everything
@@ -92,12 +92,10 @@ export function foodHotbarRoom(inventory) {
 }
 
 export async function emptyHand(field) {
-  await field.observe();
-  const inventory = await field.send({ action: 'inventory' });
-  const slot = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && !s.code);
-  if (!slot) throw Error('Harvest needs an empty hotbar slot; inventory management required');
-  await field.send({ action: 'select', slot: slot.slot });
-  return slot.slot;
+  // Harvesting food has the same native empty-hand requirement as loose
+  // pickup. Reuse verified equipment management so a full hotbar can put one
+  // ordinary stack into free worn-basket storage instead of abandoning food.
+  return (await equip(field, { item: null })).slot;
 }
 
 // Eat one item: the least harmful first, then the soonest to spoil.
