@@ -35,6 +35,11 @@ export const storage: Concern = {
   done: s => s.storage && !s.moreStorage,
   after: ['knife'],
   running: ctx => {
+    // Harvest already pauses or routes around a nearby hostile. Cancelling it
+    // on the same sighting discards its deterministic frontier and restarts
+    // the reed search from scratch. Actual damage still falls through to the
+    // safety reflex and interrupts the work.
+    if (ctx.active?.kind === 'harvest' && ctx.danger && !ctx.hurt) return { wait: 'letting harvest evade threat' };
     const source = ctx.memory.notes.stash;
     const target = ctx.active?.args;
     if (

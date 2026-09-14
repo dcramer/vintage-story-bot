@@ -1023,6 +1023,20 @@ test('brain: forage keeps its own threat evasion instead of being cancelled', ()
   );
 });
 
+test('brain: storage reeds keep their harvest frontier while navigation evades a threat', () => {
+  const memory = fresh();
+  memory.job = 'storage';
+  const wolf = state({ nearbyEntities: [{ code: 'game:wolf-male', point: { x: 5, y: 100, z: 0 }, distance: 5, how: 'seen', at: 1 }] });
+  assert.deepEqual(decide(reading({ state: wolf, active: { id: 'reeds', kind: 'harvest', state: 'running', by: 'brain' } }), memory), {
+    wait: 'letting harvest evade threat',
+  });
+  assert.equal(
+    storage.running?.({ active: { kind: 'harvest' }, danger: true, hurt: true, memory: { notes: {} } } as any),
+    null,
+    'an actual hit still falls through to the safety reflex',
+  );
+});
+
 test('brain: night waits for forage to finish food already in hand', () => {
   const memory = fresh();
   memory.job = 'eat';
