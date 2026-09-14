@@ -1258,6 +1258,21 @@ test('brain: three scares around the same spot make it move on; a failed stick s
   const calm = decide(reading({ now: 2000 }), memory);
   assert.equal(calm.start, 'travel');
   assert.ok(Math.hypot(calm.args.x, calm.args.z) > 60, 'far from the scares');
+  memory.notes.home = { x: 0.5, y: 100, z: 0.5 };
+  memory.job = 'relocate';
+  assert.deepEqual(
+    decide(
+      reading({
+        environment: night,
+        state: state({ position: { x: 60, y: 100, z: 0 } }),
+        active: { id: 'relocation', kind: 'travel', state: 'running', by: 'brain' },
+        now: 2500,
+      }),
+      memory,
+    ),
+    { wait: 'letting travel finish' },
+    'crossing the scare radius at night does not cancel relocation and send the bot back to the rejected camp',
+  );
   decide(reading({ last: { id: 'r', kind: 'travel', ok: true }, now: 3000 }), memory);
   assert.equal(memory.scares.length, 0);
   const noSticks = fresh();

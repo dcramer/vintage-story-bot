@@ -18,6 +18,10 @@ export const dangerHere = (memory: Memory, position: { x: number; z: number }) =
 export const relocate: Concern = {
   id: 'relocate',
   cuts: true,
+  // Relocation is the response to a camp repeatedly proving unsafe. Once the
+  // trip has crossed outside the scare radius, night must not cancel it and
+  // route straight back to the camp it is deliberately abandoning.
+  uncuttable: true,
   run: ({ state, memory }) => {
     const away = fleeTarget(
       state.position,
