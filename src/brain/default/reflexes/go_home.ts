@@ -3,7 +3,7 @@
 import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import { shelterCover } from '../../../support/sites.ts';
 import { shelter as blueprint, SHELTER_MATERIAL, shelterDoor, shelterScaffold, shelterTorches } from '../../../support/structures.ts';
-import { type Concern, insideHome } from '../concern.ts';
+import type { Concern } from '../concern.ts';
 import { shelter } from '../tasks/shelter.ts';
 
 export const goHome: Concern = {
@@ -32,7 +32,6 @@ export const goHome: Concern = {
     const dwelling = memory.notes.dwelling;
     if (dwelling) {
       const have = k.slots.filter(s => s.code?.includes(dwelling.item)).reduce((n, s) => n + s.quantity, 0);
-      if (have < 2 && insideHome(memory.notes, state.position)) return { handoff: 'leave_shelter' };
       if (have < 2 && dwelling.item === 'game:hay-normal-ud') {
         const grass = k.slots.filter(s => s.code === 'game:drygrass').reduce((n, s) => n + s.quantity, 0);
         if (grass < (2 - have) * 8)

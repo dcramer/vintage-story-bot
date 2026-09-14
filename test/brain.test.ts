@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { eat as eating } from '../src/brain/default/reflexes/eat.ts';
-import { goHome } from '../src/brain/default/reflexes/go_home.ts';
 import { SIEGE_MS } from '../src/brain/default/reflexes/tunnel.ts';
 import { stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { storage } from '../src/brain/default/tasks/storage.ts';
@@ -2041,11 +2040,6 @@ test('brain: shared supplies are approached from inside the owned home', () => {
     state: { position: { x: 8.5, y: 99, z: 21.5 } },
   } as any);
   assert.deepEqual(enter, { handoff: 'go_home' }, 'proximity outside a wall is not usable container reach');
-  assert.deepEqual(
-    goHome.run({ memory, k: { slots: [slot('game:hay-normal-ud')] }, state: { position: home } } as any),
-    { handoff: 'leave_shelter' },
-    'a partial door is opened before going outside for the missing seal block',
-  );
   const use: any = stockpile.run({
     home,
     memory,
@@ -2104,6 +2098,31 @@ test('brain: shared supplies are approached from inside the owned home', () => {
   );
   assert.ok(['inspect_container', 'store_items', 'take_items'].includes(inspect.start));
   assert.equal(inspect.args.target, memory.notes.stash?.key, 'a sealed house stays closed while its interior storage is used');
+
+  const partial = fresh(inside.notes);
+  partial.startupChecked = true;
+  partial.notes.farm!.checkedAt = 0;
+  const leave = decide(
+    reading({
+      now: 10 * 60 * 1000,
+      state: state({ position: home }),
+      inventory: supplies,
+      terrain: {
+        get: (x, y, z) => ({
+          hazard: null,
+          boxes: x === 14 && y === 101 && z === 26 ? [] : [{}],
+          code:
+            x === 14 && y === 101 && z === 26
+              ? 'game:air'
+              : (x === 11 || x === 18) && z === 23
+                ? 'game:torch-basic-lit-up'
+                : 'game:rammed-light-plain',
+        }),
+      },
+    }),
+    partial,
+  );
+  assert.equal(leave.start, 'goal_script', 'a partial door is opened before starting outdoor farm work');
 });
 
 test('brain: a shelter has to be entered and sealed, and opens before morning work', () => {

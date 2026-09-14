@@ -122,7 +122,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
   }
   const early = earlyDecision(reading, memory);
   if (early) return early;
-  const { s, k, tried, danger, hurt, classifyingHurt, satiety, storm, home, dwelling, inside, sealed } = digestReading(reading, memory, concern);
+  const { s, k, tried, danger, hurt, classifyingHurt, satiety, storm, home, dwelling, inside } = digestReading(reading, memory, concern);
   const job = pickJob(s, tried);
   const ctx: Context = {
     reading,
@@ -187,7 +187,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
   const ready = readyDecision(ctx, concern);
   if (ready) return ready;
   let decision: Decision | undefined;
-  if (dwelling && inside && sealed && job !== 'wait' && job !== 'go_home') {
+  if (dwelling && inside && job !== 'wait' && job !== 'go_home') {
     decision = workOn(job, ctx, concern);
     const indoors =
       ('start' in decision &&
