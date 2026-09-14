@@ -31,12 +31,14 @@ export const stockpile: Concern = {
       .sort((a, b) => horizontal(a, ctx.state.position) - horizontal(b, ctx.state.position));
     let stash = stale[0] ?? ctx.memory.notes.stash!;
     if (stash !== ctx.memory.notes.stash) selectStash(ctx.memory, stash);
-    // Home storage sits against an interior wall. A loose proximity check can
-    // stop outside that wall, where the container is close but occluded. Enter
-    // the owned dwelling first so the following inspect/store has native line
-    // of sight to the basket.
-    if (ctx.home && !ctx.s.atHome && horizontal(stash, ctx.home) <= 8) return { handoff: 'go_home' };
-    const approach = (why: string) => (ctx.home && ctx.s.atHome && horizontal(stash, ctx.home) <= 8 ? null : goTo(ctx, stash, why, 3));
+    // Home storage sits against an interior wall. Enter before an actual
+    // container operation so a loose proximity check cannot stop outside the
+    // wall, but do not enter merely to discover that the next step is outdoor
+    // gathering. That creates an enter/seal/open loop at night.
+    const approach = (why: string) => {
+      if (ctx.home && horizontal(stash, ctx.home) <= 8) return ctx.s.atHome ? null : { handoff: 'go_home' as const };
+      return goTo(ctx, stash, why, 3);
+    };
     if (!stash.seen || ctx.now - stash.seen.at >= STOCK_CHECK_MS) {
       return (
         approach('checking shared supplies') ?? {

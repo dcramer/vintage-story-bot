@@ -2053,6 +2053,17 @@ test('brain: shared supplies are approached from inside the owned home', () => {
     'the home center is already a usable approach to its interior storage',
   );
 
+  memory.notes.stash!.seen = { at: 1000, items: {} };
+  const gather: any = stockpile.run({
+    home,
+    memory,
+    now: 1100,
+    s: { atHome: false },
+    state: { position: { x: 14.5, y: 100, z: 27.5 } },
+    k: kit(inventory(slot('game:stick', 4))),
+  } as any);
+  assert.equal(gather.start, 'gather', 'outdoor supply work does not enter and seal the house before immediately leaving again');
+
   const inside = fresh({
     home,
     house: { x: 10, y: 100, z: 20 },
