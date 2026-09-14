@@ -109,6 +109,23 @@ test('a farm shoreline is surveyed before unknown margin cells authorize grading
   assert.equal(memory.notes.farm.surveyed, true);
 });
 
+test('an established farm rescans a transiently unknown changed floor before abandoning it', () => {
+  const { map, plan } = shoreline();
+  const changed = farmCell(plan, 0, 0, -1);
+  map.forget(`${changed.x},${changed.y},${changed.z}`);
+  const center = farmCell(plan, 2, 2);
+  const memory = { notes: { farm: { ...plan } } } as any;
+  const decision: any = farm.run({
+    k: kit({ state: 'test', inventories: [] }),
+    memory,
+    reading: { terrain: map },
+    state: { position: { ...center, x: center.x + 0.5, z: center.z + 0.5 } },
+  } as any);
+  assert.equal(decision.start, 'look_around');
+  assert.equal(decision.why, 'confirming recently changed farm cells before revalidation');
+  assert.deepEqual(memory.notes.farm.origin, plan.origin, 'durable work is retained until the missing cell is actually observed');
+});
+
 test('farm grading clears rises and fills shoreline cells from existing support', () => {
   const { map, plan } = shoreline();
   const raised = farmCell(plan, 0, 0);

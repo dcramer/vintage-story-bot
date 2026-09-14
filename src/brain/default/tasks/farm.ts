@@ -87,6 +87,24 @@ export const farm: Concern = {
     if (!plan.prepared) {
       const groundwork = farmGroundwork(reading.terrain, plan);
       if (!groundwork) {
+        // A just-placed or dug block is invalidated before the eye reports its
+        // replacement. Preserve the established site through that transient
+        // unknown and look at it again; known bad terrain still falls through
+        // to normal rejection below.
+        const unobserved = [];
+        for (let x = 0; x < 6; x++) for (let z = 0; z < 4; z++) unobserved.push(farmCell(plan, x, z, -1));
+        for (const p of farmMargin(plan)) for (let h = 0; h < 2; h++) unobserved.push({ ...p, y: p.y + h });
+        if (unobserved.some(p => !reading.terrain?.get(p.x, p.y, p.z))) {
+          const center = farmCell(plan, 2, 2);
+          const trip = goTo(ctx, { x: center.x + 0.5, y: plan.origin.y, z: center.z + 0.5 }, 'rechecking the changed farm footprint', 8, 6);
+          return (
+            trip ?? {
+              start: 'look_around',
+              args: { radius: 16, limit: 16, timeoutMs: 60000 },
+              why: 'confirming recently changed farm cells before revalidation',
+            }
+          );
+        }
         if (farmSurveyGroundwork(reading.terrain, plan)) {
           const center = farmCell(plan, 2, 2);
           const trip = goTo(ctx, { x: center.x + 0.5, y: plan.origin.y, z: center.z + 0.5 }, 'surveying the farm footprint', 8, 6);
