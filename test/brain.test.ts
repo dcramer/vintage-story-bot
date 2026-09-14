@@ -151,6 +151,20 @@ test('brain: a positively observed lake-ice shelter cannot pull durable work bac
     'an absent seasonal home leaves lighting done instead of calling goHome with null',
   );
 });
+
+test('brain: a spare knife in any remembered chest satisfies the storage task', () => {
+  const primary = { ...chestNote(), full: true, seen: { at: 1000, items: { 'game:stick': 4 } } };
+  const knifeChest = {
+    ...chestNote(),
+    key: 'block:0:8:100:2:game:stationarybasket-west',
+    x: 8,
+    code: 'game:stationarybasket-west',
+    seen: { at: 1000, items: { 'game:knife-generic-flint': 1 } },
+  };
+  const memory = fresh({ stash: primary, stores: [knifeChest] });
+  decide(reading(), memory);
+  assert.equal(memory.situation?.stashKnife, true, 'secondary storage is part of the same durable stockpile');
+});
 const situation = (extra = {}) => ({
   burrowed: false,
   besieged: false,

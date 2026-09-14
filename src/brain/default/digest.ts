@@ -157,7 +157,7 @@ export function digestReading(reading: Reading, memory: Memory, lookup: (job: Jo
     house: !!memory.notes.house,
     lit: light.lit,
     stocked: stashes.length > 0 && stashes.every(stash => stash.seen && now - stash.seen.at < STOCK_CHECK_MS) && missing.length === 0,
-    stashKnife: Object.keys(memory.notes.stash?.seen?.items ?? {}).some(code => code.includes('knife-')),
+    stashKnife: stashes.some(stash => Object.keys(stash.seen?.items ?? {}).some(code => code.includes('knife-'))),
   };
   memory.situation = s;
   memory.tried_now = [...tried];

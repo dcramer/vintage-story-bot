@@ -2,7 +2,7 @@
 // beats a search for flint with nothing to cut. Made like the first, then put
 // away; done once the chest was seen holding one.
 import type { Concern, Stash } from '../concern.ts';
-import { goTo, noteContents } from '../concern.ts';
+import { allStashes, goTo, noteContents, selectStash } from '../concern.ts';
 import { makeTool } from './tools.ts';
 
 export const spareKnife: Concern = {
@@ -13,7 +13,14 @@ export const spareKnife: Concern = {
   run: ctx => {
     const { k } = ctx;
     if (k.knives < 2) return makeTool(k, 'spare knife', 'knifeblade', k.knifeBlade, 'game:knife-generic');
-    const note = ctx.memory.notes.stash as Stash;
+    let note = ctx.memory.notes.stash as Stash;
+    if (note.full) {
+      const available = allStashes(ctx.memory.notes).find(stash => !stash.full);
+      if (available) {
+        note = available;
+        selectStash(ctx.memory, note);
+      }
+    }
     return (
       goTo(ctx, note, 'a spare knife for the chest') ?? {
         start: 'store_items',

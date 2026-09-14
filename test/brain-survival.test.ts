@@ -10,6 +10,7 @@ import { lighting, lightingDay, prepareFirestarter, shelterLight } from '../src/
 import { recover, recoverableBody } from '../src/brain/default/tasks/recover.ts';
 import { homeDamage, repairHome } from '../src/brain/default/tasks/repair_home.ts';
 import { shelter } from '../src/brain/default/tasks/shelter.ts';
+import { spareKnife } from '../src/brain/default/tasks/spare_knife.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { shovel } from '../src/brain/default/tasks/tools.ts';
@@ -72,6 +73,34 @@ test('starter template stays enclosed with reachable interior torch positions', 
   }
   for (let x = 0; x < 5; x++) for (let z = 0; z < 5; z++) assert.ok(keys.has(`${x},102,${z}`), 'sealed roof');
   for (const torch of shelterTorches(origin)) assert.ok(!keys.has(`${torch.x},${torch.y},${torch.z}`), 'torch is inside clear space');
+});
+
+test('a spare knife uses available secondary storage instead of a full primary chest', () => {
+  const primary = {
+    key: 'block:0:4:100:2:game:stationarybasket-north',
+    x: 4,
+    y: 100,
+    z: 2,
+    code: 'game:stationarybasket-north',
+    seen: null,
+    full: true,
+  };
+  const available = {
+    ...primary,
+    key: 'block:0:40:100:2:game:stationarybasket-west',
+    x: 40,
+    code: 'game:stationarybasket-west',
+    full: false,
+  };
+  const memory = fresh({ stash: primary, stores: [available] });
+  const decision: any = spareKnife.run({
+    k: { knives: 2 },
+    memory,
+    state: { position: { x: 0, y: 100, z: 0 } },
+  } as any);
+  assert.equal(memory.notes.stash?.key, available.key);
+  assert.equal(decision.start, 'travel');
+  assert.deepEqual(decision.args, { x: 40, y: 100, z: 2, arrivalRadius: 3, manageFood: false, timeoutMs: 900000 });
 });
 
 test('the front staircase still reaches the roof after the walls are covered', () => {
