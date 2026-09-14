@@ -96,6 +96,24 @@ test('a roof placement retry chooses a higher viewpoint instead of another spot 
   assert.deepEqual(destination, beneath, 'digging an overhead block may still use its underside');
 });
 
+test('building closes from maximum reach before selecting a placement face', async () => {
+  const state = { position: { x: 0.5, y: 100, z: 0.5 }, body: { eyeHeight: 1.7 } };
+  let approaches = 0;
+  const field = {
+    latest: state,
+    observe: async () => state,
+    approach: () => {
+      approaches++;
+      return { x: 3.5, y: 100, z: 1.5 };
+    },
+    walk: async () => ({ state: 'arrived' }),
+  };
+  assert.equal(await standNear(field, null, { x: 4, y: 100, z: 0 }, false, true), true);
+  assert.equal(approaches, 1);
+  assert.equal(await standNear(field, null, { x: 4, y: 100, z: 0 }, false, false), true);
+  assert.equal(approaches, 1, 'digging keeps the full native reach');
+});
+
 test('leaf excavation can ask for a ground-height viewpoint beneath a canopy', async () => {
   const state = { position: { x: 0.5, y: 100, z: 0.5 }, body: { eyeHeight: 1.7 } };
   let approached;

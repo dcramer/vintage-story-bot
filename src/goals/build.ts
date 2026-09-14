@@ -33,7 +33,10 @@ async function eye(field) {
 // Stand within native reach of a cell without occupying its column; returns false when no route exists.
 export async function standNear(field, survival, cell, force = false, placing = false, preferredStandY = null, preferHigher = placing) {
   const from = await eye(field);
-  if (!force && distance(from, center(cell)) <= reach) return true;
+  // Placement face selection becomes unreliable at the very edge of native
+  // reach. Digging can use the full range, but building first closes enough
+  // distance to see a useful side of the support block.
+  if (!force && distance(from, center(cell)) <= (placing ? 3 : reach)) return true;
   // Look over the work before seeking another viewpoint. From the access
   // stairs this reveals the roof's headroom, which was hidden from below.
   if (placing && force) await field.look({ ...center(cell), y: cell.y + 2 });
