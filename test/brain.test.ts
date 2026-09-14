@@ -1868,6 +1868,31 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
     { x: 5, y: 100, z: 2, item: 'game:stationarybasket-east' },
     'additional storage uses observed open ground instead of a fixed buried offset',
   );
+  const guardedPlacement = fresh({
+    home: { x: 13.5, y: 99, z: 23.5 },
+    dwelling: { door: { x: 14, y: 100, z: 26 }, item: 'game:hay-normal-ud' },
+    house: { x: 10, y: 100, z: 20 },
+  });
+  guardedPlacement.notes.stash = { ...chestNote(), full: true, seen: { at: 1000, items: { 'game:cattailtops': 63 } } };
+  guardedPlacement.tried.storage = { x: guardedPlacement.notes.stash.x, z: guardedPlacement.notes.stash.z, at: 1000 };
+  const safePlacement = storage.run({
+    memory: guardedPlacement,
+    now: 2000,
+    k: { chest: 'game:stationarybasket-east' },
+    s: { atHome: true },
+    state: { position: { x: 13.5, y: 99, z: 23.5 }, nearbyEntities: [] },
+    reading: {
+      terrain: {
+        get: () => ({ hazard: null, boxes: [], code: 'game:air' }),
+      },
+    },
+  } as any);
+  assert.ok('start' in safePlacement);
+  assert.deepEqual(
+    [safePlacement.start, safePlacement.args.cells[0], safePlacement.why],
+    ['build', { x: 11, y: 99, z: 21, item: 'game:stationarybasket-east' }, 'safe storage along the house wall, away from the guarded supplies'],
+    'a carried basket uses the owned house instead of retrying a recently guarded supply cache',
+  );
   const returning = fresh();
   returning.notes.shelter = { x: 100, y: 100, z: 100 };
   const returnToSite = decide(reading({ inventory: inventory(slot('game:stationarybasket-east', 1), ...tools) }), returning);

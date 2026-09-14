@@ -32,6 +32,7 @@ import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 import { houseFoundationSafe, houseGroundwork, houseSurveyClearing } from '../src/support/house-site.ts';
 import {
   houseScaffold,
+  houseStorage,
   house as houseTemplate,
   shelterDoor,
   shelterScaffold,
@@ -56,6 +57,12 @@ test('starter template stays enclosed with reachable interior torch positions', 
     { x: 1, y: 101, z: 5, item: 'earth' },
   ]);
   assert.equal(houseScaffold(origin, 'earth').length, 3);
+  const permanentStorage = houseStorage(origin);
+  assert.equal(permanentStorage.length, 8);
+  assert.ok(
+    permanentStorage.every(cell => (cell.x === 1 || cell.x === 8) && cell.y === 99 && cell.z !== 3),
+    'house storage lines the walls and avoids torches',
+  );
   const storage = shelterStorage(origin);
   assert.equal(storage.length, 6);
   for (const cell of storage) {

@@ -3,7 +3,7 @@
 
 import { shelterSite } from '../../../goals/shelter.ts';
 import { horizontal } from '../../../runtime/navigation/terrain.ts';
-import { shelterStorage } from '../../../support/structures.ts';
+import { houseStorage, shelterStorage } from '../../../support/structures.ts';
 import { hostileEntity, threatClearDistance, threatVerticalRange } from '../../../support/threats.ts';
 import type { Concern } from '../concern.ts';
 import { allStashes, goTo, noteContents, selectStash, TRIED_MS, TRIED_RADIUS } from '../concern.ts';
@@ -53,9 +53,22 @@ export const storage: Concern = {
     const { k, state } = ctx;
     if (k.chest) {
       const starter = ctx.memory.notes.starter;
-      if (starter) {
+      const old = ctx.memory.notes.stash;
+      const unsafeOld = !!old && (guarded(ctx, old) || recentlyUnreachable(ctx, old));
+      const indoor = !old
+        ? starter
+          ? shelterStorage(starter)
+          : null
+        : unsafeOld
+          ? ctx.memory.notes.house
+            ? houseStorage(ctx.memory.notes.house)
+            : starter
+              ? shelterStorage(starter)
+              : null
+          : null;
+      if (indoor) {
         if (!ctx.s.atHome) return { handoff: 'go_home' };
-        const spot = shelterStorage(starter).find(cell => {
+        const spot = indoor.find(cell => {
           const block = ctx.reading.terrain?.get(cell.x, cell.y, cell.z);
           return block && !block.hazard && !block.boxes.length && (!block.code || block.code === 'game:air');
         });
@@ -63,10 +76,11 @@ export const storage: Concern = {
         return {
           start: 'build',
           args: { cells: [{ ...spot, item: k.chest }], timeoutMs: 600000 },
-          why: 'a chest along the shelter wall, keeping the aisle clear',
+          why: unsafeOld
+            ? 'safe storage along the house wall, away from the guarded supplies'
+            : 'a chest along the shelter wall, keeping the aisle clear',
         };
       }
-      const old = ctx.memory.notes.stash;
       if (!old) {
         const pending = ctx.memory.notes.shelter;
         const origin = pending ?? shelterSite(ctx.reading.terrain, state.position);
@@ -85,7 +99,7 @@ export const storage: Concern = {
           why: 'the first chest marks its reserved place inside the planned shelter',
         };
       }
-      if (old) {
+      if (old && !unsafeOld) {
         const walk = goTo(ctx, old, 'adding storage beside the supplies', 3);
         if (walk) return walk;
       }

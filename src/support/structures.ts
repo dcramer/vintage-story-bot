@@ -76,6 +76,10 @@ export const houseScaffold = (origin, item) => [
   { x: origin.x + 3, y: origin.y, z: origin.z + 7, item },
   { x: origin.x + 3, y: origin.y + 1, z: origin.z + 7, item },
 ];
+// Interior side-wall cells, clear of the center aisle and the two torch cells.
+// The permanent-house origin is its first wall course; objects stand one level
+// below that course on the observed interior floor.
+export const houseStorage = origin => [1, 2, 4, 5].flatMap(z => [1, 8].map(x => ({ x: origin.x + x, y: origin.y - 1, z: origin.z + z })));
 
 export const presets = { house, pit_kiln: pitKiln, shelter };
 
