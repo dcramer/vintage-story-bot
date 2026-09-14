@@ -17,6 +17,7 @@ import { shovel } from '../src/brain/default/tasks/tools.ts';
 import { torchStep } from '../src/brain/default/tasks/torches.ts';
 import { fresh, kit } from '../src/brain/default.ts';
 import {
+  build,
   placementFaceVisible,
   selectExistingPlacementCell,
   selectedPlacementCell,
@@ -267,6 +268,32 @@ test('building never uses replaceable snow as a support face', () => {
   assert.equal(selectedPlacementCell('game:rammed-light-plain', { code: 'game:rammed-light-plain' }), 'placed');
   assert.equal(selectedPlacementCell('game:rammed-light-plain', { code: 'game:snowlayer-3' }), 'clear');
   assert.equal(selectedPlacementCell('game:rammed-light-plain', { code: 'game:soil-low-none' }), 'blocked');
+});
+
+test('building rejects a wrong occupied block by default', async () => {
+  const cell = { x: 0, y: 1, z: 0, item: 'game:rammed-light-plain' };
+  const wrong = { code: 'game:soil-low-none', boxes: [[0, 1, 0, 1, 2, 1]], hazard: null, traits: [] };
+  const support = { code: 'game:soil-low-none', boxes: [[0, 0, 0, 1, 1, 1]], hazard: null, traits: [] };
+  const state = {
+    position: { x: -1.5, y: 1, z: 0.5, dimension: 0 },
+    body: { height: 1.85, eyeHeight: 1.7 },
+    motion: { onGround: true, feetInLiquid: false, swimming: false },
+  };
+  const field = {
+    latest: state,
+    moved: 0,
+    env: { map: { get: (x, y, z) => (x === 0 && y === 1 && z === 0 ? wrong : x === 0 && y === 0 && z === 0 ? support : null) } },
+    observe: async () => state,
+    send: async request => {
+      if (request.action === 'aim_cell') return { ok: true };
+      if (request.action === 'inspect_target') return { key: 'block:0:0:1:0:game:soil-low-none', code: 'game:soil-low-none' };
+      throw new Error(`unexpected ${request.action}`);
+    },
+  };
+  const result = await build(field, null, { cells: [cell] });
+  assert.equal(result.ok, false);
+  assert.equal(result.placed, 0);
+  assert.equal(result.failed[0].reason, 'occupied');
 });
 
 test('the larger house retains a legal route from the ground to its completed ridge', () => {

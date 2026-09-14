@@ -13,6 +13,7 @@ export type BlockUse = {
   target: string;
   face?: string;
   item?: string | null;
+  quantity?: number;
   sneak?: boolean;
   holdMs?: number;
   expectAfter?: string;
@@ -21,14 +22,14 @@ export type BlockUse = {
 };
 export async function useOnBlock(
   field,
-  { target, face, item, sneak = false, holdMs = 600, expectAfter, consume = false, expectDialog = false }: BlockUse,
+  { target, face, item, quantity = 1, sneak = false, holdMs = 600, expectAfter, consume = false, expectDialog = false }: BlockUse,
 ) {
   const cell = parseBlockKey(target);
   const state = await field.observe();
   if (holdMs > 2000 && !state.capabilities?.includes('long_hand_hold')) throw Error('Missing capability: long_hand_hold');
   if (cell.dimension !== state.position.dimension || distance(state.position, cell) > 8) throw Error('Target out of local reach; move closer first');
   let slot = state.activeSlot;
-  if (item !== undefined) slot = (await equip(field, { item })).slot;
+  if (item !== undefined) slot = (await equip(field, { item, quantity })).slot;
   const selected = await selectCell(field, cell, { face });
   if (!selected || selected.key !== target) throw Error('Target not in native reach, changed or obstructed; no action sent');
   await field.observe();
@@ -89,6 +90,7 @@ export default defineGoal({
       target: blockTarget,
       face: z.enum(['up', 'down', 'north', 'east', 'south', 'west']).optional().describe('Required block face for placement.'),
       item: z.string().min(1).max(160).nullable().optional().describe('Item code to equip first; null = empty hand; omitted = current slot.'),
+      quantity: z.number().int().min(1).max(64).default(1).describe('Minimum requested stack size to equip, for multi-item interactions.'),
       sneak: z.boolean().default(false).describe('Shift modifier: ground storage, knapping/clay surface, firepit creation.'),
       holdMs: z.number().int().min(100).max(5000).default(600),
       expectAfter: z.string().min(1).max(64).optional().describe('Substring the target cell code must contain afterwards, e.g. farmland.'),
@@ -98,7 +100,8 @@ export default defineGoal({
     .strict(),
   destructive: true,
   description:
-    'Aim at one observed block within reach and hold right-click with the held item, optionally sneaking. Verifies a target-cell ' +
+    'Aim at one observed block within reach and hold right-click with the held item, optionally sneaking. quantity requests a sufficiently ' +
+    'large held stack for interactions such as kiln layers. Verifies a target-cell ' +
     'code change or item consumption (till, plant, water, ignite, ground placement, kiln layers); no_observed_effect otherwise. ' +
     'No walking, GUI dialogs or retries. Returns START; poll goal_status for client-observed outcome.',
   title: args => (args.item ? `Use ${cleanName(args.item)} on a block` : 'Use a block'),

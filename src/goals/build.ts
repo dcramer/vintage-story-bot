@@ -234,7 +234,7 @@ export async function digArea(field, survival, { cells, tool, minTier = 0, order
   };
 }
 
-export async function build(field, survival, { cells, verifyExisting = false }) {
+export async function build(field, survival, { cells, verifyExisting = true }) {
   const placed = [],
     failed = [];
   const summary = () => ({ total: cells.length, placed: placed.length, failed: failed.length, moved: +field.moved.toFixed(1) });
@@ -428,8 +428,9 @@ export default defineGoal({
   destructive: true,
   description:
     'Place blocks cell by cell from own inventory: equip the item, stand within reach off the destination column, pick a known ' +
-    'solid support face, place once and verify (one item consumed in survival). Occupied cells are skipped; failures are reported ' +
-    'per cell; stops on out_of_material. No terrain clearing or scaffolding. Returns START; poll goal_status.',
+    'solid support face, place once and verify (one item consumed in survival). Cells already containing the requested block are skipped; ' +
+    'replaceable vegetation is cleared and incompatible occupied cells fail. Failures are reported per cell; stops on out_of_material. ' +
+    'No terrain clearing or scaffolding. Returns START; poll goal_status.',
   title: args => (args.preset ? `Build ${cleanName(args.preset.kind)}` : `Build with ${args.cells.length} blocks`),
   announce: args => `Building a ${(args.preset?.kind ?? 'structure').replace(/[-_]/g, ' ')}.`,
   run: (env, { cells, preset, ...options }) =>
