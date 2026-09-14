@@ -1988,6 +1988,13 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
   carrying.job = 'resupply';
   decide(settledReading({ inventory: inventory(slot('game:stick', 2), ...tools), last: gone }), carrying);
   assert.ok(carrying.notes.stash, 'one miss at the chest is not proof it is gone');
+  const farAfterMiss = decide(
+    settledReading({ inventory: inventory(slot('game:stick', 2), ...tools), state: state({ position: { x: 100, y: 100, z: 0 } }), now: 2000 }),
+    carrying,
+  );
+  assert.ok(carrying.tried_now.includes('resupply'), 'walking away does not reactivate a failed trip to the same chest');
+  assert.notEqual(carrying.job, 'resupply');
+  assert.notEqual(farAfterMiss.start, 'take_items');
   carrying.job = 'resupply';
   decide(settledReading({ inventory: inventory(slot('game:stick', 2), ...tools), last: gone }), carrying);
   assert.equal(carrying.notes.stash, null, 'a chest missed twice where its note says is forgotten');

@@ -34,6 +34,11 @@ export const resupply: Concern = {
   id: 'resupply',
   title: 'what the chest holds that I am short of',
   done: s => s.short === 0,
+  // A failed chest trip is about that remembered destination, not the patch of
+  // ground where navigation happened to give up. Keep it cooled down while the
+  // bot moves elsewhere so optional kit top-ups cannot immediately pull durable
+  // work back toward the same chest.
+  setAsideEverywhere: true,
   run: ctx => {
     const note = ctx.memory.notes.stash as Stash;
     const items = resupplyOf(ctx.k, { home: !!ctx.home, torches: ctx.k.torches, rammedShelter: ctx.s.rammedShelter }, note);
