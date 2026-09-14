@@ -25,13 +25,21 @@ export const farmMargin = (farm: Farm) => {
   for (let x = -2; x < 8; x++) for (let z = -2; z < 6; z++) cells.push(farmCell(farm, x, z));
   return cells;
 };
+// The farm replaces its eight beds with fertile soil, so a naturally level
+// shovel-workable shore is enough. Requiring fertile soil here strands the
+// planner on common sand and gravel shores that it can terraform itself.
+export const workableFarmFloor = (cell, y) => supportedFloor(cell, y) && /^game:(?:soil-|forestfloor-|sand-|gravel-)/.test(cell?.code ?? '');
 // Lake ice is observed frozen freshwater: it can site winter preparation and
-// becomes the same irrigation row when it thaws. Saltwater remains excluded.
+// becomes the same irrigation source when it thaws. Saltwater remains excluded.
 export const freshwater = block => /^game:(?:water-|lakeice$)/.test(block?.code ?? '');
 export const farmWatered = (map, farm: Farm) =>
-  [1, 2, 3, 4].every(x => {
-    const p = farmCell(farm, x, -1, -1);
-    return freshwater(map?.get(p.x, p.y, p.z));
+  farmBeds(farm).every(bed => {
+    // Vintage Story irrigates horizontally within three blocks, including
+    // diagonals. One well-placed source can therefore water this 4x2 bed set;
+    // demanding a perfectly straight four-block shoreline rejects ordinary
+    // ponds and jagged lake edges for no gameplay reason.
+    for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) if (freshwater(map?.get(bed.x + dx, bed.y, bed.z + dz))) return true;
+    return false;
   });
 
 // New plots use observed level shoreline, not hidden water or assumed air.
@@ -49,7 +57,7 @@ export function farmSite(map, home, radius = 64): Farm | null {
         for (let z = 0; z < 4 && clear; z++) {
           const p = farmCell(farm, x, z);
           const floor = map.get(p.x, p.y - 1, p.z);
-          if (!/^game:soil-/.test(floor?.code ?? '') || !supportedFloor(floor, p.y)) clear = false;
+          if (!workableFarmFloor(floor, p.y)) clear = false;
         }
       if (!clear) continue;
       for (const p of farmMargin(farm))

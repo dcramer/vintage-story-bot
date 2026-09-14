@@ -8,7 +8,18 @@ import { allocate } from '../src/goals/craft_item.ts';
 import { plant } from '../src/goals/plant.ts';
 import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
 import { cropRequirements, FARM_SOIL, farmlandReadings, plantingProblem } from '../src/support/crops.ts';
-import { farmApproach, farmBeds, farmCell, farmFence, farmGate, farmMargin, farmSite, farmWatered, fertileBed } from '../src/support/farming.ts';
+import {
+  farmApproach,
+  farmBeds,
+  farmCell,
+  farmFence,
+  farmGate,
+  farmMargin,
+  farmSite,
+  farmWatered,
+  fertileBed,
+  workableFarmFloor,
+} from '../src/support/farming.ts';
 
 function shoreline(turn = 0) {
   const map = new TerrainMemory();
@@ -48,14 +59,23 @@ test('all farm orientations keep eight dry beds irrigated behind a complete 15-f
     assert.equal(farmSite(map, farmApproach(plan)), null, 'raised ground beside fencing lets animals enter');
   }
   const { map, plan } = shoreline();
-  const water = farmCell(plan, 1, -1, -1);
-  map.put({ ...water, seenAt: Date.now(), traits: ['water'], code: 'game:saltwater-still-7', boxes: [] });
+  for (let x = 1; x <= 4; x++) {
+    const water = farmCell(plan, x, -1, -1);
+    map.put({ ...water, seenAt: Date.now(), traits: ['water'], code: 'game:saltwater-still-7', boxes: [] });
+  }
   assert.equal(farmWatered(map, plan), false, 'saltwater cannot irrigate');
   assert.equal(farmSite(map, farmApproach(plan)), null);
-  for (let x = 1; x <= 4; x++)
-    map.put({ ...farmCell(plan, x, -1, -1), seenAt: Date.now(), traits: [], code: 'game:lakeice', boxes: [[0, 0, 0, 1, 1, 1]] });
-  assert.equal(farmWatered(map, plan), true, 'observed lake ice authorizes winter preparation beside future irrigation');
+  const ice = farmCell(plan, 1, -1, -1);
+  map.put({ ...ice, seenAt: Date.now(), traits: [], code: 'game:lakeice', boxes: [[ice.x, ice.y, ice.z, ice.x + 1, ice.y + 1, ice.z + 1]] });
+  assert.equal(farmWatered(map, plan), true, 'one observed lake-ice source waters every bed within three blocks');
   assert.deepEqual(farmSite(map, farmApproach(plan)), { origin: plan.origin, turn: 0 });
+  for (let x = 0; x < 6; x++)
+    for (let z = 0; z < 4; z++) {
+      const p = farmCell(plan, x, z, -1);
+      map.put({ ...p, seenAt: Date.now(), traits: [], code: 'game:sand-claystone', boxes: [[p.x, p.y, p.z, p.x + 1, p.y + 1, p.z + 1]] });
+    }
+  assert.deepEqual(farmSite(map, farmApproach(plan)), { origin: plan.origin, turn: 0 }, 'the carried bed soil makes a flat sand shore usable');
+  assert.ok(workableFarmFloor(map.get(plan.origin.x, plan.origin.y - 1, plan.origin.z), plan.origin.y));
   assert.equal(farmSite(new TerrainMemory(), plan.origin), null, 'unknown ground never authorizes a farm');
   assert.equal(fertileBed('game:farmland-moist-low'), false);
   assert.equal(fertileBed('game:farmland-moist-medium'), true);

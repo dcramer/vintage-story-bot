@@ -2,7 +2,18 @@ import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { selectCell } from '../support/blocks.ts';
 import { cropRequirements } from '../support/crops.ts';
-import { type Farm, farmApproach, farmBeds, farmCell, farmFence, farmGate, farmMargin, farmWatered, fertileBed } from '../support/farming.ts';
+import {
+  type Farm,
+  farmApproach,
+  farmBeds,
+  farmCell,
+  farmFence,
+  farmGate,
+  farmMargin,
+  farmWatered,
+  fertileBed,
+  workableFarmFloor,
+} from '../support/farming.ts';
 import { itemCount, ownedSlots } from '../support/inventory.ts';
 import { surfaceCover } from '../support/sites.ts';
 import { runField } from '../support/task.ts';
@@ -48,7 +59,7 @@ export async function tendFarm(field, survival, options) {
     await field.observe();
     const b = get(p);
     if (fertileBed(b?.code)) continue;
-    if (!/^game:soil-(low|verylow)-/.test(b?.code ?? '') && !air(b)) return failure('bed_soil_unknown_or_occupied', { cell: p });
+    if (!workableFarmFloor(b, p.y + 1) && !air(b)) return failure('bed_soil_unknown_or_occupied', { cell: p });
     if (itemCount(await field.send({ action: 'inventory' }), soil) < 1) return failure('missing_soil', { item: soil });
     if (!air(b)) {
       const dug = await digArea(field, survival, { cells: [p], tool: 'Shovel' });
