@@ -350,6 +350,54 @@ test('farm supplies come from the chest before gathering, and stay in the workin
   assert.ok(!surplus.some(s => s.item.includes('roughhewnfence')));
 });
 
+test('a prepared farm inspects unknown beds and enclosure cells before replacing them', () => {
+  const { map, plan } = shoreline(1);
+  plan.prepared = true;
+  for (const bed of farmBeds(plan))
+    map.put({
+      ...bed,
+      seenAt: Date.now(),
+      traits: [],
+      code: 'game:farmland-moist-medium',
+      boxes: [[bed.x, bed.y, bed.z, bed.x + 1, bed.y + 0.9375, bed.z + 1]],
+    });
+  for (const p of farmFence(plan))
+    map.put({
+      ...p,
+      seenAt: Date.now(),
+      traits: [],
+      code: 'game:roughhewnfence-pine-ew-free',
+      boxes: [[p.x, p.y, p.z, p.x + 1, p.y + 1.5, p.z + 1]],
+    });
+  const gate = farmGate(plan);
+  map.put({
+    ...gate,
+    seenAt: Date.now(),
+    traits: [],
+    code: 'game:roughhewnfencegate-pine-n-closed-free',
+    boxes: [[gate.x, gate.y, gate.z, gate.x + 1, gate.y + 1.5, gate.z + 1]],
+  });
+  for (const unknown of [farmBeds(plan)[0], farmFence(plan)[0], gate]) map.forget(`${unknown.x},${unknown.y},${unknown.z}`);
+  const chest = {
+    key: 'chest',
+    x: 100,
+    y: 100,
+    z: 100,
+    code: 'game:stationarybasket-east',
+    seen: { at: 0, items: { [plan.soil]: 64 } },
+  };
+  const choice: any = farm.run({
+    k: kit({ state: 'test', inventories: [] }),
+    memory: { notes: { farm: plan, stash: chest } },
+    reading: { terrain: map },
+    state: { position: chest },
+    home: chest,
+  } as any);
+  assert.equal(choice.start, 'travel');
+  assert.deepEqual(choice.args, { ...farmApproach(plan), arrivalRadius: 2, manageFood: false, timeoutMs: 900000 });
+  assert.equal(choice.why, 'returning to the farm, 114 blocks away');
+});
+
 test('farm shoreline exploration stays inside the home search area', () => {
   const home = { x: 0, y: 100, z: 0 };
   const choice = farm.run({

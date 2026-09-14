@@ -118,7 +118,7 @@ export const farm: Concern = {
       };
     }
     const count = code => k.slots.filter(s => s.code?.includes(code)).reduce((n, s) => n + s.quantity, 0);
-    const ground = p => reading.terrain?.get(p.x, p.y, p.z)?.code ?? '';
+    const block = p => reading.terrain?.get(p.x, p.y, p.z);
     if (!plan.prepared) {
       const groundwork = farmGroundwork(reading.terrain, plan);
       if (!groundwork) {
@@ -238,7 +238,13 @@ export const farm: Concern = {
         }
       );
     };
-    const soil = farmBeds(plan).filter(p => !fertileBed(ground(p))).length;
+    // Unknown after a distant respawn means "inspect again", not "missing".
+    // Only positively observed non-fertile beds justify fetching replacement
+    // soil; the farm goal will return to the plot and refresh everything else.
+    const soil = farmBeds(plan).filter(p => {
+      const observed = block(p);
+      return observed && !fertileBed(observed.code);
+    }).length;
     const storedSoil = fromChest(plan.soil, soil - count(plan.soil));
     if (storedSoil) return storedSoil;
     if (count(plan.soil) < soil)
@@ -251,11 +257,16 @@ export const farm: Concern = {
     const gateCode = `game:roughhewnfencegate-${plan.wood}-n-closed-free`;
     const fences = Math.max(
       0,
-      farmFence(plan).filter(p => !ground(p).startsWith(`game:roughhewnfence-${plan.wood}-`)).length - count(`game:roughhewnfence-${plan.wood}-`),
+      farmFence(plan).filter(p => {
+        const observed = block(p);
+        return observed && !observed.code?.startsWith(`game:roughhewnfence-${plan.wood}-`);
+      }).length - count(`game:roughhewnfence-${plan.wood}-`),
     );
-    const gates = ground(farmGate(plan)).startsWith(`game:roughhewnfencegate-${plan.wood}-`)
-      ? 0
-      : Math.max(0, 1 - count(`game:roughhewnfencegate-${plan.wood}-`));
+    const observedGate = block(farmGate(plan));
+    const gates =
+      !observedGate || observedGate.code?.startsWith(`game:roughhewnfencegate-${plan.wood}-`)
+        ? 0
+        : Math.max(0, 1 - count(`game:roughhewnfencegate-${plan.wood}-`));
     if (fences || gates) {
       const storedFence = fromChest(fenceCode, fences) ?? fromChest(gateCode, gates);
       if (storedFence) return storedFence;
