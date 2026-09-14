@@ -31,13 +31,13 @@ async function eye(field) {
 }
 
 // Stand within native reach of a cell without occupying its column; returns false when no route exists.
-export async function standNear(field, survival, cell, force = false, placing = false, preferredStandY = null) {
+export async function standNear(field, survival, cell, force = false, placing = false, preferredStandY = null, preferHigher = placing) {
   const from = await eye(field);
   if (!force && distance(from, center(cell)) <= reach) return true;
   // Look over the work before seeking another viewpoint. From the access
   // stairs this reveals the roof's headroom, which was hidden from below.
   if (placing && force) await field.look({ ...center(cell), y: cell.y + 2 });
-  const minimumEye = placing && force ? Math.max(from.y, cell.y + 0.5) : -Infinity;
+  const minimumEye = placing && force && preferHigher ? Math.max(from.y, cell.y + 0.5) : -Infinity;
   const destination = field.approach(
     { point: { ...center(cell), y: preferredStandY ?? cell.y + 0.5 }, kind: 'block' },
     q =>
@@ -256,15 +256,21 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
       };
     }
     let reason = 'no_support';
-    // Ground, access stairs, then the roof itself can be separate viewpoints.
+    // Try the current view, another lateral view, then the access stairs or
+    // roof. Climbing directly onto a new support hides the side face needed
+    // for the next block in a horizontal course.
     for (let attempt = 0; attempt < 3 && reason; attempt++) {
-      if (!(await standNear(field, survival, cell, attempt > 0, true))) {
+      if (!(await standNear(field, survival, cell, attempt > 0, true, null, attempt > 1))) {
         // No second place to stand keeps the first attempt's reason; it is what actually failed.
         if (attempt > 0) break;
         reason = 'no_stand_position';
         continue;
       }
-      for (const [face, offset] of Object.entries(faces)) {
+      const faceOrder = Object.entries(faces).sort(([, a], [, b]) => {
+        const support = offset => field.env.map.get(cell.x - offset[0], cell.y - offset[1], cell.z - offset[2]);
+        return Number(stablePlacementSupport(support(b))) - Number(stablePlacementSupport(support(a)));
+      });
+      for (const [face, offset] of faceOrder) {
         const support = { x: cell.x - offset[0], y: cell.y - offset[1], z: cell.z - offset[2] };
         const rememberedSupport = field.env.map.get(support.x, support.y, support.z);
         let selected, point;

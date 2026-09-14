@@ -90,6 +90,8 @@ test('a roof placement retry chooses a higher viewpoint instead of another spot 
   };
   assert.equal(await standNear(field, null, { x: 4, y: 102, z: 2 }, true, true), true);
   assert.deepEqual(destination, rooftop);
+  assert.equal(await standNear(field, null, { x: 4, y: 102, z: 2 }, true, true, null, false), true);
+  assert.deepEqual(destination, beneath, 'a lateral placement retry stays below the unfinished course');
   assert.equal(await standNear(field, null, { x: 4, y: 102, z: 2 }, true, false), true);
   assert.deepEqual(destination, beneath, 'digging an overhead block may still use its underside');
 });
