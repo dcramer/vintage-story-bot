@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
-import { diggingSlot, digOut, pitLimit, reachable, stairStep, supportedSteps } from '../src/support/digging.ts';
+import { diggingSlot, digOut, needsDigOut, pitLimit, reachable, stairStep, supportedSteps } from '../src/support/digging.ts';
 import { until } from '../src/support/fieldwork.ts';
 
 // A block world: floor at y=-1, air above, plus solid cells from `solid`.
@@ -166,6 +166,10 @@ test('a pit is a place the search runs out of; open ground is not', () => {
     ),
     pitLimit,
   );
+  const open = world(6, () => false);
+  assert.equal(needsDigOut(open, { x: 0.5, y: 0, z: 0.5 }, 0), false);
+  assert.equal(needsDigOut(open, { x: 0.5, y: 0, z: 0.5 }, 0, true), true, 'forced cave recovery must gain one standing level');
+  assert.equal(needsDigOut(open, { x: 0.5, y: 1, z: 0.5 }, 0, true), false, 'one gained level hands control back to travel');
 });
 
 test('the stair step goes through the wall toward the goal and lists the blocks to cut', () => {

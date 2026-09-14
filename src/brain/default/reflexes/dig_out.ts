@@ -13,7 +13,11 @@ const climbed = (last: Ended, memory: Memory, { state }: Reading) =>
 export const digOut: Concern = {
   id: 'dig_out',
   uncuttable: true,
-  run: ({ memory }) => ({ start: 'dig_out', args: { x: memory.pit!.x, z: memory.pit!.z }, why: 'in a hole' }),
+  run: ({ memory }) => ({
+    start: 'dig_out',
+    args: { x: memory.pit!.x, z: memory.pit!.z, ...(memory.pit!.forced ? { force: true } : {}) },
+    why: 'in a hole',
+  }),
   setAside: (last, memory, reading) => !climbed(last, memory, reading) && failedOnItsOwn(last),
   ended: (last, memory, reading) => {
     if (last.ok || !climbed(last, memory, reading)) {

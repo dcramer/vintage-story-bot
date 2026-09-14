@@ -154,12 +154,19 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
       // cell. There is deliberately no standing node in that case, but the
       // scoped body-cell RPC lets dig_out recover once travel reports a pit.
       const embedded = !here && map?.get && solid(map, Math.floor(position.x), Math.floor(position.y), Math.floor(position.z));
-      if (embedded || (here && reachable(map, here) < pitLimit))
+      const covered =
+        y !== undefined &&
+        y > position.y + 1.5 &&
+        map?.get &&
+        solid(map, Math.floor(position.x), Math.floor(position.y) + 2, Math.floor(position.z)) &&
+        !reachableAscent(map, field.latest, goal);
+      if (embedded || (here && reachable(map, here) < pitLimit) || (covered && stuck >= 2))
         return {
           ok: false,
           goal: 'travel',
           reason: 'pit',
           toward: { x: goal.x, z: goal.z },
+          ...(covered ? { covered: true } : {}),
           ...summary(),
           remaining: +horizontal(field.latest.position, goal).toFixed(1),
           position: field.latest.position,

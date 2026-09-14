@@ -1144,6 +1144,26 @@ test('brain: digging out of a hole is never interrupted by a threat', () => {
 });
 
 test('brain: a partial pit escape resumes instead of starting work underground', () => {
+  const covered = fresh();
+  covered.job = 'go_home';
+  const forced = decide(
+    reading({
+      last: {
+        id: 'uphill',
+        kind: 'travel',
+        ok: false,
+        reason: 'pit',
+        result: { position: { x: 1.5, y: 100, z: 2.5 }, toward: { x: 8.5, z: 2.5 }, covered: true },
+      },
+    }),
+    covered,
+  );
+  assert.deepEqual(
+    [forced.start, forced.args.force],
+    ['dig_out', true],
+    'a wide cave capped by a verified roof asks the existing escape goal for one upward level',
+  );
+
   const memory = fresh();
   memory.pit = { x: 8.5, y: 100, z: 0.5 };
   memory.job = 'dig_out';

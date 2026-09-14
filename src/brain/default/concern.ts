@@ -95,7 +95,7 @@ export type Memory = {
   tried_now: Job[];
   job: Job | null;
   // Where the last walk was heading when it ended in a pit; dig_out cuts stairs that way.
-  pit: Cell | null;
+  pit: (Cell & { forced?: boolean }) | null;
   // The job whose route reported that pit. If dig_out finds no pit to escape,
   // set that job aside instead of immediately repeating the same bad route.
   pitJob: Job | null;

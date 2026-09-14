@@ -1210,6 +1210,31 @@ test('travel reports a pit when a full block embeds the grounded body', async ()
   assert.deepEqual(result.toward, { x: 10.5, z: -20.5 });
 });
 
+test('an upward trip stalled beneath a verified cave roof asks existing dig-out for one level', async () => {
+  const position = { x: 0.5, y: 1, z: 0.5 };
+  const state = { position, body: { halfWidth: 0.3, height: 1.85 }, condition: {}, capabilities: [] };
+  const floor = Array.from({ length: 49 }, (_, i) => ({ x: (i % 7) + 1.5, y: 1, z: Math.floor(i / 7) + 0.5 }));
+  const map = {
+    nodeAt: () => position,
+    moves: node => (node === position ? floor.map(node => ({ node })) : []),
+    gapMoves: () => [],
+    get: (_x, y) => (y === 3 ? { hazard: null, boxes: [[0, 0, 0, 1, 1, 1]] } : null),
+  };
+  const field = {
+    moved: 0,
+    env: { map },
+    latest: state,
+    skipped: new Map(),
+    observe: async () => state,
+    report: () => {},
+    explore: () => ({ x: 8.5, y: 1, z: 0.5, horizontalOnly: true, arrivalRadius: 1 }),
+    walk: async () => ({ state: 'blocked', reason: 'no_observed_route' }),
+  };
+  const result = await travel(field, null, { x: 20.5, y: 8, z: 0.5 });
+  assert.equal((result as any).reason, 'pit');
+  assert.equal((result as any).covered, true);
+});
+
 test('nearby elevated travel gives its detour enough reach to find an ascent', async () => {
   const initial = { position: { x: 0.5, y: 1, z: 0.5 }, condition: {} };
   const destination = { x: 4.5, y: 11, z: 0.5, arrivalRadius: 1 };

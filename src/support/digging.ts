@@ -33,6 +33,11 @@ export function reachable(map, origin, limit = pitLimit) {
   return seen.size;
 }
 
+// Ordinary pits are small connected components. A wide cave can still need
+// one forced upward recovery step after travel proves it is capped by a solid
+// ceiling; gaining one full standing level hands the route back to travel.
+export const needsDigOut = (map, origin, startY, force = false) => reachable(map, origin) < pitLimit || (force && origin.y <= startY + 0.6);
+
 export const solid = (map, x, y, z) => {
   const c = map.get(x, y, z);
   return !!c && !c.hazard && c.boxes.some(b => b[4] - b[1] > 0.99 && b[3] - b[0] > 0.99 && b[5] - b[2] > 0.99);
@@ -145,8 +150,9 @@ export async function diggingSlot(field, selected, inventory) {
 }
 
 // Dig stairs toward a point until there is room to roam again.
-export async function digOut(field, toward, { steps = 8 } = {}) {
+export async function digOut(field, toward, { steps = 8, force = false } = {}) {
   const map = field.env.map;
+  const startY = field.latest.position.y;
   let climbed = 0,
     reason = null;
   for (let step = 0; step < steps; step++) {
@@ -197,7 +203,7 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
         break;
       }
     }
-    if (reachable(map, origin) >= pitLimit) {
+    if (!needsDigOut(map, origin, startY, force)) {
       reason = null;
       break;
     }
@@ -299,7 +305,7 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
     reason = 'still_enclosed';
   }
   const here = map.nodeAt(Math.floor(field.latest.position.x), Math.floor(field.latest.position.z), field.latest.position.y, 0.6, 0.6);
-  const free = !!here && reachable(map, here) >= pitLimit;
+  const free = !!here && !needsDigOut(map, here, startY, force);
   return {
     ok: free,
     goal: 'dig_out',

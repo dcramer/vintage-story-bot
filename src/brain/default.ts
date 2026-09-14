@@ -113,7 +113,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     if (last.reason === 'pit') {
       const where = last.result?.position ?? state.position;
       const toward = last.result?.toward;
-      memory.pit = { x: toward?.x ?? where.x + 8, y: where.y, z: toward?.z ?? where.z };
+      memory.pit = { x: toward?.x ?? where.x + 8, y: where.y, z: toward?.z ?? where.z, ...(last.result?.covered ? { forced: true } : {}) };
       if (mine?.id !== 'dig_out') memory.pitJob = mine?.id ?? null;
     } else if (!last.ok && mine && (mine.setAside ?? failedOnItsOwn)(last, memory, reading))
       memory.tried[mine.id] = { x: state.position.x, z: state.position.z, at: now };
