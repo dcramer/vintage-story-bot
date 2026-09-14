@@ -31,7 +31,7 @@ async function eye(field) {
 }
 
 // Stand within native reach of a cell without occupying its column; returns false when no route exists.
-export async function standNear(field, survival, cell, force = false, placing = false) {
+export async function standNear(field, survival, cell, force = false, placing = false, preferredStandY = null) {
   const from = await eye(field);
   if (!force && distance(from, center(cell)) <= reach) return true;
   // Look over the work before seeking another viewpoint. From the access
@@ -39,7 +39,7 @@ export async function standNear(field, survival, cell, force = false, placing = 
   if (placing && force) await field.look({ ...center(cell), y: cell.y + 2 });
   const minimumEye = placing && force ? Math.max(from.y, cell.y + 0.5) : -Infinity;
   const destination = field.approach(
-    { point: center(cell), kind: 'block' },
+    { point: { ...center(cell), y: preferredStandY ?? cell.y + 0.5 }, kind: 'block' },
     q =>
       (sameColumn(q, cell) && Math.abs(q.y - cell.y) < 2.5) ||
       q.y + field.latest.body.eyeHeight < minimumEye ||
@@ -120,7 +120,8 @@ export async function digArea(field, survival, { cells, tool, minTier = 0, order
           }
         }
       }
-      if (!(await standNear(field, survival, cell, attempt > 0))) {
+      const preferredStandY = leafBlock(remembered ? { kind: 'block', ...remembered } : null) ? cell.y - field.latest.body.height : null;
+      if (!(await standNear(field, survival, cell, attempt > 0, false, preferredStandY))) {
         // No second place to stand keeps the first attempt's reason; it is what actually failed.
         if (attempt > 0) break;
         reason = 'no_stand_position';

@@ -94,6 +94,22 @@ test('a roof placement retry chooses a higher viewpoint instead of another spot 
   assert.deepEqual(destination, beneath, 'digging an overhead block may still use its underside');
 });
 
+test('leaf excavation can ask for a ground-height viewpoint beneath a canopy', async () => {
+  const state = { position: { x: 0.5, y: 100, z: 0.5 }, body: { eyeHeight: 1.7 } };
+  let approached;
+  const field = {
+    latest: state,
+    observe: async () => state,
+    approach: object => {
+      approached = object.point;
+      return { x: 2.5, y: 100, z: 0.5 };
+    },
+    walk: async () => ({ state: 'arrived' }),
+  };
+  assert.equal(await standNear(field, null, { x: 4, y: 103, z: 0 }, true, false, 101.15), true);
+  assert.deepEqual(approached, { x: 4.5, y: 101.15, z: 0.5 });
+});
+
 test('building never uses replaceable snow as a support face', () => {
   const solid = { code: 'game:soil-low-none', boxes: [[0, 0, 0, 1, 1, 1]], hazard: null, traits: [] };
   const snow = { code: 'game:snowlayer-3', boxes: [[0, 0, 0, 1, 0.375, 1]], hazard: null, traits: [] };
