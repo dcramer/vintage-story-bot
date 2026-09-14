@@ -17,13 +17,13 @@ import { angle, distance, horizontal, JUMP_HEADROOM, JUMP_HEIGHT, key, lookAt, M
 // cell, keep walking through bends while the head turns, jump when the next
 // cell is a block up, walk off a drop, and re-plan only when the next cell
 // stops being a place to stand or no progress is made for a while.
-// A run of checkpoints is merged into one up to this far ahead.
-// Leave a block inside the mod's eight-block input range for motion before a frame is processed.
-export const MERGE_RUN = 7;
-// The queued point is validated against the body's live position in the mod,
-// after the previously held frame may have moved it away from the new route.
-// Keep two blocks inside that eight-block boundary for request and frame lag.
-const QUEUED_POINT_RANGE = 6;
+// A run of checkpoints is merged into one up to this far ahead. The bridge validates
+// against the body's live position, while this process only has the position returned
+// by the preceding frame. On a remote server a sprinting body can travel roughly two
+// blocks before the next request is handled, so leave three blocks inside its eight-
+// block control boundary.
+export const MERGE_RUN = 5;
+const QUEUED_POINT_RANGE = 5;
 // Satiety from which a walk sprints where there is room; running costs more per minute, so not on a low bar.
 export const SPRINT_FOOD = 0.35;
 // How often a partial route is re-planned from the body's position while walking, once the far view has filled in.
@@ -508,7 +508,7 @@ export class Navigation {
     const rollOn =
       after && (['walk', 'jump', 'step', 'swim', 'wade', undefined].includes(after.move) || (after.move === 'drop' && next.y - after.y <= 1.05));
     let next2 =
-      rollOn && horizontal(p, after) <= QUEUED_POINT_RANGE && Math.abs(after.y - p.y) <= 3
+      rollOn && distance(p, after) <= QUEUED_POINT_RANGE
         ? { x: after.x, y: after.y, z: after.z, hop: after.move === 'jump' || after.y - next.y > STEP_HEIGHT }
         : undefined;
     const food = state.vitals?.hunger;

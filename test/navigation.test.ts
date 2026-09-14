@@ -343,10 +343,10 @@ test('a merged run keeps input reach margin and falls back when the body drifts 
     0,
   );
   const first = nav.tick(state, 0);
-  assert.ok(distance(state.position, first.toward) <= 7, 'leave room for movement before the mod processes the frame');
+  assert.ok(distance(state.position, first.toward) <= 5, 'leave room for remote movement before the mod processes the frame');
   state.position = { x: -0.5, y: 0, z: 0.5 };
   const turning = nav.tick(state, 100);
-  assert.ok(distance(state.position, turning.toward) <= 7, 'a previously merged point cannot drift out of reach');
+  assert.ok(distance(state.position, turning.toward) <= 5, 'a previously merged point cannot drift out of reach');
   assert.equal(turning.toward.x, 1.5, 'return to the original nearby checkpoint');
 });
 
@@ -363,7 +363,7 @@ test('a stalled extended merge resumes near the body instead of rewinding out of
 
   assert.equal(nav.tick(state, 100, { state: 'blocked', toward: route[13], distance: 1.2 }), null);
   const recovered = nav.tick(state, 200);
-  assert.ok(distance(state.position, recovered.toward) <= 7, 'the recovered checkpoint must remain a valid control input');
+  assert.ok(distance(state.position, recovered.toward) <= 5, 'the recovered checkpoint must remain a valid control input');
   assert.notEqual(recovered.toward.x, route[0].x, 'do not walk back to the stale start of the merged run');
 });
 
