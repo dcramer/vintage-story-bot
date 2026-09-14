@@ -2040,6 +2040,18 @@ test('brain: shared supplies are approached from inside the owned home', () => {
     state: { position: { x: 8.5, y: 99, z: 21.5 } },
   } as any);
   assert.deepEqual(enter, { handoff: 'go_home' }, 'proximity outside a wall is not usable container reach');
+  const use: any = stockpile.run({
+    home,
+    memory,
+    now: 1000,
+    s: { atHome: true },
+    state: { position: home },
+  } as any);
+  assert.deepEqual(
+    [use.start, use.args.target],
+    ['inspect_container', memory.notes.stash?.key],
+    'the home center is already a usable approach to its interior storage',
+  );
 
   const inside = fresh({
     home,

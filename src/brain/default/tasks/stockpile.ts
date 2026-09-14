@@ -36,9 +36,10 @@ export const stockpile: Concern = {
     // the owned dwelling first so the following inspect/store has native line
     // of sight to the basket.
     if (ctx.home && !ctx.s.atHome && horizontal(stash, ctx.home) <= 8) return { handoff: 'go_home' };
+    const approach = (why: string) => (ctx.home && ctx.s.atHome && horizontal(stash, ctx.home) <= 8 ? null : goTo(ctx, stash, why, 3));
     if (!stash.seen || ctx.now - stash.seen.at >= STOCK_CHECK_MS) {
       return (
-        goTo(ctx, stash, 'checking shared supplies', 3) ?? {
+        approach('checking shared supplies') ?? {
           start: 'inspect_container',
           args: { target: stash.key },
           why: 'check what teammates have used',
@@ -58,7 +59,7 @@ export const stockpile: Concern = {
     const spare = Math.max(0, carried(ctx.k, supply.item) - supply.keep);
     if (spare > 0)
       return (
-        goTo(ctx, stash, 'putting shared supplies away') ?? {
+        approach('putting shared supplies away') ?? {
           start: 'store_items',
           args: { target: stash.key, items: [{ item: supply.item, count: Math.min(need, spare) }], timeoutMs: 600000 },
           why: `stocking ${supply.item} for teammates`,
