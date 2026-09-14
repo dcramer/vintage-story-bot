@@ -236,6 +236,49 @@ test('equipping an empty hand verifies the selected zero-quantity slot', async (
   assert.equal(field.latest.activeSlot, 1);
 });
 
+test('equipping an empty hand puts away a non-tool when the hotbar is full', async () => {
+  let packState = 0;
+  const inventories: any[] = [
+    {
+      name: 'hotbar',
+      slots: [
+        { slot: 0, code: 'game:soil-medium-none', quantity: 8, tool: null },
+        { slot: 1, code: 'game:hoe-flint', quantity: 1, tool: 'Hoe', toolTier: 1, durability: 10 },
+      ],
+    },
+    { name: 'backpack', slots: [{ slot: 0, code: null, quantity: 0, bag: false }] },
+  ];
+  const contents = () => ({ state: `pack-${packState}`, inventories: structuredClone(inventories) });
+  const field: any = {
+    latest: { activeSlot: 1 },
+    report: () => {},
+    wait: async () => {},
+    observe: async () => field.latest,
+    send: async request => {
+      if (request.action === 'inventory') return contents();
+      if (request.action === 'inventory_move') {
+        assert.equal(request.expectedState, `pack-${packState}`);
+        const from = inventories.find(i => i.name === request.from.inventory).slots[request.from.slot];
+        const to = inventories.find(i => i.name === request.to.inventory).slots[request.to.slot];
+        Object.assign(to, structuredClone(from), { slot: request.to.slot });
+        Object.assign(from, { code: null, quantity: 0, tool: null });
+        packState++;
+        return { ok: true };
+      }
+      if (request.action === 'select') field.latest.activeSlot = request.slot;
+      return { ok: true };
+    },
+    until: (condition, options) => until(field, condition, options),
+  };
+
+  const result = await equip(field, { item: null });
+
+  assert.equal(result.item, null);
+  assert.equal(result.slot, 0);
+  assert.equal(inventories[0].slots[0].code, null);
+  assert.equal(inventories[1].slots[0].code, 'game:soil-medium-none');
+});
+
 test('equipping rotates a full inventory through the cursor without dropping anything', async () => {
   let activeSlot = 1;
   let packState = 0;

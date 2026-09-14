@@ -18,8 +18,9 @@ export default defineGoal({
     .refine(a => a.minTier === undefined || a.tool !== undefined, 'minTier requires tool'),
   destructive: true,
   description:
-    'Equip an owned item/tool or empty hand. Selects a matching hotbar stack or transfers one item into an ' +
-    'empty hotbar slot. No swaps, drops, armor/offhand or crafting. Verifies transfer and selection; ' +
+    'Equip an owned item/tool or empty hand. Selects a matching hotbar stack, transfers one item into an ' +
+    'empty hotbar slot, or puts away one non-tool stack to free an empty hand. No overwrites, drops, armor/offhand ' +
+    'or crafting. Verifies transfer and selection; ' +
     'never retries mutations. Returns START and goal.id; poll goal_status. Damage/session loss interrupt.',
   title: args => (args.item === null ? 'Select an empty hand' : `Equip ${cleanName(args.item ?? args.tool)}`),
   announce: () => 'Sorting out my gear.',

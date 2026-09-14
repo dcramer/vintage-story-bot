@@ -19,9 +19,41 @@ export async function equip(
     const own = contents.inventories.find(i => i.name === address.inventory);
     return own?.slots.find(s => s.slot === address.slot);
   };
-  const slots = ownedSlots(inventory);
+  let slots = ownedSlots(inventory);
   const matches = s => (tool !== undefined ? s.code && s.tool === tool && s.toolTier >= minTier && s.durability > 0 : s.code === item);
-  const source = slots
+  const makeHotbarRoom = async (exceptCode = undefined) => {
+    const storage = slots.find(s => s.inventory === 'backpack' && !s.bag && !s.code);
+    const displaced = slots.find(s => s.inventory === 'hotbar' && s.code && !s.tool && s.slot !== field.latest.activeSlot && s.code !== exceptCode);
+    if (!storage || !displaced) return null;
+    field.report('making hotbar room', { item: displaced.code, from: displaced.slot, to: storage.slot });
+    await field.observe();
+    await field.send({
+      action: 'inventory_move',
+      from: { inventory: 'hotbar', slot: displaced.slot },
+      to: { inventory: 'backpack', slot: storage.slot },
+      quantity: displaced.quantity,
+      expectedState: inventory.state,
+    });
+    const transfer = await field.until(
+      (_, contents) => {
+        const current = ownedSlots(contents);
+        const freed = current.find(s => s.inventory === 'hotbar' && s.slot === displaced.slot);
+        const stored = current.find(s => s.inventory === 'backpack' && s.slot === storage.slot);
+        return (
+          !freed?.code &&
+          stored?.code === displaced.code &&
+          stored.quantity === displaced.quantity &&
+          itemCount(contents, displaced.code) === itemCount(inventory, displaced.code)
+        );
+      },
+      { timeoutMs: 2000, everyMs: 200, read: () => field.send({ action: 'inventory' }) },
+    );
+    if (!transfer.met) throw Error('Hotbar room transfer unverified; inspect inventory before another attempt');
+    inventory = transfer.read;
+    slots = ownedSlots(inventory);
+    return slots.find(s => s.inventory === 'hotbar' && s.slot === displaced.slot);
+  };
+  let source = slots
     .filter(s => matches(s) && (s.code ? s.quantity >= quantity : s.inventory === 'hotbar'))
     .sort(
       (a, b) =>
@@ -30,6 +62,10 @@ export async function equip(
         Number(b.slot === slot) - Number(a.slot === slot) ||
         (b.durability ?? 0) - (a.durability ?? 0),
     )[0];
+  // Empty hand is a real equipment request. If every ordinary hotbar slot is
+  // occupied but carried storage has room, put away one non-tool stack and
+  // select the newly empty slot instead of failing a door or pickup action.
+  if (!source && item === null) source = await makeHotbarRoom();
   if (!source) throw Error('No matching owned item/tool or empty hand slot');
   let destination =
     slot === undefined
@@ -39,36 +75,8 @@ export async function equip(
       : slots.find(s => s.inventory === 'hotbar' && s.slot === slot);
   let rotated = false;
   if (!destination && slot === undefined && source.inventory !== 'hotbar') {
-    const storage = slots.find(s => s.inventory === 'backpack' && !s.bag && !s.code);
-    const displaced = slots.find(s => s.inventory === 'hotbar' && s.code && !s.tool && s.slot !== field.latest.activeSlot && s.code !== source.code);
-    if (storage && displaced) {
-      field.report('making hotbar room', { item: displaced.code, from: displaced.slot, to: storage.slot });
-      await field.observe();
-      await field.send({
-        action: 'inventory_move',
-        from: { inventory: 'hotbar', slot: displaced.slot },
-        to: { inventory: 'backpack', slot: storage.slot },
-        quantity: displaced.quantity,
-        expectedState: inventory.state,
-      });
-      const transfer = await field.until(
-        (_, contents) => {
-          const current = ownedSlots(contents);
-          const freed = current.find(s => s.inventory === 'hotbar' && s.slot === displaced.slot);
-          const stored = current.find(s => s.inventory === 'backpack' && s.slot === storage.slot);
-          return (
-            !freed?.code &&
-            stored?.code === displaced.code &&
-            stored.quantity === displaced.quantity &&
-            itemCount(contents, displaced.code) === itemCount(inventory, displaced.code)
-          );
-        },
-        { timeoutMs: 2000, everyMs: 200, read: () => field.send({ action: 'inventory' }) },
-      );
-      if (!transfer.met) throw Error('Hotbar room transfer unverified; inspect inventory before another attempt');
-      inventory = transfer.read;
-      destination = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === displaced.slot);
-    } else {
+    destination = await makeHotbarRoom(source.code);
+    if (!destination) {
       const mouse = inventory.inventories.find(i => i.name === 'mouse')?.slots.find(s => !s.code);
       const cursorRoom = slots
         .filter(
