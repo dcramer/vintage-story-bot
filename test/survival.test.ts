@@ -1331,6 +1331,22 @@ test('travel stops a detour when it crosses the real destination', async () => {
   assert.equal(walks, 2, 'the detour must not carry the body past the destination');
 });
 
+test('travel accepts the same arrival-boundary tolerance as navigation', async () => {
+  const latest = { position: { x: 3.005, y: 1, z: 0 }, condition: {}, nearbyEntities: [] };
+  const field = {
+    moved: 0,
+    latest,
+    observe: async () => latest,
+    report: () => {},
+    walk: async () => {
+      throw Error('an arrival already accepted by navigation must not launch another leg');
+    },
+  };
+  const result = await travel(field, null, { x: 0, z: 0, arrivalRadius: 3 });
+  assert.equal(result.ok, true);
+  assert.equal(result.remaining, 3);
+});
+
 test('travel bounds regression from its best observed destination distance', () => {
   assert.equal(routeRegressed(100, 112), false);
   assert.equal(routeRegressed(100, 112.01), true);

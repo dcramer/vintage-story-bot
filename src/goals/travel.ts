@@ -111,7 +111,11 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
         };
       return { ok: false, goal: 'travel', reason: 'no_progress', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
     }
-    if (remaining <= arrivalRadius && (y === undefined || Math.abs(state.position.y - y) < 1.5))
+    // Match Navigator.reaches(): its one-centimetre tolerance absorbs floating
+    // point settling at an arrival boundary. Without it, navigation can report
+    // arrival forever while this outer composed goal keeps restarting the same
+    // already-finished leg.
+    if (remaining <= arrivalRadius + 0.01 && (y === undefined || Math.abs(state.position.y - y) < 1.5))
       return { ok: true, goal: 'travel', ...summary(), remaining: +remaining.toFixed(1), position: state.position };
     field.report('travelling', { remaining: +remaining.toFixed(1), legs, roughRoute: field.roughRouteStatus });
     const elevationDetour = y === undefined ? 0 : elevationDetourDistance(Math.abs(state.position.y - y));
@@ -136,7 +140,7 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
       // its way to a farther checkpoint. Stop that leg while the body is in
       // range; waiting for the leg to finish can carry it straight past the
       // requested point before the outer loop gets another observation.
-      if (currentRemaining <= arrivalRadius && (y === undefined || Math.abs(current.position.y - y) < 1.5)) return 'destination_reached';
+      if (currentRemaining <= arrivalRadius + 0.01 && (y === undefined || Math.abs(current.position.y - y) < 1.5)) return 'destination_reached';
       return !nearestThreat(current) && routeRegressed(bestRemaining, currentRemaining) ? 'route_regressed' : null;
     });
     legs++;
