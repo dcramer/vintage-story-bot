@@ -13,10 +13,14 @@ import type { Situation } from './situation.ts';
 // Below this satiety a burrow is opened whatever stands outside.
 export const STARVING = 0.1;
 const starving = (s: Situation) => s.hunger !== null && s.hunger < STARVING;
-// On a world that has returned a full carried inventory after death, sheltering
-// cannot save a starving bot with no food; it only spends the rest of the life
-// preventing durable progress. This is learned from play, never assumed.
-const progressThroughRespawn = (s: Situation) => s.keepInventory === true && starving(s) && s.reserve === 0;
+// On a world that has returned a full carried inventory after death, darkness
+// alone should not abandon durable work when no food can be eaten. This is
+// learned from play, never assumed. Once the home, storage, farm, and stockpile
+// are established, the ordinary night routine takes over again.
+const progressThroughRespawn = (s: Situation) =>
+  s.keepInventory === true &&
+  s.reserve === 0 &&
+  (starving(s) || !s.house || !s.storage || s.moreStorage === true || s.farmTended === false || s.stocked === false);
 // The starter shelter is enough to recover from a failed night. Once it
 // exists, darkness alone should not consume half the run that could establish
 // the permanent house; threats and storms still keep their higher priority.

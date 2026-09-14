@@ -226,6 +226,21 @@ test('brain: danger and carried food come before progress, and the kit comes in 
     'verified keep-inventory worlds keep durable work moving when starvation is already unavoidable',
   );
   assert.equal(
+    pickJob(situation({ hunger: 0.5, reserve: 0, night: true, atHome: false, keepInventory: true, moreStorage: true })),
+    'storage',
+    'a keep-inventory respawn resumes durable storage instead of immediately walking home',
+  );
+  assert.equal(
+    pickJob(situation({ hunger: 0.5, reserve: 0, night: true, atHome: false, keepInventory: true, farmTended: false })),
+    'farm',
+    'a keep-inventory respawn resumes the unfinished farm through the night',
+  );
+  assert.equal(
+    pickJob(situation({ hunger: 0.5, reserve: 0, night: true, atHome: false, keepInventory: true })),
+    'go_home',
+    'night shelter returns after the durable camp is established',
+  );
+  assert.equal(
     pickJob(situation({ hunger: 0.1, night: true, reserve: 100, burrowed: true })),
     'eat',
     'dug in with food in the pack: eat where it sits',
