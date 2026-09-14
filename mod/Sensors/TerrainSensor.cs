@@ -119,7 +119,14 @@ internal sealed class TerrainSensor(ICoreClientAPI api, TerrainMap map, Sighting
             if (path.Contains("leaves")) traits.Add("leaves");
             else if (block.BlockMaterial == EnumBlockMaterial.Plant) traits.Add("plant");
             if (block.Climbable) traits.Add("climbable");
-            if (boxes.Length > 16 || boxes.Any(b => b.X1 < 0 || b.Y1 < 0 || b.Z1 < 0 || b.X2 > 1 || b.Y2 > 1 || b.Z2 > 1)) traits.Add("shape");
+            bool overflowsCell = boxes.Length > 16 || boxes.Any(b => b.X1 < 0 || b.Y1 < 0 || b.Z1 < 0 || b.X2 > 1 || b.Y2 > 1 || b.Z2 > 1);
+            bool opened = block.Variant?.TryGetValue("state", out var state) == true && state == "opened";
+            bool overflowingShape = BlockHazards.OverflowingShape(overflowsCell, opened);
+            if (overflowingShape) traits.Add("shape");
+            // Open doors and gates leave only their edge/hinge collision. The
+            // game lets a centered normal player through that gap, while the
+            // navigation grid's intentional safety margin would reject it.
+            if (opened) boxes = [];
             int tier = boxes.Length > 0 ? block.GetRequiredMiningTier(api.World, blockPos) : 0;
             if (tier > 0) traits.Add($"tier{tier}");
             map.Put(cell, boxes.Take(16).Select(b => new Bounds(cell.X + b.X1, cell.Y + b.Y1, cell.Z + b.Z1,

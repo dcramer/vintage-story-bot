@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
+import { horizontal } from '../runtime/navigation/terrain.ts';
 import { selectCell } from '../support/blocks.ts';
 import { cropRequirements } from '../support/crops.ts';
 import {
@@ -38,38 +39,13 @@ export async function tendFarm(field, survival, options) {
   const gate = farmGate(farm);
   const gateAxis = farmGateAxis(farm);
   const fence = farmFence(farm);
+  const preciseWalk = async (point, reason) => {
+    const walked = await field.walk({ ...point, arrivalRadius: 0.3 }, survival?.pauseWhen);
+    if (walked.state === 'arrived' && horizontal(field.latest.position, point) <= 0.5) return null;
+    return failure(walked.reason ?? reason, { position: field.latest.position, target: point });
+  };
   const gateCode = `game:roughhewnfencegate-${wood}-n-closed-free`;
   const fenceCode = `game:roughhewnfence-${wood}-ew-free`;
-  // Clear the jump margin as well as the beds: snow against a fence is a step.
-  const cover = [];
-  for (const p of farmMargin(farm)) {
-    const b = get(p);
-    const ours =
-      (p.x === gate.x && p.z === gate.z && b?.code?.startsWith(`game:roughhewnfencegate-${wood}-`)) ||
-      (fence.some(c => c.x === p.x && c.z === p.z) && b?.code?.startsWith(`game:roughhewnfence-${wood}-`));
-    const crop = farmBeds(farm).some(c => c.x === p.x && c.z === p.z) && /^game:(crop-|deadcrop)/.test(b?.code ?? '');
-    if (surfaceCover(b)) cover.push(p);
-    else if (!air(b) && !ours && !crop) return failure('farm_obstructed', { cell: p });
-    const overhead = get({ ...p, y: p.y + 1 });
-    if (!air(overhead)) return failure('farm_headroom_unknown_or_blocked', { cell: p });
-  }
-  if (cover.length) {
-    const cleared = await digArea(field, survival, { cells: cover, tool: undefined });
-    if (!cleared.ok) return { ...cleared, goal: 'farm', origin, turn };
-  }
-  for (const p of farmBeds(farm)) {
-    await field.observe();
-    const b = get(p);
-    if (fertileBed(b?.code)) continue;
-    if (!workableFarmFloor(b, p.y + 1) && !air(b)) return failure('bed_soil_unknown_or_occupied', { cell: p });
-    if (itemCount(await field.send({ action: 'inventory' }), soil) < 1) return failure('missing_soil', { item: soil });
-    if (!air(b)) {
-      const dug = await digArea(field, survival, { cells: [p], tool: 'Shovel' });
-      if (!dug.ok) return { ...dug, goal: 'farm', origin, turn };
-    }
-    const placed = await build(field, survival, { cells: [{ ...p, item: soil }], verifyExisting: true });
-    if (!placed.ok) return { ...placed, goal: 'farm', origin, turn };
-  }
   const missing = [];
   for (const p of fence) {
     const b = get(p);
@@ -82,8 +58,11 @@ export async function tendFarm(field, survival, options) {
     if (!built.ok) return { ...built, goal: 'farm', origin, turn };
   }
   // Native placement chooses orientation from the player's position.
-  const approach = await travel(field, survival, { ...farmApproach(farm), arrivalRadius: 0.5 });
-  if (!approach.ok) return { ...approach, goal: 'farm', origin, turn };
+  // Long-distance travel deliberately has an arrival margin. Center exactly
+  // outside the one-block doorway before touching or crossing the gate so a
+  // slightly early arrival cannot cut the adjacent fence corner.
+  const approachFailure = await preciseWalk(farmApproach(farm), 'gate_approach_unreachable');
+  if (approachFailure) return approachFailure;
   const gatePrefix = `game:roughhewnfencegate-${wood}-`;
   if (get(gate)?.code?.startsWith(gatePrefix) && !get(gate)?.code?.startsWith(`${gatePrefix}${gateAxis}-`)) {
     const before = itemCount(await field.send({ action: 'inventory' }), gateCode);
@@ -112,17 +91,50 @@ export async function tendFarm(field, survival, options) {
   };
   if (!(await operateGate('opened'))) return failure('gate_not_open');
   const center = farmCell(farm, 2, 2);
-  const entered = await travel(field, survival, { x: center.x + 0.5, y: origin.y, z: center.z + 0.5, arrivalRadius: 0.5 });
-  if (!entered.ok) return { ...entered, goal: 'farm', origin, turn };
+  const entered = await preciseWalk({ x: center.x + 0.5, y: origin.y, z: center.z + 0.5 }, 'gate_entry_unreachable');
+  if (entered) return entered;
   const finish = async result => {
-    const left = await travel(field, survival, { ...farmApproach(farm), arrivalRadius: 0.5 });
-    if (!left.ok) return { ...left, goal: 'farm', origin, turn };
+    const left = await preciseWalk(farmApproach(farm), 'gate_exit_unreachable');
+    if (left) return left;
     if (!(await operateGate('closed'))) return failure('gate_not_closed');
     await field.observe();
     if (!fence.every(p => get(p)?.code?.startsWith(`game:roughhewnfence-${wood}-`))) return failure('fence_not_verified');
     const prepared = farmBeds(farm).every(p => get(p)?.code?.startsWith('game:farmland-'));
     return { ...result, goal: 'farm', origin, turn, prepared, verification: 'observed_beds,fence,gate' };
   };
+  // Resume enclosed work from inside the gate. Clearing bed snow while still
+  // outside makes every native selection ray hit the fence first, so a farm
+  // that was nearly finished before a restart could never progress again.
+  // Clear the jump margin as well as the beds: snow against a fence is a step.
+  const cover = [];
+  for (const p of farmMargin(farm)) {
+    const b = get(p);
+    const ours =
+      (p.x === gate.x && p.z === gate.z && b?.code?.startsWith(`game:roughhewnfencegate-${wood}-`)) ||
+      (fence.some(c => c.x === p.x && c.z === p.z) && b?.code?.startsWith(`game:roughhewnfence-${wood}-`));
+    const crop = farmBeds(farm).some(c => c.x === p.x && c.z === p.z) && /^game:(crop-|deadcrop)/.test(b?.code ?? '');
+    if (surfaceCover(b)) cover.push(p);
+    else if (!air(b) && !ours && !crop) return finish(failure('farm_obstructed', { cell: p }));
+    const overhead = get({ ...p, y: p.y + 1 });
+    if (!air(overhead)) return finish(failure('farm_headroom_unknown_or_blocked', { cell: p }));
+  }
+  if (cover.length) {
+    const cleared = await digArea(field, survival, { cells: cover, tool: undefined });
+    if (!cleared.ok) return finish({ ...cleared, goal: 'farm', origin, turn });
+  }
+  for (const p of farmBeds(farm)) {
+    await field.observe();
+    const b = get(p);
+    if (fertileBed(b?.code)) continue;
+    if (!workableFarmFloor(b, p.y + 1) && !air(b)) return finish(failure('bed_soil_unknown_or_occupied', { cell: p }));
+    if (itemCount(await field.send({ action: 'inventory' }), soil) < 1) return finish(failure('missing_soil', { item: soil }));
+    if (!air(b)) {
+      const dug = await digArea(field, survival, { cells: [p], tool: 'Shovel' });
+      if (!dug.ok) return finish({ ...dug, goal: 'farm', origin, turn });
+    }
+    const placed = await build(field, survival, { cells: [{ ...p, item: soil }], verifyExisting: true });
+    if (!placed.ok) return finish({ ...placed, goal: 'farm', origin, turn });
+  }
   const inventory = await field.send({ action: 'inventory' });
   const hoe = ownedSlots(inventory).find(s => s.tool === 'Hoe' && s.durability > 0);
   if (!hoe) return finish(failure('missing_hoe'));

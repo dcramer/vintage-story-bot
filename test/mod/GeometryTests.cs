@@ -43,7 +43,10 @@ foreach (string path in new[] { "firepit-cold", "firepit-extinct", "firepit-cons
     Check(!BlockHazards.Fire(false, path), $"{path} is not burning");
 Check(BlockHazards.Fire(true, "fire"), "fire material burns");
 Check(BlockHazards.Fire(false, "firepit-lit"), "lit firepit burns");
-Console.WriteLine("8 fire-hazard checks passed.");
+Check(BlockHazards.OverflowingShape(true, false), "overflowing closed geometry is hazardous");
+Check(!BlockHazards.OverflowingShape(true, true), "an opened block is not an overflow hazard");
+Check(!BlockHazards.OverflowingShape(false, false), "ordinary in-cell geometry is not an overflow hazard");
+Console.WriteLine("11 block-hazard checks passed.");
 LifeTests.Run();
 ControlHoldTests.Run();
 StepTrackerTests.Run();

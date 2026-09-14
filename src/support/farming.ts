@@ -75,7 +75,9 @@ function assessFarmGroundwork(map, farm: Farm, { allowUnknownClearance = false }
   const wood = (farm as Farm & { wood?: unknown }).wood;
   const enclosureWood = typeof wood === 'string' ? wood : null;
   const fenceKeys = new Set(farmFence(farm).map(key));
-  const gateKey = key(farmGate(farm));
+  const gate = farmGate(farm);
+  const gateKey = key(gate);
+  const establishedGate = !!enclosureWood && map.get(gate.x, gate.y, gate.z)?.code?.startsWith(`game:roughhewnfencegate-${enclosureWood}-`);
   const establishedEnclosure = (at, cell) => {
     if (!enclosureWood || at.y !== farm.origin.y || !cell?.code) return false;
     if (key(at) === gateKey) return cell.code.startsWith(`game:roughhewnfencegate-${enclosureWood}-`);
@@ -135,6 +137,10 @@ function assessFarmGroundwork(map, farm: Farm, { allowUnknownClearance = false }
       const cell = map.get(at.x, at.y, at.z);
       if (!cell && allowUnknownClearance) continue;
       if (empty(cell)) continue;
+      // Once the gate exists, the farm goal opens it before clearing seasonal
+      // cover from inside. Sending generic groundwork after snow inside an
+      // enclosure can only aim through the fence that blocks it.
+      if (establishedGate && surfaceCover(cell)) continue;
       // Revalidating a persisted plan happens after construction may already
       // have placed part or all of its enclosure. Those exact, planned blocks
       // are proof of durable progress, not foreign structures that invalidate

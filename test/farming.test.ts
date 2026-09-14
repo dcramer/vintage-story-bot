@@ -157,8 +157,15 @@ test('an established farm revalidates its own partial enclosure after restart', 
     code: 'game:roughhewnfencegate-pine-n-closed-free',
     boxes: [[gate.x, gate.y, gate.z, gate.x + 1, gate.y + 1.5, gate.z + 1]],
   });
+  const bedSnow = { ...farmBeds(plan)[0], y: plan.origin.y };
+  map.put({ ...bedSnow, seenAt: Date.now(), traits: ['replaceable'], code: 'game:snowlayer-1', boxes: [] });
 
-  assert.ok(farmGroundwork(map, plan), 'the persisted farm accepts its own fence and even a gate awaiting orientation repair');
+  const resumed = farmGroundwork(map, plan);
+  assert.ok(resumed, 'the persisted farm accepts its own fence and even a gate awaiting orientation repair');
+  assert.ok(
+    !resumed.clear.some(cell => cell.x === bedSnow.x && cell.y === bedSnow.y && cell.z === bedSnow.z),
+    'snow inside an established gate is deferred until the farm goal opens it',
+  );
   assert.equal(
     farmGroundwork(map, { origin: plan.origin, turn: plan.turn }),
     null,
@@ -230,7 +237,7 @@ test('farm grading builds observed shallow footing before bridging deeper cells'
   assert.deepEqual(work?.fill.slice(0, 2), [shallow, deep]);
 });
 
-test('farm construction is set aside while its footprint is guarded', () => {
+test('an established farm keeps its durable work while its movement avoids a nearby threat', () => {
   const { plan } = shoreline();
   const center = farmCell(plan, 2, 2);
   const ctx = {
@@ -238,7 +245,7 @@ test('farm construction is set aside while its footprint is guarded', () => {
     memory: { notes: { farm: plan } },
     state: { nearbyEntities: [{ code: 'game:bowtorn-surface', point: { ...center } }] },
   } as any;
-  assert.deepEqual(farm.running?.(ctx), { stop: 'farm site is inside a hostile perimeter' });
+  assert.equal(farm.running?.(ctx), null);
   assert.equal(farm.setAside?.({ kind: 'build', reason: 'brain: farm site is inside a hostile perimeter' } as any, ctx.memory, {} as any), true);
   assert.equal(ctx.memory.notes.farm.siteFailures, 1);
   assert.equal(farm.setAsideEverywhere, true, 'fleeing beyond the local retry radius must not restart the guarded site');
@@ -276,6 +283,26 @@ test('an unreachable unprepared farm is eventually replaced without selecting an
   const restored = parseNotes({ farm: { ...plan, siteFailures: 2 }, failedFarms: memory.notes.failedFarms });
   assert.equal(restored.farm?.siteFailures, 2, 'site failures survive a controller restart');
   assert.deepEqual(restored.failedFarms, memory.notes.failedFarms, 'abandoned areas survive a controller restart');
+});
+
+test('an observed partial enclosure is never blacklisted after a route failure', () => {
+  const { map, plan } = shoreline();
+  const fence = farmFence(plan)[0];
+  map.put({
+    ...fence,
+    seenAt: Date.now(),
+    traits: [],
+    code: 'game:roughhewnfence-pine-ew-free',
+    boxes: [[fence.x, fence.y, fence.z, fence.x + 1, fence.y + 1.5, fence.z + 1]],
+  });
+  const memory = { notes: { farm: { ...plan, siteFailures: FARM_SITE_FAILURES - 1 } } } as any;
+  assert.equal(
+    farm.setAside?.({ kind: 'travel', reason: 'no_progress', outcome: 'no_progress' } as any, memory, { now: 100, terrain: map } as any),
+    true,
+  );
+  assert.deepEqual(memory.notes.farm.origin, plan.origin);
+  assert.equal(memory.notes.farm.siteFailures, undefined);
+  assert.equal(memory.notes.failedFarms, undefined);
 });
 
 test('farm supplies come from the chest before gathering, and stay in the working kit', () => {

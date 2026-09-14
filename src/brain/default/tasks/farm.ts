@@ -75,11 +75,10 @@ export const farm: Concern = {
   title: 'an irrigated, fenced farm tended and rotated',
   done: s => s.farmTended === true,
   after: ['storage', 'shelter', 'hoe', 'shovel', 'axe'],
-  running: ctx => {
-    const plan = ctx.memory.notes.farm;
-    if (plan && ['build', 'dig_area', 'farm'].includes(ctx.active?.kind ?? '') && guarded(ctx, plan)) return { stop: GUARDED_SITE };
-    return null;
-  },
+  // Construction and tending are durable work. Their own field navigation
+  // already routes around immediate threats; merely seeing wildlife near an
+  // established plot must not cancel the whole job and discard another trip.
+  running: () => null,
   run: ctx => {
     const { k, memory, reading } = ctx;
     const now = Number.isFinite(ctx.now) ? ctx.now : Number.isFinite(reading.now) ? reading.now : Date.now();
@@ -333,7 +332,18 @@ export const farm: Concern = {
   // from the next observation instead of discarding a viable farm site.
   setAside: (last, memory, reading) => {
     const plan = memory.notes.farm;
-    const siteFailed = !!plan && !plan.prepared && (last.reason === `brain: ${GUARDED_SITE}` || (last.kind === 'travel' && failedOnItsOwn(last)));
+    const established =
+      !!plan &&
+      [...farmFence(plan), farmGate(plan)].some(p => {
+        const code = reading.terrain?.get(p.x, p.y, p.z)?.code ?? '';
+        return code.startsWith(`game:roughhewnfence-${plan.wood}-`) || code.startsWith(`game:roughhewnfencegate-${plan.wood}-`);
+      });
+    // Once world state proves construction started, a route bug or passing
+    // predator cannot turn durable work into a rejected site. Keep the exact
+    // plot and let a later run resume what is already built.
+    if (established) delete plan.siteFailures;
+    const siteFailed =
+      !!plan && !plan.prepared && !established && (last.reason === `brain: ${GUARDED_SITE}` || (last.kind === 'travel' && failedOnItsOwn(last)));
     if (siteFailed) {
       plan.siteFailures = (plan.siteFailures ?? 0) + 1;
       if (plan.siteFailures >= FARM_SITE_FAILURES) {
