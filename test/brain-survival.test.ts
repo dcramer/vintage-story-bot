@@ -183,6 +183,13 @@ test('the larger house roofs outward from its access stairs and keeps every comp
       cells.every(cell => cell.z === 6 - course),
       'roof courses must start beside the +z access stairs',
     );
+    if (course === 0) {
+      assert.deepEqual(
+        cells.map(cell => cell.x),
+        [3, 2, 1, 5, 6, 7, 8, 4],
+        'the scaffold block starts the eave and the unsupported doorway span closes last',
+      );
+    }
     for (const { x, y, z } of cells) map.put({ x, y, z, seenAt: Date.now(), traits: [], boxes: [[x, y, z, x + 1, y + 1, z + 1]] });
     const middle = cells.find(cell => cell.x === 3)!;
     assert.ok(

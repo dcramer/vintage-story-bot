@@ -18,7 +18,11 @@ export function house(origin, item) {
   // roof already underfoot. Starting at the opposite eave makes a partial
   // build strand the player on the stairs with no observed route to its work.
   for (let dz = 6; dz >= 0; dz--) {
-    const xs = Array.from({ length: 8 }, (_, i) => ((6 - dz) % 2 === 0 ? i + 1 : 8 - i));
+    // Start the front eave at the scaffold and bridge the doorway (x+4)
+    // only after both neighboring roof blocks exist. If that span is placed
+    // while standing on its sole lateral support, the support face is hidden
+    // under the player's feet.
+    const xs = dz === 6 ? [3, 2, 1, 5, 6, 7, 8, 4] : Array.from({ length: 8 }, (_, i) => ((6 - dz) % 2 === 0 ? i + 1 : 8 - i));
     for (const dx of xs) cells.push(at(dx, gable[dz], dz));
   }
   return cells;
