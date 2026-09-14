@@ -49,7 +49,10 @@ export const lighting: Concern = {
   id: 'lighting',
   cuts: ({ s, active }) => s.atHome && !s.lit && active?.kind !== 'craft_item',
   title: 'lit shelter torches, refreshed daily',
-  done: s => s.lit === true,
+  // There is nothing to light while a replacement permanent home is only a
+  // construction plan. This also keeps goHome from dereferencing a home note
+  // that was deliberately discarded with a seasonal shelter.
+  done: s => !s.home || s.lit === true,
   after: ['shelter'],
   running: ({ active, s, hurt, classifyingHurt }) =>
     s.sheltered && !hurt && !classifyingHurt && ['light_shelter', 'craft_item'].includes(active?.kind ?? '')

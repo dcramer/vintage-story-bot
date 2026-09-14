@@ -4,7 +4,7 @@
 // for the heads still missing, in one trip), so a knife is made the moment a
 // flint and a stick are in hand.
 import type { Decision } from '../../../runtime/brain.ts';
-import type { Concern } from '../concern.ts';
+import { type Concern, failedOnItsOwn } from '../concern.ts';
 import { headMaterial, type Kit, KNAPPABLE } from '../situation.ts';
 
 // Loose flint, and the loose stones that knap; claystone and the like are not worth a stop.
@@ -60,6 +60,10 @@ const toolTask = (id: 'knife' | 'axe' | 'shovel' | 'hoe', head: string, blades: 
   // Flint and knappable stones are picked up in passing while a tool is missing and nothing knappable is carried.
   wants: k => (!k[id] && k.knappables < 2 ? KNAPPABLE_WANTS : []),
   short: k => (!k[id] && flintShort(k) > 0 ? { item: 'game:flint', count: flintShort(k) } : null),
+  // A vanished forming surface may have consumed its placed stone but leaves
+  // the tool unfinished. Re-derive the missing material and retry instead of
+  // setting the prerequisite aside and running unrelated downstream work.
+  setAside: last => failedOnItsOwn(last) && last.reason !== 'surface_gone_without_output',
 });
 
 export const knife = toolTask('knife', 'knifeblade', k => k.knifeBlade, 'game:knife-generic');

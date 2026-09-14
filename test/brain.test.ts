@@ -141,6 +141,11 @@ test('brain: a positively observed lake-ice shelter cannot pull durable work bac
   assert.equal(memory.situation?.rammedShelter, true, 'the permanent build suppresses a duplicate starter shelter');
   assert.equal(memory.situation?.shelterReady, false, 'carried materials do not start a second temporary shelter');
   assert.equal(memory.situation?.short, 0, 'starter-shelter dirt is no longer a resupply need');
+  assert.notEqual(
+    pickJob(situation({ home: false, house: false, rammedShelter: true, shovel: false, lit: false }), new Set(['shovel'] as any)),
+    'lighting',
+    'an absent seasonal home leaves lighting done instead of calling goHome with null',
+  );
 });
 const situation = (extra = {}) => ({
   burrowed: false,

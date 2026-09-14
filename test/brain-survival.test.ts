@@ -11,6 +11,7 @@ import { homeDamage, repairHome } from '../src/brain/default/tasks/repair_home.t
 import { shelter } from '../src/brain/default/tasks/shelter.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
+import { shovel } from '../src/brain/default/tasks/tools.ts';
 import { fresh, kit } from '../src/brain/default.ts';
 import { selectedPlacementCell, selectedPlacementSupport, stablePlacementSupport, standNear } from '../src/goals/build.ts';
 import craft from '../src/goals/craft_item.ts';
@@ -219,6 +220,10 @@ test('house: partial material batches resume the same site without claiming a ho
   house.ended!({ kind: 'house', ok: true } as any, memory, {} as any);
   assert.equal(memory.notes.construction?.phase, 'floor');
   assert.equal(memory.notes.home, null, 'a roof alone is not a finished home');
+});
+
+test('a lost knapping surface retries its unfinished tool prerequisite', () => {
+  assert.equal(shovel.setAside?.({ kind: 'knap', ok: false, reason: 'surface_gone_without_output' } as any, {} as any, {} as any), false);
 });
 
 test('finished construction offloads its surplus and the next house retrieves it before gathering', () => {
