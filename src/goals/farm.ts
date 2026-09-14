@@ -181,8 +181,10 @@ export async function tendFarm(field, survival, options) {
     if ([...wanted].some((code: string) => itemCount(after, code) > itemCount(before, code))) harvested++;
     else return finish(failure('harvest_not_verified'));
   }
-  // Let the brain rotate the bed groups before any new planting after a cycle.
-  if (harvested || growing) return finish({ ok: true, harvested, planted, growing, rotate: harvested > 0 && growing === 0 });
+  // Let the brain rotate the bed groups before any new planting after a
+  // completed harvest. Crops that are merely growing do not block compatible
+  // carried seed from filling the remaining empty beds.
+  if (harvested) return finish({ ok: true, harvested, planted, growing, rotate: growing === 0 });
   const seeds = [];
   for (const code of new Set(
     ownedSlots(await field.send({ action: 'inventory' }))

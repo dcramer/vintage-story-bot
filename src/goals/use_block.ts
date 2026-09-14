@@ -33,21 +33,36 @@ export async function useOnBlock(
   const selected = await selectCell(field, cell, { face });
   if (!selected || selected.key !== target) throw Error('Target not in native reach, changed or obstructed; no action sent');
   await field.observe();
-  const inventory = await field.send({ action: 'inventory' });
-  const held = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === slot);
-  const heldCode = held?.code ?? null;
+  let inventory = await field.send({ action: 'inventory' });
+  let heldCode = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === slot)?.code ?? null;
   if (item !== undefined && heldCode !== item) throw Error('Held item changed');
-  const before = heldCode ? itemCount(inventory, heldCode) : 0;
+  let before = heldCode ? itemCount(inventory, heldCode) : 0;
   field.report('using', { target, item: heldCode, sneak });
   try {
-    await field.send({
-      action: 'interact',
-      durationMs: holdMs,
-      expectedTarget: target,
-      expectedState: inventory.state,
-      expectedItem: { slot, code: heldCode },
-      ...(sneak ? { sneak: true } : {}),
-    });
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await field.send({
+          action: 'interact',
+          durationMs: holdMs,
+          expectedTarget: target,
+          expectedState: inventory.state,
+          expectedItem: { slot, code: heldCode },
+          ...(sneak ? { sneak: true } : {}),
+        });
+        break;
+      } catch (error) {
+        // The bridge rejects before pressing the button when an asynchronous
+        // inventory sync lands between our read and the guarded interaction.
+        // One fresh guarded submission is safe; no game action was sent.
+        if (attempt > 0 || !(error instanceof Error) || !/^Inventory changed; inspect before interacting\.$/i.test(error.message)) throw error;
+        await field.observe(true);
+        inventory = await field.send({ action: 'inventory' });
+        heldCode = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === slot)?.code ?? null;
+        if (item !== undefined && heldCode !== item) throw Error('Held item changed');
+        before = heldCode ? itemCount(inventory, heldCode) : 0;
+        field.report('inventory_refreshed', { target, item: heldCode });
+      }
+    }
     const look = async () => {
       const state = await field.send({ action: 'observe' });
       return expectDialog && state.alive && !state.controlReady ? state : field.guard(state);
