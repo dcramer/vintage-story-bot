@@ -15,6 +15,7 @@ import {
   farmCell,
   farmFence,
   farmGate,
+  farmGateAxis,
   farmGroundwork,
   farmMargin,
   farmSite,
@@ -49,6 +50,7 @@ test('all farm orientations keep eight dry beds irrigated behind a complete 15-f
     const { map, plan } = shoreline(turn);
     assert.equal(farmFence(plan).length, 15);
     assert.equal(farmBeds(plan).length, 8);
+    assert.equal(farmGateAxis(plan), turn % 2 ? 'w' : 'n');
     assert.ok(farmWatered(map, plan));
     assert.deepEqual(farmSite(map, farmApproach(plan)), { origin: plan.origin, turn });
     const blocked = farmCell(plan, -1, 1);

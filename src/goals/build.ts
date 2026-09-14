@@ -357,7 +357,14 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
         }
         let result;
         try {
-          result = await changeBlock(field, 'place', { target: selected.key, point, face, slot, expectedItem: cell.item });
+          result = await changeBlock(field, 'place', {
+            target: selected.key,
+            point,
+            face,
+            slot,
+            expectedItem: cell.item,
+            placementAxis: cell.placementAxis,
+          });
         } catch (error) {
           if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
           result = { ok: false, reason: error.message };
@@ -392,7 +399,7 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
   };
 }
 
-const cell = z.object({ x: z.number().int(), y: z.number().int(), z: z.number().int() }).strict();
+const cell = z.object({ x: z.number().int(), y: z.number().int(), z: z.number().int(), placementAxis: z.enum(['n', 'w']).optional() }).strict();
 const item = z.string().min(1).max(160);
 
 export default defineGoal({

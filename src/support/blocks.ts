@@ -17,6 +17,7 @@ export type BlockChange = {
   face?: string;
   slot?: number;
   expectedItem?: string | null;
+  placementAxis?: 'n' | 'w';
   acceptTransform?: boolean;
   allowBodyCellDig?: boolean;
   timeoutMs?: number;
@@ -31,6 +32,7 @@ export async function changeBlock(
     face,
     slot,
     expectedItem,
+    placementAxis,
     acceptTransform = false,
     allowBodyCellDig = false,
     timeoutMs = kind === 'dig' ? 60000 : 15000,
@@ -70,6 +72,7 @@ export async function changeBlock(
     item: held.code,
     expectedState: inventory.state,
     allowStarvingRecovery: field.recoveringFood,
+    ...(placementAxis ? { placementAxis } : {}),
     ...(allowBodyCellDig ? { allowBodyCellDig: true } : {}),
   });
   let sequence = 0;

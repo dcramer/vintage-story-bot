@@ -36,8 +36,12 @@ internal sealed class BlockActions(ICoreClientAPI api)
         var stack = player.InventoryManager.ActiveHotbarSlot.Itemstack;
         string? String(string key) => request.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
         string? nextId = String("id"), nextKind = String("kind");
+        string? placementAxis = String("placementAxis");
         if (!Guid.TryParseExact(nextId, "N", out _) || nextId == id || nextKind is not ("dig" or "place"))
             return Error("Invalid or reused block operation id/kind.");
+        if (request.TryGetProperty("placementAxis", out var placementAxisField) &&
+            (placementAxisField.ValueKind != JsonValueKind.String || placementAxis is not ("n" or "w") || nextKind != "place"))
+            return Error("placementAxis must be n or w and is valid only for placement.");
         if (selection?.Face == null || selection.Position.dimension != 0 ||
             api.World.BlockAccessor.GetChunkAtBlockPos(selection.Position) == null)
             return Error("Aim at a loaded block in the main dimension.");
@@ -112,6 +116,21 @@ internal sealed class BlockActions(ICoreClientAPI api)
             // Same single-placement path as OnBlockBuild; native behavior, claims, collision and packets.
             var placement = selection.Clone();
             placement.Position = destination.Copy(); placement.DidOffset = true;
+            if (placementAxis != null)
+            {
+                var support = destination.AddCopy(selection.Face.Opposite);
+                var eye = player.Entity.Pos.XYZ.Add(player.Entity.LocalEyePos);
+                if (placementAxis == "n") placement.HitPosition.X = PlacementPolicy.OrientedHitCoordinate(eye.X, support.X);
+                else placement.HitPosition.Z = PlacementPolicy.OrientedHitCoordinate(eye.Z, support.Z);
+                var facing = Block.SuggestedHVOrientation(player, placement)[0];
+                string predictedAxis = facing == BlockFacing.NORTH || facing == BlockFacing.SOUTH ? "n" : "w";
+                if (predictedAxis != placementAxis)
+                {
+                    state = "failed";
+                    reason = $"Stand on the {placementAxis} axis of the destination before oriented placement.";
+                    return Observe();
+                }
+            }
             string failure = "";
             if (!game.OnPlayerTryPlace(placement, ref failure)) { state = "failed"; reason = failure ?? "placement_refused"; }
             else game.HandSetAttackBuild = true;

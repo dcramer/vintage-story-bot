@@ -9,6 +9,7 @@ import {
   farmCell,
   farmFence,
   farmGate,
+  farmGateAxis,
   farmMargin,
   farmWatered,
   fertileBed,
@@ -35,6 +36,7 @@ export async function tendFarm(field, survival, options) {
   await field.observe(true);
   if (!farmWatered(field.env.map, farm)) return failure('irrigation_not_observed');
   const gate = farmGate(farm);
+  const gateAxis = farmGateAxis(farm);
   const fence = farmFence(farm);
   const gateCode = `game:roughhewnfencegate-${wood}-n-closed-free`;
   const fenceCode = `game:roughhewnfence-${wood}-ew-free`;
@@ -82,13 +84,25 @@ export async function tendFarm(field, survival, options) {
   // Native placement chooses orientation from the player's position.
   const approach = await travel(field, survival, { ...farmApproach(farm), arrivalRadius: 0.5 });
   if (!approach.ok) return { ...approach, goal: 'farm', origin, turn };
-  if (!get(gate)?.code?.startsWith(`game:roughhewnfencegate-${wood}-`)) {
+  const gatePrefix = `game:roughhewnfencegate-${wood}-`;
+  if (get(gate)?.code?.startsWith(gatePrefix) && !get(gate)?.code?.startsWith(`${gatePrefix}${gateAxis}-`)) {
+    const before = itemCount(await field.send({ action: 'inventory' }), gateCode);
+    const removed = await digArea(field, survival, { cells: [gate], tool: 'Axe' });
+    if (!removed.ok) return { ...removed, goal: 'farm', origin, turn };
+    if (itemCount(await field.send({ action: 'inventory' }), gateCode) <= before) {
+      const drop = (await field.scan(4, gateCode, 'items')).find(
+        item => item.code === gateCode && Math.hypot(item.point.x - gate.x - 0.5, item.point.z - gate.z - 0.5) <= 2,
+      );
+      if (drop) await collectItem(field, { target: drop.key, expectedItem: gateCode, radius: 4 });
+    }
+  }
+  if (!get(gate)?.code?.startsWith(gatePrefix)) {
     if (!air(get(gate))) return failure('gate_cell_occupied_or_unknown');
-    const built = await build(field, survival, { cells: [{ ...gate, item: gateCode }] });
+    const built = await build(field, survival, { cells: [{ ...gate, item: gateCode, placementAxis: gateAxis }] });
     if (!built.ok) return { ...built, goal: 'farm', origin, turn };
   }
   await field.observe();
-  if (!get(gate)?.code?.startsWith(`game:roughhewnfencegate-${wood}-${turn % 2 ? 'w' : 'n'}-`)) return failure('gate_orientation');
+  if (!get(gate)?.code?.startsWith(`${gatePrefix}${gateAxis}-`)) return failure('gate_orientation');
   const operateGate = async (state: 'opened' | 'closed') => {
     const selected = await selectCell(field, gate);
     if (!selected?.code?.startsWith(`game:roughhewnfencegate-${wood}-`)) return false;

@@ -13,6 +13,7 @@ export default defineGoal({
       point: blockPoint.optional(),
       slot: z.number().int().min(0).max(9).describe('Hotbar block stack to place.'),
       expectedItem: z.string().min(1).max(160).describe('Expected block item code in slot.'),
+      placementAxis: z.enum(['n', 'w']).optional().describe('Require a native n/w orientation for an axis-sensitive block.'),
       timeoutMs: z.number().int().min(1000).max(30000).default(10000),
     })
     .strict(),

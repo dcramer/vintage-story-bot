@@ -13,6 +13,7 @@ export function farmCell(farm: Farm, x: number, z: number, dy = 0) {
 }
 export const farmBeds = (farm: Farm) => [1, 2, 3, 4].flatMap(x => [1, 2].map(z => ({ ...farmCell(farm, x, z, -1), bed: x - 1 })));
 export const farmGate = (farm: Farm) => farmCell(farm, 2, 3);
+export const farmGateAxis = (farm: Farm): 'n' | 'w' => (farm.turn % 2 ? 'w' : 'n');
 export const farmApproach = (farm: Farm) => {
   const p = farmCell(farm, 2, 4);
   return { x: p.x + 0.5, y: p.y, z: p.z + 0.5 };
