@@ -252,7 +252,11 @@ export async function form(field, { kind, output, material }) {
     await field.send({ action: click, durationMs: 120, expectedTarget: key });
     clicks++;
     await field.wait(350);
-    detail = await inspectSurface(field, cell);
+    // Removing a voxel changes the native selection-box list. Its former
+    // first box can no longer be aimed at, even though the forming surface is
+    // still present and usable; inspect across the remaining grid just as we
+    // do when resuming an unfinished surface.
+    detail = await inspectKnownFormingSurface(field, cell, surfaceCode);
     if (detail?.forming) {
       if (detail.forming.remaining < lastRemaining) {
         stuck = 0;
