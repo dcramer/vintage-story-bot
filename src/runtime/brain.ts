@@ -29,7 +29,7 @@ export type Reading = {
   inventory: any;
   environment: any;
   // The goal running now, whoever started it, or null when idle.
-  active: { id: string; kind: string; state: string; by: string } | null;
+  active: { id: string; kind: string; state: string; by: string; progress?: Record<string, unknown> } | null;
   // The brain's own goal that finished since the previous tick, once.
   last: { id: string; kind: string; ok: boolean; reason?: string; outcome?: string; result?: any } | null;
   // What the controller noticed since the previous decision, oldest first (events).
@@ -174,7 +174,7 @@ export class BrainLoop<Memory> {
       if (this.notes.loaded) this.log.info('brain', 'notes_loaded', { file: this.notes.status().file, ...this.notes.loaded });
     }
     const record = controller.active as any;
-    const active = record ? { id: record.id, kind: record.kind, state: record.state, by: record.by } : null;
+    const active = record ? { id: record.id, kind: record.kind, state: record.state, by: record.by, progress: record.progress } : null;
     let last: Reading['last'] = null;
     if (this.goal && (!active || active.id !== this.goal.id)) {
       const view = controller.history.get(this.goal.id) ?? (controller.last?.id === this.goal.id ? controller.goalView() : null);

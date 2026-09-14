@@ -167,7 +167,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // deterministic evasion route. Cancelling that route on the same sighting
     // throws away its progress and launches a second flight in another
     // direction. A real hit still interrupts below.
-    if (active.by === 'brain' && active.kind === 'travel' && danger && !hurt && mine?.id !== 'hide') return { wait: 'letting travel evade threat' };
+    const navigating = ['walking', 'rough_route', 'no_rough_route', 'rerouting', 'travelling', 'evading'].includes(
+      String(active.progress?.phase ?? ''),
+    );
+    if (active.by === 'brain' && danger && !hurt && mine?.id !== 'hide' && (active.kind === 'travel' || navigating))
+      return { wait: `letting ${active.kind} navigation evade threat` };
     // A hostile that cannot be run from (a flight just failed here) does not cut work short either: the
     // alternative is a goal started and stopped every tick beside it. A hit still does.
     if ((hurt || (danger && !tried.has('hide'))) && !mine?.uncuttable) return { stop: hurt ? 'hurt' : 'threat' };
