@@ -151,6 +151,20 @@ test('farm grading clears rises and fills shoreline cells from existing support'
   assert.deepEqual(blocker.args.cells, [fill]);
 });
 
+test('farm construction is set aside while its footprint is guarded', () => {
+  const { plan } = shoreline();
+  const center = farmCell(plan, 2, 2);
+  const ctx = {
+    active: { kind: 'build' },
+    memory: { notes: { farm: plan } },
+    state: { nearbyEntities: [{ code: 'game:bowtorn-surface', point: { ...center } }] },
+  } as any;
+  assert.deepEqual(farm.running?.(ctx), { stop: 'farm site is inside a hostile perimeter' });
+  assert.equal(farm.setAside?.({ kind: 'build', reason: 'brain: farm site is inside a hostile perimeter' } as any, ctx.memory, {} as any), true);
+  ctx.state.nearbyEntities[0].point.x += 100;
+  assert.equal(farm.running?.(ctx), null, 'construction resumes after the hostile perimeter clears');
+});
+
 test('farm supplies come from the chest before gathering, and stay in the working kit', () => {
   const { map, plan } = shoreline(1);
   const inventory = slots => ({ state: 'test', inventories: [{ name: 'hotbar', slots: slots.map((s, slot) => ({ ...s, slot })) }] });
