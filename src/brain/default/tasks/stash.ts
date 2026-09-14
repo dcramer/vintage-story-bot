@@ -3,7 +3,7 @@
 // the sticks, logs, dirt and grass the day-1 list keeps. Recurring: done until the
 // pack fills again.
 import type { Concern, Stash } from '../concern.ts';
-import { goTo, noteContents } from '../concern.ts';
+import { allStashes, goTo, noteContents, selectStash } from '../concern.ts';
 import type { Kit } from '../situation.ts';
 import { LOG_MIN } from './logs.ts';
 import { SHELTER_DIRT } from './shelter.ts';
@@ -62,7 +62,18 @@ export const stash: Concern = {
   done: s => !s.storage || !s.full || s.surplus === 0,
   after: ['storage'],
   run: ctx => {
-    const note = ctx.memory.notes.stash as Stash;
+    let note = ctx.memory.notes.stash as Stash;
+    // A full primary basket is durable evidence about that container, not a
+    // reason to ignore another remembered basket whose capacity is unknown.
+    // Promote the alternative so noteContents records the result against the
+    // container this attempt actually opened.
+    if (note.full) {
+      const available = allStashes(ctx.memory.notes).find(stash => !stash.full);
+      if (available) {
+        note = available;
+        selectStash(ctx.memory, note);
+      }
+    }
     const items = surplusOf(ctx.k, {
       home: !!ctx.home,
       torches: ctx.k.torches,

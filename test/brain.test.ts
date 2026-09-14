@@ -1768,6 +1768,14 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
   assert.ok(carrying.tried_now.includes('stash'), 'walking away does not reactivate the same full destination');
   assert.notEqual(carrying.job, 'stash');
   assert.notEqual(farFromFullChest.start, 'store_items');
+  const second = { ...chestNote(), x: 5, key: 'block:0:5:100:2:game:stationarybasket-east' };
+  carrying.notes.stores = [second];
+  const afterCooldown = decide(settledReading({ inventory: heavy, now: 5 * 60 * 1000 + 1002 }), carrying);
+  assert.equal(afterCooldown.start, 'store_items');
+  assert.equal(afterCooldown.args.target, second.key, 'after a full basket cooldown, try remembered alternative storage');
+  assert.equal(carrying.notes.stash?.key, second.key);
+  assert.equal(carrying.notes.stores?.[0].key, key, 'the full basket remains remembered as an alternative');
+  [carrying.notes.stash, carrying.notes.stores] = [carrying.notes.stores![0], [carrying.notes.stash!]];
   delete carrying.tried.stash;
   const roomy = inventory(slot('game:stick', 20), slot('game:log-placed-oak-ud', 12), ...tools, slot(null, 0), slot(null, 0));
   assert.notEqual(decide(settledReading({ inventory: roomy }), carrying).start, 'store_items', 'with room to spare nothing is put away');
