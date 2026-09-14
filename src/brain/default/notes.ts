@@ -84,6 +84,10 @@ export function parseNotes(kept: unknown): Notes {
               : 0,
             prepared: (from.farm as Record<string, unknown>)?.prepared === true,
             checkedAt: finite((from.farm as Record<string, unknown>)?.checkedAt) ?? 0,
+            ...(Number.isInteger((from.farm as Record<string, unknown>)?.siteFailures) &&
+            ((from.farm as Record<string, unknown>).siteFailures as number) > 0
+              ? { siteFailures: (from.farm as Record<string, unknown>).siteFailures as number }
+              : {}),
           },
         }
       : {}),

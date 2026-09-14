@@ -18,8 +18,17 @@ import { hostileEntity, threatClearDistance, threatVerticalRange } from '../../.
 import type { Concern } from '../concern.ts';
 import { allStashes, failedOnItsOwn, goTo, noteContents, selectStash } from '../concern.ts';
 
-export type FarmNote = Farm & { soil: string; wood: string; rotation: number; prepared: boolean; checkedAt: number; surveyed?: boolean };
+export type FarmNote = Farm & {
+  soil: string;
+  wood: string;
+  rotation: number;
+  prepared: boolean;
+  checkedAt: number;
+  surveyed?: boolean;
+  siteFailures?: number;
+};
 export const FARM_CHECK_MS = 5 * 60 * 1000;
+export const FARM_SITE_FAILURES = 3;
 const woods = new Set(['birch', 'oak', 'maple', 'pine', 'acacia', 'kapok', 'aged', 'baldcypress', 'larch', 'redwood', 'walnut']);
 const GUARDED_SITE = 'farm site is inside a hostile perimeter';
 
@@ -55,8 +64,9 @@ export const farm: Concern = {
     let plan = memory.notes.farm;
     if (!plan) {
       const center = ctx.home ?? ctx.state.position;
-      const ready = farmSite(reading.terrain, center);
-      const site = ready ?? farmSurveySite(reading.terrain, center);
+      const safe = (candidate: Farm) => !guarded(ctx, candidate);
+      const ready = farmSite(reading.terrain, center, 64, safe);
+      const site = ready ?? farmSurveySite(reading.terrain, center, 64, safe);
       if (!site)
         return (
           goTo(ctx, { x: center.x, z: center.z }, 'returning to the farm search area', 48, 8) ?? {
@@ -268,6 +278,7 @@ export const farm: Concern = {
   },
   ended: (last, memory, reading) => {
     if (last.kind === 'take_items') noteContents(memory, last, reading.now);
+    if (last.ok && memory.notes.farm && ['build', 'dig_area', 'farm'].includes(last.kind)) delete memory.notes.farm.siteFailures;
     if (memory.notes.farm && !memory.notes.farm.prepared && last.kind === 'look_around') memory.notes.farm.surveyed = true;
     if (memory.notes.farm && !memory.notes.farm.prepared && last.kind === 'dig_area') memory.notes.farm.surveyed = false;
     if (last.kind !== 'farm' || !memory.notes.farm) return;
@@ -281,7 +292,19 @@ export const farm: Concern = {
   },
   // Grading is incremental world state. A partial clear or fill is recomputed
   // from the next observation instead of discarding a viable farm site.
-  setAside: last => last.reason === `brain: ${GUARDED_SITE}` || (failedOnItsOwn(last) && !['dig_area', 'build'].includes(last.kind)),
+  setAside: (last, memory) => {
+    const plan = memory.notes.farm;
+    const siteFailed = !!plan && !plan.prepared && (last.reason === `brain: ${GUARDED_SITE}` || (last.kind === 'travel' && failedOnItsOwn(last)));
+    if (siteFailed) {
+      plan.siteFailures = (plan.siteFailures ?? 0) + 1;
+      if (plan.siteFailures >= FARM_SITE_FAILURES) {
+        memory.notes.farm = null;
+        return false;
+      }
+      return true;
+    }
+    return last.reason === `brain: ${GUARDED_SITE}` || (failedOnItsOwn(last) && !['dig_area', 'build'].includes(last.kind));
+  },
   // A flight can carry the body outside the ordinary local retry radius while
   // the fixed farm itself remains guarded. Give that site the full cooldown.
   setAsideEverywhere: true,

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { parseNotes } from '../src/brain/default/notes.ts';
 import { kit } from '../src/brain/default/situation.ts';
-import { farm, farmDue } from '../src/brain/default/tasks/farm.ts';
+import { FARM_SITE_FAILURES, farm, farmDue } from '../src/brain/default/tasks/farm.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { hoe } from '../src/brain/default/tasks/tools.ts';
 import { allocate } from '../src/goals/craft_item.ts';
@@ -200,9 +201,29 @@ test('farm construction is set aside while its footprint is guarded', () => {
   } as any;
   assert.deepEqual(farm.running?.(ctx), { stop: 'farm site is inside a hostile perimeter' });
   assert.equal(farm.setAside?.({ kind: 'build', reason: 'brain: farm site is inside a hostile perimeter' } as any, ctx.memory, {} as any), true);
+  assert.equal(ctx.memory.notes.farm.siteFailures, 1);
   assert.equal(farm.setAsideEverywhere, true, 'fleeing beyond the local retry radius must not restart the guarded site');
   ctx.state.nearbyEntities[0].point.x += 100;
   assert.equal(farm.running?.(ctx), null, 'construction resumes after the hostile perimeter clears');
+});
+
+test('an unreachable unprepared farm is eventually replaced without selecting another guarded site', () => {
+  const { map, plan } = shoreline();
+  assert.equal(
+    farmSite(map, farmApproach(plan), 64, () => false),
+    null,
+    'site selection honors the live safety filter',
+  );
+  const memory = { notes: { farm: { ...plan, siteFailures: FARM_SITE_FAILURES - 1 } } } as any;
+  assert.equal(farm.setAside?.({ kind: 'travel', reason: 'no_progress', outcome: 'no_progress' } as any, memory, {} as any), false);
+  assert.equal(memory.notes.farm, null, 'three failed approaches release an unfinished plot instead of retrying it forever');
+
+  memory.notes.farm = { ...plan, siteFailures: 2 };
+  farm.ended?.({ kind: 'build', ok: true } as any, memory, { now: 1 } as any);
+  assert.equal(memory.notes.farm.siteFailures, undefined, 'verified construction progress forgives earlier approach failures');
+
+  const restored = parseNotes({ farm: { ...plan, siteFailures: 2 } });
+  assert.equal(restored.farm?.siteFailures, 2, 'site failures survive a controller restart');
 });
 
 test('farm supplies come from the chest before gathering, and stay in the working kit', () => {

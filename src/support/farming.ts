@@ -147,7 +147,7 @@ export function farmSurveyClearing(map, farm: Farm) {
   return farmSurveyGroundwork(map, farm)?.clear ?? [];
 }
 
-function chooseFarmSite(map, home, radius: number, survey: boolean): Farm | null {
+function chooseFarmSite(map, home, radius: number, survey: boolean, accept: (farm: Farm) => boolean): Farm | null {
   if (!map?.cells) return null;
   const sources = [...map.cells.values()].filter((b: any) => freshwater(b) && horizontal(b, home) <= radius) as any[];
   sources.sort((a, b) => horizontal(a, home) - horizontal(b, home));
@@ -156,6 +156,7 @@ function chooseFarmSite(map, home, radius: number, survey: boolean): Farm | null
     for (let turn = 0; turn < 4; turn++) {
       const offset = farmCell({ origin: { x: 0, y: 0, z: 0 }, turn }, 1, -1);
       const farm = { origin: { x: water.x - offset.x, y: water.y + 1, z: water.z - offset.z }, turn };
+      if (!accept(farm)) continue;
       const work = survey ? farmSurveyGroundwork(map, farm) : farmGroundwork(map, farm);
       if (!work) continue;
       const approach = farmApproach(farm);
@@ -168,10 +169,10 @@ function chooseFarmSite(map, home, radius: number, survey: boolean): Farm | null
 
 // New plots use observed freshwater and a gradeable permanent shoreline, not
 // hidden water, seasonal footing or assumed air.
-export function farmSite(map, home, radius = 64): Farm | null {
-  return chooseFarmSite(map, home, radius, false);
+export function farmSite(map, home, radius = 64, accept: (farm: Farm) => boolean = () => true): Farm | null {
+  return chooseFarmSite(map, home, radius, false, accept);
 }
 
-export function farmSurveySite(map, home, radius = 64): Farm | null {
-  return chooseFarmSite(map, home, radius, true);
+export function farmSurveySite(map, home, radius = 64, accept: (farm: Farm) => boolean = () => true): Farm | null {
+  return chooseFarmSite(map, home, radius, true, accept);
 }
