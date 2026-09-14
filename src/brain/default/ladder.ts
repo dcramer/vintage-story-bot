@@ -48,7 +48,11 @@ const stormAwayFromHome = (s: Situation, tried: Tried) => s.storm && s.home && !
 const stormWithCover = (s: Situation) => s.storm && ((s.home && s.atHome) || s.burrowed);
 const stormNowhereToDig = (s: Situation, tried: Tried) => s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow');
 const stormNoCover = (s: Situation) => s.storm;
-const badGround = (s: Situation) => s.dangerHere && !establishingHouse(s) && !s.burrowed;
+// An active threat still wins above and triggers a flight. Once it is gone,
+// historical scares must not replace unfinished durable work with a long
+// relocation on a proven keep-inventory world where death already preserves
+// that progress. Farm construction has its own guarded-site rejection.
+const badGround = (s: Situation) => s.dangerHere && !progressThroughRespawn(s) && !establishingHouse(s) && !s.burrowed;
 const nightAwayFromHome = (s: Situation, tried: Tried) =>
   s.night && !progressThroughRespawn(s) && !establishingHouse(s) && s.home && !s.atHome && !tried.has('go_home');
 const nightWithCover = (s: Situation) => s.night && !progressThroughRespawn(s) && !establishingHouse(s) && ((s.home && s.atHome) || s.burrowed);

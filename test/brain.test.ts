@@ -312,6 +312,11 @@ test('brain: danger and carried food come before progress, and the kit comes in 
   assert.equal(pickJob(situation({ hunger: 0.35, reserve: 200 })), 'provisions', 'a small reserve is replenished once durable work is complete');
   assert.equal(pickJob(situation({ dangerHere: true, night: true })), 'relocate', 'a place full of scares is left');
   assert.equal(
+    pickJob(situation({ dangerHere: true, keepInventory: true, hunger: 0, reserve: 0, farmTended: false })),
+    'farm',
+    'old scares do not replace unfinished durable work when a respawn preserves inventory',
+  );
+  assert.equal(
     pickJob(situation({ dangerHere: true, rammedShelter: true, house: false })),
     'house',
     'old scares do not abandon a camp with a permanent house underway',
