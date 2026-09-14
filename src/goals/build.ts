@@ -5,6 +5,7 @@ import { changeBlock, replaceablePlant, selectCell } from '../support/blocks.ts'
 import { diggingSlot } from '../support/digging.ts';
 import { Gleaner, pickupBlock } from '../support/gleaning.ts';
 import { equip, ownedSlots } from '../support/inventory.ts';
+import { clearLeafPath, leafBlock } from '../support/leaf-clearing.ts';
 import { presets } from '../support/structures.ts';
 import { cleanName, runField } from '../support/task.ts';
 import { has } from '../support/traits.ts';
@@ -102,6 +103,23 @@ export async function digArea(field, survival, { cells, tool, minTier = 0, order
     field.report('digging', { cell, ...summary() });
     let reason = 'no_stand_position';
     for (let attempt = 0; attempt < 3; attempt++) {
+      // Exact leaf cells can be hidden behind the same canopy that prevents a
+      // useful work position. Open one observed, reachable leaf toward the
+      // requested cell before asking navigation to find another viewpoint.
+      // This stays bounded by the normal dig retries and never clears around
+      // soil, rock, or an unknown target.
+      const remembered = field.env.map.get(cell.x, cell.y, cell.z);
+      if (leafBlock(remembered ? { kind: 'block', ...remembered } : null)) {
+        const cleared = await clearLeafPath(field, center(cell), 1);
+        if (cleared) {
+          await field.observe(true);
+          if (known(field, cell) === 'air') {
+            done.push({ ...cell, before: remembered.code });
+            reason = null;
+            break;
+          }
+        }
+      }
       if (!(await standNear(field, survival, cell, attempt > 0))) {
         // No second place to stand keeps the first attempt's reason; it is what actually failed.
         if (attempt > 0) break;
