@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { elevationDetourDistance, reachableAscent, routeRegressed, travel } from '../src/goals/travel.ts';
+import { GoalError } from '../src/runtime/failure.ts';
 import { remember } from '../src/support/facts.ts';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe, until } from '../src/support/fieldwork.ts';
 import {
@@ -316,6 +317,30 @@ test('food harvesting makes an empty hand when worn-basket storage has room', as
   assert.equal(await emptyHand(field), 0);
   assert.equal(inventories[0].slots[0].code, null);
   assert.equal(inventories[1].slots[0].code, 'game:soil-medium-none');
+});
+
+test('food harvesting reports a full carried inventory as no_room', async () => {
+  const inventories = [
+    {
+      name: 'hotbar',
+      slots: [
+        { slot: 0, code: 'game:soil-medium-none', quantity: 8, tool: null },
+        { slot: 1, code: 'game:knife-flint', quantity: 1, tool: 'Knife', toolTier: 1, durability: 10 },
+      ],
+    },
+    { name: 'backpack', slots: [{ slot: 0, code: 'game:flint', quantity: 1, bag: false }] },
+  ];
+  const field: any = {
+    latest: { activeSlot: 1 },
+    report: () => {},
+    observe: async () => field.latest,
+    send: async request => (request.action === 'inventory' ? { state: 'pack', inventories } : { ok: true }),
+  };
+
+  await assert.rejects(
+    emptyHand(field),
+    (error: unknown) => error instanceof GoalError && error.code === 'no_room' && error.message === 'Food harvest needs one free carried slot',
+  );
 });
 
 test('equipping rotates a full inventory through the cursor without dropping anything', async () => {

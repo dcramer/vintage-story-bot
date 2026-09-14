@@ -1,3 +1,4 @@
+import { GoalError } from '../runtime/failure.ts';
 import { known } from './facts.ts';
 import { equip, ownedSlots } from './inventory.ts';
 
@@ -95,7 +96,13 @@ export async function emptyHand(field) {
   // Harvesting food has the same native empty-hand requirement as loose
   // pickup. Reuse verified equipment management so a full hotbar can put one
   // ordinary stack into free worn-basket storage instead of abandoning food.
-  return (await equip(field, { item: null })).slot;
+  try {
+    return (await equip(field, { item: null })).slot;
+  } catch (error) {
+    if (error instanceof Error && /No matching owned item\/tool or empty hand slot|Equip needs an empty ordinary hotbar slot/i.test(error.message))
+      throw new GoalError('no_room', 'Food harvest needs one free carried slot');
+    throw error;
+  }
 }
 
 // Eat one item: the least harmful first, then the soonest to spoil.
