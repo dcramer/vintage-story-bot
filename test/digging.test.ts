@@ -150,7 +150,7 @@ test('pit recovery clears snow that occludes a full block occupying the body cel
   assert.deepEqual(
     requests.map(request => [request.target, request.allowBodyCellDig]),
     [
-      [cover, undefined],
+      [cover, true],
       [body, true],
     ],
   );

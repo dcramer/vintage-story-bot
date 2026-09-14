@@ -166,7 +166,7 @@ export async function digOut(field, toward, { steps = 8 } = {}) {
       // Snow or surface plants above the embedded block can intercept the
       // native selection ray. Clear that replaceable cover, then re-aim at
       // the full body cell the scoped recovery request is allowed to break.
-      const selected = await selectCell(field, cell, { clearPlants: true });
+      const selected = await selectCell(field, cell, { clearPlants: true, allowBodyCellDig: true });
       const slot = selected && (await diggingSlot(field, selected, inventory));
       if (!selected || slot === null) {
         reason = 'cannot_cut';

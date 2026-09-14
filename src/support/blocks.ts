@@ -150,7 +150,16 @@ export async function aimAtObject(field, object) {
   return aimed.target?.key === object.key ? aimed.target : null;
 }
 
-export async function selectCell(field, cell, { point, face, clearPlants = false }: { point?: any; face?: string; clearPlants?: boolean } = {}) {
+export async function selectCell(
+  field,
+  cell,
+  {
+    point,
+    face,
+    clearPlants = false,
+    allowBodyCellDig = false,
+  }: { point?: any; face?: string; clearPlants?: boolean; allowBodyCellDig?: boolean } = {},
+) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const state = await field.observe();
     const eye = { ...state.position, y: state.position.y + state.body.eyeHeight };
@@ -169,7 +178,7 @@ export async function selectCell(field, cell, { point, face, clearPlants = false
     field.report('clearing_plant', { target: selected.key });
     let result;
     try {
-      result = await changeBlock(field, 'dig', { target: selected.key, acceptTransform: true });
+      result = await changeBlock(field, 'dig', { target: selected.key, acceptTransform: true, allowBodyCellDig });
     } catch (error) {
       if (/interruption|cancelled|deadline/i.test(error.message)) throw error;
       field.report('clearing_failed', { target: selected.key, reason: error.message });

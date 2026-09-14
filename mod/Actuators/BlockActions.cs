@@ -77,9 +77,13 @@ internal sealed class BlockActions(ICoreClientAPI api)
             var boxes = block.GetCollisionBoxes(api.World.BlockAccessor, destination);
             var bodyMin = new Point3(p.X + body.X1, p.Y + .35, p.Z + body.Z1);
             var bodyMax = new Point3(p.X + body.X2, p.Y + body.Y2, p.Z + body.Z2);
-            bool exactBodyCell = destination.X == (int)Math.Floor(p.X) && destination.Y == (int)Math.Floor(p.Y) &&
-                destination.Z == (int)Math.Floor(p.Z);
-            if ((!bodyCellDig || !exactBodyCell) && boxes?.Any(box => SceneGeometry.Overlaps(
+            // Explicit recovery may need to remove more than the foot cell: a respawn can place a full
+            // block at the feet with a snow layer in the same body column intercepting its selection ray.
+            // Keep the exception inside the body's own vertical column; it cannot authorize arbitrary
+            // overhead or adjacent excavation.
+            bool recoveryBodyColumn = destination.X == (int)Math.Floor(p.X) && destination.Z == (int)Math.Floor(p.Z) &&
+                destination.Y >= (int)Math.Floor(p.Y) && destination.Y <= (int)Math.Floor(p.Y + body.Y2);
+            if ((!bodyCellDig || !recoveryBodyColumn) && boxes?.Any(box => SceneGeometry.Overlaps(
                 new(destination.X + box.X1, destination.Y + box.Y1, destination.Z + box.Z1),
                 new(destination.X + box.X2, destination.Y + box.Y2, destination.Z + box.Z2),
                 bodyMin, bodyMax)) == true)
