@@ -3,6 +3,9 @@ import { defineGoal } from '../runtime/define.ts';
 import { runField } from '../support/task.ts';
 import { nearestThreat } from '../support/threats.ts';
 
+export const waitTargetDay = (totalDays: number, hour: number, untilHour: number, hoursPerDay = 24) =>
+  totalDays + ((((untilHour - hour) % hoursPerDay) + hoursPerDay) % hoursPerDay) / hoursPerDay;
+
 // Stay put with eyes open: nights indoors, storms, a kiln firing.
 export default defineGoal({
   name: 'wait',
@@ -43,7 +46,7 @@ export default defineGoal({
           hour = calendar.hourOfDay ?? null;
           if (typeof calendar.totalDays === 'number' && typeof hour === 'number') {
             const hoursPerDay = calendar.hoursPerDay ?? 24;
-            target ??= calendar.totalDays + (((untilHour - hour) % hoursPerDay) + hoursPerDay) / hoursPerDay;
+            target ??= waitTargetDay(calendar.totalDays, hour, untilHour, hoursPerDay);
             if (calendar.totalDays >= target) return { ok: true, goal: 'wait', waitedMs, hour };
           }
         }
