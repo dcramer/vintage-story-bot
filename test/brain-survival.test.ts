@@ -20,7 +20,7 @@ import buildHouse from '../src/goals/house.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
 import { findRoute } from '../src/runtime/navigation/planner.ts';
 import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
-import { houseGroundwork, houseSurveyClearing } from '../src/support/house-site.ts';
+import { houseFoundationSafe, houseGroundwork, houseSurveyClearing } from '../src/support/house-site.ts';
 import {
   houseScaffold,
   house as houseTemplate,
@@ -237,6 +237,27 @@ test('house: partial material batches resume the same site without claiming a ho
   house.ended!({ kind: 'house', ok: true } as any, memory, {} as any);
   assert.equal(memory.notes.construction?.phase, 'floor');
   assert.equal(memory.notes.home, null, 'a roof alone is not a finished home');
+});
+
+test('house: an early-dug interior floor does not abandon the partial shell', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const ground = (x, y, z) => ({
+    code: 'game:soil-low-none',
+    boxes: [[x, y, z, x + 1, y + 1, z + 1]],
+    hazard: null,
+  });
+  const terrain = {
+    get: (x, y, z) => {
+      const interior = x >= 1 && x <= 8 && z >= 1 && z <= 5;
+      return interior ? { code: 'game:air', boxes: [], hazard: null } : ground(x, y, z);
+    },
+  };
+  assert.equal(houseFoundationSafe(terrain, origin), true, 'the later floor phase intentionally removes these cells');
+  assert.equal(
+    houseFoundationSafe({ get: (x, y, z) => ({ ...ground(x, y, z), code: 'game:lakeice' }) }, origin),
+    false,
+    'seasonal footing beneath the walls is still rejected',
+  );
 });
 
 test('a lost knapping surface retries its unfinished tool prerequisite', () => {

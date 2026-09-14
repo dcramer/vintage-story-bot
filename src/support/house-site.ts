@@ -36,6 +36,17 @@ const floorCells = (origin: HouseCell) => {
   return cells;
 };
 
+// The interior is deliberately lowered after the shell is built. Harvesting
+// its soil early must not make the brain abandon an otherwise sound partial
+// house; only the ground that continues to support walls and access steps is
+// permanent foundation.
+const permanentFoundationCells = (origin: HouseCell) =>
+  floorCells(origin).filter(cell => {
+    const dx = cell.x - origin.x,
+      dz = cell.z - origin.z;
+    return dx === 0 || dx === 9 || dz === 0 || dz >= 6;
+  });
+
 // A planned house may stand on existing permanent ground or bridge a shallow
 // dip with ordinary earth. Surface plants, snow and tree trunks are removed
 // first; fill is returned bottom-up so every placement has support. Anything
@@ -147,5 +158,5 @@ export function houseSurveyClearing(terrain: any, origin: HouseCell): HouseCell[
 }
 
 export function houseFoundationSafe(terrain: any, origin: HouseCell): boolean {
-  return !!terrain && floorCells(origin).every(cell => permanentFloor(terrain.get(cell.x, cell.y, cell.z), origin.y));
+  return !!terrain && permanentFoundationCells(origin).every(cell => permanentFloor(terrain.get(cell.x, cell.y, cell.z), origin.y));
 }
