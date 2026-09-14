@@ -18,7 +18,7 @@ import buildHouse from '../src/goals/house.ts';
 import { shelterSite } from '../src/goals/shelter.ts';
 import { findRoute } from '../src/runtime/navigation/planner.ts';
 import { TerrainMemory } from '../src/runtime/navigation/terrain.ts';
-import { houseGroundwork } from '../src/support/house-site.ts';
+import { houseGroundwork, houseSurveyClearing } from '../src/support/house-site.ts';
 import {
   houseScaffold,
   house as houseTemplate,
@@ -337,6 +337,20 @@ test('house: vegetation and trees in shallow foundation dips are cleared and rep
     house.setAside?.({ kind: 'dig_area', ok: false, reason: 'no_stand_position', result: {} } as any, {} as any, {} as any),
     false,
     'partial survey clearing remains incremental even when one cell has no current approach',
+  );
+});
+
+test('house: survey clearing works upward from reachable ground cover', () => {
+  const blocks = new Map([
+    ['0:100:0', { code: 'game:leaves-pine', traits: ['leaves'], boxes: [], hazard: null }],
+    ['0:99:0', { code: 'game:tallgrass-short-free', traits: ['plant', 'replaceable'], boxes: [], hazard: null }],
+    ['1:101:0', { code: 'game:leaves-pine', traits: ['leaves'], boxes: [], hazard: null }],
+  ]);
+  const clearing = houseSurveyClearing({ get: (x, y, z) => blocks.get(`${x}:${y}:${z}`) }, { x: 0, y: 100, z: 0 });
+  assert.deepEqual(
+    clearing.map(cell => cell.y),
+    [99, 100, 101],
+    'brush and low foliage open a sight line before the bot attempts the canopy',
   );
 });
 

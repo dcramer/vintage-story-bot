@@ -279,6 +279,18 @@ export function decide(reading: Reading, memory: Memory): Decision {
   else if (k.reserve <= 0 || (satiety !== null && satiety >= 0.5)) {
     delete memory.notes.foodRecovery;
   }
+  // A winter shelter on lake ice is not a durable home. Once that seasonal
+  // floor is positively observed, forget the shelter coordinates so storage,
+  // lighting and weather reflexes cannot keep routing work back onto the lake.
+  const rememberedHome = memory.notes.home;
+  const rememberedFloor = rememberedHome
+    ? reading.terrain?.get(Math.floor(rememberedHome.x), Math.floor(rememberedHome.y) - 1, Math.floor(rememberedHome.z))
+    : null;
+  if (rememberedFloor && /(?:^|:)lakeice$/.test(rememberedFloor.code ?? '')) {
+    memory.notes.home = null;
+    memory.notes.starter = null;
+    memory.notes.dwelling = null;
+  }
   const home = memory.notes.home;
   const tried = triedNow(memory, state.position, now);
   const dwelling = memory.notes.dwelling;
@@ -325,10 +337,11 @@ export function decide(reading: Reading, memory: Memory): Decision {
     grass: k.grass,
     dirt: k.dirt,
     buildingMaterials: k.buildingMaterials,
-    rammedShelter: !!starter || !!houseOrigin,
+    rammedShelter: !!starter || !!houseOrigin || !!memory.notes.construction,
     shelterReady:
       !starter &&
       !houseOrigin &&
+      !memory.notes.construction &&
       ((!!memory.notes.shelter && k.rammed > 0) || (k.rammed >= 60 && k.torches > 0 && k.slots.some(s => s.code === 'game:firestarter'))),
 
     logs: k.logs,

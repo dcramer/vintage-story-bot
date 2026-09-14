@@ -38,7 +38,9 @@ function obstructedShelter(map, origin) {
 export const shelter: Concern = {
   id: 'shelter',
   title: 'a 5x5 rammed-earth shelter to call home',
-  done: s => s.home && s.rammedShelter !== false,
+  // A permanent house already being surveyed or built supersedes another
+  // starter shelter, even if an obsolete seasonal home was forgotten.
+  done: s => (s.home && s.rammedShelter !== false) || s.rammedShelter === true,
   after: ['dirt', 'torches'],
   run: ctx => {
     let pending = ctx.memory.notes.shelter;

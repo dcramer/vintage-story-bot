@@ -123,16 +123,23 @@ export function houseSurveyClearing(terrain: any, origin: HouseCell): HouseCell[
     for (let z = 0; z < 7; z++) for (let y = origin.y - 1; y <= origin.y + 4; y++) cells.push({ x: origin.x + x, y, z: origin.z + z });
   for (const floor of floorCells(origin)) for (let y = floor.y; y <= origin.y + 1; y++) cells.push({ ...floor, y });
   const unique = new Map(cells.map(cell => [`${cell.x}:${cell.y}:${cell.z}`, cell]));
-  return [...unique.values()].filter(cell => {
-    const seen = terrain.get(cell.x, cell.y, cell.z);
-    return (
-      !!seen &&
-      !seen.hazard &&
-      !seasonal(seen) &&
-      !has(seen, 'container') &&
-      (shelterCover(seen, 0) || replaceablePlant(seen.code) || has(seen, 'choppable') || has(seen, 'leaves'))
-    );
-  });
+  return (
+    [...unique.values()]
+      .filter(cell => {
+        const seen = terrain.get(cell.x, cell.y, cell.z);
+        return (
+          !!seen &&
+          !seen.hazard &&
+          !seasonal(seen) &&
+          !has(seen, 'container') &&
+          (shelterCover(seen, 0) || replaceablePlant(seen.code) || has(seen, 'choppable') || has(seen, 'leaves'))
+        );
+      })
+      // Work upward from reachable ground cover. Starting with the canopy makes
+      // dig_area climb through the same obstructing leaves it is trying to
+      // remove; lower foliage first opens a direct line of sight to the rest.
+      .sort((a, b) => a.y - b.y || a.x - b.x || a.z - b.z)
+  );
 }
 
 export function houseFoundationSafe(terrain: any, origin: HouseCell): boolean {

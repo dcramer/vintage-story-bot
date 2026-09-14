@@ -105,6 +105,41 @@ test('brain: learns a keep-inventory server across a death and skips its cosmeti
   assert.equal(memory.notes.keepInventory, true);
   assert.notEqual((next as any).start, 'retrieve_body');
 });
+
+test('brain: a positively observed lake-ice shelter cannot pull durable work back to the lake', () => {
+  const home = { x: 0.5, y: 100, z: 0.5 };
+  const memory = fresh({
+    home,
+    starter: { x: -2, y: 100, z: -2 },
+    dwelling: { door: { x: 0, y: 100, z: 2 }, item: 'game:rammed-light-plain' },
+    construction: { origin: { x: 20, y: 100, z: 20 }, phase: 'survey' },
+  });
+  decide(
+    reading({
+      inventory: inventory(
+        slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }),
+        slot('game:axe-flint', 1, { tool: 'Axe', durability: 5 }),
+        slot('game:shovel-flint', 1, { tool: 'Shovel', durability: 5 }),
+        slot('game:rammed-light-plain', 60),
+        slot('game:torch-basic-up'),
+        slot('game:firestarter'),
+      ),
+      terrain: {
+        get: (x, y, z) =>
+          x === 0 && y === 99 && z === 0
+            ? { code: 'game:lakeice', boxes: [[0, 99, 0, 1, 100, 1]], hazard: null }
+            : { code: 'game:air', boxes: [], hazard: null },
+      },
+    }),
+    memory,
+  );
+  assert.equal(memory.notes.home, null);
+  assert.equal(memory.notes.starter, null);
+  assert.equal(memory.notes.dwelling, null);
+  assert.ok(memory.notes.construction, 'the inland permanent-house plan remains active');
+  assert.equal(memory.situation?.rammedShelter, true, 'the permanent build suppresses a duplicate starter shelter');
+  assert.equal(memory.situation?.shelterReady, false, 'carried materials do not start a second temporary shelter');
+});
 const situation = (extra = {}) => ({
   burrowed: false,
   besieged: false,
