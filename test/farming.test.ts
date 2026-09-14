@@ -14,8 +14,10 @@ import {
   farmCell,
   farmFence,
   farmGate,
+  farmGroundwork,
   farmMargin,
   farmSite,
+  farmSurveySite,
   farmWatered,
   fertileBed,
   workableFarmFloor,
@@ -56,7 +58,11 @@ test('all farm orientations keep eight dry beds irrigated behind a complete 15-f
       code: 'game:soil-low-normal',
       boxes: [[blocked.x, blocked.y, blocked.z, blocked.x + 1, blocked.y + 1, blocked.z + 1]],
     });
-    assert.equal(farmSite(map, farmApproach(plan)), null, 'raised ground beside fencing lets animals enter');
+    assert.ok(
+      farmGroundwork(map, plan)?.clear.some(cell => cell.x === blocked.x && cell.y === blocked.y && cell.z === blocked.z),
+      'raised natural ground beside fencing becomes explicit grading work',
+    );
+    assert.deepEqual(farmSite(map, farmApproach(plan)), { origin: plan.origin, turn });
   }
   const { map, plan } = shoreline();
   for (let x = 1; x <= 4; x++) {
@@ -79,6 +85,45 @@ test('all farm orientations keep eight dry beds irrigated behind a complete 15-f
   assert.equal(farmSite(new TerrainMemory(), plan.origin), null, 'unknown ground never authorizes a farm');
   assert.equal(fertileBed('game:farmland-moist-low'), false);
   assert.equal(fertileBed('game:farmland-moist-medium'), true);
+});
+
+test('a farm shoreline is surveyed before unknown margin cells authorize grading', () => {
+  const { map, plan } = shoreline();
+  const unknown = farmCell(plan, -2, -2);
+  map.forget(`${unknown.x},${unknown.y},${unknown.z}`);
+  assert.equal(farmSite(map, farmApproach(plan)), null);
+  const survey = farmSurveySite(map, farmApproach(plan));
+  assert.ok(survey, 'known freshwater and foundation permit a close survey of the unseen margin');
+
+  const surveyPlan = { ...plan, ...survey };
+  const center = farmCell(surveyPlan, 2, 2);
+  const memory = { notes: { farm: { ...surveyPlan, surveyed: false } } } as any;
+  const decision: any = farm.run({
+    k: kit({ state: 'test', inventories: [] }),
+    memory,
+    reading: { terrain: map },
+    state: { position: { ...center, x: center.x + 0.5, z: center.z + 0.5 } },
+  } as any);
+  assert.equal(decision.start, 'look_around');
+  farm.ended({ kind: 'look_around', ok: true } as any, memory, { now: 1, terrain: map } as any);
+  assert.equal(memory.notes.farm.surveyed, true);
+});
+
+test('farm grading clears rises and fills shoreline cells from existing support', () => {
+  const { map, plan } = shoreline();
+  const raised = farmCell(plan, 0, 0);
+  map.put({
+    ...raised,
+    seenAt: Date.now(),
+    traits: ['diggable'],
+    code: 'game:soil-low-none',
+    boxes: [[raised.x, raised.y, raised.z, raised.x + 1, raised.y + 1, raised.z + 1]],
+  });
+  const fill = farmCell(plan, 0, 1, -1);
+  map.put({ ...fill, seenAt: Date.now(), traits: [], code: 'game:air', boxes: [] });
+  const work = farmGroundwork(map, plan);
+  assert.ok(work?.clear.some(cell => cell.x === raised.x && cell.y === raised.y && cell.z === raised.z));
+  assert.ok(work?.fill.some(cell => cell.x === fill.x && cell.y === fill.y && cell.z === fill.z));
 });
 
 test('farm supplies come from the chest before gathering, and stay in the working kit', () => {

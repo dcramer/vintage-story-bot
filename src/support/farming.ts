@@ -1,7 +1,10 @@
 import { horizontal } from '../runtime/navigation/terrain.ts';
+import { replaceablePlant } from './blocks.ts';
 import { supportedFloor, surfaceCover } from './sites.ts';
+import { has } from './traits.ts';
 
 export type Farm = { origin: { x: number; y: number; z: number }; turn: number };
+export type FarmGroundwork = { clear: { x: number; y: number; z: number }[]; fill: { x: number; y: number; z: number }[] };
 export const fertileBed = code => /^game:(soil-(medium|high|compost)-|farmland-(dry|moist)-(medium|high|compost)$)/.test(code ?? '');
 // Local +z points away from the shoreline; origin.y is the walking surface.
 export function farmCell(farm: Farm, x: number, z: number, dy = 0) {
@@ -42,31 +45,126 @@ export const farmWatered = (map, farm: Farm) =>
     return false;
   });
 
-// New plots use observed level shoreline, not hidden water or assumed air.
-export function farmSite(map, home, radius = 64): Farm | null {
+const empty = cell => !!cell && !cell.hazard && !cell.boxes.length && (!cell.code || cell.code === 'game:air');
+const clearable = cell =>
+  !!cell &&
+  !cell.hazard &&
+  !has(cell, 'container') &&
+  (surfaceCover(cell) ||
+    replaceablePlant(cell.code) ||
+    has(cell, 'diggable') ||
+    has(cell, 'choppable') ||
+    has(cell, 'leaves') ||
+    /^game:(?:aquatic-|flower-|fern-|forestfloor-|gravel-|leaves-|log-|sand-|snow|soil-|tallgrass-|wildvine-)/.test(cell.code ?? ''));
+
+const key = p => `${p.x}:${p.y}:${p.z}`;
+const sides = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+
+// Grade a small farm rather than waiting for a naturally perfect pad. The
+// fill order grows from observed permanent ground so generic block placement
+// always has a real side support; unknown, player-made and hazardous cells
+// still reject the site.
+function assessFarmGroundwork(map, farm: Farm, { allowUnknownClearance = false } = {}): FarmGroundwork | null {
+  if (!map || !farmWatered(map, farm)) return null;
+  const footprint = [];
+  for (let x = 0; x < 6; x++) for (let z = 0; z < 4; z++) footprint.push(farmCell(farm, x, z, -1));
+  const footprintKeys = new Set(footprint.map(key));
+  const clear = new Map<string, { x: number; y: number; z: number }>();
+  const pending = new Map<string, { x: number; y: number; z: number }>();
+  const reached = new Set<string>();
+
+  for (const floor of footprint) {
+    const cell = map.get(floor.x, floor.y, floor.z);
+    if (workableFarmFloor(cell, floor.y + 1)) {
+      reached.add(key(floor));
+      continue;
+    }
+    if (!cell || (!empty(cell) && !freshwater(cell) && !clearable(cell))) return null;
+    pending.set(key(floor), floor);
+    // Water and air are directly replaceable by a placed soil block. Solid
+    // seasonal ice and vegetation must first be removed.
+    if (!empty(cell) && (!freshwater(cell) || cell.boxes.length)) clear.set(key(floor), floor);
+  }
+
+  // A fill course may also start from permanent ground immediately outside
+  // the footprint, then advance across shallow water one supported cell at a time.
+  for (const floor of footprint)
+    for (const [dx, dz] of sides) {
+      const neighbor = { x: floor.x + dx, y: floor.y, z: floor.z + dz };
+      if (!footprintKeys.has(key(neighbor)) && workableFarmFloor(map.get(neighbor.x, neighbor.y, neighbor.z), neighbor.y + 1))
+        reached.add(key(neighbor));
+    }
+
+  const fill: { x: number; y: number; z: number }[] = [];
+  while (pending.size) {
+    const next = [...pending.values()].find(cell => sides.some(([dx, dz]) => reached.has(key({ x: cell.x + dx, y: cell.y, z: cell.z + dz }))));
+    if (!next) return null;
+    pending.delete(key(next));
+    reached.add(key(next));
+    fill.push(next);
+  }
+
+  // Clear two blocks of headroom across the animal-proof margin. One-block
+  // natural rises are grading work; liquids, structures and unseen cells are
+  // not silently assumed away.
+  for (const p of farmMargin(farm))
+    for (let h = 0; h < 2; h++) {
+      const at = { ...p, y: p.y + h };
+      const cell = map.get(at.x, at.y, at.z);
+      if (!cell && allowUnknownClearance) continue;
+      if (empty(cell)) continue;
+      if (!clearable(cell)) return null;
+      clear.set(key(at), at);
+    }
+  return { clear: [...clear.values()].sort((a, b) => a.y - b.y || a.x - b.x || a.z - b.z), fill };
+}
+
+export function farmGroundwork(map, farm: Farm): FarmGroundwork | null {
+  return assessFarmGroundwork(map, farm);
+}
+
+// A promising shoreline whose foundation and irrigation are known, but whose
+// whole animal-proof margin has not yet been seen from close range. The brain
+// may walk near it and take a panorama; construction still uses the strict
+// farmGroundwork result above.
+export function farmSurveyGroundwork(map, farm: Farm): FarmGroundwork | null {
+  return assessFarmGroundwork(map, farm, { allowUnknownClearance: true });
+}
+
+export function farmSurveyClearing(map, farm: Farm) {
+  return farmSurveyGroundwork(map, farm)?.clear ?? [];
+}
+
+function chooseFarmSite(map, home, radius: number, survey: boolean): Farm | null {
   if (!map?.cells) return null;
   const sources = [...map.cells.values()].filter((b: any) => freshwater(b) && horizontal(b, home) <= radius) as any[];
   sources.sort((a, b) => horizontal(a, home) - horizontal(b, home));
+  let best: { farm: Farm; score: number } | null = null;
   for (const water of sources)
     for (let turn = 0; turn < 4; turn++) {
       const offset = farmCell({ origin: { x: 0, y: 0, z: 0 }, turn }, 1, -1);
       const farm = { origin: { x: water.x - offset.x, y: water.y + 1, z: water.z - offset.z }, turn };
-      if (!farmWatered(map, farm)) continue;
-      let clear = true;
-      for (let x = 0; x < 6 && clear; x++)
-        for (let z = 0; z < 4 && clear; z++) {
-          const p = farmCell(farm, x, z);
-          const floor = map.get(p.x, p.y - 1, p.z);
-          if (!workableFarmFloor(floor, p.y)) clear = false;
-        }
-      if (!clear) continue;
-      for (const p of farmMargin(farm))
-        for (let h = 0; h < 2; h++) {
-          const b = map.get(p.x, p.y + h, p.z);
-          if (!b || b.hazard || ((b.boxes.length || (b.code && b.code !== 'game:air')) && !(h === 0 && surfaceCover(b)))) clear = false;
-        }
+      const work = survey ? farmSurveyGroundwork(map, farm) : farmGroundwork(map, farm);
+      if (!work) continue;
       const approach = farmApproach(farm);
-      if (clear && map.nodeAt(Math.floor(approach.x), Math.floor(approach.z), approach.y, 0.1, 0.1)) return farm;
+      if (!survey && !map.nodeAt(Math.floor(approach.x), Math.floor(approach.z), approach.y, 0.1, 0.1)) continue;
+      const score = work.fill.length * 2 + work.clear.length + horizontal(farm.origin, home) / 16;
+      if (!best || score < best.score) best = { farm, score };
     }
-  return null;
+  return best?.farm ?? null;
+}
+
+// New plots use observed freshwater and a gradeable permanent shoreline, not
+// hidden water, seasonal footing or assumed air.
+export function farmSite(map, home, radius = 64): Farm | null {
+  return chooseFarmSite(map, home, radius, false);
+}
+
+export function farmSurveySite(map, home, radius = 64): Farm | null {
+  return chooseFarmSite(map, home, radius, true);
 }

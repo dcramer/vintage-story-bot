@@ -1,8 +1,21 @@
-import { type Farm, farmApproach, farmBeds, farmFence, farmGate, farmSite, fertileBed } from '../../../support/farming.ts';
+import {
+  type Farm,
+  farmApproach,
+  farmBeds,
+  farmCell,
+  farmFence,
+  farmGate,
+  farmGroundwork,
+  farmSite,
+  farmSurveyClearing,
+  farmSurveyGroundwork,
+  farmSurveySite,
+  fertileBed,
+} from '../../../support/farming.ts';
 import type { Concern } from '../concern.ts';
-import { allStashes, goTo, noteContents, selectStash } from '../concern.ts';
+import { allStashes, failedOnItsOwn, goTo, noteContents, selectStash } from '../concern.ts';
 
-export type FarmNote = Farm & { soil: string; wood: string; rotation: number; prepared: boolean; checkedAt: number };
+export type FarmNote = Farm & { soil: string; wood: string; rotation: number; prepared: boolean; checkedAt: number; surveyed?: boolean };
 export const FARM_CHECK_MS = 5 * 60 * 1000;
 const woods = new Set(['birch', 'oak', 'maple', 'pine', 'acacia', 'kapok', 'aged', 'baldcypress', 'larch', 'redwood', 'walnut']);
 
@@ -24,13 +37,14 @@ export const farm: Concern = {
     let plan = memory.notes.farm;
     if (!plan) {
       const center = ctx.home ?? ctx.state.position;
-      const site = farmSite(reading.terrain, center);
+      const ready = farmSite(reading.terrain, center);
+      const site = ready ?? farmSurveySite(reading.terrain, center);
       if (!site)
         return (
           goTo(ctx, { x: center.x, z: center.z }, 'returning to the farm search area', 48, 8) ?? {
             start: 'explore',
             args: { legs: 1, timeoutMs: 180000 },
-            why: 'observed level shoreline for an irrigated fenced farm',
+            why: 'looking for freshwater beside ground that can be graded for a farm',
           }
         );
       const carriedWood = k.slots.map(s => s.code?.match(/^game:log-(?:grown|placed)-([a-z]+)-/)?.[1]).find(w => woods.has(w));
@@ -40,10 +54,82 @@ export const farm: Concern = {
           args: { count: 8, timeoutMs: 600000 },
           why: 'choose the farm enclosure wood from locally gathered logs',
         };
-      plan = memory.notes.farm = { ...site, soil: 'game:soil-medium-none', wood: carriedWood, rotation: 0, prepared: false, checkedAt: 0 };
+      plan = memory.notes.farm = {
+        ...site,
+        soil: 'game:soil-medium-none',
+        wood: carriedWood,
+        rotation: 0,
+        prepared: false,
+        checkedAt: 0,
+        ...(ready ? {} : { surveyed: false }),
+      };
     }
     const count = code => k.slots.filter(s => s.code?.includes(code)).reduce((n, s) => n + s.quantity, 0);
     const ground = p => reading.terrain?.get(p.x, p.y, p.z)?.code ?? '';
+    if (!plan.prepared) {
+      const groundwork = farmGroundwork(reading.terrain, plan);
+      if (!groundwork) {
+        if (farmSurveyGroundwork(reading.terrain, plan)) {
+          const center = farmCell(plan, 2, 2);
+          const trip = goTo(ctx, { x: center.x + 0.5, y: plan.origin.y, z: center.z + 0.5 }, 'surveying the farm footprint', 8, 6);
+          if (trip) return trip;
+          if (!plan.surveyed)
+            return {
+              start: 'look_around',
+              args: { radius: 16, limit: 16, timeoutMs: 60000 },
+              why: 'checking the whole farm margin before clearing it',
+            };
+          const clearing = farmSurveyClearing(reading.terrain, plan);
+          if (clearing.length)
+            return {
+              start: 'dig_area',
+              args: { cells: clearing.slice(0, 12), order: 'given', timeoutMs: 600000 },
+              why: 'removing vegetation and raised natural ground from the surveyed farm site',
+            };
+        }
+        memory.notes.farm = null;
+        return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'refreshing terrain for a farm site that can be graded' };
+      }
+      delete plan.surveyed;
+      if (groundwork.clear.length)
+        return {
+          start: 'dig_area',
+          args: { cells: groundwork.clear.slice(0, 12), order: 'given', timeoutMs: 600000 },
+          why: 'clearing vegetation and one-block rises from the farm site',
+        };
+      if (groundwork.fill.length) {
+        const foundations = ['game:soil-low-none', 'game:soil-verylow-none']
+          .map(item => ({ item, count: count(item) }))
+          .sort((a, b) => b.count - a.count);
+        const foundation = foundations[0];
+        const batch = Math.min(8, groundwork.fill.length);
+        if (foundation.count < batch) {
+          const grade = foundation.item.includes('verylow') ? 'verylow' : 'low';
+          const forestFloor =
+            grade === 'low' &&
+            [...(reading.terrain?.cells?.values() ?? [])].some(
+              (cell: any) =>
+                cell.code?.startsWith('game:forestfloor-') && Math.hypot(cell.x + 0.5 - plan.origin.x, cell.z + 0.5 - plan.origin.z) <= 64,
+            );
+          return {
+            start: 'harvest',
+            args: {
+              match: forestFloor ? 'forestfloor-' : `soil-${grade}-`,
+              item: foundation.item,
+              count: batch - foundation.count,
+              tool: 'Shovel',
+              timeoutMs: 600000,
+            },
+            why: 'ordinary earth to grade the farm platform',
+          };
+        }
+        return {
+          start: 'build',
+          args: { cells: groundwork.fill.slice(0, batch).map(cell => ({ ...cell, item: foundation.item })), timeoutMs: 600000 },
+          why: 'leveling the farm platform from solid ground outward',
+        };
+      }
+    }
     const fromChest = (item: string, count: number) => {
       const chest = allStashes(memory.notes).find(s => (s.seen?.items[item] ?? 0) > 0);
       if (!chest || count <= 0) return null;
@@ -134,6 +220,8 @@ export const farm: Concern = {
   },
   ended: (last, memory, reading) => {
     if (last.kind === 'take_items') noteContents(memory, last, reading.now);
+    if (memory.notes.farm && !memory.notes.farm.prepared && last.kind === 'look_around') memory.notes.farm.surveyed = true;
+    if (memory.notes.farm && !memory.notes.farm.prepared && last.kind === 'dig_area') memory.notes.farm.surveyed = false;
     if (last.kind !== 'farm' || !memory.notes.farm) return;
     const wasPrepared = memory.notes.farm.prepared;
     if (last.result?.prepared) memory.notes.farm.prepared = true;
@@ -143,4 +231,7 @@ export const farm: Concern = {
       memory.notes.farm.checkedAt = 0;
     } else memory.notes.farm.checkedAt = wasPrepared ? reading.now : 0;
   },
+  // Grading is incremental world state. A partial clear or fill is recomputed
+  // from the next observation instead of discarding a viable farm site.
+  setAside: last => failedOnItsOwn(last) && !['dig_area', 'build'].includes(last.kind),
 };
