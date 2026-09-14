@@ -1146,6 +1146,30 @@ test('nearby travel explores after a stationary direct route failure', async () 
   assert.deepEqual(legs, [destination, detour, destination]);
 });
 
+test('travel reports a pit when a full block embeds the grounded body', async () => {
+  const position = { x: 40.5, y: 120, z: 30.5 };
+  const body = { boxes: [[40, 120, 30, 41, 121, 31]], hazard: false };
+  const state = { position, condition: {}, capabilities: [] };
+  const field = {
+    moved: 0,
+    latest: state,
+    env: {
+      map: {
+        nodeAt: () => null,
+        get: (x, y, z) => (x === 40 && y === 120 && z === 30 ? body : null),
+      },
+    },
+    observe: async () => state,
+    report: () => {},
+    walk: async () => ({ state: 'blocked', reason: 'no_observed_route' }),
+  };
+  const result = await travel(field, null, { x: 10.5, z: -20.5 });
+  assert.equal(result.ok, false);
+  assert.ok('reason' in result && 'toward' in result);
+  assert.equal(result.reason, 'pit');
+  assert.deepEqual(result.toward, { x: 10.5, z: -20.5 });
+});
+
 test('nearby elevated travel gives its detour enough reach to find an ascent', async () => {
   const initial = { position: { x: 0.5, y: 1, z: 0.5 }, condition: {} };
   const destination = { x: 4.5, y: 11, z: 0.5, arrivalRadius: 1 };

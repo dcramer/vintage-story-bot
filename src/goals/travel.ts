@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
-import { pitLimit, reachable } from '../support/digging.ts';
+import { pitLimit, reachable, solid } from '../support/digging.ts';
 import { clearLeafPath } from '../support/leaf-clearing.ts';
 import { destinationName, runField } from '../support/task.ts';
 import { nearestThreat } from '../support/threats.ts';
@@ -109,14 +109,14 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
       }
       // In a hole with nowhere to walk: that ends the trip with a reason the
       // caller (a brain, an agent) acts on, for instance with dig_out.
-      const here = field.env?.map?.nodeAt?.(
-        Math.floor(field.latest.position.x),
-        Math.floor(field.latest.position.z),
-        field.latest.position.y,
-        0.6,
-        0.6,
-      );
-      if (here && reachable(field.env.map, here) < pitLimit)
+      const map = field.env?.map;
+      const position = field.latest.position;
+      const here = map?.nodeAt?.(Math.floor(position.x), Math.floor(position.z), position.y, 0.6, 0.6);
+      // A falling block or respawn can leave the grounded body inside a full
+      // cell. There is deliberately no standing node in that case, but the
+      // scoped body-cell RPC lets dig_out recover once travel reports a pit.
+      const embedded = !here && map?.get && solid(map, Math.floor(position.x), Math.floor(position.y), Math.floor(position.z));
+      if (embedded || (here && reachable(map, here) < pitLimit))
         return {
           ok: false,
           goal: 'travel',
