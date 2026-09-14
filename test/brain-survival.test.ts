@@ -13,7 +13,13 @@ import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
 import { shovel } from '../src/brain/default/tasks/tools.ts';
 import { fresh, kit } from '../src/brain/default.ts';
-import { selectedPlacementCell, selectedPlacementSupport, stablePlacementSupport, standNear } from '../src/goals/build.ts';
+import {
+  selectExistingPlacementCell,
+  selectedPlacementCell,
+  selectedPlacementSupport,
+  stablePlacementSupport,
+  standNear,
+} from '../src/goals/build.ts';
 import craft from '../src/goals/craft_item.ts';
 import digAreaGoal from '../src/goals/dig_area.ts';
 import buildHouse from '../src/goals/house.ts';
@@ -112,6 +118,34 @@ test('building closes from maximum reach before selecting a placement face', asy
   assert.equal(approaches, 1);
   assert.equal(await standNear(field, null, { x: 4, y: 100, z: 0 }, false, false), true);
   assert.equal(approaches, 1, 'digging keeps the full native reach');
+});
+
+test('an occluded existing roof obstruction retries from another build viewpoint', async () => {
+  const cell = { x: 4, y: 102, z: 0 };
+  const state = { position: { x: 2.5, y: 100, z: 0.5 }, body: { eyeHeight: 1.7 } };
+  let inspections = 0,
+    walks = 0;
+  const field = {
+    latest: state,
+    observe: async () => state,
+    look: async () => {},
+    approach: () => ({ x: 3.5, y: 103, z: 0.5 }),
+    walk: async () => {
+      walks++;
+      return { state: 'arrived' };
+    },
+    send: async request => {
+      if (request.action === 'aim_cell') return { ok: true };
+      if (request.action === 'inspect_target') {
+        inspections++;
+        return inspections === 1 ? { key: null } : { key: 'block:0:4:102:0:game:snowlayer-1', code: 'game:snowlayer-1' };
+      }
+      throw new Error(`unexpected ${request.action}`);
+    },
+  };
+  const selected = await selectExistingPlacementCell(field, null, cell);
+  assert.equal(selected.code, 'game:snowlayer-1');
+  assert.equal(walks, 1, 'the second ray comes from another reachable construction viewpoint');
 });
 
 test('leaf excavation can ask for a ground-height viewpoint beneath a canopy', async () => {

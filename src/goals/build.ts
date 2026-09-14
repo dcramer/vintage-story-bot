@@ -81,6 +81,21 @@ export const selectedPlacementSupport = (remembered, selected) =>
 export const selectedPlacementCell = (item, selected) =>
   !selected ? 'unknown' : selected.code === item ? 'placed' : replaceablePlant(selected.code) ? 'clear' : 'blocked';
 
+// A replaceable block occupying a blueprint cell can be hidden behind the
+// part of the shell already built. Verify it from the same close/lateral/high
+// viewpoints used for placement instead of rejecting the cell after one ray.
+export async function selectExistingPlacementCell(field, survival, cell) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (!(await standNear(field, survival, cell, attempt > 0, true, null, attempt > 1))) {
+      if (attempt > 0) break;
+      continue;
+    }
+    const selected = await selectCell(field, cell);
+    if (selected) return selected;
+  }
+  return null;
+}
+
 export async function digArea(field, survival, { cells, tool, minTier = 0, order: requestedOrder = 'top-down' }) {
   const done = [],
     failed = [];
@@ -205,11 +220,7 @@ export async function build(field, survival, { cells, verifyExisting = false }) 
     }
     let occupied = known(field, cell) === 'solid';
     if (occupied && verifyExisting && field.env.map.get(cell.x, cell.y, cell.z)?.code !== cell.item) {
-      if (!(await standNear(field, survival, cell))) {
-        failed.push({ ...cell, reason: 'no_stand_position' });
-        continue;
-      }
-      const selected = await selectCell(field, cell);
+      const selected = await selectExistingPlacementCell(field, survival, cell);
       const state = selectedPlacementCell(cell.item, selected);
       if (state === 'placed') {
         placed.push({ ...cell, skipped: 'occupied' });
