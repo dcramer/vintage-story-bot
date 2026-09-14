@@ -189,7 +189,12 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
       // scoped body-cell RPC lets dig_out recover once travel reports a pit.
       const embedded = !here && map?.get && solid(map, Math.floor(position.x), Math.floor(position.y), Math.floor(position.z));
       const covered = coveredAscent(map, field.latest, goal);
-      if (embedded || (here && reachable(map, here) < pitLimit) || (covered && stuck >= 2))
+      // The navigator deliberately refuses an irreversible descent until it
+      // has observed a safe route beyond the landing. A small connected area
+      // above a lower goal is therefore a ridge, not a hole: keep trying
+      // alternate routes instead of asking dig_out to excavate upward.
+      const strandedAbove = !!here && Number.isFinite(goal.y) && goal.y < position.y - 1.5;
+      if (embedded || (here && !strandedAbove && reachable(map, here) < pitLimit) || (covered && stuck >= 2))
         return {
           ok: false,
           goal: 'travel',
