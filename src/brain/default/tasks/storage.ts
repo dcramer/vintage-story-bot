@@ -6,7 +6,7 @@ import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import { shelterStorage } from '../../../support/structures.ts';
 import { hostileEntity, threatClearDistance, threatVerticalRange } from '../../../support/threats.ts';
 import type { Concern } from '../concern.ts';
-import { allStashes, goTo, noteContents, selectStash } from '../concern.ts';
+import { allStashes, goTo, noteContents, selectStash, TRIED_MS, TRIED_RADIUS } from '../concern.ts';
 
 // The recipe (the game calls it a reed chest): eight lots of three cattail tops.
 export const CHEST_TOPS = 24;
@@ -19,6 +19,11 @@ const guarded = (ctx: Parameters<Concern['run']>[0], stash: { x: number; y: numb
       Math.abs(stash.y - entity.point.y) <= threatVerticalRange(entity.code) && horizontal(stash, entity.point) <= threatClearDistance(entity.code)
     );
   });
+
+const recentlyUnreachable = (ctx: Parameters<Concern['run']>[0], stash: { x: number; z: number }) => {
+  const failed = ctx.memory.tried.storage;
+  return !!failed && ctx.now - failed.at < TRIED_MS && horizontal(stash, failed) <= TRIED_RADIUS;
+};
 
 export const storage: Concern = {
   id: 'storage',
@@ -93,7 +98,9 @@ export const storage: Concern = {
     // A remembered source inside a currently observed hostile perimeter cannot
     // be approached. Use the existing harvest fallback until the threat moves
     // instead of repeatedly walking to and fleeing from the same container.
-    const stored = allStashes(ctx.memory.notes).find(stash => (stash.seen?.items['game:cattailtops'] ?? 0) > 0 && !guarded(ctx, stash));
+    const stored = allStashes(ctx.memory.notes).find(
+      stash => (stash.seen?.items['game:cattailtops'] ?? 0) > 0 && !guarded(ctx, stash) && !recentlyUnreachable(ctx, stash),
+    );
     if (stored) {
       selectStash(ctx.memory, stored);
       const count = Math.min(CHEST_TOPS - k.cattailtops, stored.seen!.items['game:cattailtops']);
