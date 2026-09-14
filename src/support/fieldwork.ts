@@ -301,11 +301,19 @@ export class Fieldwork {
   // player looks around from a rise. Then read what is now remembered.
   async lookAround(match?, kind = 'blocks', radius = sightRange) {
     if (!this.seeing || !this.attentive) return this.scan(radius, match, kind);
-    // One full circle per spot: the view does not change by looking again from the same place.
+    // One full circle per unchanged spot. Digging or placing can expose a
+    // different view without moving the body, so a terrain revision must
+    // invalidate the shared panorama cache.
     const p0 = this.latest.position;
-    if (this.lookedAround && this.now() - this.lookedAround.at < 45000 && horizontal(p0, this.lookedAround.position) < 3)
+    const revision = this.env.map?.revision ?? null;
+    if (
+      this.lookedAround &&
+      this.now() - this.lookedAround.at < 45000 &&
+      horizontal(p0, this.lookedAround.position) < 3 &&
+      this.lookedAround.revision === revision
+    )
       return this.scan(radius, match, kind);
-    this.lookedAround = { position: { ...p0 }, at: this.now() };
+    this.lookedAround = { position: { ...p0 }, at: this.now(), revision };
     const p = this.latest.position,
       start = this.latest.orientation.yawDegrees;
     for (const offset of [60, 120, 180, 240, 300, 0]) {

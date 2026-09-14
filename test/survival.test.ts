@@ -548,6 +548,32 @@ test('a search without surface vision approaches its far frontier in legal local
   assert.ok(Math.hypot(walked[0].x - start.x, walked[0].z - start.z) <= APPROACH_LEG + 1, 'the native navigation request is a bounded local leg');
 });
 
+test('a panorama is repeated after terrain changes at the same viewpoint', async () => {
+  const env: any = { looks: {}, map: { revision: 1 }, surface: {}, sightings: {} };
+  const field = new Fieldwork(env, { now: () => 1000 });
+  field.latest = {
+    position: { x: 0.5, y: 100, z: 0.5 },
+    orientation: { yawDegrees: 0 },
+    body: { eyeHeight: 1.6 },
+    pickingRange: 4.5,
+    capabilities: ['surface_vision', 'block_sightings'],
+  };
+  let aims = 0;
+  field.aim = async () => {
+    aims++;
+  };
+  field.settle = async () => {};
+  field.scan = async () => [];
+
+  await field.lookAround();
+  assert.equal(aims, 6);
+  await field.lookAround();
+  assert.equal(aims, 6, 'an unchanged panorama is reused');
+  env.map.revision++;
+  await field.lookAround();
+  assert.equal(aims, 12, 'clearing blocks invalidates the panorama even without walking');
+});
+
 test('a threatened search also bounds its frontier when walking bypasses rough routing', async () => {
   const places = new Places(() => 1000);
   const field = new Fieldwork({ places, surface: {} }, { now: () => 1000 });
