@@ -1674,6 +1674,32 @@ test('brain: a chest along the shelter wall is made in three steps, a full pack 
     'additional storage uses remembered cattail tops before cutting more reeds',
   );
   assert.equal(storedTops.notes.stash?.key, topStore.key, 'the source basket becomes the current container for result bookkeeping');
+  const guardedTops = settled();
+  guardedTops.notes.stash = { ...chestNote(), full: true, seen: { at: 1000, items: {} } };
+  guardedTops.notes.stores = [topStore];
+  const harvestElsewhere = decide(
+    settledReading({
+      state: state({
+        position: { x: 3.5, y: 100, z: 0.5 },
+        nearbyEntities: [
+          {
+            code: 'game:wolf-eurasian-adult-female',
+            // Inside the wolf's 30-block clearance around the source, but
+            // outside its 22-block flee radius around the bot at home.
+            point: { x: topStore.x + 28, y: topStore.y, z: topStore.z },
+          },
+        ],
+      }),
+      inventory: inventory(slot('game:stick', 10), ...tools),
+    }),
+    guardedTops,
+  );
+  assert.deepEqual(
+    [harvestElsewhere.start, harvestElsewhere.args.match, harvestElsewhere.args.item],
+    ['harvest', 'coopersreed', 'cattailtops'],
+    'a predator guarding stored tops sends storage through the existing harvest fallback',
+  );
+  assert.notEqual(guardedTops.notes.stash?.key, topStore.key, 'a guarded source is not promoted to the active container');
   const carrying = settled();
   const put = decide(settledReading({ inventory: inventory(slot('game:stick', 10), slot('game:stationarybasket-east', 1), ...tools) }), carrying);
   assert.deepEqual(

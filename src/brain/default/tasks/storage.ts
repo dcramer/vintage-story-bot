@@ -2,13 +2,23 @@
 // slot of the above-ground shelter. The first chest fixes the planned origin.
 
 import { shelterSite } from '../../../goals/shelter.ts';
+import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import { shelterStorage } from '../../../support/structures.ts';
+import { hostileEntity, threatClearDistance, threatVerticalRange } from '../../../support/threats.ts';
 import type { Concern } from '../concern.ts';
 import { allStashes, goTo, noteContents, selectStash } from '../concern.ts';
 
 // The recipe (the game calls it a reed chest): eight lots of three cattail tops.
 export const CHEST_TOPS = 24;
 export const CHEST = 'game:stationarybasket-east';
+
+const guarded = (ctx: Parameters<Concern['run']>[0], stash: { x: number; y: number; z: number }) =>
+  (ctx.state.nearbyEntities ?? []).some(entity => {
+    if (!entity.code || !entity.point || !hostileEntity(entity)) return false;
+    return (
+      Math.abs(stash.y - entity.point.y) <= threatVerticalRange(entity.code) && horizontal(stash, entity.point) <= threatClearDistance(entity.code)
+    );
+  });
 
 export const storage: Concern = {
   id: 'storage',
@@ -80,7 +90,10 @@ export const storage: Concern = {
       };
     }
     if (k.cattailtops >= CHEST_TOPS) return { start: 'craft_item', args: { output: CHEST, count: 1, timeoutMs: 300000 }, why: 'weaving a chest' };
-    const stored = allStashes(ctx.memory.notes).find(stash => (stash.seen?.items['game:cattailtops'] ?? 0) > 0);
+    // A remembered source inside a currently observed hostile perimeter cannot
+    // be approached. Use the existing harvest fallback until the threat moves
+    // instead of repeatedly walking to and fleeing from the same container.
+    const stored = allStashes(ctx.memory.notes).find(stash => (stash.seen?.items['game:cattailtops'] ?? 0) > 0 && !guarded(ctx, stash));
     if (stored) {
       selectStash(ctx.memory, stored);
       const count = Math.min(CHEST_TOPS - k.cattailtops, stored.seen!.items['game:cattailtops']);
