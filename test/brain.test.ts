@@ -1761,6 +1761,30 @@ test('brain: finish indoor torch refresh despite an outside threat, but stop on 
   assert.equal(absent.start, 'craft_item', 'replace a missing torch from carried materials while staying sealed');
 });
 
+test('brain: a failed shelter relight is set aside instead of relaunched every tick', () => {
+  const home = { x: 0.5, y: 100, z: 0.5 };
+  const memory = fresh({ home, dwelling: { door: { x: 0, y: 100, z: 1 }, item: 'soil-' }, lightingDay: 0 });
+  memory.startupChecked = true;
+  const indoors = reading({
+    state: state({ position: home }),
+    inventory: inventory(slot('game:firestarter')),
+    environment: { calendar: { totalDays: 1.25, hourOfDay: 6, daylight: 1 } },
+    terrain: {
+      get: (_x, _y, z) => ({ code: z === 1 ? 'game:soil-low-none' : 'game:torch-basic-extinct-up', boxes: z === 1 ? [{}] : [], hazard: null }),
+    },
+  });
+  assert.equal(decide(indoors, memory).start, 'light_shelter');
+  const afterFailure = decide(
+    {
+      ...indoors,
+      last: { id: 'light', kind: 'light_shelter', ok: false, reason: 'no_torch', outcome: 'failed' },
+    },
+    memory,
+  );
+  assert.notEqual(afterFailure.start, 'light_shelter');
+  assert.ok(memory.tried.lighting, 'the failed lighting job is retained by ordinary set-aside bookkeeping');
+});
+
 test('brain: a ready shelter takes precedence over errands and an empty stomach, but not night', () => {
   const supplies = kitted();
   supplies.inventories[0].slots.push(slot('game:rammed-light-plain', 60), slot('game:torch-basic-extinct-up'), slot('game:firestarter'));

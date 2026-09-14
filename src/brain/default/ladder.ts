@@ -19,7 +19,8 @@ const starving = (s: Situation) => s.hunger !== null && s.hunger < STARVING;
 const establishingHouse = (s: Situation) => !!s.rammedShelter && !s.house;
 
 type Tried = Set<Job>;
-const sealedInTheDark = (s: Situation) => !establishingHouse(s) && !!s.sheltered && s.lit === false && !s.hurt && !hungry(s);
+const sealedInTheDark = (s: Situation, tried: Tried) =>
+  !establishingHouse(s) && !!s.sheltered && s.lit === false && !s.hurt && !hungry(s) && !tried.has('lighting');
 const threatWhileSealed = (s: Situation) => !!s.sheltered && s.threat && !s.hurt && !hungry(s);
 const hurtInBurrow = (s: Situation) => s.burrowed && s.hurt;
 const besiegedInBurrow = (s: Situation, tried: Tried) => s.burrowed && s.threat && !s.hurt && s.besieged && !tried.has('tunnel');
@@ -31,7 +32,7 @@ const threatWhileBurrowed = (s: Situation) => s.burrowed && s.threat && !s.hurt;
 const hurtOrThreat = (s: Situation, tried: Tried) => s.hurt || (s.threat && !tried.has('hide'));
 const hungryWithFood = (s: Situation, tried: Tried) => (hungry(s) || !!s.foodRecovery) && s.reserve > 0 && !tried.has('eat');
 const damageAtHome = (s: Situation, tried: Tried) => s.atHome && !!s.homeDamaged && !tried.has('repair_home');
-const unlitAtHome = (s: Situation) => !establishingHouse(s) && s.atHome && s.lit === false && s.torches > 0;
+const unlitAtHome = (s: Situation, tried: Tried) => !establishingHouse(s) && s.atHome && s.lit === false && s.torches > 0 && !tried.has('lighting');
 const stormAwayFromHome = (s: Situation, tried: Tried) => s.storm && s.home && !s.atHome && !tried.has('go_home');
 const stormWithCover = (s: Situation) => s.storm && ((s.home && s.atHome) || s.burrowed);
 const stormNowhereToDig = (s: Situation, tried: Tried) => s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow');
