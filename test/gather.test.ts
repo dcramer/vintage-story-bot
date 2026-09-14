@@ -25,7 +25,7 @@ test('loose resources are approached from beside their floor column', () => {
   assert.equal(standsOnLooseBlock({ ...loose, kind: 'item' }, { x: 10.5, y: 5, z: 20.5 }), false);
 });
 
-function fixture({ gain = true, interruptAfter = Infinity } = {}) {
+function fixture({ gain = true, interruptAfter = Infinity, threatened = false } = {}) {
   const calls = [],
     reports = [];
   let walks = 0,
@@ -46,6 +46,10 @@ function fixture({ gain = true, interruptAfter = Infinity } = {}) {
     orientation: { yawDegrees: 90 },
     life: { session: 'world', lastDamageAt: null, alerts: ['low_food'] },
     motion: { onGround: true },
+    nearbyEntities:
+      threatened && walks < 7
+        ? [{ key: 'wolf', code: 'game:wolf-eurasian-adult-male', point: { x: 5, y: 0, z: 0.5 }, traits: ['hostile'], distance: 5 }]
+        : [],
     body: { halfWidth: 0.3, height: 1.85 },
     activeSlot,
     hotbar: [
@@ -111,6 +115,16 @@ test('persistent ground-only goal reroutes and verifies ten inventory gains', as
   assert.equal(f.calls.filter(c => c.action === 'interact').length, 10);
   assert.ok(f.reports.some(p => p.phase === 'rerouting'));
   assert.equal(f.calls.at(-1).action, 'stop');
+});
+
+test('ground gathering actively leaves a predator perimeter before resuming its search', async () => {
+  const f = fixture({ threatened: true });
+  const result = await gather(f.env, { count: 1, manageFood: false, wait: async () => {} });
+  assert.equal(result.ok, true);
+  assert.ok(
+    f.reports.some(p => p.phase === 'evading'),
+    'the gatherer must move away rather than reject every resource route in place',
+  );
 });
 
 test('acknowledgements do not count as sticks; cancellation stops continued search', async () => {

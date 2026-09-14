@@ -4,6 +4,7 @@ import { blockWorkReady, changeBlock, dryBlockWorkPosition } from '../support/bl
 import { Fieldwork } from '../support/fieldwork.ts';
 import { Gleaner, pickupBlock } from '../support/gleaning.ts';
 import { habitatsFor } from '../support/habitat.ts';
+import { clearLeafPath } from '../support/leaf-clearing.ts';
 import { Search } from '../support/search.ts';
 import { Survival } from '../support/survival.ts';
 import { cleanName, foodFeatures } from '../support/task.ts';
@@ -85,6 +86,26 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
     await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
     while (true) {
       await field.observe(true);
+      if (!survival) {
+        const evasion = await field.evadeThreat(target => clearLeafPath(field, target));
+        if (evasion === 'blocked')
+          return {
+            ok: false,
+            goal: 'gather',
+            reason: 'threat_escape_blocked',
+            position: field.latest.position,
+            match,
+            item,
+            count,
+            gained: gained(),
+            moved: +field.moved.toFixed(1),
+            searched: field.searched,
+          };
+        if (evasion) {
+          search.avoidThreat();
+          continue;
+        }
+      }
       if (gained() >= count)
         return {
           ok: true,
