@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { elevationDetourDistance, routeRegressed, travel } from '../src/goals/travel.ts';
+import { elevationDetourDistance, reachableAscent, routeRegressed, travel } from '../src/goals/travel.ts';
 import { remember } from '../src/support/facts.ts';
 import { explorationDistance, explorationReach, explorationScore, Fieldwork, temporalStormUnsafe, until } from '../src/support/fieldwork.ts';
 import {
@@ -1062,6 +1062,46 @@ test('elevation travel searches beyond a horizontally close cliff face', () => {
   assert.equal(explorationReach(4, 48), 4);
   assert.equal(explorationReach(4, 20, 20), 20);
   assert.equal(explorationReach(4, 10, 20), 10);
+});
+
+test('elevation travel keeps a reachable cave ledge instead of probing flat ground again', async () => {
+  const body = { halfWidth: 0.3, height: 1.85 };
+  const initial = { position: { x: 0.5, y: 1, z: 0.5 }, body, condition: {}, capabilities: [] };
+  const origin = initial.position;
+  const floor = Array.from({ length: 49 }, (_, i) => ({ x: (i % 7) + 1.5, y: 1, z: Math.floor(i / 7) + 0.5 }));
+  const ledge = { x: -1.5, y: 3, z: 0.5 };
+  const map = {
+    nodeAt: (_x, _z, y) => (y > 2 ? ledge : origin),
+    moves: node => (node === origin ? [...floor.map(node => ({ node })), { node: ledge }] : []),
+    gapMoves: () => [],
+    get: () => null,
+  };
+  const destination = { x: 20.5, y: 8, z: 0.5, arrivalRadius: 1 };
+  assert.deepEqual(reachableAscent(map, initial, destination), { ...ledge, arrivalRadius: 0.35 });
+  const legs = [];
+  let latest = initial;
+  const field = {
+    moved: 0,
+    env: { map },
+    skipped: new Map(),
+    get latest() {
+      return latest;
+    },
+    observe: async () => latest,
+    report: () => {},
+    explore: () => {
+      throw Error('a known higher ledge should be tried before another flat probe');
+    },
+    walk: async target => {
+      legs.push(target);
+      if (legs.length === 1) return { state: 'blocked', reason: 'no_observed_route' };
+      if (legs.length === 2) latest = { ...initial, position: ledge };
+      else latest = { ...initial, position: destination };
+      return { state: 'arrived' };
+    },
+  };
+  assert.equal((await travel(field, null, destination)).ok, true);
+  assert.deepEqual(legs, [destination, { ...ledge, arrivalRadius: 0.35 }, destination]);
 });
 
 test('long travel extends a productive partial detour instead of reversing it', async () => {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
-import { horizontal } from '../runtime/navigation/terrain.ts';
+import { failedEdges } from '../runtime/navigation/failed-edges.ts';
+import { horizontal, key } from '../runtime/navigation/terrain.ts';
 import { pitLimit, reachable, solid } from '../support/digging.ts';
 import { clearLeafPath } from '../support/leaf-clearing.ts';
 import { destinationName, runField } from '../support/task.ts';
@@ -8,6 +9,42 @@ import { nearestThreat } from '../support/threats.ts';
 
 export const routeRegressed = (best, current, margin = 12) => current > best + margin;
 export const elevationDetourDistance = verticalRemaining => (verticalRemaining < 1.5 ? 0 : Math.min(24, Math.max(12, verticalRemaining * 2)));
+
+// A flat exploration bearing can repeatedly walk down from a cave ledge even
+// though the destination is above it. After the direct route fails, prefer the
+// highest nearby node already connected to the body. The next look from that
+// ledge can reveal another step without inventing any unseen route.
+export function reachableAscent(map, state, goal, radius = 16, limit = 512) {
+  if (!map?.nodeAt || !map?.moves || !Number.isFinite(goal?.y) || goal.y <= state.position.y + 1) return null;
+  const { position, body = {} } = state;
+  const origin = map.nodeAt(Math.floor(position.x), Math.floor(position.z), position.y, body.halfWidth ?? 0.3, body.height ?? 1.85);
+  if (!origin) return null;
+  const blocked = failedEdges(map);
+  const seen = new Set([key(origin)]);
+  const queue = [origin];
+  let best = origin;
+  const better = node => {
+    const height = Math.min(node.y, goal.y);
+    const bestHeight = Math.min(best.y, goal.y);
+    return (
+      height > bestHeight + 0.01 ||
+      (Math.abs(height - bestHeight) <= 0.01 &&
+        (horizontal(node, goal) < horizontal(best, goal) - 0.01 ||
+          (Math.abs(horizontal(node, goal) - horizontal(best, goal)) <= 0.01 && horizontal(node, origin) < horizontal(best, origin))))
+    );
+  };
+  while (queue.length && seen.size < limit) {
+    const at = queue.shift();
+    for (const { node } of map.moves(at)) {
+      const id = key(node);
+      if (seen.has(id) || blocked.has(`${key(at)}>${id}`) || horizontal(node, origin) > radius) continue;
+      seen.add(id);
+      queue.push(node);
+      if (better(node)) best = node;
+    }
+  }
+  return best.y > origin.y + 0.6 ? { x: best.x, y: best.y, z: best.z, arrivalRadius: 0.35 } : null;
+}
 
 // Chain bounded navigation legs toward a far destination; exploration legs detour around unknown terrain.
 export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { x: number; y?: number; z: number; arrivalRadius?: number }) {
@@ -51,13 +88,14 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
     // walk looks at the landscape and follows rough routes on its own; legs here
     // only choose the destination, and exploration legs remain the fallback
     // once nothing visible leads toward it.
+    const ascent = localDetour && elevationDetour > 0 ? reachableAscent(field.env?.map, state, goal) : null;
     const leg =
       continuation ??
       (!localDetour
         ? y === undefined
           ? { x, y: state.position.y, z, horizontalOnly: true, arrivalRadius }
           : { x, y, z, arrivalRadius }
-        : field.explore(goal, Math.min(48, Math.max(remaining, elevationDetour)), elevationDetour));
+        : (ascent ?? field.explore(goal, Math.min(48, Math.max(remaining, elevationDetour)), elevationDetour)));
     const before = state.position;
     const result = await field.walk(leg, current => {
       const survivalReason = survival?.pauseWhen(current);
