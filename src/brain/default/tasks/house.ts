@@ -71,7 +71,9 @@ export const house: Concern = {
     if (plan.phase === 'walls' && count(RAMMED) < 6) {
       for (const item of [RAMMED, 'game:packeddirt', 'game:soil-low-none', 'game:soil-verylow-none']) {
         if (count(item) >= (item.includes('soil-') ? 10 : 6)) break;
-        const chest = allStashes(memory.notes).find(s => (s.seen?.items[item] ?? 0) > 0);
+        const chest = allStashes(memory.notes).find(
+          s => Math.hypot(s.x - plan.origin.x, s.z - plan.origin.z) <= 48 && (s.seen?.items[item] ?? 0) > 0,
+        );
         if (!chest) continue;
         selectStash(memory, chest);
         return (

@@ -198,12 +198,15 @@ test('finished construction offloads its surplus and the next house retrieves it
   ]);
   assert.ok(!surplusOf(k, { home: true, torches: 1, building: true }).some(s => s.item === 'game:packeddirt'));
   const memory = fresh({
-    construction: { origin: { x: 50, y: 100, z: 50 }, phase: 'walls' },
+    construction: { origin: { x: 8, y: 100, z: 8 }, phase: 'walls' },
     stash: { ...chest, seen: { at: 0, items: { 'game:packeddirt': 30 } } },
   });
   const next = house.run({ memory, k: kit(inventory({})), state: { position: chest } } as any);
   assert.ok('start' in next && next.start === 'take_items');
   assert.deepEqual(next.args.items, [{ item: 'game:packeddirt', count: 28 }]);
+  memory.notes.construction!.origin = { x: 100, y: 100, z: 100 };
+  const distant = house.run({ memory, k: kit(inventory({})), state: { position: chest } } as any);
+  assert.ok('start' in distant && distant.start === 'harvest', 'distant stored dirt cannot pull construction away from its camp');
 });
 
 test('house: unknown terrain and hazards never qualify as a building site', () => {
