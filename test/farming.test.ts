@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseNotes } from '../src/brain/default/notes.ts';
 import { kit } from '../src/brain/default/situation.ts';
-import { FARM_SITE_FAILURES, farm, farmDue } from '../src/brain/default/tasks/farm.ts';
+import { FARM_SITE_FAILURES, FARM_SITE_RETRY_MS, farm, farmDue } from '../src/brain/default/tasks/farm.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { hoe } from '../src/brain/default/tasks/tools.ts';
 import { allocate } from '../src/goals/craft_item.ts';
@@ -215,15 +215,28 @@ test('an unreachable unprepared farm is eventually replaced without selecting an
     'site selection honors the live safety filter',
   );
   const memory = { notes: { farm: { ...plan, siteFailures: FARM_SITE_FAILURES - 1 } } } as any;
-  assert.equal(farm.setAside?.({ kind: 'travel', reason: 'no_progress', outcome: 'no_progress' } as any, memory, {} as any), false);
+  assert.equal(farm.setAside?.({ kind: 'travel', reason: 'no_progress', outcome: 'no_progress' } as any, memory, { now: 100 } as any), false);
   assert.equal(memory.notes.farm, null, 'three failed approaches release an unfinished plot instead of retrying it forever');
+  assert.deepEqual(memory.notes.failedFarms, [{ origin: plan.origin, turn: plan.turn, until: 100 + FARM_SITE_RETRY_MS }]);
+
+  const avoided: any = farm.run({
+    k: kit({ state: 'test', inventories: [] }),
+    memory,
+    reading: { now: 101, terrain: map },
+    state: { position: farmApproach(plan), nearbyEntities: [] },
+    home: farmApproach(plan),
+    now: 101,
+  } as any);
+  assert.equal(avoided.start, 'explore', 'an abandoned area stays out of replacement-site selection after the bot walks away');
+  assert.equal(memory.notes.farm, null);
 
   memory.notes.farm = { ...plan, siteFailures: 2 };
   farm.ended?.({ kind: 'build', ok: true } as any, memory, { now: 1 } as any);
   assert.equal(memory.notes.farm.siteFailures, undefined, 'verified construction progress forgives earlier approach failures');
 
-  const restored = parseNotes({ farm: { ...plan, siteFailures: 2 } });
+  const restored = parseNotes({ farm: { ...plan, siteFailures: 2 }, failedFarms: memory.notes.failedFarms });
   assert.equal(restored.farm?.siteFailures, 2, 'site failures survive a controller restart');
+  assert.deepEqual(restored.failedFarms, memory.notes.failedFarms, 'abandoned areas survive a controller restart');
 });
 
 test('farm supplies come from the chest before gathering, and stay in the working kit', () => {

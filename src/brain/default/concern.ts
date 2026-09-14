@@ -71,6 +71,7 @@ export type Notes = {
   home: Cell | null;
   house?: Cell | null;
   farm?: FarmNote | null;
+  failedFarms?: { origin: Cell; turn: number; until: number }[];
   lightingDay?: number | null;
   firepit?: Cell | null;
   failedFirepits?: (Cell & { until: number })[];

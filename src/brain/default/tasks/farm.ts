@@ -29,6 +29,8 @@ export type FarmNote = Farm & {
 };
 export const FARM_CHECK_MS = 5 * 60 * 1000;
 export const FARM_SITE_FAILURES = 3;
+export const FARM_SITE_RETRY_MS = 15 * 60 * 1000;
+export const FARM_SITE_REJECT_RADIUS = 12;
 const woods = new Set(['birch', 'oak', 'maple', 'pine', 'acacia', 'kapok', 'aged', 'baldcypress', 'larch', 'redwood', 'walnut']);
 const GUARDED_SITE = 'farm site is inside a hostile perimeter';
 
@@ -40,6 +42,14 @@ const guarded = (ctx: Parameters<Concern['run']>[0], plan: Farm) =>
         Math.abs(cell.y - entity.point.y) <= threatVerticalRange(entity.code) && horizontal(cell, entity.point) <= threatClearDistance(entity.code),
     );
   });
+
+const rejectSite = (memory: Parameters<NonNullable<Concern['setAside']>>[1], plan: Farm, now: number) => {
+  const failures = (memory.notes.failedFarms ?? []).filter(
+    failed => failed.until > now && horizontal(failed.origin, plan.origin) >= FARM_SITE_REJECT_RADIUS,
+  );
+  failures.push({ origin: { ...plan.origin }, turn: plan.turn, until: now + FARM_SITE_RETRY_MS });
+  memory.notes.failedFarms = failures.slice(-8);
+};
 
 export function farmDue(reading, plan: FarmNote | null | undefined) {
   if (!plan?.prepared || reading.now - plan.checkedAt >= FARM_CHECK_MS) return true;
@@ -61,10 +71,15 @@ export const farm: Concern = {
   },
   run: ctx => {
     const { k, memory, reading } = ctx;
+    const now = Number.isFinite(ctx.now) ? ctx.now : Number.isFinite(reading.now) ? reading.now : Date.now();
+    const failedFarms = (memory.notes.failedFarms ?? []).filter(failed => failed.until > now);
+    if (failedFarms.length) memory.notes.failedFarms = failedFarms;
+    else delete memory.notes.failedFarms;
     let plan = memory.notes.farm;
     if (!plan) {
       const center = ctx.home ?? ctx.state.position;
-      const safe = (candidate: Farm) => !guarded(ctx, candidate);
+      const safe = (candidate: Farm) =>
+        !guarded(ctx, candidate) && !failedFarms.some(failed => horizontal(failed.origin, candidate.origin) < FARM_SITE_REJECT_RADIUS);
       const ready = farmSite(reading.terrain, center, 64, safe);
       const site = ready ?? farmSurveySite(reading.terrain, center, 64, safe);
       if (!site)
@@ -133,6 +148,7 @@ export const farm: Concern = {
               why: 'removing vegetation and raised natural ground from the surveyed farm site',
             };
         }
+        rejectSite(memory, plan, now);
         memory.notes.farm = null;
         return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'refreshing terrain for a farm site that can be graded' };
       }
@@ -292,12 +308,13 @@ export const farm: Concern = {
   },
   // Grading is incremental world state. A partial clear or fill is recomputed
   // from the next observation instead of discarding a viable farm site.
-  setAside: (last, memory) => {
+  setAside: (last, memory, reading) => {
     const plan = memory.notes.farm;
     const siteFailed = !!plan && !plan.prepared && (last.reason === `brain: ${GUARDED_SITE}` || (last.kind === 'travel' && failedOnItsOwn(last)));
     if (siteFailed) {
       plan.siteFailures = (plan.siteFailures ?? 0) + 1;
       if (plan.siteFailures >= FARM_SITE_FAILURES) {
+        rejectSite(memory, plan, reading.now);
         memory.notes.farm = null;
         return false;
       }

@@ -35,6 +35,11 @@ const farm = z.object({
   soil: z.string().regex(/^game:soil-(medium|high|compost)-none$/),
   wood: z.string().regex(/^[a-z]+$/),
 });
+const failedFarm = z.object({
+  origin: cell,
+  turn: z.number().int().min(0).max(3),
+  until: z.number().finite(),
+});
 const construction = z.object({
   origin: cell,
   phase: z.enum(['survey', 'site', 'walls', 'floor', 'enter']),
@@ -89,6 +94,15 @@ export function parseNotes(kept: unknown): Notes {
               ? { siteFailures: (from.farm as Record<string, unknown>).siteFailures as number }
               : {}),
           },
+        }
+      : {}),
+    ...(Array.isArray(from.failedFarms) && from.failedFarms.length > 0
+      ? {
+          failedFarms: from.failedFarms
+            .map(failed => failedFarm.safeParse(failed))
+            .filter(failed => failed.success)
+            .map(failed => failed.data)
+            .slice(-8),
         }
       : {}),
     ...(keptBuilding.success
