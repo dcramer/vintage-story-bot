@@ -19,6 +19,8 @@ export const formingGround = selection =>
 export const hasFormingOutputRoom = (inventory, output, maxStackSize = 1) =>
   ownedSlots(inventory).some(slot => !slot.bag && (!slot.code || (slot.code === output && slot.quantity < maxStackSize)));
 
+export const needsOpenRecipeSelection = (state, detail) => !state.controlReady && !detail?.forming?.recipe;
+
 const voxelPoint = (cell, [vx, vy, vz], top = true) => ({
   x: cell.x + (vx + 0.5) / 16,
   y: cell.y + (vy + (top ? 0.95 : 0.5)) / 16,
@@ -129,12 +131,18 @@ export async function form(field, { kind, output, material }) {
   let clicks = 0;
   // Reuse an unfinished own surface in reach, else sneak-place one on the ground ahead.
   let cell = null;
+  let detail = null;
   for (const object of await field.scan(6, spec.surface, 'blocks')) {
     if (object.code !== surfaceCode || !object.withinPickingRange) continue;
     const candidate = parseBlockKey(object.key);
-    const detail = await inspectKnownFormingSurface(field, candidate, surfaceCode);
-    if (detail?.forming && detail.forming.material === material && (!detail.forming.recipe || detail.forming.recipe.output === output)) {
+    const candidateDetail = await inspectKnownFormingSurface(field, candidate, surfaceCode);
+    if (
+      candidateDetail?.forming &&
+      candidateDetail.forming.material === material &&
+      (!candidateDetail.forming.recipe || candidateDetail.forming.recipe.output === output)
+    ) {
       cell = candidate;
+      detail = candidateDetail;
       break;
     }
   }
@@ -181,11 +189,10 @@ export async function form(field, { kind, output, material }) {
     await field.send({ action: 'ui_close' }).catch(() => {});
     return result;
   };
-  let detail;
   try {
     // Surface creation opens the native recipe dialog; select before inspecting so controls come back.
     const state = await field.send({ action: 'observe' });
-    if (!state.controlReady || kind === 'clayforming') {
+    if (needsOpenRecipeSelection(state, detail)) {
       await field.send({ action: 'select_recipe', target: key, output });
       await field.wait(300);
     }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formingGround, hasFormingOutputRoom, inspectKnownFormingSurface } from '../src/support/forming.ts';
+import { formingGround, hasFormingOutputRoom, inspectKnownFormingSurface, needsOpenRecipeSelection } from '../src/support/forming.ts';
 
 test('forming surfaces reject loose resources as ground', () => {
   assert.equal(formingGround({ key: 'block:0:1:2:3:game:soil-low-none', code: 'game:soil-low-none', face: 'up' }), true);
@@ -25,6 +25,14 @@ test('forming reserves carried room before consuming its surface material', () =
   );
   inventory.inventories[1].slots[0] = { slot: 0, code: null, quantity: 0, bag: false };
   assert.equal(hasFormingOutputRoom(inventory, 'game:spearhead-flint'), true);
+});
+
+test('forming resumes a selected clay recipe without submitting it again', () => {
+  const selected = { forming: { recipe: { output: 'game:storagevessel-red-raw' } } };
+
+  assert.equal(needsOpenRecipeSelection({ controlReady: true }, selected), false);
+  assert.equal(needsOpenRecipeSelection({ controlReady: false }, selected), false);
+  assert.equal(needsOpenRecipeSelection({ controlReady: false }, { forming: { recipe: null } }), true);
 });
 
 test('forming retries a known surface after clearing a leaf obstruction', async () => {
