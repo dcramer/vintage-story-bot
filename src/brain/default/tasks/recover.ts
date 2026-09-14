@@ -9,6 +9,10 @@ import { failedOnItsOwn } from '../concern.ts';
 // Ten minutes of recovery effort per latest marker, preserved across restarts.
 // A marker is not evidence that dropped belongings still exist there.
 export function recoverableBody(markers, notes: Notes, now: number) {
+  if (notes.keepInventory) {
+    notes.recovery = null;
+    return false;
+  }
   const marker = latestDeathMarker(markers);
   if (!marker) return false;
   if (notes.recovery?.guid !== marker.guid) notes.recovery = { guid: marker.guid, until: now + 600000 };

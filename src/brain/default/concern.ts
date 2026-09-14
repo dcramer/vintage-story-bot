@@ -63,6 +63,9 @@ export type Notes = {
   shelter?: Cell | null;
   starter?: Cell | null;
   recovery?: { guid: string; until: number } | null;
+  // Learned from a death/respawn boundary in this world. A gravestone is only
+  // a map annotation when the server returned the carried inventory intact.
+  keepInventory?: boolean;
   home: Cell | null;
   house?: Cell | null;
   farm?: FarmNote | null;
@@ -77,6 +80,10 @@ export type Notes = {
 };
 export type Memory = {
   notes: Notes;
+  // Carried contents around a death boundary. These are session evidence, not
+  // durable world knowledge; only the verified server rule above is kept.
+  lastInventory: Record<string, number>;
+  deathInventory: Record<string, number> | null;
   // The Home marker was put on the map, or found there, for the home in the notes.
   homeMarked: boolean;
   // Where and when each job last failed.

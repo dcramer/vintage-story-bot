@@ -5,6 +5,7 @@ import type { Brain, Decision, Reading } from '../runtime/brain.ts';
 import { horizontal } from '../runtime/navigation/terrain.ts';
 import { temporalStormUnsafe } from '../support/fieldwork.ts';
 import { hunger } from '../support/food.ts';
+import { ownedSlots } from '../support/inventory.ts';
 import { surfaceCover } from '../support/sites.ts';
 import { copper } from './default/alongside/copper.ts';
 import { homeMarker } from './default/alongside/home.ts';
@@ -162,6 +163,25 @@ export const closableDialog = (dialogs: Reading['dialogs']) =>
   dialogs?.find(d => d.blocksControl && /^GuiDialog(?!CreateCharacter|Dead|Death|Disconnect|Confirm|Login)/.test(d.name))?.name ?? null;
 export const pickJob = (s: Situation, tried: Set<Job> = new Set()) => pick(LADDER, TASKS, 'explore', s, tried);
 
+const inventorySnapshot = (inventory: any): Record<string, number> => {
+  const snapshot: Record<string, number> = {};
+  for (const slot of ownedSlots(inventory)) if (slot.code && slot.quantity > 0) snapshot[slot.code] = (snapshot[slot.code] ?? 0) + slot.quantity;
+  return snapshot;
+};
+
+// Goals can consume one or two items between the brain's last live reading and
+// the death event. Both the distinct item kinds and most units must survive,
+// which distinguishes a keep-inventory respawn from an empty spawn without
+// requiring access to the server's private world configuration.
+export function retainedInventory(before: Record<string, number>, after: Record<string, number>): boolean {
+  const entries = Object.entries(before).filter(([, quantity]) => quantity > 0);
+  if (entries.length < 2) return false;
+  const codes = entries.filter(([code]) => (after[code] ?? 0) > 0).length;
+  const units = entries.reduce((total, [code, quantity]) => total + Math.min(quantity, after[code] ?? 0), 0);
+  const total = entries.reduce((sum, [, quantity]) => sum + quantity, 0);
+  return codes / entries.length >= 0.8 && units / total >= 0.8;
+}
+
 // The jobs set aside around here: failed within a few minutes and, unless the job says
 // everywhere, within a few blocks of where it failed.
 function triedNow(memory: Memory, position: { x: number; z: number }, now: number) {
@@ -174,6 +194,7 @@ function triedNow(memory: Memory, position: { x: number; z: number }, now: numbe
 
 export function decide(reading: Reading, memory: Memory): Decision {
   const { state, inventory, environment, active, last, now, events = [], markers = [], ground = null } = reading;
+  const carried = inventorySnapshot(inventory);
   // Bookkeeping for the brain's own goal that just ended.
   // Damage the job just done explains (poison from a desperate bite) is known before the job is forgotten,
   // and for a while after: the poison outlasts the bite.
@@ -200,6 +221,8 @@ export function decide(reading: Reading, memory: Memory): Decision {
   // transient terrain state so the next live reading inspects the new spawn
   // instead of treating it as the old burrow or pit.
   if (!state.alive) {
+    if (state.life?.deathId && !memory.deathInventory && Object.keys(memory.lastInventory).length > 0)
+      memory.deathInventory = { ...memory.lastInventory };
     memory.burrow = null;
     memory.pit = null;
     memory.pitJob = null;
@@ -212,6 +235,14 @@ export function decide(reading: Reading, memory: Memory): Decision {
       ? { act: [{ action: 'respawn', deathId: state.life.deathId }], why: 'dead' }
       : { wait: 'dead, waiting for respawn' };
   }
+  if (memory.deathInventory) {
+    if (retainedInventory(memory.deathInventory, carried)) {
+      memory.notes.keepInventory = true;
+      memory.notes.recovery = null;
+    }
+    memory.deathInventory = null;
+  }
+  memory.lastInventory = carried;
   // Death during multiplayer join can arrive before the client's Alive flag
   // and dialog synchronize. Do not perform ghost actions or invent a respawn
   // request; wait for the native life state to agree with the empty health bar.
@@ -430,6 +461,7 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
       ...(typeof kept?.recovery?.guid === 'string' && Number.isFinite(kept?.recovery?.until)
         ? { recovery: { guid: kept.recovery.guid, until: kept.recovery.until } }
         : {}),
+      ...(kept?.keepInventory === true ? { keepInventory: true } : {}),
       home: cell(kept?.home),
       ...(cell(kept?.shelter) ? { shelter: cell(kept?.shelter) } : {}),
       ...(cell(kept?.starter) ? { starter: cell(kept?.starter) } : {}),
@@ -472,6 +504,8 @@ export function fresh(kept?: Partial<Notes> | null): Memory {
         cell(kept?.dwelling?.door) && typeof kept?.dwelling?.item === 'string' ? { door: cell(kept.dwelling.door)!, item: kept.dwelling.item } : null,
     },
     homeMarked: false,
+    lastInventory: {},
+    deathInventory: null,
     tried: {},
     situation: null,
     tried_now: [],

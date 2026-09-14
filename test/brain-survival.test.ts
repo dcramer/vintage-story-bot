@@ -167,6 +167,13 @@ test('an old death marker cannot renew recovery after a controller restart', () 
   assert.equal(recoverableBody([marker, { ...marker, guid: 'death-two' }], restarted.notes, 601000), true);
 });
 
+test('a keep-inventory world treats later gravestones as annotations', () => {
+  const marker = { guid: 'death-one', icon: 'gravestone' };
+  const memory = fresh({ keepInventory: true, recovery: { guid: 'death-one', until: 601000 } });
+  assert.equal(recoverableBody([marker], memory.notes, 1000), false);
+  assert.equal(memory.notes.recovery, null);
+});
+
 test('knapping requires two matching stones and prefers a usable stack over a lone flint', () => {
   const mixed = kit(inventory({ 'game:flint': 1, 'game:stone-peridotite': 1 }));
   assert.equal(mixed.knappables, 1);

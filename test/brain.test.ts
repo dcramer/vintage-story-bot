@@ -9,6 +9,7 @@ import brain, {
   HURT_CLASSIFY_MS,
   kit,
   pickJob,
+  retainedInventory,
   SHELTER_DIRT,
   STICK_MIN,
   wants,
@@ -73,6 +74,36 @@ const reading = (extra = {}) => ({
   terrain: { get: () => ({ hazard: null, boxes: [] }) },
   now: 1000,
   ...extra,
+});
+
+test('brain: learns a keep-inventory server across a death and skips its cosmetic grave', () => {
+  const before = inventory(
+    slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 5 }),
+    slot('game:axe-flint', 1, { tool: 'Axe', durability: 5 }),
+    slot('game:soil-low-none', 24),
+    slot('game:stick', 5),
+  );
+  const after = inventory(
+    slot('game:knife-generic-flint', 1, { tool: 'Knife', durability: 4 }),
+    slot('game:axe-flint', 1, { tool: 'Axe', durability: 5 }),
+    slot('game:soil-low-none', 23),
+    slot('game:stick', 5),
+  );
+  assert.equal(retainedInventory({ a: 1, b: 1, dirt: 24, stick: 5 }, { a: 1, b: 1, dirt: 23, stick: 5 }), true);
+  assert.equal(retainedInventory({ a: 1, b: 1, dirt: 24, stick: 5 }, {}), false);
+
+  const memory = fresh();
+  decide(reading({ inventory: before }), memory);
+  memory.job = null;
+  const dead = state({ alive: false, life: { deathId: 'death-keep', canRespawn: true } });
+  assert.deepEqual(decide(reading({ state: dead, inventory: before }), memory), {
+    act: [{ action: 'respawn', deathId: 'death-keep' }],
+    why: 'dead',
+  });
+  const grave = [{ guid: 'death-keep', title: 'You died here', icon: 'gravestone', position: { x: 30, y: 100, z: 0 } }];
+  const next = decide(reading({ state: state(), inventory: after, markers: grave, now: 2000 }), memory);
+  assert.equal(memory.notes.keepInventory, true);
+  assert.notEqual((next as any).start, 'retrieve_body');
 });
 const situation = (extra = {}) => ({
   burrowed: false,
