@@ -10,6 +10,7 @@ import { compileGoalScript, runGoalPlan } from './goal-script.ts';
 import { type Log, noLog } from './log.ts';
 import { Knowledge } from './navigation/knowledge.ts';
 import { Navigation } from './navigation/navigator.ts';
+import { horizontal } from './navigation/terrain.ts';
 import { findTool, goals, tools } from './registry.ts';
 import { activeMetricGoal, RunMetrics } from './run-metrics.ts';
 
@@ -610,6 +611,9 @@ export class Controller {
     );
     const nav = (record.nav = new Navigation(this.map, initial, goal, Date.now(), { avoidThreats }));
     let state = initial;
+    const walkStartedAt = Date.now();
+    let walkFrom = initial.position,
+      walkDistance = 0;
     try {
       if (started) {
         nav.id = record.id;
@@ -697,6 +701,8 @@ export class Controller {
           break;
         }
         state = batch.state;
+        walkDistance += horizontal(walkFrom, state.position);
+        walkFrom = state.position;
         stepView = batch.step ?? null;
         if (state.life.lastDamageAt !== initial.life.lastDamageAt) {
           // Hurt: noted for the goal and its brain; the walk itself goes on.
@@ -754,10 +760,13 @@ export class Controller {
     record.log?.info('nav', nav.state, {
       reason: nav.reason,
       target: nav.target,
+      from: initial.position,
       position: state.position,
       replans: nav.replans,
       remaining: Math.max(0, nav.route.length - nav.index),
       ms: Date.now() - record.startedAt,
+      walkMs: Date.now() - walkStartedAt,
+      distance: +walkDistance.toFixed(1),
       ...(nav.diagnostics ? { diagnostics: nav.diagnostics } : {}),
     });
     return nav.observe();

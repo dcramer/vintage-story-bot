@@ -61,7 +61,7 @@ export async function changeBlock(
   if (!held || (expectedItem !== undefined && held.code !== expectedItem)) throw Error('Selected item changed');
   if (kind === 'place' && held.itemClass !== 'Block') throw Error('Placement requires a block stack');
   const id = randomUUID().replaceAll('-', '');
-  field.report(kind === 'dig' ? 'digging' : 'placing', { target, operation: id });
+  field.report(kind === 'dig' ? 'digging' : 'placing', { target, operation: id, tool: held.code });
   let operation = await field.send({
     action: 'block_action_begin',
     id,
