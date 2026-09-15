@@ -17,12 +17,13 @@ export type BlockUse = {
   sneak?: boolean;
   holdMs?: number;
   expectAfter?: string;
+  expectInfo?: string;
   consume?: boolean;
   expectDialog?: boolean;
 };
 export async function useOnBlock(
   field,
-  { target, face, item, quantity = 1, sneak = false, holdMs = 600, expectAfter, consume = false, expectDialog = false }: BlockUse,
+  { target, face, item, quantity = 1, sneak = false, holdMs = 600, expectAfter, expectInfo, consume = false, expectDialog = false }: BlockUse,
 ) {
   const cell = parseBlockKey(target);
   const state = await field.observe();
@@ -37,6 +38,8 @@ export async function useOnBlock(
   let heldCode = ownedSlots(inventory).find(s => s.inventory === 'hotbar' && s.slot === slot)?.code ?? null;
   if (item !== undefined && heldCode !== item) throw Error('Held item changed');
   let before = heldCode ? itemCount(inventory, heldCode) : 0;
+  const beforeDetail = await field.send({ action: 'inspect_target' });
+  const beforeInfo = typeof beforeDetail.info === 'string' ? beforeDetail.info : '';
   field.report('using', { target, item: heldCode, sneak });
   try {
     for (let attempt = 0; ; attempt++) {
@@ -85,10 +88,15 @@ export async function useOnBlock(
       }
       const detail = await field.send({ action: 'inspect_target' });
       const after = detail.key?.startsWith('block:') ? (detail.code ?? detail.key.split(':').slice(5).join(':')) : null;
+      const info = typeof detail.info === 'string' ? detail.info : '';
       const changed = detail.key !== target;
-      last = { target, after, changed, consumed, item: heldCode, dialog: false };
-      const expected = (expectAfter === undefined || (typeof after === 'string' && after.includes(expectAfter))) && (!consume || consumed > 0);
-      if (expected && (changed || consumed > 0 || expectAfter !== undefined))
+      const infoChanged = info !== beforeInfo;
+      last = { target, after, changed, consumed, item: heldCode, dialog: false, info, infoChanged };
+      const expected =
+        (expectAfter === undefined || (typeof after === 'string' && after.includes(expectAfter))) &&
+        (expectInfo === undefined || info.includes(expectInfo)) &&
+        (!consume || consumed > 0);
+      if (expected && (changed || consumed > 0 || (expectInfo !== undefined && infoChanged)))
         return { ok: true, goal: 'use_block', ...last, verification: 'client_observed' };
       await field.wait(200);
     }
@@ -109,6 +117,12 @@ export default defineGoal({
       sneak: z.boolean().default(false).describe('Shift modifier: ground storage, knapping/clay surface, firepit creation.'),
       holdMs: z.number().int().min(100).max(5000).default(600),
       expectAfter: z.string().min(1).max(64).optional().describe('Substring the target cell code must contain afterwards, e.g. farmland.'),
+      expectInfo: z
+        .string()
+        .min(1)
+        .max(128)
+        .optional()
+        .describe('Substring the native target info must newly contain afterwards, for block-entity state such as a lit pit kiln.'),
       consume: z.boolean().default(false).describe('Require the held item count to drop.'),
       timeoutMs: z.number().int().min(1000).max(60000).default(20000),
     })
@@ -117,7 +131,8 @@ export default defineGoal({
   description:
     'Aim at one observed block within reach and hold right-click with the held item, optionally sneaking. quantity requests a sufficiently ' +
     'large held stack for interactions such as kiln layers. Verifies a target-cell ' +
-    'code change or item consumption (till, plant, water, ignite, ground placement, kiln layers); no_observed_effect otherwise. ' +
+    'code change, item consumption, or a requested target-info change (till, plant, water, ignite, ground placement, kiln layers); ' +
+    'no_observed_effect otherwise. ' +
     'No walking, GUI dialogs or retries. Returns START; poll goal_status for client-observed outcome.',
   title: args => (args.item ? `Use ${cleanName(args.item)} on a block` : 'Use a block'),
   announce: args => `Working on a block${args.item ? ` with ${cleanName(args.item)}` : ''}.`,
