@@ -13,6 +13,7 @@ import { shelter } from '../src/brain/default/tasks/shelter.ts';
 import { spareKnife } from '../src/brain/default/tasks/spare_knife.ts';
 import { surplusOf } from '../src/brain/default/tasks/stash.ts';
 import { SUPPLIES, stockpile } from '../src/brain/default/tasks/stockpile.ts';
+import { storage } from '../src/brain/default/tasks/storage.ts';
 import { shovel } from '../src/brain/default/tasks/tools.ts';
 import { torchStep } from '../src/brain/default/tasks/torches.ts';
 import { fresh, kit } from '../src/brain/default.ts';
@@ -938,6 +939,35 @@ test('night finishes a nearby almost complete owned shelter before a distant old
   assert.equal(next(ctx), 'enter_shelter', 'foreign occupancy must not turn night completion into a new site search');
   goHome.ended!({ kind: 'shelter', ok: true, result: { home: { x: 12.5, y: 100, z: 22.5 }, origin, item: material } } as any, memory, {} as any);
   assert.deepEqual(memory.notes.starter, origin);
+});
+
+test('a task handoff walks home without sealing; a stay seals', () => {
+  const home = { x: 200, y: 100, z: 200 };
+  const memory: any = fresh({ home, dwelling: { door: { x: 200, y: 100, z: 201 }, item: 'game:soil-low-none' } });
+  const ctxFor = (job, position) =>
+    ({ job, memory, home, storm: false, state: { position }, k: { slots: [{ code: 'game:soil-low-none', quantity: 2 }] } }) as any;
+  const run = (job, position) => (goHome.run(ctxFor(job, position)) as any).start;
+  assert.equal(run('storage', { x: 0, y: 100, z: 0 }), 'travel', 'a handoff walks home instead of sealing for a task that may leave');
+  assert.equal(run('go_home', { x: 0, y: 100, z: 0 }), 'enter_shelter', 'a night or storm stay seals');
+  assert.equal(run('storage', { x: 195, y: 100, z: 198 }), 'enter_shelter', 'near the door the task needs the inside');
+});
+
+test('storage clears snow and grass off a chest slot instead of waiting on it', () => {
+  const origin = { x: 0, y: 100, z: 0 };
+  const box = [[0, 100, 0, 1, 100.2, 1]];
+  const ctxFor = code =>
+    ({
+      memory: fresh({ home: { x: 2.5, y: 100, z: 2.5 }, starter: origin }),
+      s: { atHome: true },
+      k: kit(inventory({ 'game:stationarybasket-east': 1 })),
+      state: { position: { x: 2.5, y: 100, z: 2.5 } },
+      reading: { terrain: { get: () => ({ code, boxes: box, hazard: null }) } },
+    }) as any;
+  const clearing = storage.run(ctxFor('game:snowlayer-1')) as any;
+  assert.equal(clearing.start, 'dig_area', 'removable cover is cleared by hand');
+  assert.equal(clearing.args.cells.length, 6, 'every reserved slot is cleared at once');
+  const waiting = storage.run(ctxFor('game:rock-granite')) as any;
+  assert.ok('wait' in waiting, 'solid obstruction still waits');
 });
 
 test('a remembered shelter footprint is abandoned when storage blocks the aisle', () => {

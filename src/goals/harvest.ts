@@ -119,7 +119,7 @@ export async function harvest(field, survival, { match, item, count, tool, minTi
       field.skip(o, result.ok ? 120000 : 30000);
       if (result.ok) dug++;
       else field.report('dig_failed', { target: o.key, reason: result.reason });
-      return true;
+      return result.ok;
     },
     approachExclude: target =>
       target.kind === 'block'

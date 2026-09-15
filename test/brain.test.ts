@@ -232,6 +232,26 @@ test('brain: danger and carried food come before progress, and the kit comes in 
   assert.equal(pickJob(situation({ storm: true, atHome: false })), 'go_home');
   assert.equal(pickJob(situation({ storm: true, home: false })), 'burrow', 'a storm sends a homeless bot underground');
   assert.equal(pickJob(situation({ storm: true, home: false, burrowed: true })), 'wait', 'an existing burrow shelters from a storm');
+  assert.equal(
+    pickJob(situation({ sheltered: true, lit: false, house: false }), new Set(['lighting'] as any)),
+    'house',
+    'failed shelter lighting yields to the work list instead of retrying every tick',
+  );
+  assert.equal(
+    pickJob(situation({ storm: true, home: false }), new Set(['burrow'] as any)),
+    'shift',
+    'a failed storm dig-in walks on instead of retrying the same ground',
+  );
+  assert.equal(
+    pickJob(situation({ storm: true, home: false }), new Set(['burrow', 'shift'] as any)),
+    'dirt',
+    'failed cover options yield to useful work until the retry window passes',
+  );
+  assert.equal(
+    pickJob(situation({ hurt: true, burrowed: true }), new Set(['unburrow'] as any)),
+    'unburrow',
+    'hurt and dug in keeps pressure on the only exit despite a failed attempt',
+  );
   assert.equal(pickJob(situation({ hunger: 0.1, night: true, reserve: 100 })), 'eat', 'the pack is eaten from at night');
   assert.equal(
     pickJob(situation({ hunger: 0.1, reserve: 0, night: true, atHome: false })),

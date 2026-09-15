@@ -208,8 +208,18 @@ export class Survival {
     }
     this.tending = true;
     field.recoveringFood = true;
+    try {
+      return await this.recover(field, { toward, count });
+    } finally {
+      this.tending = false;
+      field.recoveringFood = false;
+    }
+  }
+  // The food search itself; tend() owns the tending flags around it so every
+  // exit, including a blocked escape, leaves them unset.
+  async recover(field, { toward, count }: { toward?: any; count?: number } = {}) {
     const search = (this.search = new Search(field, {
-      kind: match?.length ? `food:${[...new Set(this.match)].sort().join(',')}` : 'food',
+      kind: this.match === forageMatch ? 'food' : `food:${[...new Set(this.match)].sort().join(',')}`,
       match: this.match,
       wanted: this.forage,
       ready: (object, state) => harvestReady(object, state.position, state.body?.halfWidth, this.tolerance),
@@ -248,8 +258,6 @@ export class Survival {
         count,
       });
       if (count === undefined ? foodRecoverySatisfied(ratio, this.reserve, this.until, this.keep) : this.retained >= count) {
-        this.tending = false;
-        field.recoveringFood = false;
         await field.aim({ yawDegrees: field.heading, pitchDegrees: 15 });
         return;
       }
@@ -260,8 +268,6 @@ export class Survival {
       }
       // Nothing taken, seen or covered for a while: say so, rather than run to the deadline.
       if (search.pit || search.exhausted()) {
-        this.tending = false;
-        field.recoveringFood = false;
         return {
           reason: search.pit ? 'pit' : 'none_found',
           ...(search.pit ? { toward: search.pitToward } : {}),

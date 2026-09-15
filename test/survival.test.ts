@@ -473,6 +473,57 @@ test('eating rotates a full inventory through the cursor without dropping anythi
   assert.equal(inventories[2].slots[0].code, null);
 });
 
+test('harvesting parks one hotbar stack instead of failing on a full hand row', async () => {
+  let mutation = 0;
+  const state: any = { activeSlot: 1, vitals: { hunger: { current: 100, max: 1500 } } };
+  const inventories: any[] = [
+    {
+      name: 'hotbar',
+      slots: [
+        { slot: 0, code: 'game:stick', quantity: 4, tool: null },
+        { slot: 1, code: 'game:knife-flint', quantity: 1, tool: 'Knife', durability: 5 },
+      ],
+    },
+    {
+      name: 'backpack',
+      slots: [
+        { slot: 0, code: 'game:flint', quantity: 1, bag: false },
+        { slot: 1, bag: false },
+      ],
+    },
+  ];
+  const field: any = {
+    latest: state,
+    report: () => {},
+    wait: async () => {},
+    observe: async () => state,
+    send: async request => {
+      if (request.action === 'inventory') return { state: `pack-${mutation}`, inventories: structuredClone(inventories) };
+      if (request.action === 'inventory_move') {
+        const from = inventories.find(i => i.name === request.from.inventory).slots[request.from.slot];
+        const to = inventories.find(i => i.name === request.to.inventory).slots[request.to.slot];
+        assert.equal(to.code ?? null, null);
+        Object.assign(to, structuredClone(from));
+        to.slot = request.to.slot;
+        Object.assign(from, { code: null, quantity: 0, tool: null });
+        mutation++;
+        return { ok: true };
+      }
+      if (request.action === 'select') {
+        state.activeSlot = request.slot;
+        return { ok: true };
+      }
+      return { ok: true };
+    },
+    until: (condition, options) => until(field, condition, options),
+  };
+
+  assert.equal(await emptyHand(field), 0);
+  assert.equal(inventories[0].slots[0].code, null);
+  assert.equal(inventories[1].slots[1].code, 'game:stick');
+  assert.equal(state.activeSlot, 0);
+});
+
 test('a block is forage when the pages read say it yields food now', () => {
   page('game:fruit-blueberry', { nutrition: food });
   page('game:fruitingbush-grown-blueberry-free', { harvest: { drops: [{ code: 'game:fruit-blueberry' }], requiresGrowth: 'ripe' }, drops: [] });
@@ -832,6 +883,18 @@ test('a predator pauses a search route before navigation can carry it into dange
   assert.equal(search.pause(state), null, 'a bite in the pack is kept while walking, not eaten at once');
   state.vitals.hunger.current = 100;
   assert.equal(search.pause(state), 'food_available', 'hungry: eat what is carried');
+});
+
+test('a blocked food escape still ends food recovery instead of latching it', async () => {
+  const field = new Fieldwork({}, { now: () => 5000 });
+  field.latest = { position: { x: 0, y: 0, z: 0 }, vitals: { hunger: { current: 100, max: 1000 } } };
+  field.observe = async () => field.latest;
+  field.evadeThreat = async () => 'blocked';
+  const survival = new Survival(field);
+  const ended = await survival.tend();
+  assert.equal(ended?.reason, 'threat_escape_blocked');
+  assert.equal(survival.tending, false, 'the next tend re-checks hunger instead of assuming recovery');
+  assert.equal(field.recoveringFood, false, 'the starving-recovery control scope ends with the escape');
 });
 
 test('only food inside a predator perimeter is abandoned', () => {
@@ -1376,7 +1439,9 @@ test('travel does not call isolated ordinary ground a pit when dig-out has no re
   const result = await travel(field, null, { x: 20.5, y: 2, z: 0.5 });
   assert.equal(result.ok, false);
   assert.ok('reason' in result);
-  assert.equal(result.reason, 'no_progress');
+  // Identical routeless legs fail fast with the walk's own reason rather than
+  // spinning to the liveness clock; still never a pit without a recovery shape.
+  assert.equal(result.reason, 'no_observed_route');
 });
 
 test('an upward trip stalled beneath a verified cave roof asks existing dig-out for one level', async () => {

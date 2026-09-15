@@ -30,6 +30,9 @@ type Tried = Set<Job>;
 const sealedInTheDark = (s: Situation, tried: Tried) =>
   !progressThroughRespawn(s) && !establishingHouse(s) && !!s.sheltered && s.lit === false && !s.hurt && !hungry(s) && !tried.has('lighting');
 const threatWhileSealed = (s: Situation) => !!s.sheltered && s.threat && !s.hurt && !hungry(s);
+// Hurt and dug in: keep pressure on the only exit. An opening failure is
+// transient (a hostile at the mouth moves on), so this rung deliberately does
+// not wait out the tried window the way the other escape rungs do.
 const hurtInBurrow = (s: Situation) => s.burrowed && s.hurt;
 const besiegedInBurrow = (s: Situation, tried: Tried) => s.burrowed && s.threat && !s.hurt && s.besieged && !tried.has('tunnel');
 // Rock stopped every tunnel: open the mouth and run (the hide rung takes over once outside), but not
@@ -46,20 +49,32 @@ const unlitAtHome = (s: Situation, tried: Tried) =>
   !progressThroughRespawn(s) && !establishingHouse(s) && s.atHome && s.lit === false && s.torches > 0 && !tried.has('lighting');
 const stormAwayFromHome = (s: Situation, tried: Tried) => s.storm && s.home && !s.atHome && !tried.has('go_home');
 const stormWithCover = (s: Situation) => s.storm && ((s.home && s.atHome) || s.burrowed);
-const stormNowhereToDig = (s: Situation, tried: Tried) => s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow');
-const stormNoCover = (s: Situation) => s.storm;
+// A dig-in that failed here is not tried again at once either: once burrow
+// and shift have both been tried, the storm rungs below stop matching until
+// the tried window expires, so the ladder does something else instead of
+// re-issuing the same failed dig-in every evaluation.
+const stormNowhereToDig = (s: Situation, tried: Tried) =>
+  s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow') && !tried.has('shift');
+const stormNoCover = (s: Situation, tried: Tried) => s.storm && !tried.has('burrow');
 // An active threat still wins above and triggers a flight. Once it is gone,
 // historical scares must not replace unfinished durable work with a long
 // relocation on a proven keep-inventory world where death already preserves
 // that progress. Farm construction has its own guarded-site rejection.
-const badGround = (s: Situation) => s.dangerHere && !progressThroughRespawn(s) && !establishingHouse(s) && !s.burrowed;
+const badGround = (s: Situation, tried: Tried) =>
+  s.dangerHere && !progressThroughRespawn(s) && !establishingHouse(s) && !s.burrowed && !tried.has('relocate');
 const nightAwayFromHome = (s: Situation, tried: Tried) =>
   s.night && !progressThroughRespawn(s) && !establishingHouse(s) && s.home && !s.atHome && !tried.has('go_home');
 const nightWithCover = (s: Situation) => s.night && !progressThroughRespawn(s) && !establishingHouse(s) && ((s.home && s.atHome) || s.burrowed);
 // A burrow that failed here (rock, nothing to seal it): walk on and dig in elsewhere, never stand in the dark.
 const nightNowhereToDig = (s: Situation, tried: Tried) =>
-  s.night && !progressThroughRespawn(s) && !establishingHouse(s) && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow');
-const nightNoCover = (s: Situation) => s.night && !progressThroughRespawn(s) && !establishingHouse(s);
+  s.night &&
+  !progressThroughRespawn(s) &&
+  !establishingHouse(s) &&
+  !(s.home && s.atHome) &&
+  !s.burrowed &&
+  tried.has('burrow') &&
+  !tried.has('shift');
+const nightNoCover = (s: Situation, tried: Tried) => s.night && !progressThroughRespawn(s) && !establishingHouse(s) && !tried.has('burrow');
 const burrowedAndCalm = (s: Situation, tried: Tried) => s.burrowed && !tried.has('unburrow');
 const readyToBuildShelter = (s: Situation, tried: Tried) => !!s.shelterReady && !tried.has('shelter');
 

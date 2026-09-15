@@ -4,6 +4,7 @@ import { horizontal } from '../../../runtime/navigation/terrain.ts';
 import { shelterCover } from '../../../support/sites.ts';
 import { shelter as blueprint, SHELTER_MATERIAL, shelterDoor, shelterScaffold, shelterTorches } from '../../../support/structures.ts';
 import type { Concern } from '../concern.ts';
+import { goTo } from '../concern.ts';
 import { shelter } from '../tasks/shelter.ts';
 
 export const goHome: Concern = {
@@ -31,6 +32,14 @@ export const goHome: Concern = {
     }
     const dwelling = memory.notes.dwelling;
     if (dwelling) {
+      // A task handoff only needs the bot home; sealing the door is for a stay
+      // the night or storm rungs chose themselves. Near the door the task needs
+      // the inside, so the walk falls through to the seal below. Unset in
+      // synthetic readings behaves as a direct call.
+      if (home && ctx.job !== undefined && ctx.job !== 'go_home') {
+        const walk = goTo(ctx, home, 'returning home for the task');
+        if (walk) return walk;
+      }
       if (dwelling.kind === 'gates')
         return {
           start: 'shelter_access',

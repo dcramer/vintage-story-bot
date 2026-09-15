@@ -3,6 +3,7 @@
 
 import { shelterSite } from '../../../goals/shelter.ts';
 import { horizontal } from '../../../runtime/navigation/terrain.ts';
+import { surfaceCover } from '../../../support/sites.ts';
 import { houseStorage, shelterStorage } from '../../../support/structures.ts';
 import { hostileEntity, threatClearDistance, threatVerticalRange } from '../../../support/threats.ts';
 import type { Concern } from '../concern.ts';
@@ -11,6 +12,25 @@ import { allStashes, goTo, noteContents, selectStash, TRIED_MS, TRIED_RADIUS } f
 // The recipe (the game calls it a reed chest): eight lots of three cattail tops.
 export const CHEST_TOPS = 24;
 export const CHEST = 'game:stationarybasket-east';
+
+// A chest slot is open air, under removable cover (snow, grass), or otherwise
+// blocked. Cover is cleared by hand; anything solid is waited out.
+const splitSpots = (terrain: any, cells: { x: number; y: number; z: number }[]) => {
+  const open: { x: number; y: number; z: number }[] = [];
+  const cover: { x: number; y: number; z: number }[] = [];
+  for (const cell of cells) {
+    const block = terrain?.get(cell.x, cell.y, cell.z);
+    if (!block) continue;
+    if (!block.hazard && !block.boxes.length && (!block.code || block.code === 'game:air')) open.push(cell);
+    else if (!block.hazard && surfaceCover(block)) cover.push(cell);
+  }
+  return { open, cover };
+};
+const clearCover = (cover: { x: number; y: number; z: number }[]) => ({
+  start: 'dig_area',
+  args: { cells: cover, timeoutMs: 120000 },
+  why: 'clearing snow and grass where the chest goes',
+});
 
 const guarded = (ctx: Parameters<Concern['run']>[0], stash: { x: number; y: number; z: number }) =>
   (ctx.state.nearbyEntities ?? []).some(entity => {
@@ -73,14 +93,12 @@ export const storage: Concern = {
           : null;
       if (indoor) {
         if (!ctx.s.atHome) return { handoff: 'go_home' };
-        const spot = indoor.find(cell => {
-          const block = ctx.reading.terrain?.get(cell.x, cell.y, cell.z);
-          return block && !block.hazard && !block.boxes.length && (!block.code || block.code === 'game:air');
-        });
-        if (!spot) return { wait: 'reserved indoor chest slots are occupied or not observed' };
+        const { open, cover } = splitSpots(ctx.reading.terrain, indoor);
+        if (cover.length && !open.length) return clearCover(cover);
+        if (!open.length) return { wait: 'reserved indoor chest slots are occupied or not observed' };
         return {
           start: 'build',
-          args: { cells: [{ ...spot, item: k.chest }], timeoutMs: 600000 },
+          args: { cells: [{ ...open[0], item: k.chest }], timeoutMs: 600000 },
           why: unsafeOld
             ? 'safe storage along the house wall, away from the guarded supplies'
             : 'a chest along the shelter wall, keeping the aisle clear',
@@ -93,14 +111,12 @@ export const storage: Concern = {
         ctx.memory.notes.shelter = origin;
         const trip = goTo(ctx, { x: origin.x + 2.5, y: origin.y, z: origin.z + 5.5 }, 'returning to the planned shelter site', 8, 2);
         if (trip) return trip;
-        const spot = shelterStorage(origin).find(cell => {
-          const block = ctx.reading.terrain?.get(cell.x, cell.y, cell.z);
-          return block && !block.hazard && !block.boxes.length && (!block.code || block.code === 'game:air');
-        });
-        if (!spot) return { wait: 'reserved indoor chest slots are occupied or not observed' };
+        const { open, cover } = splitSpots(ctx.reading.terrain, shelterStorage(origin));
+        if (cover.length && !open.length) return clearCover(cover);
+        if (!open.length) return { wait: 'reserved indoor chest slots are occupied or not observed' };
         return {
           start: 'build',
-          args: { cells: [{ ...spot, item: k.chest }], timeoutMs: 600000 },
+          args: { cells: [{ ...open[0], item: k.chest }], timeoutMs: 600000 },
           why: 'the first chest marks its reserved place inside the planned shelter',
         };
       }
@@ -112,7 +128,7 @@ export const storage: Concern = {
       const x = Math.floor(p.x),
         y = Math.floor(p.y),
         z = Math.floor(p.z);
-      const spot = [
+      const { open, cover } = splitSpots(ctx.reading.terrain, [
         { x: x + 1, y, z },
         { x: x - 1, y, z },
         { x, y, z: z + 1 },
@@ -121,14 +137,12 @@ export const storage: Concern = {
         { x: x - 2, y, z },
         { x, y, z: z + 2 },
         { x, y, z: z - 2 },
-      ].find(cell => {
-        const block = ctx.reading.terrain?.get(cell.x, cell.y, cell.z);
-        return block && !block.hazard && !block.boxes.length && (!block.code || block.code === 'game:air');
-      });
-      if (!spot) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'looking for open ground beside the supplies' };
+      ]);
+      if (cover.length && !open.length) return clearCover(cover);
+      if (!open.length) return { start: 'explore', args: { legs: 1, timeoutMs: 180000 }, why: 'looking for open ground beside the supplies' };
       return {
         start: 'build',
-        args: { cells: [{ ...spot, item: k.chest }], timeoutMs: 600000 },
+        args: { cells: [{ ...open[0], item: k.chest }], timeoutMs: 600000 },
         why: 'the chest goes down here: this is the site',
       };
     }

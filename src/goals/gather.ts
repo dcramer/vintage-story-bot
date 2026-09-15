@@ -57,10 +57,11 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
       if (loose(o)) {
         field.report('pickup', { target: o.key });
         const ok = await picker.pickup(o);
-        if (ok) field.seen.delete(o.key);
-        else field.skip(o, 5000);
-        field.report('verified', { target: o.key });
-        return true;
+        if (ok) {
+          field.seen.delete(o.key);
+          field.report('verified', { target: o.key });
+        } else field.skip(o, 5000);
+        return ok;
       }
       field.report('breaking', { target: o.key });
       let result;
@@ -73,7 +74,7 @@ export async function gather(env, { match = 'stick', item = match, count = 10, m
       field.seen.delete(o.key);
       field.skip(o, result.ok ? 120000 : 30000);
       if (!result.ok) field.report('dig_failed', { target: o.key, reason: result.reason });
-      return true;
+      return result.ok;
     },
     // A loose block is itself a thin floor shape. Standing on its column hides it
     // under the player, so approach from an adjacent cell where it can be aimed at.

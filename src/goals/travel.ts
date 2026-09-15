@@ -69,6 +69,17 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
     routeResets = 0,
     continuation = null,
     localDetour = false;
+  // Legs the planner refuses for lack of any observed route retry identically:
+  // same view, same memory, same failure. Three in a row from the same spot
+  // toward the same leg target ends the trip with the walk's own reason
+  // instead of spinning to the liveness clock while piling failure marks onto
+  // the destination. A new leg target surveys new ground, and any other
+  // blocked reason (a route exists but the leg stalled or regressed) engages
+  // leaf clearing, detours and the visit-history reset below instead: both
+  // reset the count rather than failing fast.
+  let noRoute = 0,
+    noRouteAt = null,
+    noRouteLeg = null;
   let bestRemaining = Infinity;
   // Liveness: give up if the bot gets no meaningfully closer for two minutes,
   // whatever recovery loop is cycling. A trapped spot is not a deadline hang.
@@ -167,8 +178,11 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
     // forward/lateral frontier search as long travel instead of retrying an
     // identical unobserved segment forever.
     localDetour = result.reason === 'route_regressed' || (!['arrived', 'paused'].includes(result.state) && progress <= 2);
-    if (result.state === 'arrived' || result.state === 'paused' || progress > 2) stuck = 0;
-    else {
+    if (result.state === 'arrived' || result.state === 'paused' || progress > 2) {
+      stuck = 0;
+      noRoute = 0;
+      noRouteAt = null;
+    } else {
       stuck++;
       // The planner has already exhausted non-mutating routes for this leg.
       // Clear an explicitly observed leaf now, aimed at the actual destination
@@ -177,6 +191,8 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
       const cleared = await clearLeafPath(field, goal);
       if (cleared) {
         stuck = 0;
+        noRoute = 0;
+        noRouteAt = null;
         continuation = null;
         localDetour = false;
         field.report('route_cleared', { remaining: +horizontal(field.latest.position, goal).toFixed(1), legs });
@@ -207,6 +223,22 @@ export async function travel(field, survival, { x, y, z, arrivalRadius = 1 }: { 
           ...summary(),
           remaining: +horizontal(field.latest.position, goal).toFixed(1),
           position: field.latest.position,
+        };
+      const at = field.latest.position;
+      if (result.reason !== 'no_observed_route') noRoute = 0;
+      else if (noRouteAt && noRouteLeg && horizontal(noRouteAt, at) < 1 && horizontal(noRouteLeg, leg) < 1) noRoute++;
+      else noRoute = 1;
+      noRouteAt = { x: at.x, z: at.z };
+      noRouteLeg = { x: leg.x, z: leg.z };
+      if (noRoute >= 3)
+        return {
+          ok: false,
+          goal: 'travel',
+          reason: result.reason,
+          toward: { x: goal.x, z: goal.z },
+          ...summary(),
+          remaining: +horizontal(at, goal).toFixed(1),
+          position: at,
         };
       if (stuck < 6) continue;
       // A long trip can exhaust every local alternative on a steep ridge even
@@ -246,7 +278,7 @@ export default defineGoal({
   destructive: true,
   description:
     'Walk any distance by chaining safe navigation legs with exploration detours through unknown terrain; wades shallow water. ' +
-    'Ends with reason pit when the ground it can reach runs out (dig_out gets out), no_progress, a life alert, death or control loss; being hurt is reported, not a stop. ' +
+    'Ends with reason pit when the ground it can reach runs out (dig_out gets out), no_observed_route when the planner finds nothing three identical legs running, no_progress, a life alert, death or control loss; being hurt is reported, not a stop. ' +
     'Food management as gather. Returns START; poll goal_status.',
   title: args => `Travel to ${destinationName(args)}`,
   announce: args => (args.waypoint ? `Traveling to ${args.waypoint}.` : 'Setting off on a journey.'),

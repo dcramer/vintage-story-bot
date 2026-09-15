@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { collectItem } from '../src/goals/collect_item.ts';
 import { explore } from '../src/goals/explore.ts';
+import { travel } from '../src/goals/travel.ts';
 import { until } from '../src/support/fieldwork.ts';
 
 // A scripted field: what each look and each read returns is a script, time is a counter, and
@@ -70,6 +71,45 @@ test('exploration does not report success after a blocked leg with no movement',
     position,
     heading: 90,
   });
+});
+
+test('travel ends with the walk reason after repeated routeless legs from the same spot', async () => {
+  const position = { x: 0.5, y: 64, z: 0.5 };
+  let walks = 0;
+  const field: any = {
+    latest: { position },
+    moved: 0,
+    now: () => 0,
+    report: () => {},
+    observe: async () => ({ position }),
+    explore: () => ({ x: 48.5, y: 64, z: 0.5 }),
+    walk: async () => {
+      walks++;
+      return { state: 'blocked', reason: 'no_observed_route' };
+    },
+  };
+  const result = await travel(field, null, { x: 100.5, z: 0.5, arrivalRadius: 1 });
+  assert.equal(result.ok, false);
+  assert.equal('reason' in result ? result.reason : null, 'no_observed_route');
+  assert.equal(walks, 4, 'the direct leg plus three identical detours end the trip instead of spinning to the clock');
+});
+
+test('travel does not fast-fail when the planner finds routes but the legs stall', async () => {
+  const position = { x: 0.5, y: 64, z: 0.5 };
+  let walks = 0;
+  const field: any = {
+    latest: { position },
+    moved: 0,
+    now: () => 0,
+    report: () => {},
+    observe: async () => ({ position }),
+    explore: () => ({ x: 48.5, y: 64, z: 0.5 }),
+    walk: async () => {
+      if (++walks === 4) throw Error('past_fast_fail');
+      return { state: 'blocked', reason: 'stalled' };
+    },
+  };
+  await assert.rejects(travel(field, null, { x: 100.5, z: 0.5, arrivalRadius: 1 }), /past_fast_fail/);
 });
 
 test('a drop that is never picked up ends the goal after a bounded number of approaches', async () => {
