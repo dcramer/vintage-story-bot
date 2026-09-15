@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { defineGoal } from '../runtime/define.ts';
+import { GoalError } from '../runtime/failure.ts';
 import { learn } from '../support/facts.ts';
 import { itemCount, ownedSlots } from '../support/inventory.ts';
 import { cleanName, runField } from '../support/task.ts';
@@ -15,6 +16,29 @@ export function craftDestination(inventory, output, quantity, facts) {
     emptyOwned(inventory) ??
     (facts?.bagSlots > 0 && quantity === 1 ? slots.find(s => s.bag && !s.code) : undefined)
   );
+}
+
+export async function submitCraft(field, { destination, inventory, output, recipe }) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await field.send({
+        action: 'craft',
+        to: { inventory: destination.inventory, slot: destination.slot },
+        expectedState: inventory.state,
+        expectedOutput: output,
+      });
+      return inventory;
+    } catch (error) {
+      if (attempt > 0 || !(error instanceof GoalError) || error.code !== 'craft_changed') throw error;
+      // No output was taken: wait for the virtual result slot to settle,
+      // then submit once against a fresh state. Keep the same destination;
+      // any unrelated inventory change is rejected by the new state token.
+      await field.wait(150);
+      inventory = await field.send({ action: 'inventory' });
+      if (inventory.crafting?.recipeId == null) throw error;
+      field.report('craft_output_refreshed', { output, recipe });
+    }
+  }
 }
 
 async function transfer(field, from, to, quantity) {
@@ -152,12 +176,7 @@ export async function craftItem(field, { output, count = 1, exclude = [] }) {
         return { ok: false, reason: 'no_empty_slot_for_output', output, gained: gained(), crafts };
       }
       field.report('crafting', { output, recipe: recipe.id, gained: gained(), crafts });
-      await field.send({
-        action: 'craft',
-        to: { inventory: destination.inventory, slot: destination.slot },
-        expectedState: inventory.state,
-        expectedOutput: output,
-      });
+      inventory = await submitCraft(field, { destination, inventory, output, recipe: recipe.id });
       const crafted = await field.until((_, contents) => itemCount(contents, output) >= itemCount(inventory, output) + recipe.output.quantity, {
         timeoutMs: 2000,
         everyMs: 200,

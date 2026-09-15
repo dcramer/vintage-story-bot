@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { allocate, craftDestination } from '../src/goals/craft_item.ts';
+import { allocate, craftDestination, submitCraft } from '../src/goals/craft_item.ts';
+import { GoalError } from '../src/runtime/failure.ts';
 
 test('a repeated craft stages consumables together without duplicating a retained tool', () => {
   const plan = allocate(
@@ -97,4 +98,36 @@ test('a wearable craft can go into an empty bag slot when the ordinary pack is f
   assert.equal(destination?.slot, 0);
   assert.equal(craftDestination(inventory, 'game:packeddirt', 6, { maxStackSize: 64 }), undefined);
   assert.equal(craftDestination(inventory, 'game:basket-normal-reed', 2, { bagSlots: 3, maxStackSize: 1 }), undefined);
+});
+
+test('crafting retries once when the virtual output has not settled', async () => {
+  const reports: string[] = [];
+  const fresh = { state: 'fresh', crafting: { recipeId: 7 } };
+  let submissions = 0;
+  const field: any = {
+    wait: async ms => assert.equal(ms, 150),
+    report: phase => reports.push(phase),
+    send: async request => {
+      if (request.action === 'inventory') return fresh;
+      assert.equal(request.action, 'craft');
+      submissions++;
+      if (submissions === 1) {
+        assert.equal(request.expectedState, 'initial');
+        throw new GoalError('craft_changed', 'Crafting output is not ready; inspect inventory.');
+      }
+      assert.equal(request.expectedState, 'fresh');
+      return { ok: true, moved: 6 };
+    },
+  };
+
+  const view = await submitCraft(field, {
+    destination: { inventory: 'backpack', slot: 4 },
+    inventory: { state: 'initial', crafting: { recipeId: 7 } },
+    output: 'game:packeddirt',
+    recipe: 7,
+  });
+
+  assert.equal(view, fresh);
+  assert.equal(submissions, 2);
+  assert.deepEqual(reports, ['craft_output_refreshed']);
 });

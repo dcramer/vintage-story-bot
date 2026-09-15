@@ -118,7 +118,14 @@ public sealed class InventoryAdapter(ICoreClientAPI api)
             return Error("inventory_changed", "Inventory changed; read inventory and replan. Nothing moved.", true);
         var target = Resolve(request, "to", !craft);
         var source = craft ? Manager.GetOwnInventory("craftinggrid")?[9] : Resolve(request, "from", true);
-        if (source == null || target == null || source == target || source.Empty) return Error("invalid_request", "Invalid, identical, or empty inventory slots.");
+        if (source == null || target == null || source == target) return Error("invalid_request", "Invalid or identical inventory slots.");
+        // The server can acknowledge the final ingredient transfer one tick
+        // before the client's virtual crafting-output slot settles. The
+        // expected inventory state still proves that no craft happened; tell
+        // the controller to re-read once instead of misclassifying the empty
+        // output as a malformed request.
+        if (source.Empty && craft) return Error("craft_changed", "Crafting output is not ready; inspect inventory.", true);
+        if (source.Empty) return Error("invalid_request", "Source inventory slot is empty.");
         int quantity;
         if (craft)
         {
