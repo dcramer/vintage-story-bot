@@ -730,11 +730,11 @@ export class Controller {
           nav.finish('paused', nextPause);
           break;
         }
-        // The mod keeps the hand on the keys until the next step arrives, so one
-        // request per iteration is enough. A reset feed means the map is being
-        // rebuilt: stand still for a tick rather than walk on it. A step in
-        // flight is watched about ten times a second, not as fast as the
-        // loopback allows.
+        // The mod drops the keys when the frame's hold expires, so each iteration
+        // renews it; toward-frames also stop themselves at their checkpoint.
+        // A reset feed means the map is being rebuilt: stand still for a tick
+        // rather than walk on it. A step in flight is watched about ten times
+        // a second, not as fast as the loopback allows.
         if (batch.terrain.reset) {
           try {
             await control.frame({

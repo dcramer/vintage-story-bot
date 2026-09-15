@@ -561,8 +561,9 @@ export class Navigation {
       jump: (!!next.swim || (wet && !next.wet)) && state.capabilities?.includes('step_jump_hold') === true,
       sprint,
       sneak: false,
-      // The hold's heartbeat caps a frame at 500 ms; the loop renews well inside that and the step carries on.
-      durationMs: 500,
+      // Toward-frames stop themselves at the checkpoint, so the hold only needs to outlast a slow
+      // sense roundtrip: 2000 ms where the mod allows it, else the 500 ms every mod accepts.
+      durationMs: state.capabilities?.includes('long_control_hold') ? 2000 : 500,
     };
   }
 }

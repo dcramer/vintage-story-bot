@@ -82,7 +82,7 @@ public sealed partial class AiBridgeMod
         }
         if (!request.TryGetProperty("owner", out var frameOwner) || frameOwner.ValueKind != JsonValueKind.String ||
             !request.TryGetProperty("sequence", out var sequenceField) || !sequenceField.TryGetInt64(out long sequence) ||
-            !TryInteger(request, "durationMs", out int frameDuration) || frameDuration is < 1 or > 500 ||
+            !TryInteger(request, "durationMs", out int frameDuration) || frameDuration is < 1 or > 2000 ||
             !TryNumber(request, "yawDegrees", out double frameYaw) || Math.Abs(frameYaw) > 36000 ||
             !TryNumber(request, "pitchDegrees", out double framePitch) || Math.Abs(framePitch) > 89 ||
             !request.TryGetProperty("forward", out var forwardField) || forwardField.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||

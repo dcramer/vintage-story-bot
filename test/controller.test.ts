@@ -306,6 +306,12 @@ test('navigation hands the mod one point per step, hops for a block up, and take
   assert.ok(first.toward, 'a step is a point the mod walks to with its hand on the keys every tick');
   assert.equal(first.hop, false);
   assert.equal(first.durationMs, 500);
+  const flagged = new Navigation(map, state, { x: 3.5, y: 1, z: 0.5, timeoutMs: 10000 }, 0);
+  assert.equal(
+    flagged.tick({ ...state, capabilities: ['long_control_hold'] }, 0).durationMs,
+    2000,
+    'a mod that allows long holds gets one that outlasts a slow sense',
+  );
   const facing = { ...state, position: at(2, 0), orientation: { yawDegrees: 90 } };
   const jump = nav.tick(facing, 500);
   assert.equal(nav.route[nav.index].move, 'jump');
