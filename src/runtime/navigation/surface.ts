@@ -20,6 +20,11 @@ const directions = [
   [-1, -1],
 ];
 
+// One far-view column row as the mod sends it: a sight-verified standing
+// surface sample. at is on the eye's clock; color is the block's native
+// world-map RGB integer.
+export type SurfaceRow = [x: number, z: number, y: number, kind: string, step: number, code: string | null, at: number, color?: number];
+
 export class SurfaceMemory {
   columns = new Bounded<any>(262144);
   now = 0;
@@ -30,7 +35,8 @@ export class SurfaceMemory {
     this.now = snapshot.clock ?? this.now;
     // Completed passes of the mod's eye over the current view.
     this.sweeps = snapshot.sweeps ?? this.sweeps;
-    for (const [x, z, y, kind, step, code, at] of snapshot.columns ?? [])
+    const rows: SurfaceRow[] = snapshot.columns ?? [];
+    for (const [x, z, y, kind, step, code, at] of rows)
       this.columns.set(columnKey(x, z), { x, z, y, kind, step, code, at: at ?? this.now, seenAt: wall });
     this.columns.bound(wall, column => wall - column.seenAt > this.ttlMs);
     return snapshot.columns?.length ?? 0;

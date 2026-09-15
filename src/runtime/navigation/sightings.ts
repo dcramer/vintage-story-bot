@@ -11,6 +11,10 @@ export const rememberMs = { entity: 20000, item: 60000, block: 7 * 24 * 60 * 60 
 // How long after its last confirmation, on the eye's clock, a sighting still counts as in view:
 // entities every tick, a block only when its column or cell is sampled again.
 export const windowMs = { entity: 1000, item: 1000, block: 8000 };
+// One sighting row as the mod sends it. at is on the eye's clock; extra is
+// {quantity} for items, {facts, access} for blocks, null for entities.
+export type SightingRow = [key: string, kind: string, code: string, x: number, y: number, z: number, how: string, at?: number, extra?: any];
+
 // The cell a block sighting names: keys are block:<dimension>:<x>:<y>:<z>:<code>.
 export const cellOfKey = key => {
   const m = /^block:\d+:(-?\d+):(-?\d+):(-?\d+):/.exec(key ?? '');
@@ -33,7 +37,8 @@ export class SightingsMemory {
     this.wall = wall;
     const fresh = [];
     const blocks = [];
-    for (const [key, kind, code, x, y, z, how, at, extra] of snapshot.sightings ?? []) {
+    const rows: SightingRow[] = snapshot.sightings ?? [];
+    for (const [key, kind, code, x, y, z, how, at, extra] of rows) {
       const record = { key, kind, code, point: { x, y, z }, how, at: at ?? this.now, seenAt: wall, extra: extra ?? null, visible: true };
       if (!this.records.has(key)) fresh.push(record);
       this.records.set(key, record);

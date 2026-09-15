@@ -48,6 +48,11 @@ export const REMEMBER_MS = 7 * 24 * 60 * 60 * 1000;
 
 import { Bounded } from './bounded.ts';
 
+// One surroundings delta row as the mod sends it. A live row ends with the
+// block's code (null for air); a null row (boxes null) ends with its reason,
+// changed or forgot. at is on the eye's clock.
+export type TerrainRow = [x: number, y: number, z: number, at: number, traits: string | null, boxes: number[][] | null, codeOrReason: string | null];
+
 // The mod's trait word list for a cell; older memories and tests carry one hazard word or a boolean.
 const traitsOf = value => (typeof value === 'string' ? value.split(',').filter(Boolean) : value === true ? ['shape'] : []);
 export class TerrainMemory {
@@ -67,7 +72,8 @@ export class TerrainMemory {
     this.cursor = batch.cursor;
     this.now = batch.clock;
     // A live row ends with the block's code (null for air); a null row ends with the reason it was dropped.
-    for (const [x, y, z, at, hazard, boxes, tail] of batch.cells) {
+    const rows: TerrainRow[] = batch.cells;
+    for (const [x, y, z, at, hazard, boxes, tail] of rows) {
       const id = cellKey(x, y, z);
       if (boxes === null) {
         if (tail !== 'forgot') this.forget(id);
