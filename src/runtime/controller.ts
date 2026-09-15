@@ -316,7 +316,13 @@ export class Controller {
           if (batch.ok) {
             this.chatCursor = { after: batch.cursor, session: batch.session };
             for (const line of batch.messages ?? [])
-              this.events.emit('message', { sender: line.sender ?? null, text: line.text, kind: line.type, group: line.group });
+              this.events.emit('message', {
+                sender: line.sender ?? null,
+                text: line.text,
+                kind: line.type,
+                group: line.group,
+                truncated: line.truncated ?? null,
+              });
           }
         } catch {
           /* the next tick reads again */

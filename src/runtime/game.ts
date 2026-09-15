@@ -135,11 +135,27 @@ export class GameClient {
     if (!seen) return;
     const position = state.position ? { x: state.position.x, y: state.position.y, z: state.position.z } : null;
     const health = state.vitals?.health?.current ?? null;
-    if (now.lastDamageAt !== null && now.lastDamageAt !== seen.lastDamageAt) this.events?.emit('hurt', { health, position });
-    if (seen.alive && !now.alive) this.events?.emit('died', { deathId: life.deathId ?? null, position });
+    if (now.lastDamageAt !== null && now.lastDamageAt !== seen.lastDamageAt)
+      this.events?.emit('hurt', { health, position, amount: life.lastDamage?.amount ?? null });
+    if (seen.alive && !now.alive)
+      this.events?.emit('died', {
+        deathId: life.deathId ?? null,
+        position,
+        lastDamage: life.lastDamage ?? null,
+        lastAttrition: life.lastAttrition ?? null,
+      });
     if (!seen.alive && now.alive) this.events?.emit('alive', { position });
     if (now.alerts !== seen.alerts) this.events?.emit('alert', { alerts: life.alerts ?? [], health });
-    if (now.storm !== seen.storm) this.events?.emit('storm', { phase: now.storm });
+    if (now.storm !== seen.storm) {
+      const detail = state.condition?.temporalStorm ?? {};
+      this.events?.emit('storm', {
+        phase: now.storm,
+        active: detail.active ?? null,
+        startsInDays: detail.startsInDays ?? null,
+        remainingDays: detail.remainingDays ?? null,
+        strength: detail.strength ?? null,
+      });
+    }
   }
   async sense(signal?: AbortSignal) {
     const batch = await this.io({ action: 'sense', ...this.cursors() }, signal);
