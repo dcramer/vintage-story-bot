@@ -69,7 +69,7 @@ export const goHome: Concern = {
     }
     return {
       start: 'travel',
-      args: { x: home!.x, z: home!.z, y: home!.y, arrivalRadius: 0.35, timeoutMs: 600000 },
+      args: { x: home!.x, z: home!.z, y: home!.y, arrivalRadius: 0.5, timeoutMs: 600000 },
       why: storm ? 'storm coming' : 'night falling',
     };
   },

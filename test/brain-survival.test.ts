@@ -443,6 +443,8 @@ const chest = {
 test('ordinary errands and body recovery do not turn into food searches', () => {
   const trip: any = goTo({ state: { position: { x: 0, y: 100, z: 0 } } } as any, { x: 100, y: 100, z: 0 }, 'durable work');
   assert.equal(trip.args.manageFood, false);
+  const precise: any = goTo({ state: { position: { x: 0, y: 100, z: 0 } } } as any, { x: 100, y: 100, z: 0 }, 'precise durable work', 0.5, 0.35);
+  assert.equal(precise.args.arrivalRadius, 0.5, 'brain travel never asks the controller for an invalid sub-half-block radius');
   const body: any = recover.run({ memory: fresh({ recovery: { guid: 'death-one', until: 601000 } }), now: 1000 } as any);
   assert.equal(body.args.manageFood, false);
 });

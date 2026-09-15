@@ -2201,8 +2201,8 @@ test('brain: shared supplies are approached from inside the owned home', () => {
     settling,
   );
   assert.deepEqual(
-    [settleFromDoor.start, settleFromDoor.args.x, settleFromDoor.args.y, settleFromDoor.args.z],
-    ['travel', home.x, home.y, home.z],
+    [settleFromDoor.start, settleFromDoor.args.x, settleFromDoor.args.y, settleFromDoor.args.z, settleFromDoor.args.arrivalRadius],
+    ['travel', home.x, home.y, home.z, 0.5],
     'a short indoor walk toward storage does not open the gates and leave the shelter',
   );
   const inspect = decide(
