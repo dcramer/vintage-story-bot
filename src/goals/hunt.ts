@@ -34,6 +34,9 @@ async function recoverProjectile(field, weaponCode, expectedCount, knownKey = nu
 export async function hunt(env, { match = 'hare', count = 1, weapon = 'Spear', knife = 'Knife', ...options }: any = {}) {
   const harvested = [];
   let failure = null;
+  // Terrestrial prey is not permission to enter deep water. Besides refusing
+  // swim routes, this interrupts immediately if footing turns into swimming.
+  options.swim = false;
   return runField(env, options, ['inventory', 'item_info', 'long_hand_hold', 'look_at', 'can_see', 'containers', 'sneak'], async field => {
     const search = new Search(field, {
       kind: `hunt:${match}`,
@@ -45,9 +48,10 @@ export async function hunt(env, { match = 'hare', count = 1, weapon = 'Spear', k
         !has(object, 'hostile') &&
         !has(object, 'young') &&
         !has(object, 'player'),
-      // Small prey can move sideways during the native spear wind-up. Get close
-      // enough that a carefully tracked shot does not depend on predicting it.
-      ready: object => object.alive !== false && object.visible && object.distance <= 5,
+      // Stop chasing when native spear range is useful. throwAt then remains
+      // stationary long enough for movement and sprint accuracy penalties to
+      // settle before release.
+      ready: object => object.alive !== false && object.visible && object.distance <= 8,
       score: (object, position) => horizontal(position, object.point),
       learn: objects =>
         learnYields(
@@ -144,7 +148,7 @@ export default defineGoal({
   description:
     'Search observed ground for an adult non-hostile creature the game explicitly tags as huntable, approach within a safe throw, ' +
     'verify line of sight, throw one ranged weapon, require the same entity to be observed dead, butcher it, transfer every ' +
-    'carcass drop, and recover the landed weapon when visible. Uses the shared deterministic Search loop; no coordinates, ' +
+    'carcass drop, and recover the landed weapon when visible. Terrestrial hunts refuse deep-water routes. Uses the shared deterministic Search loop; no coordinates, ' +
     'screenshots, AI decisions or default deadline. The default is low-risk one-shot hare hunting. Returns START; poll goal_status.',
   title: args => `Hunt ${args.count} × ${cleanName(args.match)}`,
   announce: args => `Hunting ${cleanName(args.match)} for meat.`,

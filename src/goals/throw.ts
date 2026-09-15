@@ -13,7 +13,7 @@ const findTarget = (field, target, expectedKind) =>
     .scan(64, expectedKind, 'entities')
     .then(objects => objects.find(object => object.key === target && (!expectedKind || object.code.includes(expectedKind))));
 
-export async function throwAt(field, { target, expectedKind, weapon = 'Spear', holdMs = 500 }) {
+export async function throwAt(field, { target, expectedKind, weapon = 'Spear', holdMs = 1200 }) {
   let object = await findTarget(field, target, expectedKind);
   if (!object || object.alive === false) throw Error('Living target not currently visible or identity changed; scan again');
   const equipped = await equip(field, { tool: weapon });
@@ -88,7 +88,13 @@ export default defineGoal({
       target: entityTarget,
       expectedKind: z.string().min(1).max(64).optional().describe('Entity code substring guard.'),
       weapon: z.string().min(1).max(64).default('Spear').describe('Exact inventory tool class.'),
-      holdMs: z.number().int().min(350).max(2000).default(500),
+      holdMs: z
+        .number()
+        .int()
+        .min(350)
+        .max(2000)
+        .default(1200)
+        .describe('Native aim hold before release; 1.2s lets movement and sprint accuracy penalties settle.'),
       timeoutMs: z.number().int().min(1000).max(60000).optional(),
     })
     .strict(),
