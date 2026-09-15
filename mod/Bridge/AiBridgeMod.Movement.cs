@@ -42,16 +42,16 @@ public sealed partial class AiBridgeMod
             !Guid.TryParseExact(ownerField.GetString(), "N", out _) ||
             !request.TryGetProperty("session", out var controlSession) || controlSession.GetString() != life.Session ||
             !request.TryGetProperty("epoch", out var epochField) || !epochField.TryGetInt64(out long epoch))
-            return new { ok = false, error = "Supply owner UUID, observed life session and control epoch." };
+            return WireError.Fail("invalid_request", "Supply owner UUID, observed life session and control epoch.");
         bool controlRecovery = request.TryGetProperty("allowStarvingRecovery", out var controlRecoveryField) &&
             controlRecoveryField.ValueKind == JsonValueKind.True;
         if (request.TryGetProperty("allowStarvingRecovery", out controlRecoveryField) &&
             controlRecoveryField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-            return new { ok = false, error = "allowStarvingRecovery must be boolean." };
+            return WireError.Fail("invalid_request", "allowStarvingRecovery must be boolean.");
         if (!CanControl() || ManualInput() || entity.MountedOn != null)
-            return new { ok = false, error = "Controls unavailable." };
+            return WireError.Fail("controls_unavailable", "Controls unavailable.", true);
         if (!control.Begin(ownerField.GetString()!, epoch, Environment.TickCount64, controlRecovery))
-            return new { ok = false, error = "Control epoch changed or another controller owns inputs." };
+            return WireError.Fail("inputs_owned", "Control epoch changed or another controller owns inputs.", true);
         // A walk owns the camera: no look set before it is kept.
         StopActs(); ClearTargetLock();
         controlYaw = entity.Pos.Yaw * 180 / Math.PI; controlPitch = (entity.Pos.Pitch - Math.PI) * 180 / Math.PI;
@@ -61,7 +61,7 @@ public sealed partial class AiBridgeMod
     private object ControlEnd(JsonElement request)
     {
         if (!request.TryGetProperty("owner", out var endOwner) || endOwner.GetString() != control.Owner || !control.Active)
-            return new { ok = false, error = "Not the input owner." };
+            return WireError.Fail("not_owner", "Not the input owner.");
         ReleaseControl("released");
         return new { ok = true, status = "stopped" };
     }
@@ -75,10 +75,10 @@ public sealed partial class AiBridgeMod
         if (includeSense)
         {
             if (request.TryGetProperty("after", out var stepCursorField) && (!stepCursorField.TryGetInt64(out stepCursor) || stepCursor < 0))
-                return new { ok = false, error = "Invalid terrain cursor." };
+                return WireError.Fail("invalid_cursor", "Invalid terrain cursor.");
             stepSession = request.TryGetProperty("session", out var stepSessionField) && stepSessionField.ValueKind == JsonValueKind.String
                 ? stepSessionField.GetString() : null;
-            if (ReadSeen(request, out stepSeen) is { } seenError) return new { ok = false, error = seenError };
+            if (ReadSeen(request, out stepSeen) is { } seenFailure) return seenFailure;
         }
         if (!request.TryGetProperty("owner", out var frameOwner) || frameOwner.ValueKind != JsonValueKind.String ||
             !request.TryGetProperty("sequence", out var sequenceField) || !sequenceField.TryGetInt64(out long sequence) ||
@@ -87,19 +87,19 @@ public sealed partial class AiBridgeMod
             !TryNumber(request, "pitchDegrees", out double framePitch) || Math.Abs(framePitch) > 89 ||
             !request.TryGetProperty("forward", out var forwardField) || forwardField.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
             !request.TryGetProperty("jump", out var frameJump) || frameJump.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-            return new { ok = false, error = "Invalid control frame." };
+            return WireError.Fail("invalid_request", "Invalid control frame.");
         Cell? focus = null;
         bool sprinting = false, frameSneak = false;
         if (request.TryGetProperty("sprint", out var frameSprint))
         {
             if (frameSprint.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                return new { ok = false, error = "sprint must be boolean." };
+                return WireError.Fail("invalid_request", "sprint must be boolean.");
             sprinting = frameSprint.GetBoolean();
         }
         if (request.TryGetProperty("sneak", out var frameSneakField))
         {
             if (frameSneakField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                return new { ok = false, error = "sneak must be boolean." };
+                return WireError.Fail("invalid_request", "sneak must be boolean.");
             frameSneak = frameSneakField.GetBoolean();
         }
         // A step: walk toward a point until on it, blocked or expired, the hand on the keys every tick.
@@ -108,15 +108,15 @@ public sealed partial class AiBridgeMod
         {
             if (!TryNumber(towardField, "x", out double tx) || !TryNumber(towardField, "y", out double ty) || !TryNumber(towardField, "z", out double tz) ||
                 SceneGeometry.Distance(new(entity.Pos.X, entity.Pos.Y, entity.Pos.Z), new(tx, ty, tz)) > 8)
-                return new { ok = false, error = "toward must be a point within 8 blocks." };
+                return WireError.Fail("invalid_request", "toward must be a point within 8 blocks.");
             toward = new Point3(tx, ty, tz);
             if (request.TryGetProperty("reach", out var reachField) && (!reachField.TryGetDouble(out reach) || reach is < 0.15 or > 1.5))
-                return new { ok = false, error = "reach must be 0.15 to 1.5 blocks." };
+                return WireError.Fail("invalid_request", "reach must be 0.15 to 1.5 blocks.");
             if (request.TryGetProperty("reachY", out var reachYField) && (!reachYField.TryGetDouble(out reachY) || reachY is < 0.2 or > 3))
-                return new { ok = false, error = "reachY must be 0.2 to 3 blocks." };
+                return WireError.Fail("invalid_request", "reachY must be 0.2 to 3 blocks.");
             if (request.TryGetProperty("hop", out var hopField))
             {
-                if (hopField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return new { ok = false, error = "hop must be boolean." };
+                if (hopField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return WireError.Fail("invalid_request", "hop must be boolean.");
                 hop = hopField.GetBoolean();
             }
             // The point after this one (next), to roll on to without a pause: within 8 blocks like the first.
@@ -124,7 +124,7 @@ public sealed partial class AiBridgeMod
             {
                 if (!TryNumber(thenField, "x", out double nx) || !TryNumber(thenField, "y", out double ny) || !TryNumber(thenField, "z", out double nz) ||
                     SceneGeometry.Distance(new(entity.Pos.X, entity.Pos.Y, entity.Pos.Z), new(nx, ny, nz)) > 8)
-                    return new { ok = false, error = "next must be a point within 8 blocks." };
+                    return WireError.Fail("invalid_request", "next must be a point within 8 blocks.");
                 then = new Point3(nx, ny, nz);
                 thenHop = thenField.TryGetProperty("hop", out var thenHopField) && thenHopField.ValueKind == JsonValueKind.True;
             }
@@ -133,14 +133,15 @@ public sealed partial class AiBridgeMod
         {
             if (!TryInteger(focusField, "x", out int fx) || !TryInteger(focusField, "y", out int fy) || !TryInteger(focusField, "z", out int fz) ||
                 SceneGeometry.Distance(new(entity.Pos.X, entity.Pos.Y, entity.Pos.Z), new(fx, fy, fz)) > 8)
-                return new { ok = false, error = "Focus must be a nearby cell; it never bypasses visibility." };
+                return WireError.Fail("invalid_request", "Focus must be a nearby cell; it never bypasses visibility.");
             focus = new(fx, fy, fz);
         }
         if (!CanControl() || ManualInput() || entity.MountedOn != null)
-        { ReleaseControl("control_unavailable"); return new { ok = false, error = "Controls unavailable." }; }
+        { ReleaseControl("control_unavailable"); return WireError.Fail("controls_unavailable", "Controls unavailable.", true); }
         long frameNow = Environment.TickCount64;
         if (!control.Frame(frameOwner.GetString()!, sequence, receivedAt ?? frameNow, frameNow, frameDuration))
-            return new { ok = false, error = control.RefusalReason(frameOwner.GetString()!, sequence, receivedAt ?? frameNow, frameDuration) };
+            return WireError.Fail(control.RefusalCode(frameOwner.GetString()!, sequence, receivedAt ?? frameNow, frameDuration),
+                control.RefusalReason(frameOwner.GetString()!, sequence, receivedAt ?? frameNow, frameDuration));
         // The step in flight is kept: the next frame may roll on from it.
         StopMovement(keepStep: true); StopHandAction();
         sensorPriority = focus; controlYaw = frameYaw; controlPitch = framePitch;
@@ -159,7 +160,7 @@ public sealed partial class AiBridgeMod
         if (frameSneak) frameMappings = [..frameMappings, "sneak"];
         var frameKeys = frameMappings.Select(name => api.Input.GetHotKeyByCode(name)?.CurrentMapping.KeyCode ?? -1).ToArray();
         if (frameKeys.Any(key => key < 0 || key >= api.Input.KeyboardKeyState.Length))
-        { ReleaseControl("binding_unavailable"); return new { ok = false, error = "Movement binding unavailable." }; }
+        { ReleaseControl("binding_unavailable"); return WireError.Fail("binding_unavailable", "Movement binding unavailable."); }
         if (frameKeys.Length > 0)
         {
             movingKeys = frameKeys; movingControls = entity.Controls; moveDirection = frameForward ? "forward" : "none";
@@ -177,7 +178,8 @@ public sealed partial class AiBridgeMod
             if (subscriber != null) { stepCursor = subscriber.Cursor; stepSession = subscriber.Session; stepSeen = subscriber.Seen; }
             var page = terrain.Read(stepCursor, stepSession, lastSenseAt);
             var sensed = new { ok = true, sequence, step = step?.View(), state = Observe(), terrain = page,
-                surface = vision.Surface(lastSenseAt), sightings = vision.Sightings(lastSenseAt, stepSeen) };
+                surface = vision.Surface(lastSenseAt), sightings = vision.Sightings(lastSenseAt, stepSeen),
+                clocks = new { eye = lastSenseAt, wall = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() } };
             if (subscriber != null) { subscriber.Cursor = page.cursor; subscriber.Session = page.session; subscriber.Seen = lastSenseAt; subscriber.PushedAt = lastSenseAt; }
             return sensed;
         }
@@ -190,35 +192,35 @@ public sealed partial class AiBridgeMod
         var entity = api.World!.Player.Entity;
         if (!request.TryGetProperty("durationMs", out var duration) || duration.ValueKind != JsonValueKind.Number ||
             !duration.TryGetInt32(out int milliseconds) || milliseconds < 1 || milliseconds > 2000)
-            return new { ok = false, error = "durationMs must be an integer from 1 to 2000." };
+            return WireError.Fail("invalid_request", "durationMs must be an integer from 1 to 2000.");
         if (!CanControl())
-            return new { ok = false, error = "Cannot move while dead, paused, or in menus." };
+            return WireError.Fail("controls_blocked", "Cannot move while dead, paused, or in menus.", true);
         string direction = "forward";
         bool jump = false;
         bool sprintMove = false;
         if (request.TryGetProperty("direction", out var directionField))
         {
-            if (directionField.ValueKind != JsonValueKind.String) return new { ok = false, error = "direction must be a string." };
+            if (directionField.ValueKind != JsonValueKind.String) return WireError.Fail("invalid_request", "direction must be a string.");
             direction = directionField.GetString()!;
         }
-        if (direction is not ("forward" or "backward" or "left" or "right")) return new { ok = false, error = "Invalid movement direction." };
+        if (direction is not ("forward" or "backward" or "left" or "right")) return WireError.Fail("invalid_request", "Invalid movement direction.");
         if (request.TryGetProperty("jump", out var jumpField))
         {
-            if (jumpField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return new { ok = false, error = "jump must be boolean." };
+            if (jumpField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return WireError.Fail("invalid_request", "jump must be boolean.");
             jump = jumpField.GetBoolean();
         }
         StopActs();
         if (request.TryGetProperty("sprint", out var sprintField))
         {
             if (sprintField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                return new { ok = false, error = "sprint must be boolean." };
+                return WireError.Fail("invalid_request", "sprint must be boolean.");
             sprintMove = sprintField.GetBoolean();
         }
         bool sneakMove = false;
         if (request.TryGetProperty("sneak", out var sneakField))
         {
             if (sneakField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                return new { ok = false, error = "sneak must be boolean." };
+                return WireError.Fail("invalid_request", "sneak must be boolean.");
             sneakMove = sneakField.GetBoolean();
         }
         if (sneakMove) sprintMove = false;
@@ -227,7 +229,7 @@ public sealed partial class AiBridgeMod
         if (sneakMove) mappings = [..mappings, "sneak"];
         var keys = mappings.Select(name => api.Input.GetHotKeyByCode(name)?.CurrentMapping.KeyCode ?? -1).ToArray();
         if (keys.Any(key => key < 0 || key >= api.Input.KeyboardKeyState.Length || api.Input.KeyboardKeyState[key]))
-            return new { ok = false, error = "Movement binding unavailable or manually pressed." };
+            return WireError.Fail("binding_unavailable", "Movement binding unavailable or manually pressed.", true);
         movingKeys = keys;
         moveDirection = direction;
         moveJump = jump;
@@ -244,9 +246,9 @@ public sealed partial class AiBridgeMod
         var entity = api.World!.Player.Entity;
         if (!TryNumber(request, "yawDegrees", out double yaw) ||
             !TryNumber(request, "pitchDegrees", out double pitch) || pitch < -89 || pitch > 89 || Math.Abs(yaw) > 36000)
-            return new { ok = false, error = "Supply finite yawDegrees (-36000 to 36000) and pitchDegrees (-89 up to 89 down)." };
+            return WireError.Fail("invalid_request", "Supply finite yawDegrees (-36000 to 36000) and pitchDegrees (-89 up to 89 down).");
         if (!entity.Alive || api.IsGamePaused)
-            return new { ok = false, error = "Cannot look while dead or paused." };
+            return WireError.Fail("controls_blocked", "Cannot look while dead or paused.", true);
         StopHandAction();
         ClearTargetLock();
         api.Input.MouseYaw = entity.Pos.Yaw = (float)(NormalizeDegrees(yaw) * Math.PI / 180);
@@ -258,24 +260,24 @@ public sealed partial class AiBridgeMod
     {
         var entity = api.World!.Player.Entity;
             if (!TryInteger(request, "x", out int ax) || !TryInteger(request, "y", out int ay) || !TryInteger(request, "z", out int az))
-                return new { ok = false, error = "Supply integer cell x, y, z." };
-            if (!CanControl()) return new { ok = false, error = "Close menus and enter the world before aiming." };
-            if (!entity.Alive || api.IsGamePaused) return new { ok = false, error = "Cannot aim while dead or paused." };
+                return WireError.Fail("invalid_request", "Supply integer cell x, y, z.");
+            if (!CanControl()) return WireError.Fail("controls_blocked", "Close menus and enter the world before aiming.", true);
+            if (!entity.Alive || api.IsGamePaused) return WireError.Fail("controls_blocked", "Cannot aim while dead or paused.", true);
             // Aiming is a look of its own: a target lock would swing the crosshair back next tick.
             ClearTargetLock();
             var cellPos = new BlockPos(ax, ay, az, 0);
             if (api.World.BlockAccessor.GetChunkAtBlockPos(cellPos) == null)
-                return new { ok = false, error = "Target cell unloaded." };
+                return WireError.Fail("cell_unloaded", "Target cell unloaded.", true);
             var eyeVec = entity.Pos.XYZ.Add(entity.LocalEyePos);
             var aimEye = new Point3(eyeVec.X, eyeVec.Y, eyeVec.Z);
             if (SceneGeometry.Distance(aimEye, new Point3(ax + 0.5, ay + 0.5, az + 0.5)) > 8)
-                return new { ok = false, error = "Target cell out of reach." };
+                return WireError.Fail("target_unreachable", "Target cell out of reach.", true);
             string? aimFace = request.TryGetProperty("face", out var faceField) && faceField.ValueKind == JsonValueKind.String ? faceField.GetString() : null;
             Point3 aimTarget;
             if (request.TryGetProperty("voxel", out var voxelField) && voxelField.ValueKind == JsonValueKind.Array)
             {
                 var v = voxelField.EnumerateArray().Select(e => e.TryGetInt32(out int n) ? n : -1).ToArray();
-                if (v.Length != 3 || v.Any(n => n < 0 || n > 15)) return new { ok = false, error = "voxel must be three integers 0-15." };
+                if (v.Length != 3 || v.Any(n => n < 0 || n > 15)) return WireError.Fail("invalid_request", "voxel must be three integers 0-15.");
                 // Voxel top-centre, for aiming at knapping/clay surface voxels.
                 aimTarget = new Point3(ax + (v[0] + 0.5) / 16.0, ay + (v[1] + 0.95) / 16.0, az + (v[2] + 0.5) / 16.0);
             }
@@ -296,9 +298,9 @@ public sealed partial class AiBridgeMod
     {
         var entity = api.World!.Player.Entity;
         if (!entity.Alive || api.IsGamePaused)
-            return new { ok = false, error = "Cannot aim while dead or paused." };
+            return WireError.Fail("controls_blocked", "Cannot aim while dead or paused.", true);
         if (!CanControl())
-            return new { ok = false, error = "Close menus and enter the world before aiming." };
+            return WireError.Fail("controls_blocked", "Close menus and enter the world before aiming.", true);
         string? key = null;
         if (request.TryGetProperty("entity", out var entityField) && entityField.ValueKind == JsonValueKind.String)
             key = entityField.GetString()!;
@@ -317,7 +319,7 @@ public sealed partial class AiBridgeMod
             {
                 cell = new BlockPos(x, y, z, dim);
                 if (api.World.BlockAccessor.GetChunkAtBlockPos(cell) == null)
-                    return new { ok = false, error = "Target cell unloaded." };
+                    return WireError.Fail("cell_unloaded", "Target cell unloaded.", true);
                 code = string.Join(":", parts[5..]);
                 kind = LockKind.Block;
             }
@@ -326,17 +328,17 @@ public sealed partial class AiBridgeMod
             {
                 kind = LockKind.Entity;
             }
-            else return new { ok = false, error = "Unknown target; use an observed block key or sighted entity id." };
+            else return WireError.Fail("unknown_target", "Unknown target; use an observed block key or sighted entity id.");
         }
         else if (request.TryGetProperty("x", out _) || request.TryGetProperty("y", out _) || request.TryGetProperty("z", out _))
         {
             if (!TryNumber(request, "x", out double px) || !TryNumber(request, "y", out double py) || !TryNumber(request, "z", out double pz))
-                return new { ok = false, error = "Supply finite x, y, z." };
+                return WireError.Fail("invalid_request", "Supply finite x, y, z.");
             point = new Point3(px, py, pz);
             key = $"point:{px}:{py}:{pz}";
             kind = LockKind.Point;
         }
-        else return new { ok = false, error = "Supply target, entity, or x/y/z." };
+        else return WireError.Fail("invalid_request", "Supply target, entity, or x/y/z.");
         StopHandAction();
         lockKind = kind; lockCell = cell; lockCode = code; lockEntityId = entityId; lockPoint = point; lockName = key;
         UpdateTargetLock();

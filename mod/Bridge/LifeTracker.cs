@@ -18,6 +18,14 @@ public sealed class LifeTracker
     public long? RespawnRequestedAt { get; private set; }
     public long? LastDamageAt { get; private set; }
     public long? LastAttritionAt { get; private set; }
+    public float? LastDamageAmount { get; private set; }
+    public float? LastAttritionAmount { get; private set; }
+    public string? LastAttritionCause { get; private set; }
+    // The most recent hit (an attack or a fall: attrition never lands here)
+    // and the most recent predictable loss, for hurt/died attribution.
+    public object? LastDamage() => LastDamageAt == null ? null : new { at = LastDamageAt, amount = LastDamageAmount };
+    public object? LastAttrition() => LastAttritionAt == null ? null
+        : new { at = LastAttritionAt, amount = LastAttritionAmount, cause = LastAttritionCause };
     public string[] Alerts => alerts.Where(pair => pair.Value).Select(pair => pair.Key).ToArray();
 
     public bool Sample(bool nextAlive, float? nextHealth, Point3 position, long now,
@@ -38,16 +46,18 @@ public sealed class LifeTracker
         bool hurt = lost && !attrition;
         if (lost)
         {
-            if (hurt) LastDamageAt = now; else LastAttritionAt = now;
-            Add(now, "health_lost", new { amount = loss, health = nextHealth,
-                cause = instability ? "instability" : starvation ? "starvation" : null });
+            string? cause = instability ? "instability" : starvation ? "starvation" : null;
+            if (hurt) { LastDamageAt = now; LastDamageAmount = loss; }
+            else { LastAttritionAt = now; LastAttritionAmount = loss; LastAttritionCause = cause; }
+            Add(now, "health_lost", new { amount = loss, health = nextHealth, cause });
         }
         if (!nextAlive && (!initialized || alive))
         {
             DeadSince = now;
             DeathId = $"{Session}:{sequence + 1}";
             RespawnRequestedAt = null;
-            Add(now, "died", new { deathId = DeathId, position = new { x = position.X, y = position.Y, z = position.Z } });
+            Add(now, "died", new { deathId = DeathId, position = new { x = position.X, y = position.Y, z = position.Z },
+                lastDamage = LastDamage(), lastAttrition = LastAttrition() });
         }
         else if (nextAlive && initialized && !alive)
         {

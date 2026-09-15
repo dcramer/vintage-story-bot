@@ -28,6 +28,17 @@ public sealed class ControlHold
         Sequence = sequence; Until = now + HeartbeatMs;
         return true;
     }
+    // The machine code for a refused frame, mirroring RefusalReason's cases: a
+    // released or foreign hold, a duplicate sequence and an expired hold all
+    // need a fresh control_begin, never a repeated frame.
+    public string RefusalCode(string owner, long sequence, long receivedAt, int duration)
+    {
+        if (!Active) return "control_released";
+        if (owner != Owner) return "not_owner";
+        if (sequence <= Sequence) return "duplicate_sequence";
+        if (receivedAt >= Until) return "control_expired";
+        return "invalid_request";
+    }
     // Why a frame was refused, for the controller's log: each cause is a different fault.
     public string RefusalReason(string owner, long sequence, long receivedAt, int duration)
     {

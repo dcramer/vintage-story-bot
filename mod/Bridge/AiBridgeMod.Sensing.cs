@@ -16,15 +16,29 @@ namespace VintageStoryAI;
 public sealed partial class AiBridgeMod
 {
 
+    private string ModVersion()
+    {
+        try { return api.ModLoader.GetMod("vintagestoryai")?.Info?.Version?.ToString() ?? "unknown"; }
+        catch { return "unknown"; }
+    }
+
     private object Observe()
     {
         var entity = api.World!.Player.Entity;
         var pos = entity.Pos;
+        long wall = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), eye = Environment.TickCount64;
+        var nearby = NearbyEntities();
         return new
         {
             ok = true,
-            capabilities = new[] { "target_guard", "performance", "sense_feed", "directional_move", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "craft_merge", "background_control", "control_frames", "step_jump_hold", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "body_cell_dig", "sneak", "long_hand_hold", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "block_sightings", "map_waypoints", "map_waypoint_add", "map_view", "map_hud_state", "drop", "containers", "look_at", "players", "catalog", "chat_messages", "can_see", "ui_close", "catalog_facts", "client_presentation" },
-            observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            hello = new { mod = "vintagestoryai", modVersion = ModVersion(), protocol = WireProtocol, schema = WireSchema },
+            capabilities = new[] { "target_guard", "performance", "sense_feed", "directional_move", "nearby_awareness", "nearby_entities", "distant_sight", "environment", "player_condition", "inspect_target", "equipment", "block_facts", "item_info", "food_freshness", "life_events", "respawn", "inventory", "grid_craft", "craft_merge", "background_control", "control_frames", "step_jump_hold", "terrain_deltas", "background_jump", "background_sprint", "block_actions", "body_cell_dig", "sneak", "long_hand_hold", "forming", "chat", "aim_cell", "ui_dialogs", "surface_vision", "sightings", "block_sightings", "map_waypoints", "map_waypoint_add", "map_view", "map_hud_state", "drop", "containers", "look_at", "players", "catalog", "chat_messages", "can_see", "ui_close", "catalog_facts", "client_presentation", "select", "interact", "attack", "recipes", "look", "stop" },
+            observedAt = wall,
+            // The two clocks every timestamp in this API uses: wall is Unix
+            // milliseconds (observedAt, life events, death ids), eye is the
+            // client's tick clock (terrain, surface, sightings, chat, holds).
+            // Never compare one against the other.
+            clocks = new { wall, eye },
             player = new { name = api.World!.Player.PlayerName, uid = api.World.Player.PlayerUID },
             world = new { singleplayer = api.IsSinglePlayer, gameMode = api.World.Player.WorldData.CurrentGameMode.ToString(),
                 identifier = api.World.SavegameIdentifier },
@@ -55,7 +69,8 @@ public sealed partial class AiBridgeMod
             mounted = entity.MountedOn != null,
             pickingRange = api.World.Player.WorldData.PickingRange,
             // Only what is seen or heard this instant; Node remembers what left the view.
-            nearbyEntities = NearbyEntities(),
+            nearbyEntities = nearby.Rows,
+            nearbyEntitiesTruncated = nearby.Truncated,
             moving = movingControls != null,
             moveDirection = movingControls == null ? null : moveDirection,
             step = step?.View(),
@@ -125,17 +140,18 @@ public sealed partial class AiBridgeMod
 
     private object Sense(JsonElement request)
     {
-        if (ReadFeedCursors(request, out long cursor, out string? terrainSession, out long seen) is { } error) return new { ok = false, error };
+        if (ReadFeedCursors(request, out long cursor, out string? terrainSession, out long seen) is { } failure) return failure;
         lastSenseAt = Environment.TickCount64;
         // A subscribed connection reads on from its own place in the feed, whatever cursor it sends.
         return SensePayload(lastSenseAt, currentConnection?.Subscriber, cursor, terrainSession, seen);
     }
 
-    private string? ReadFeedCursors(JsonElement request, out long cursor, out string? session, out long seen)
+    private static object? ReadFeedCursors(JsonElement request, out long cursor, out string? session, out long seen)
     {
         cursor = 0; session = null;
-        if (ReadSeen(request, out seen) is { } seenError) return seenError;
-        if (request.TryGetProperty("after", out var cursorField) && (!cursorField.TryGetInt64(out cursor) || cursor < 0)) return "Invalid terrain cursor.";
+        if (ReadSeen(request, out seen) is { } seenFailure) return seenFailure;
+        if (request.TryGetProperty("after", out var cursorField) && (!cursorField.TryGetInt64(out cursor) || cursor < 0))
+            return WireError.Fail("invalid_cursor", "Invalid terrain cursor.");
         session = request.TryGetProperty("session", out var sessionField) && sessionField.ValueKind == JsonValueKind.String ? sessionField.GetString() : null;
         return null;
     }
@@ -146,7 +162,8 @@ public sealed partial class AiBridgeMod
     {
         if (subscriber != null) { cursor = subscriber.Cursor; session = subscriber.Session; seen = subscriber.Seen; }
         var page = terrain.Read(cursor, session, now);
-        var payload = new { ok = true, @event, state = Observe(), terrain = page, surface = vision.Surface(now), sightings = vision.Sightings(now, seen) };
+        var payload = new { ok = true, @event, state = Observe(), terrain = page, surface = vision.Surface(now), sightings = vision.Sightings(now, seen),
+            clocks = new { eye = now, wall = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() } };
         if (subscriber != null) { subscriber.Cursor = page.cursor; subscriber.Session = page.session; subscriber.Seen = now; subscriber.PushedAt = now; }
         return payload;
     }
@@ -156,8 +173,8 @@ public sealed partial class AiBridgeMod
     // closes. The reply is the first payload; the cursors sent set where the feed starts.
     private object Subscribe(JsonElement request)
     {
-        if (currentConnection == null) return new { ok = false, error = "No connection to subscribe." };
-        if (ReadFeedCursors(request, out long cursor, out string? session, out long seen) is { } error) return new { ok = false, error };
+        if (currentConnection == null) return WireError.Fail("no_connection", "No connection to subscribe.");
+        if (ReadFeedCursors(request, out long cursor, out string? session, out long seen) is { } failure) return failure;
         var subscriber = currentConnection.Subscriber ?? new Subscriber(currentConnection);
         subscriber.Cursor = cursor; subscriber.Session = session; subscriber.Seen = seen;
         currentConnection.Subscriber = subscriber;
@@ -237,33 +254,34 @@ public sealed partial class AiBridgeMod
         visible = exact && SceneGeometry.InCone(origin, pos, yaw, pitch, 64),
     };
 
-    private object[] NearbyEntities(int limit = 24)
+    private (object[] Rows, bool Truncated) NearbyEntities(int limit = 24)
     {
         var entity = api.World!.Player.Entity;
         var eye = entity.Pos.XYZ.Add(entity.LocalEyePos);
         var origin = new Point3(eye.X, eye.Y, eye.Z);
         long now = Environment.TickCount64;
-        return sightings.Current(now, "entity")
+        var all = sightings.Current(now, "entity")
             .Select(pair => new { key = pair.Key, code = pair.Value.Code,
                 point = new { x = pair.Value.Point.X, y = pair.Value.Point.Y, z = pair.Value.Point.Z },
                 distance = Math.Round(SceneGeometry.Distance(origin, pair.Value.Point), 2),
                 how = pair.Value.How, seenAt = pair.Value.At, visible = true })
-            .OrderBy(sighting => sighting.distance).Take(limit).Cast<object>().ToArray();
+            .OrderBy(sighting => sighting.distance).ToArray();
+        return (all.Take(limit).Cast<object>().ToArray(), all.Length > limit);
     }
 
     // The sightings cursor: the eye's clock at the reader's last look; absent or zero reads everything current.
-    private static string? ReadSeen(JsonElement request, out long seen)
+    private static object? ReadSeen(JsonElement request, out long seen)
     {
         seen = 0;
         return request.TryGetProperty("seen", out var field) && (field.ValueKind != JsonValueKind.Number || !field.TryGetInt64(out seen) || seen < 0)
-            ? "seen must be a nonnegative integer." : null;
+            ? WireError.Fail("invalid_cursor", "seen must be a nonnegative integer.") : null;
     }
 
     private object Events(JsonElement request) =>
-        ReadCursor(request, out long after, out string? session) is { } error ? new { ok = false, error } : life.Read(after, session);
+        ReadCursor(request, out long after, out string? session) is { } failure ? failure : life.Read(after, session);
 
     private object Messages(JsonElement request) =>
-        ReadCursor(request, out long after, out string? session) is { } error ? new { ok = false, error } : chat.Read(after, session);
+        ReadCursor(request, out long after, out string? session) is { } failure ? failure : chat.Read(after, session);
 
     private object CanSee(JsonElement request)
     {
@@ -271,20 +289,21 @@ public sealed partial class AiBridgeMod
         string[] names = ["x", "y", "z"];
         for (int i = 0; i < 3; i++)
             if (!request.TryGetProperty(names[i], out var field) || field.ValueKind != JsonValueKind.Number || !field.TryGetInt32(out cell[i]))
-                return new { ok = false, error = "Supply integer x, y and z." };
+                return WireError.Fail("invalid_request", "Supply integer x, y and z.");
         return vision.CanSee(cell[0], cell[1], cell[2]);
     }
 
     // The bounded-ring cursor shared by events and messages: after (nonnegative) and session.
-    private static string? ReadCursor(JsonElement request, out long after, out string? session)
+    private static object? ReadCursor(JsonElement request, out long after, out string? session)
     {
         after = 0; session = null;
         if (request.TryGetProperty("after", out var afterField) &&
             (afterField.ValueKind != JsonValueKind.Number || !afterField.TryGetInt64(out after) || after < 0))
-            return "after must be a nonnegative integer.";
+            return WireError.Fail("invalid_cursor", "after must be a nonnegative integer.");
         if (request.TryGetProperty("session", out var sessionField))
         {
-            if (sessionField.ValueKind != JsonValueKind.String || sessionField.GetString()!.Length > 64) return "Invalid event session.";
+            if (sessionField.ValueKind != JsonValueKind.String || sessionField.GetString()!.Length > 64)
+                return WireError.Fail("invalid_session", "Invalid event session.");
             session = sessionField.GetString();
         }
         return null;
@@ -294,18 +313,18 @@ public sealed partial class AiBridgeMod
     {
         if (!request.TryGetProperty("match", out var recipeMatch) || recipeMatch.ValueKind != JsonValueKind.String ||
             recipeMatch.GetString()!.Length is < 1 or > 64)
-            return new { ok = false, error = "Recipe match must be 1–64 characters of output code." };
+            return WireError.Fail("invalid_request", "Recipe match must be 1–64 characters of output code.");
         int offset = 0, recipeLimit = 4;
         if (request.TryGetProperty("offset", out _) && (!TryInteger(request, "offset", out offset) || offset < 0 || offset > 100000) ||
             request.TryGetProperty("limit", out _) && (!TryInteger(request, "limit", out recipeLimit) || recipeLimit < 1 || recipeLimit > 8))
-            return new { ok = false, error = "offset: 0–100000; limit: 1–8." };
+            return WireError.Fail("invalid_request", "offset: 0–100000; limit: 1–8.");
         return inventory.Recipes(recipeMatch.GetString()!, offset, recipeLimit);
     }
 
     private object ItemInfo(JsonElement request)
     {
         if (!request.TryGetProperty("code", out var code) || code.ValueKind != JsonValueKind.String || code.GetString()!.Length is < 1 or > 128)
-            return new { ok = false, error = "code must be 1–128 characters of item or block code." };
+            return WireError.Fail("invalid_request", "code must be 1–128 characters of item or block code.");
         bool text = !(request.TryGetProperty("text", out var textField) && textField.ValueKind == JsonValueKind.False);
         return handbook.ItemInfo(code.GetString()!, text);
     }
@@ -315,14 +334,14 @@ public sealed partial class AiBridgeMod
         var entity = api.World!.Player.Entity;
         if (!request.TryGetProperty("deathId", out var deathField) || deathField.ValueKind != JsonValueKind.String ||
             deathField.GetString() != life.DeathId || entity.Alive)
-            return new { ok = false, error = "Observe life.deathId and request respawn only for that death." };
+            return WireError.Fail("stale_death", "Observe life.deathId and request respawn only for that death.", true);
         if (life.RespawnRequestedAt != null)
             return new { ok = true, status = "pending", deathId = life.DeathId };
         if (!CanRespawn() || api.World is not ClientMain game)
-            return new { ok = false, error = "Respawn unavailable: wait for death dialog, check lives/paused state." };
+            return WireError.Fail("respawn_unavailable", "Respawn unavailable: wait for death dialog, check lives/paused state.", true);
         StopActs();
         if (!life.RequestRespawn(deathField.GetString()!, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()))
-            return new { ok = false, error = "Respawn state changed; observe again." };
+            return WireError.Fail("respawn_changed", "Respawn state changed; observe again.", true);
         // Same public client method used by GuiDialogDead.OnRespawn; server validates.
         game.Respawn();
         return new { ok = true, status = "requested", deathId = life.DeathId };
@@ -374,6 +393,7 @@ public sealed partial class AiBridgeMod
         state = api.World.Player.Entity.Alive ? "alive" : life.RespawnRequestedAt != null ? "respawn_pending" : "dead",
         session = life.Session, deathId = life.DeathId, canRespawn = CanRespawn(),
         alerts = life.Alerts, lastDamageAt = life.LastDamageAt, lastAttritionAt = life.LastAttritionAt,
+        lastDamage = life.LastDamage(), lastAttrition = life.LastAttrition(),
         livesRemaining = RemainingLives(), respawnRequestedAt = life.RespawnRequestedAt,
         revivableMinutes = api.World.Player.Entity.Alive ? (double?)null : Math.Max(0, api.World.Player.Entity.RevivableIngameHoursLeft() * 60)
     };

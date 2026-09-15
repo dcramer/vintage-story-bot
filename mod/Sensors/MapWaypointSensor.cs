@@ -13,7 +13,7 @@ internal sealed class MapWaypointSensor(ICoreClientAPI api)
     public object Observe()
     {
         var layer = Layer;
-        if (layer == null) return new { ok = false, error = "World map unavailable on this world." };
+        if (layer == null) return WireError.Fail("map_unavailable", "World map unavailable on this world.");
         var waypoints = layer.ownWaypoints ?? [];
         return new
         {

@@ -113,26 +113,26 @@ public sealed class InventoryAdapter(ICoreClientAPI api)
 
     public object Move(JsonElement request, bool craft)
     {
-        if (!api.World.Player.Entity.Alive || api.IsGamePaused) return Error("Cannot change inventory while dead or paused.");
+        if (!api.World.Player.Entity.Alive || api.IsGamePaused) return Error("controls_blocked", "Cannot change inventory while dead or paused.", true);
         if (!request.TryGetProperty("expectedState", out var expected) || expected.ValueKind != JsonValueKind.String || expected.GetString() != State())
-            return Error("Inventory changed; read inventory and replan. Nothing moved.");
+            return Error("inventory_changed", "Inventory changed; read inventory and replan. Nothing moved.", true);
         var target = Resolve(request, "to", !craft);
         var source = craft ? Manager.GetOwnInventory("craftinggrid")?[9] : Resolve(request, "from", true);
-        if (source == null || target == null || source == target || source.Empty) return Error("Invalid, identical, or empty inventory slots.");
+        if (source == null || target == null || source == target || source.Empty) return Error("invalid_request", "Invalid, identical, or empty inventory slots.");
         int quantity;
         if (craft)
         {
             if (!request.TryGetProperty("expectedOutput", out var output) || output.ValueKind != JsonValueKind.String ||
-                output.GetString() != source.Itemstack.Collectible.Code.ToString()) return Error("Crafting output changed; inspect inventory.");
+                output.GetString() != source.Itemstack.Collectible.Code.ToString()) return Error("craft_changed", "Crafting output changed; inspect inventory.", true);
             quantity = source.StackSize;
             // One complete craft into a compatible slot; the native transfer
             // merges matching stacks, with no partial extraction or drops.
             if (target.GetRemainingSlotSpace(source.Itemstack) < quantity || !target.CanTakeFrom(source))
-                return Error("Craft needs a compatible destination with room for the entire output.");
+                return Error("craft_blocked", "Craft needs a compatible destination with room for the entire output.");
         }
         else if (!request.TryGetProperty("quantity", out var count) || count.ValueKind != JsonValueKind.Number ||
             !count.TryGetInt32(out quantity) || quantity < 1 || quantity > 64 || quantity > source.StackSize)
-            return Error("quantity must be 1–64 and available in source.");
+            return Error("invalid_request", "quantity must be 1–64 and available in source.");
 
         var op = new ItemStackMoveOperation(api.World, EnumMouseButton.Left, 0, EnumMergePriority.DirectMerge, quantity)
         { ActingPlayer = api.World.Player };
@@ -141,22 +141,23 @@ public sealed class InventoryAdapter(ICoreClientAPI api)
         var packet = Manager.TryTransferTo(source, target, ref op);
         if (packet != null) api.Network.SendPacketClient(packet);
         return new { ok = op.MovedQuantity > 0, status = "submitted", moved = op.MovedQuantity,
+            code = op.MovedQuantity > 0 ? null : "transfer_empty", retryable = op.MovedQuantity == 0,
             error = op.MovedQuantity > 0 ? null : "No items moved; inspect inventory before retrying.", state = State() };
     }
 
     public object Drop(JsonElement request)
     {
-        if (!api.World.Player.Entity.Alive || api.IsGamePaused) return Error("Cannot change inventory while dead or paused.");
+        if (!api.World.Player.Entity.Alive || api.IsGamePaused) return Error("controls_blocked", "Cannot change inventory while dead or paused.", true);
         if (!request.TryGetProperty("expectedState", out var expected) || expected.ValueKind != JsonValueKind.String || expected.GetString() != State())
-            return Error("Inventory changed; read inventory and replan. Nothing dropped.");
+            return Error("inventory_changed", "Inventory changed; read inventory and replan. Nothing dropped.", true);
         var source = Resolve(request, "from", true);
-        if (source == null || source.Empty) return Error("Invalid or empty inventory slot.");
+        if (source == null || source.Empty) return Error("invalid_request", "Invalid or empty inventory slot.");
         if (!request.TryGetProperty("quantity", out var count) || count.ValueKind != JsonValueKind.Number ||
             !count.TryGetInt32(out int quantity) || quantity < 1 || quantity > 64 || quantity > source.StackSize)
-            return Error("quantity must be 1–64 and available in source.");
+            return Error("invalid_request", "quantity must be 1–64 and available in source.");
         // One act drops a single item or the whole stack; other partial counts split first via move_item.
         bool full = quantity >= source.StackSize;
-        if (!full && quantity != 1) return Error("One drop moves 1 item or the whole stack; split the stack with move_item first.");
+        if (!full && quantity != 1) return Error("invalid_request", "One drop moves 1 item or the whole stack; split the stack with move_item first.");
         string code = source.Itemstack.Collectible.Code.ToString();
         int dropped = full ? source.StackSize : 1;
         // The manager's own drop path; server validation and sync remain authoritative.
@@ -187,5 +188,5 @@ public sealed class InventoryAdapter(ICoreClientAPI api)
         }).ToArray() };
     }
 
-    private static object Error(string error) => new { ok = false, error };
+    private static object Error(string code, string error, bool retryable = false) => WireError.Fail(code, error, retryable);
 }

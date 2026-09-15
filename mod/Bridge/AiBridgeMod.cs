@@ -15,6 +15,11 @@ namespace VintageStoryAI;
 public sealed partial class AiBridgeMod : ModSystem
 {
     private const int Port = 42157;
+    // Wire contract versions, advertised on observe.hello: protocol is the
+    // dispatch/transport shape, schema the payload shapes. A breaking change
+    // bumps one; compatible additions (new fields, flags, codes) do not.
+    private const int WireProtocol = 1;
+    private const int WireSchema = 1;
     private readonly ConcurrentQueue<PendingRequest> requests = new();
     private ICoreClientAPI api = null!;
     private CancellationTokenSource? lifetime;
@@ -211,12 +216,12 @@ public sealed partial class AiBridgeMod : ModSystem
                     bool tooLong = overflow;
                     line.Clear(); overflow = false;
                     string? id = RequestId(json);
-                    if (tooLong) { await Reply(JsonSerializer.Serialize(new { ok = false, error = $"Request exceeds {RequestMaxBytes - 1} bytes." }), id).ConfigureAwait(false); continue; }
+                    if (tooLong) { await Reply(JsonSerializer.Serialize(WireError.Fail("request_too_long", $"Request exceeds {RequestMaxBytes - 1} bytes.")), id).ConfigureAwait(false); continue; }
                     long now = Environment.TickCount64, ticked = Interlocked.Read(ref lastTickAt);
                     if (ticked != 0 && now - ticked > StallMs)
                     {
-                        await Reply(JsonSerializer.Serialize(new { ok = false, code = "stalled",
-                            error = $"Game thread has not ticked for {now - ticked} ms; the client is stalled." }), id).ConfigureAwait(false);
+                        await Reply(JsonSerializer.Serialize(WireError.Fail("stalled",
+                            $"Game thread has not ticked for {now - ticked} ms; the client is stalled.", true)), id).ConfigureAwait(false);
                         continue;
                     }
                     var completion = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -386,18 +391,18 @@ public sealed partial class AiBridgeMod : ModSystem
             if (waited > RequestDeadlineMs)
             {
                 // The hand never reached the keys: the request is refused rather than acted on late.
-                pending.Completion.TrySetResult(new { ok = false, code = "expired", error = $"Request waited {waited} ms for a game tick; nothing was done." });
+                pending.Completion.TrySetResult(WireError.Fail("expired", $"Request waited {waited} ms for a game tick; nothing was done.", true));
                 continue;
             }
             currentConnection = pending.Connection;
             try { pending.Completion.TrySetResult(Execute(pending.Json, pending.ReceivedAt)); }
-            catch (JsonException) { pending.Completion.TrySetResult(new { ok = false, error = "Invalid JSON request." }); }
+            catch (JsonException) { pending.Completion.TrySetResult(WireError.Fail("invalid_json", "Invalid JSON request.")); }
             catch (Exception exception)
             {
                 // Only an act that may have touched the inputs lets go of them; a failed read never does.
                 if (TouchesInputs(pending.Json)) ReleaseControl("action_error");
                 api.Logger.Error($"AI bridge request failed: {exception}");
-                pending.Completion.TrySetResult(new { ok = false, error = "Game action failed; see client log." });
+                pending.Completion.TrySetResult(WireError.Fail("action_error", "Game action failed; see client log.", true));
             }
             finally { currentConnection = null; }
         }
@@ -418,14 +423,14 @@ public sealed partial class AiBridgeMod : ModSystem
         using var document = JsonDocument.Parse(json);
         var request = document.RootElement;
         if (request.ValueKind != JsonValueKind.Object || !request.TryGetProperty("action", out var action) || action.ValueKind != JsonValueKind.String)
-            return new { ok = false, error = "Expected an action string." };
+            return WireError.Fail("invalid_request", "Expected an action string.");
         if (api.World?.Player?.Entity == null)
-            return new { ok = false, error = "Bridge requires an active world." };
+            return WireError.Fail("no_world", "Bridge requires an active world.", true);
         string name = action.GetString()!;
         if (Mutations.Contains(name))
         {
             if (name != "stop" && control.Active)
-                return new { ok = false, error = "Controller owns inputs; stop it before another mutation." };
+                return WireError.Fail("inputs_owned", "Controller owns inputs; stop it before another mutation.", true);
             if (name == "stop") ReleaseControl("stopped");
         }
         // One case per wire action; bodies live in the partial file owning that concern.
@@ -435,7 +440,7 @@ public sealed partial class AiBridgeMod : ModSystem
             case "sense": return Sense(request);
             case "subscribe": return Subscribe(request);
             case "unsubscribe": return Unsubscribe();
-            case "inspect_target": return CanControl() ? context.InspectTarget(life.Session) : new { ok = false, error = "Close menus and unpause before inspecting." };
+            case "inspect_target": return CanControl() ? context.InspectTarget(life.Session) : WireError.Fail("controls_blocked", "Close menus and unpause before inspecting.", true);
             case "environment": return context.Environment(life.Session);
             case "events": return Events(request);
             case "messages": return Messages(request);
@@ -480,7 +485,7 @@ public sealed partial class AiBridgeMod : ModSystem
                 // Already released above, before the switch, as every stop is.
                 return new { ok = true, status = "stopped" };
             default:
-                return new { ok = false, error = "Unknown action. Use observe, events, respawn, scan, look, select, move, interact, attack, or stop." };
+                return WireError.Fail("unknown_action", "Unknown action. Use observe, events, respawn, scan, look, select, move, interact, attack, or stop.");
         }
     }
 

@@ -94,7 +94,7 @@ internal sealed class ContextSensor(ICoreClientAPI api)
         {
             var pos = selection.Position;
             if (api.World.BlockAccessor.GetChunkAtBlockPos(pos) == null)
-                return new { ok = false, error = "Selected block unloaded." };
+                return WireError.Fail("cell_unloaded", "Selected block unloaded.", true);
             var block = api.World.BlockAccessor.GetBlock(pos);
             var client = api.World as Vintagestory.Client.NoObf.ClientMain;
             return new

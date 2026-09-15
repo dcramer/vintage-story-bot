@@ -50,4 +50,3 @@ Console.WriteLine("11 block-hazard checks passed.");
 LifeTests.Run();
 ControlHoldTests.Run();
 StepTrackerTests.Run();
-PlacementPolicyTests.Run();

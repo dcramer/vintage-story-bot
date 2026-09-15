@@ -31,20 +31,16 @@ internal sealed class BlockActions(ICoreClientAPI api)
     {
         var player = api.World.Player;
         if (player.WorldData.CurrentGameMode is not (EnumGameMode.Survival or EnumGameMode.Creative))
-            return Error("Block actions require survival or creative mode.");
+            return Error("unsupported_mode", "Block actions require survival or creative mode.");
         var selection = player.CurrentBlockSelection;
         var stack = player.InventoryManager.ActiveHotbarSlot.Itemstack;
         string? String(string key) => request.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
         string? nextId = String("id"), nextKind = String("kind");
-        string? placementAxis = String("placementAxis");
         if (!Guid.TryParseExact(nextId, "N", out _) || nextId == id || nextKind is not ("dig" or "place"))
-            return Error("Invalid or reused block operation id/kind.");
-        if (request.TryGetProperty("placementAxis", out var placementAxisField) &&
-            (placementAxisField.ValueKind != JsonValueKind.String || placementAxis is not ("n" or "w") || nextKind != "place"))
-            return Error("placementAxis must be n or w and is valid only for placement.");
+            return Error("invalid_request", "Invalid or reused block operation id/kind.");
         if (selection?.Face == null || selection.Position.dimension != 0 ||
             api.World.BlockAccessor.GetChunkAtBlockPos(selection.Position) == null)
-            return Error("Aim at a loaded block in the main dimension.");
+            return Error("no_target", "Aim at a loaded block in the main dimension.", true);
         var block = api.World.BlockAccessor.GetBlock(selection.Position);
         if (String("target") != Sight.BlockKey(selection.Position, block) ||
             !inventory.Matches(String("expectedState")) ||
@@ -52,28 +48,24 @@ internal sealed class BlockActions(ICoreClientAPI api)
             selectedSlot is < 0 or > 9 || selectedSlot != player.InventoryManager.ActiveHotbarSlotNumber ||
             !request.TryGetProperty("item", out var itemField) || itemField.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) ||
             itemField.GetString() != stack?.Collectible.Code.ToString())
-            return Error("Target or inventory changed; inspect before acting.");
+            return Error("target_changed", "Target or inventory changed; inspect before acting.", true);
         var destination = selection.Position.Copy();
         if (nextKind == "place")
         {
-            if (stack?.Class != EnumItemClass.Block) return Error("Selected item is not a block stack.");
-            if (String("face") != selection.Face.Code) return Error("Selected face changed.");
-            if (block.IsReplacableBy(stack.Block)) return Error("Use a non-replaceable support block.");
+            if (stack?.Class != EnumItemClass.Block) return Error("invalid_request", "Selected item is not a block stack.");
+            if (String("face") != selection.Face.Code) return Error("target_changed", "Selected face changed.", true);
+            if (block.IsReplacableBy(stack.Block)) return Error("invalid_request", "Use a non-replaceable support block.");
             destination.Add(selection.Face);
             var blocks = api.World.BlockAccessor;
-            var destinationBlock = blocks.GetBlock(destination);
-            var destinationFluid = blocks.GetBlock(destination, BlockLayersAccess.Fluid);
-            if (!PlacementPolicy.DestinationAvailable(
-                blocks.GetChunkAtBlockPos(destination) != null,
-                destinationBlock.IsReplacableBy(stack.Block),
-                destinationFluid.LiquidCode))
-                return Error("Placement destination must be loaded, replaceable by the held block and outside lava.");
+            if (blocks.GetChunkAtBlockPos(destination) == null || blocks.GetBlock(destination).Id != 0 ||
+                blocks.GetBlock(destination, BlockLayersAccess.Fluid).Id != 0)
+                return Error("placement_blocked", "Placement destination must be loaded, empty and dry.", true);
         }
         else
         {
             if (api.World is ClientMain accessClient &&
                 accessClient.WorldMap.TestBlockAccess(player, selection, EnumBlockAccessFlags.BuildOrBreak) != EnumWorldAccessResponse.Granted)
-                return Error("Server access rules deny breaking this block.");
+                return Error("access_denied", "Server access rules deny breaking this block.");
             var entity = player.Entity;
             var p = entity.Pos;
             var body = entity.CollisionBox;
@@ -85,19 +77,15 @@ internal sealed class BlockActions(ICoreClientAPI api)
             var boxes = block.GetCollisionBoxes(api.World.BlockAccessor, destination);
             var bodyMin = new Point3(p.X + body.X1, p.Y + .35, p.Z + body.Z1);
             var bodyMax = new Point3(p.X + body.X2, p.Y + body.Y2, p.Z + body.Z2);
-            // Explicit recovery may need to remove more than the foot cell: a respawn can place a full
-            // block at the feet with a snow layer in the same body column intercepting its selection ray.
-            // Keep the exception inside the body's own vertical column; it cannot authorize arbitrary
-            // overhead or adjacent excavation.
-            bool recoveryBodyColumn = destination.X == (int)Math.Floor(p.X) && destination.Z == (int)Math.Floor(p.Z) &&
-                destination.Y >= (int)Math.Floor(p.Y) && destination.Y <= (int)Math.Floor(p.Y + body.Y2);
-            if ((!bodyCellDig || !recoveryBodyColumn) && boxes?.Any(box => SceneGeometry.Overlaps(
+            bool exactBodyCell = destination.X == (int)Math.Floor(p.X) && destination.Y == (int)Math.Floor(p.Y) &&
+                destination.Z == (int)Math.Floor(p.Z);
+            if ((!bodyCellDig || !exactBodyCell) && boxes?.Any(box => SceneGeometry.Overlaps(
                 new(destination.X + box.X1, destination.Y + box.Y1, destination.Z + box.Z1),
                 new(destination.X + box.X2, destination.Y + box.Y2, destination.Z + box.Z2),
                 bodyMin, bodyMax)) == true)
-                return Error("Refusing to dig a solid cell the player's body is in.");
+                return Error("body_cell", "Refusing to dig a solid cell the player's body is in.");
             if (block.GetRequiredMiningTier(api.World, destination) > (stack?.Collectible.ToolTier ?? 0))
-                return Error("Selected tool mining tier is insufficient.");
+                return Error("tool_tier", "Selected tool mining tier is insufficient.");
         }
         Cancel("replaced");
         StarvingRecovery = starvingRecovery;
@@ -116,21 +104,6 @@ internal sealed class BlockActions(ICoreClientAPI api)
             // Same single-placement path as OnBlockBuild; native behavior, claims, collision and packets.
             var placement = selection.Clone();
             placement.Position = destination.Copy(); placement.DidOffset = true;
-            if (placementAxis != null)
-            {
-                var support = destination.AddCopy(selection.Face.Opposite);
-                var eye = player.Entity.Pos.XYZ.Add(player.Entity.LocalEyePos);
-                if (placementAxis == "n") placement.HitPosition.X = PlacementPolicy.OrientedHitCoordinate(eye.X, support.X);
-                else placement.HitPosition.Z = PlacementPolicy.OrientedHitCoordinate(eye.Z, support.Z);
-                var facing = Block.SuggestedHVOrientation(player, placement)[0];
-                string predictedAxis = facing == BlockFacing.NORTH || facing == BlockFacing.SOUTH ? "n" : "w";
-                if (predictedAxis != placementAxis)
-                {
-                    state = "failed";
-                    reason = $"Stand on the {placementAxis} axis of the destination before oriented placement.";
-                    return Observe();
-                }
-            }
             string failure = "";
             if (!game.OnPlayerTryPlace(placement, ref failure)) { state = "failed"; reason = failure ?? "placement_refused"; }
             else game.HandSetAttackBuild = true;
@@ -143,11 +116,11 @@ internal sealed class BlockActions(ICoreClientAPI api)
     public object Read(JsonElement request, bool renew)
     {
         if (!request.TryGetProperty("id", out var value) || value.ValueKind != JsonValueKind.String || value.GetString() != id)
-            return Error("Unknown block operation; session or operation changed.");
+            return Error("unknown_operation", "Unknown block operation; session or operation changed.");
         if (renew)
         {
             if (!request.TryGetProperty("sequence", out var next) || !next.TryGetInt64(out long number) || number <= sequence)
-                return Error("Block operation sequence must increase.");
+                return Error("duplicate_sequence", "Block operation sequence must increase.");
             sequence = number;
             // Expiry is terminal, never restart a released hold.
             if (Digging && System.Environment.TickCount64 < expires) expires = System.Environment.TickCount64 + 2000;
@@ -235,5 +208,5 @@ internal sealed class BlockActions(ICoreClientAPI api)
         changedForMs = changedAt == 0 ? 0 : System.Environment.TickCount64 - changedAt,
         remainingMs = Digging ? Math.Max(0, expires - System.Environment.TickCount64) : 0 };
 
-    private static object Error(string message) => new { ok = false, error = message };
+    private static object Error(string code, string message, bool retryable = false) => WireError.Fail(code, message, retryable);
 }

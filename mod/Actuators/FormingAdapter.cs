@@ -107,20 +107,20 @@ public sealed class FormingAdapter(ICoreClientAPI api)
     public object SelectRecipe(JsonElement request)
     {
         if (!request.TryGetProperty("target", out var targetField) || targetField.ValueKind != JsonValueKind.String)
-            return new { ok = false, error = "Supply target block key and recipe id or output code." };
+            return WireError.Fail("invalid_request", "Supply target block key and recipe id or output code.");
         int recipeId = -1;
         string? output = null;
-        if (request.TryGetProperty("recipe", out var recipeField) && !recipeField.TryGetInt32(out recipeId)) return new { ok = false, error = "recipe must be an integer id." };
+        if (request.TryGetProperty("recipe", out var recipeField) && !recipeField.TryGetInt32(out recipeId)) return WireError.Fail("invalid_request", "recipe must be an integer id.");
         if (request.TryGetProperty("output", out var outputField)) output = outputField.GetString();
-        if (recipeId < 0 && output == null) return new { ok = false, error = "Supply recipe id or output code." };
+        if (recipeId < 0 && output == null) return WireError.Fail("invalid_request", "Supply recipe id or output code.");
         var parts = targetField.GetString()!.Split(':');
         if (parts.Length < 6 || parts[0] != "block" || !int.TryParse(parts[1], out int dimension) || dimension != 0 ||
             !int.TryParse(parts[2], out int x) || !int.TryParse(parts[3], out int y) || !int.TryParse(parts[4], out int z))
-            return new { ok = false, error = "Invalid block key." };
+            return WireError.Fail("unknown_target", "Invalid block key.");
         var entity = api.World.Player.Entity;
-        if (!entity.Alive || api.IsGamePaused) return new { ok = false, error = "Cannot select while dead or paused." };
+        if (!entity.Alive || api.IsGamePaused) return WireError.Fail("controls_blocked", "Cannot select while dead or paused.", true);
         var pos = new BlockPos(x, y, z, 0);
-        if (entity.Pos.DistanceTo(pos.ToVec3d().Add(.5, .5, .5)) > Reach) return new { ok = false, error = "Surface out of reach." };
+        if (entity.Pos.DistanceTo(pos.ToVec3d().Add(.5, .5, .5)) > Reach) return WireError.Fail("target_unreachable", "Surface out of reach.", true);
         var be = api.World.BlockAccessor.GetBlockEntity(pos);
         ItemStack? material;
         bool selected;
@@ -134,20 +134,20 @@ public sealed class FormingAdapter(ICoreClientAPI api)
                 material = clay.BaseMaterial; selected = clay.SelectedRecipe != null;
                 allowed = ClayRecipes(material).Select(r => (r.RecipeId, r.Output?.ResolvedItemstack?.Collectible?.Code?.ToString())); break;
             default:
-                return new { ok = false, error = "Target is not a knapping surface or clay form." };
+                return WireError.Fail("invalid_request", "Target is not a knapping surface or clay form.");
         }
-        if (selected) return new { ok = false, error = "Recipe already selected." };
+        if (selected) return WireError.Fail("already_selected", "Recipe already selected.");
         var held = api.World.Player.InventoryManager.ActiveHotbarSlot?.Itemstack;
         if (material == null || held == null || held.Collectible.Code != material.Collectible.Code)
-            return new { ok = false, error = "Hold the surface's base material." };
+            return WireError.Fail("held_item_changed", "Hold the surface's base material.", true);
         var candidates = allowed.ToArray();
         if (recipeId < 0) recipeId = candidates.FirstOrDefault(c => c.output == output, (-1, null)).id;
-        if (!candidates.Any(c => c.id == recipeId)) return new { ok = false, error = "Recipe not available for this material; target lists recipes." };
+        if (!candidates.Any(c => c.id == recipeId)) return WireError.Fail("unknown_recipe", "Recipe not available for this material; target lists recipes.");
         foreach (var dialog in api.Gui.OpenedGuis.OfType<GuiDialogBlockEntityRecipeSelector>().ToArray())
         {
             // The native dialog cancels (and destroys the surface) unless it believes a selection happened.
             var flag = typeof(GuiDialogBlockEntityRecipeSelector).GetField("didSelect", BindingFlags.Instance | BindingFlags.NonPublic);
-            if (flag == null) return new { ok = false, error = "Recipe dialog open and cannot be closed safely." };
+            if (flag == null) return WireError.Fail("dialog_changed", "Recipe dialog open and cannot be closed safely.");
             flag.SetValue(dialog, true);
             dialog.TryClose();
         }
@@ -172,7 +172,7 @@ public sealed class FormingAdapter(ICoreClientAPI api)
             _ => null,
         };
         if (applied != recipeId)
-            return new { ok = false, error = "Recipe did not apply to the surface; it may be out of reach or protected by a land claim." };
+            return WireError.Fail("recipe_failed", "Recipe did not apply to the surface; it may be out of reach or protected by a land claim.", true);
         return new { ok = true, status = "selected", recipe = recipeId, target = targetField.GetString() };
     }
 

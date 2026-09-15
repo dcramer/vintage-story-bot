@@ -29,7 +29,7 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
             foreach (var (key, value) in Entry(collectible, text ? -1 : 0)) page[key] = value;
         else if (api.World.GetEntityType(location) is { Code: not null } creature)
             foreach (var (key, value) in Entry(creature)) page[key] = value;
-        else return new { ok = false, error = "No handbook page for that code." };
+        else return WireError.Fail("unknown_code", "No handbook page for that code.");
         return page;
     }
 
@@ -43,10 +43,10 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
         int offset = 0, limit = 50;
         if (request.TryGetProperty("offset", out var offsetField) && (!offsetField.TryGetInt32(out offset) || offset < 0 || offset > 100000) ||
             request.TryGetProperty("limit", out var limitField) && (!limitField.TryGetInt32(out limit) || limit < 1 || limit > 100))
-            return new { ok = false, error = "offset: 0–100000; limit: 1–100." };
+            return WireError.Fail("invalid_request", "offset: 0–100000; limit: 1–100.");
         bool text = request.TryGetProperty("text", out var textField) && textField.ValueKind == JsonValueKind.True;
         string match = request.TryGetProperty("match", out var matchField) && matchField.ValueKind == JsonValueKind.String ? matchField.GetString()!.ToLowerInvariant() : "";
-        if (match.Length > 64) return new { ok = false, error = "match: at most 64 characters." };
+        if (match.Length > 64) return WireError.Fail("invalid_request", "match: at most 64 characters.");
         string? type = request.TryGetProperty("type", out var typeField) && typeField.ValueKind == JsonValueKind.String ? typeField.GetString() : null;
         bool Matches(string code, Func<string?> name) => match.Length == 0 || code.ToLowerInvariant().Contains(match) || (name()?.ToLowerInvariant().Contains(match) ?? false);
         // The filtered, sorted listing is the expensive part (a name rendered per collectible): kept per

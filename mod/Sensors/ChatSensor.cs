@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace VintageStoryAI;
 
-public sealed record ChatLine(long id, long at, int group, string type, string? sender, string text);
+public sealed record ChatLine(long id, long at, int group, string type, string? sender, string text, bool truncated);
 public sealed record ChatBatch(bool ok, string session, long cursor, long latest, bool missed, ChatLine[] messages);
 
 // What the player reads in the chat window: a bounded ring with the same
@@ -20,8 +20,9 @@ public sealed partial class ChatSensor
         var match = Sender().Match(text);
         if (match.Success) { sender = match.Groups["name"].Value; text = match.Groups["text"].Value; }
         text = Tags().Replace(text, "").Trim();
-        if (text.Length > 512) text = text[..512];
-        lines.Enqueue(new(++sequence, now, group, type, sender, text));
+        bool truncated = text.Length > 512;
+        if (truncated) text = text[..512];
+        lines.Enqueue(new(++sequence, now, group, type, sender, text, truncated));
         while (lines.Count > 128) lines.Dequeue();
     }
 

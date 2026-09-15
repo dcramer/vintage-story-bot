@@ -64,7 +64,7 @@ public sealed class ContainerAdapter(ICoreClientAPI api)
 
     public object Open(JsonElement request, SystemMouseInWorldInteractions? interactions, float dt)
     {
-        if (!api.World.Player.Entity.Alive || api.IsGamePaused) return Error("Cannot open a container while dead or paused.");
+        if (!api.World.Player.Entity.Alive || api.IsGamePaused) return Error("controls_blocked", "Cannot open a container while dead or paused.", true);
         // The server answers the click with the dialog a moment later; a container that opened after the
         // previous call is adopted rather than clicked again, which would toggle it closed.
         if (Candidate() is { } already && (open == null || open == already)) { open = already; mutation++; return Slots(open); }
@@ -79,7 +79,7 @@ public sealed class ContainerAdapter(ICoreClientAPI api)
         }
         finally { api.Input.InWorldMouseButton.Right = false; }
         var found = Candidate();
-        if (found == null) return Error("No container opened; aim at a chest, vessel or basket within reach and retry.");
+        if (found == null) return Error("no_container", "No container opened; aim at a chest, vessel or basket within reach and retry.", true);
         open = found;
         mutation++;
         return Slots(open);
@@ -101,18 +101,18 @@ public sealed class ContainerAdapter(ICoreClientAPI api)
 
     public object Move(JsonElement request)
     {
-        if (!api.World.Player.Entity.Alive || api.IsGamePaused) return Error("Cannot change inventory while dead or paused.");
-        if (open == null) return Error("No container open; open_container first.");
+        if (!api.World.Player.Entity.Alive || api.IsGamePaused) return Error("controls_blocked", "Cannot change inventory while dead or paused.", true);
+        if (open == null) return Error("no_container", "No container open; open_container first.");
         if (!request.TryGetProperty("expectedState", out var expected) || expected.ValueKind != JsonValueKind.String || expected.GetString() != State(open))
-            return Error("Container changed; read open_container again. Nothing moved.");
+            return Error("container_changed", "Container changed; read open_container again. Nothing moved.", true);
         var source = Resolve(request, "from");
         var target = Resolve(request, "to");
-        if (source == null || target == null || source == target || source.Empty) return Error("Invalid, identical, or empty inventory slots.");
+        if (source == null || target == null || source == target || source.Empty) return Error("invalid_request", "Invalid, identical, or empty inventory slots.");
         bool touchesContainer = source.Inventory == open || target.Inventory == open;
-        if (!touchesContainer) return Error("One end of a container move must be the open container.");
+        if (!touchesContainer) return Error("invalid_request", "One end of a container move must be the open container.");
         if (!request.TryGetProperty("quantity", out var count) || count.ValueKind != JsonValueKind.Number ||
             !count.TryGetInt32(out int quantity) || quantity < 1 || quantity > 64 || quantity > source.StackSize)
-            return Error("quantity must be 1–64 and available in source.");
+            return Error("invalid_request", "quantity must be 1–64 and available in source.");
         var op = new ItemStackMoveOperation(api.World, EnumMouseButton.Left, 0, EnumMergePriority.DirectMerge, quantity)
         { ActingPlayer = api.World.Player };
         // The game's normal synchronization packet; never assign stacks ourselves.
@@ -120,6 +120,7 @@ public sealed class ContainerAdapter(ICoreClientAPI api)
         var packet = Manager.TryTransferTo(source, target, ref op);
         if (packet != null) api.Network.SendPacketClient(packet);
         return new { ok = op.MovedQuantity > 0, status = "submitted", moved = op.MovedQuantity,
+            code = op.MovedQuantity > 0 ? null : "transfer_empty", retryable = op.MovedQuantity == 0,
             error = op.MovedQuantity > 0 ? null : "No items moved; read open_container before retrying.", state = State(open) };
     }
 
@@ -134,7 +135,7 @@ public sealed class ContainerAdapter(ICoreClientAPI api)
     }
 
     // The open container as the player sees it now; a read, no click.
-    public object Read() => open == null ? Error("No container open; open_container first.") : Slots(open);
+    public object Read() => open == null ? Error("no_container", "No container open; open_container first.") : Slots(open);
 
     public object Close()
     {
@@ -143,5 +144,5 @@ public sealed class ContainerAdapter(ICoreClientAPI api)
         return new { ok = true, status = "closed" };
     }
 
-    private static object Error(string error) => new { ok = false, error };
+    private static object Error(string code, string error, bool retryable = false) => WireError.Fail(code, error, retryable);
 }

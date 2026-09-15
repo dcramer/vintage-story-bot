@@ -33,9 +33,9 @@ public sealed partial class AiBridgeMod
         var entity = api.World!.Player.Entity;
         var hotbar = api.World!.Player.InventoryManager.GetHotbarInventory();
         if (!TryInteger(request, "slot", out int slot) || hotbar == null || slot < 0 || slot > 9 || slot >= hotbar.Count)
-            return new { ok = false, error = "Select ordinary hotbar slots 0–9; extra/offhand slots are not selection indices." };
+            return WireError.Fail("invalid_request", "Select ordinary hotbar slots 0–9; extra/offhand slots are not selection indices.");
         if (!entity.Alive || api.IsGamePaused)
-            return new { ok = false, error = "Cannot select while dead or paused." };
+            return WireError.Fail("controls_blocked", "Cannot select while dead or paused.", true);
         StopHandAction();
         api.World.Player.InventoryManager.ActiveHotbarSlotNumber = slot;
         return new { ok = true, activeSlot = slot };
@@ -44,32 +44,32 @@ public sealed partial class AiBridgeMod
     private object HandAction(string action, JsonElement request)
     {
         if (!TryInteger(request, "durationMs", out int handMilliseconds) || handMilliseconds < 1 || handMilliseconds > 5000)
-            return new { ok = false, error = "durationMs must be an integer from 1 to 5000." };
+            return WireError.Fail("invalid_request", "durationMs must be an integer from 1 to 5000.");
         if (!CanControl())
-            return new { ok = false, error = "Close menus and enter the world before interacting." };
+            return WireError.Fail("controls_blocked", "Close menus and enter the world before interacting.", true);
         if (request.TryGetProperty("expectedTarget", out var expected) &&
             (expected.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) || expected.GetString() != CurrentTargetKey()))
         {
             StopActs();
-            return new { ok = false, error = "Target changed; observe and aim again." };
+            return WireError.Fail("target_changed", "Target changed; observe and aim again.", true);
         }
         if (request.TryGetProperty("expectedState", out var expectedInventory) &&
             (expectedInventory.ValueKind != JsonValueKind.String || !inventory.Matches(expectedInventory.GetString())))
-            return new { ok = false, error = "Inventory changed; inspect before interacting." };
+            return WireError.Fail("inventory_changed", "Inventory changed; inspect before interacting.", true);
         if (request.TryGetProperty("expectedItem", out var expectedItem) &&
             (expectedItem.ValueKind != JsonValueKind.Object || !TryInteger(expectedItem, "slot", out int itemSlot) ||
              itemSlot != api.World!.Player.InventoryManager.ActiveHotbarSlotNumber ||
              !expectedItem.TryGetProperty("code", out var itemCode) || itemCode.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) ||
              itemCode.GetString() != api.World.Player.InventoryManager.ActiveHotbarSlot.Itemstack?.Collectible.Code.ToString()))
-            return new { ok = false, error = "Held item changed; inspect before interacting." };
+            return WireError.Fail("held_item_changed", "Held item changed; inspect before interacting.", true);
         if (action == "attack" && api.World!.Player.CurrentBlockSelection == null &&
             api.World!.Player.CurrentEntitySelection == null)
-            return new { ok = false, error = "Aim at a block or entity before attacking." };
+            return WireError.Fail("no_target", "Aim at a block or entity before attacking.", true);
         bool sneakHand = false;
         if (request.TryGetProperty("sneak", out var handSneakField))
         {
             if (handSneakField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-                return new { ok = false, error = "sneak must be boolean." };
+                return WireError.Fail("invalid_request", "sneak must be boolean.");
             sneakHand = handSneakField.GetBoolean();
         }
         var selection = api.World.Player.CurrentBlockSelection;
@@ -108,12 +108,12 @@ public sealed partial class AiBridgeMod
     {
         if (containers.Adopt() is { } adopted) return adopted;
         if (!CanControl())
-            return new { ok = false, error = "Close menus and enter the world before opening." };
+            return WireError.Fail("controls_blocked", "Close menus and enter the world before opening.", true);
         if (!request.TryGetProperty("target", out var target) || target.ValueKind != JsonValueKind.String ||
             target.GetString() != CurrentTargetKey())
         {
             StopActs();
-            return new { ok = false, error = "Aim at the container first; observe and aim again." };
+            return WireError.Fail("target_changed", "Aim at the container first; observe and aim again.", true);
         }
         StopActs();
         return containers.Open(request, worldInteractions, lastTickDt);
@@ -138,14 +138,14 @@ public sealed partial class AiBridgeMod
             blockRecoveryField.ValueKind == JsonValueKind.True;
         if (request.TryGetProperty("allowStarvingRecovery", out blockRecoveryField) &&
             blockRecoveryField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-            return new { ok = false, error = "allowStarvingRecovery must be boolean." };
+            return WireError.Fail("invalid_request", "allowStarvingRecovery must be boolean.");
         bool bodyCellDig = request.TryGetProperty("allowBodyCellDig", out var bodyCellDigField) &&
             bodyCellDigField.ValueKind == JsonValueKind.True;
         if (request.TryGetProperty("allowBodyCellDig", out bodyCellDigField) &&
             bodyCellDigField.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-            return new { ok = false, error = "allowBodyCellDig must be boolean." };
+            return WireError.Fail("invalid_request", "allowBodyCellDig must be boolean.");
         if (!CanControl() || ManualInput() || !entity.OnGround || entity.FeetInLiquid || entity.MountedOn != null)
-            return new { ok = false, error = "Block actions need grounded, dry, ready controls." };
+            return WireError.Fail("controls_unavailable", "Block actions need grounded, dry, ready controls.", true);
         StopActs();
         return blockActions.Begin(request, inventory, blockRecovery, bodyCellDig);
     }
@@ -153,17 +153,17 @@ public sealed partial class AiBridgeMod
     private object Chat(JsonElement request)
     {
         if (!request.TryGetProperty("message", out var chatField) || chatField.ValueKind != JsonValueKind.String)
-            return new { ok = false, error = "Supply a message string." };
+            return WireError.Fail("invalid_request", "Supply a message string.");
         var chatText = chatField.GetString()!.Replace('\n', ' ').Replace('\r', ' ').Trim();
         // Never let generated status text be interpreted as a chat command.
         while (chatText.Length > 0 && (chatText[0] == '/' || chatText[0] == '.')) chatText = chatText[1..].TrimStart();
-        if (chatText.Length == 0) return new { ok = false, error = "Empty chat message." };
+        if (chatText.Length == 0) return WireError.Fail("invalid_request", "Empty chat message.");
         if (chatText.Length > 256) chatText = chatText[..256];
         string? to = null;
         if (request.TryGetProperty("to", out var toField))
         {
             if (toField.ValueKind != JsonValueKind.String || !System.Text.RegularExpressions.Regex.IsMatch(toField.GetString()!, "^[A-Za-z0-9_-]{1,64}$"))
-                return new { ok = false, error = "to must be a player name." };
+                return WireError.Fail("invalid_request", "to must be a player name.");
             to = toField.GetString();
         }
         // A private message is the game's own /pm; the text itself never starts a command.
@@ -174,10 +174,10 @@ public sealed partial class AiBridgeMod
     private object MapWaypointRemove(JsonElement request)
     {
         if (!request.TryGetProperty("guid", out var guidField) || guidField.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(guidField.GetString()))
-            return new { ok = false, error = "Supply the waypoint guid from map_waypoints." };
+            return WireError.Fail("invalid_request", "Supply the waypoint guid from map_waypoints.");
         var guid = guidField.GetString()!;
         var index = mapWaypoints.IndexOf(guid);
-        if (index == null) return new { ok = false, error = "No such waypoint on the map; read map_waypoints again." };
+        if (index == null) return WireError.Fail("unknown_waypoint", "No such waypoint on the map; read map_waypoints again.", true);
         // The map screen's own edit dialog deletes a marker by sending exactly this command; the server
         // validates it and resends the list, so verify by reading map_waypoints until the guid is gone.
         api.SendChatMessage($"/waypoint remove {index}", GlobalConstants.GeneralChatGroup, null);
@@ -187,31 +187,31 @@ public sealed partial class AiBridgeMod
     private object MapWaypointAdd(JsonElement request)
     {
         if (!request.TryGetProperty("title", out var titleField) || titleField.ValueKind != JsonValueKind.String)
-            return new { ok = false, error = "Supply a title string." };
+            return WireError.Fail("invalid_request", "Supply a title string.");
         var title = titleField.GetString()!.Replace('\n', ' ').Replace('\r', ' ').Trim();
-        if (title.Length == 0 || title.Length > 64) return new { ok = false, error = "title must be 1–64 characters." };
+        if (title.Length == 0 || title.Length > 64) return WireError.Fail("invalid_request", "title must be 1–64 characters.");
         double[] at = new double[3];
         string[] names = ["x", "y", "z"];
         for (int i = 0; i < 3; i++)
             if (!request.TryGetProperty(names[i], out var field) || field.ValueKind != JsonValueKind.Number || !field.TryGetDouble(out at[i]) || !double.IsFinite(at[i]))
-                return new { ok = false, error = "Supply finite x, y and z." };
+                return WireError.Fail("invalid_request", "Supply finite x, y and z.");
         string icon = "circle", color = "#ff0000";
         bool pinned = false;
         if (request.TryGetProperty("icon", out var iconField))
         {
             if (iconField.ValueKind != JsonValueKind.String || !System.Text.RegularExpressions.Regex.IsMatch(iconField.GetString()!, "^[a-z0-9_-]{1,32}$"))
-                return new { ok = false, error = "icon must be a short lowercase word." };
+                return WireError.Fail("invalid_request", "icon must be a short lowercase word.");
             icon = iconField.GetString()!;
         }
         if (request.TryGetProperty("color", out var colorField))
         {
             if (colorField.ValueKind != JsonValueKind.String || !System.Text.RegularExpressions.Regex.IsMatch(colorField.GetString()!, "^(#[0-9a-fA-F]{6}|[a-z]{1,24})$"))
-                return new { ok = false, error = "color must be #rrggbb or a color name." };
+                return WireError.Fail("invalid_request", "color must be #rrggbb or a color name.");
             color = colorField.GetString()!;
         }
         if (request.TryGetProperty("pinned", out var pinnedField))
         {
-            if (pinnedField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return new { ok = false, error = "pinned must be boolean." };
+            if (pinnedField.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return WireError.Fail("invalid_request", "pinned must be boolean.");
             pinned = pinnedField.GetBoolean();
         }
         var culture = System.Globalization.CultureInfo.InvariantCulture;

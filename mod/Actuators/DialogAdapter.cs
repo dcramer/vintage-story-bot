@@ -39,28 +39,28 @@ public sealed class DialogAdapter(ICoreClientAPI api)
     {
         if (!request.TryGetProperty("dialog", out var dialogField) || dialogField.ValueKind != JsonValueKind.String ||
             !request.TryGetProperty("element", out var elementField) || elementField.ValueKind != JsonValueKind.String)
-            return new { ok = false, error = "Expected dialog and element strings from ui_dialogs." };
+            return WireError.Fail("invalid_request", "Expected dialog and element strings from ui_dialogs.");
         string dialogName = dialogField.GetString()!, elementName = elementField.GetString()!;
         var dialogs = OpenDialogs().Where(dialog => dialog.DebugName == dialogName).ToArray();
-        if (dialogs.Length != 1) return new { ok = false, error = $"Expected one open dialog named {dialogName}; found {dialogs.Length}." };
+        if (dialogs.Length != 1) return WireError.Fail("dialog_changed", $"Expected one open dialog named {dialogName}; found {dialogs.Length}.", true);
         var matches = Elements(dialogs[0])
             .Where(entry => entry.Element is GuiElementTextButton || entry.Element is GuiElementToggleButton)
             .Where(entry => string.Equals(entry.Key, elementName, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(TextOf(entry.Element), elementName, StringComparison.OrdinalIgnoreCase))
             .ToArray();
-        if (matches.Length != 1) return new { ok = false, error = $"Expected one button matching {elementName}; found {matches.Length}. Use ui_dialogs keys or texts." };
+        if (matches.Length != 1) return WireError.Fail("dialog_changed", $"Expected one button matching {elementName}; found {matches.Length}. Use ui_dialogs keys or texts.", true);
         var (key, element) = matches[0];
         string text = TextOf(element) ?? "";
-        if (RefusedKeys.Contains(key)) return new { ok = false, error = "Refused: destructive native button." };
+        if (RefusedKeys.Contains(key)) return WireError.Fail("refused", "Refused: destructive native button.");
         if (element is GuiElementControl { Enabled: false } || element is GuiElementTextButton { Visible: false })
-            return new { ok = false, error = "Button is disabled or hidden." };
+            return WireError.Fail("dialog_changed", "Button is disabled or hidden.", true);
         var bounds = element.Bounds;
         int x = (int)Math.Round(bounds.absX + bounds.OuterWidth / 2), y = (int)Math.Round(bounds.absY + bounds.OuterHeight / 2);
         if (x < 0 || y < 0 || x >= api.Render.FrameWidth || y >= api.Render.FrameHeight)
-            return new { ok = false, error = "Button center is outside the window; enlarge the display." };
-        if (api.World is not ClientMain client) return new { ok = false, error = "Client unavailable." };
+            return WireError.Fail("dialog_offscreen", "Button center is outside the window; enlarge the display.");
+        if (api.World is not ClientMain client) return WireError.Fail("no_client", "Client unavailable.");
         var dialog = dialogs[0];
-        if (!dialog.ShouldReceiveMouseEvents()) return new { ok = false, error = "Dialog does not accept mouse input right now." };
+        if (!dialog.ShouldReceiveMouseEvents()) return WireError.Fail("dialog_changed", "Dialog does not accept mouse input right now.", true);
         // Deliver the click to the named dialog only, as GuiManager would once it reached it, so no other open dialog can swallow it.
         client.MouseCurrentX = x;
         client.MouseCurrentY = y;
@@ -69,7 +69,8 @@ public sealed class DialogAdapter(ICoreClientAPI api)
         dialog.OnMouseDown(down);
         var up = new MouseEvent(x, y, EnumMouseButton.Left, 0);
         dialog.OnMouseUp(up);
-        if (!down.Handled && !up.Handled) return new { ok = false, error = "Dialog did not handle the click at the button center.", x, y };
+        if (!down.Handled && !up.Handled) return new { ok = false, code = "dialog_ignored",
+            error = "Dialog did not handle the click at the button center.", retryable = true, x, y };
         return new { ok = true, dialog = dialogName, element = key, text, x, y, stillOpen = dialog.IsOpened() };
     }
 
@@ -80,12 +81,12 @@ public sealed class DialogAdapter(ICoreClientAPI api)
         string? name = null;
         if (request.TryGetProperty("dialog", out var dialogField))
         {
-            if (dialogField.ValueKind != JsonValueKind.String || dialogField.GetString()!.Length is 0 or > 80) return new { ok = false, error = "dialog must be a name from ui_dialogs." };
+            if (dialogField.ValueKind != JsonValueKind.String || dialogField.GetString()!.Length is 0 or > 80) return WireError.Fail("invalid_request", "dialog must be a name from ui_dialogs.");
             name = dialogField.GetString();
         }
         var candidates = (name == null ? OpenDialogs().Where(BlocksControl) : OpenDialogs().Where(dialog => dialog.DebugName == name)).ToArray();
         if (candidates.Length == 0) return new { ok = true, closed = false, dialog = name, reason = "none_open" };
-        if (name != null && candidates.Length > 1) return new { ok = false, error = $"Expected one open dialog named {name}; found {candidates.Length}." };
+        if (name != null && candidates.Length > 1) return WireError.Fail("dialog_changed", $"Expected one open dialog named {name}; found {candidates.Length}.", true);
         var dialog = candidates[^1];
         var escape = new KeyEvent { KeyCode = (int)GlKeys.Escape };
         dialog.OnKeyDown(escape);
