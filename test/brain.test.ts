@@ -1253,11 +1253,7 @@ test('brain: starvation with an empty pack forages instead of making the missing
 });
 
 test('brain: starvation foraging waits out storms and opens the burrow first', () => {
-  assert.equal(
-    pickJob(situation({ hunger: 0.05, reserve: 0, storm: true, home: false })),
-    'burrow',
-    'shelter through the short storm, forage after',
-  );
+  assert.equal(pickJob(situation({ hunger: 0.05, reserve: 0, storm: true, home: false })), 'burrow', 'shelter through the short storm, forage after');
   assert.equal(pickJob(situation({ hunger: 0.05, reserve: 0, burrowed: true })), 'unburrow', 'open the exit before looking for food');
 });
 
@@ -2111,6 +2107,18 @@ test('brain: shared supplies are approached from inside the owned home', () => {
     state: { position: { x: 8.5, y: 99, z: 21.5 } },
   } as any);
   assert.deepEqual(enter, { handoff: 'go_home' }, 'proximity outside a wall is not usable container reach');
+  const settle: any = stockpile.run({
+    home,
+    memory,
+    now: 1000,
+    s: { atHome: true },
+    state: { position: { x: 14.5, y: 99, z: 25.5 } },
+  } as any);
+  assert.deepEqual(
+    [settle.start, settle.args.x, settle.args.y, settle.args.z],
+    ['travel', home.x, home.y, home.z],
+    'after crossing the door, settle at the indoor work point before reaching for a far wall basket',
+  );
   const use: any = stockpile.run({
     home,
     memory,

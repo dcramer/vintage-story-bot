@@ -37,7 +37,13 @@ export const goHome: Concern = {
       // the inside, so the walk falls through to the seal below. Unset in
       // synthetic readings behaves as a direct call.
       if (home && ctx.job !== undefined && ctx.job !== 'go_home') {
-        const walk = goTo(ctx, home, 'returning home for the task');
+        // A closed shelter makes its interior home point unreachable to the
+        // ordinary navigator. Target the known outside of the doorway first;
+        // otherwise travel can circle or climb the roof while trying to reach
+        // a point behind the closed gates. Once near, the existing access goal
+        // opens the gates and crosses the threshold deliberately.
+        const doorstep = { x: dwelling.door.x + 0.5, y: dwelling.door.y, z: dwelling.door.z + 1.5 };
+        const walk = goTo(ctx, doorstep, 'returning to the shelter door for the task');
         if (walk) return walk;
       }
       if (dwelling.kind === 'gates')

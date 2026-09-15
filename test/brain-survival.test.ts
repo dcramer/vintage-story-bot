@@ -946,10 +946,16 @@ test('a task handoff walks home without sealing; a stay seals', () => {
   const memory: any = fresh({ home, dwelling: { door: { x: 200, y: 100, z: 201 }, item: 'game:soil-low-none' } });
   const ctxFor = (job, position) =>
     ({ job, memory, home, storm: false, state: { position }, k: { slots: [{ code: 'game:soil-low-none', quantity: 2 }] } }) as any;
-  const run = (job, position) => (goHome.run(ctxFor(job, position)) as any).start;
-  assert.equal(run('storage', { x: 0, y: 100, z: 0 }), 'travel', 'a handoff walks home instead of sealing for a task that may leave');
-  assert.equal(run('go_home', { x: 0, y: 100, z: 0 }), 'enter_shelter', 'a night or storm stay seals');
-  assert.equal(run('storage', { x: 195, y: 100, z: 198 }), 'enter_shelter', 'near the door the task needs the inside');
+  const run = (job, position) => goHome.run(ctxFor(job, position)) as any;
+  const approach = run('storage', { x: 0, y: 100, z: 0 });
+  assert.equal(approach.start, 'travel', 'a handoff walks home instead of sealing for a task that may leave');
+  assert.deepEqual(
+    { x: approach.args.x, y: approach.args.y, z: approach.args.z },
+    { x: 200.5, y: 100, z: 202.5 },
+    'the approach targets the outside doorstep instead of the unreachable interior home point',
+  );
+  assert.equal(run('go_home', { x: 0, y: 100, z: 0 }).start, 'enter_shelter', 'a night or storm stay seals');
+  assert.equal(run('storage', { x: 195, y: 100, z: 198 }).start, 'enter_shelter', 'near the door the task needs the inside');
 });
 
 test('storage clears snow and grass off a chest slot instead of waiting on it', () => {

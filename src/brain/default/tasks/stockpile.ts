@@ -36,7 +36,14 @@ export const stockpile: Concern = {
     // wall, but do not enter merely to discover that the next step is outdoor
     // gathering. That creates an enter/seal/open loop at night.
     const approach = (why: string) => {
-      if (ctx.home && horizontal(stash, ctx.home) <= 8) return ctx.s.atHome ? null : { handoff: 'go_home' as const };
+      if (ctx.home && horizontal(stash, ctx.home) <= 8) {
+        if (!ctx.s.atHome) return { handoff: 'go_home' as const };
+        // Entering through the gate stops just inside the threshold. The
+        // farthest basket along the side wall can still be beyond native
+        // interaction reach from there, so settle at the remembered indoor
+        // work point before operating any of the home's containers.
+        return goTo(ctx, ctx.home, why, 0.5, 0.35);
+      }
       return goTo(ctx, stash, why, 3);
     };
     if (!stash.seen || ctx.now - stash.seen.at >= STOCK_CHECK_MS) {
