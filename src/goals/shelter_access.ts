@@ -8,6 +8,7 @@ import { travel } from './travel.ts';
 import { useOnBlock } from './use_block.ts';
 
 const cell = z.object({ x: z.number().int(), y: z.number().int(), z: z.number().int() }).strict();
+export const insideDoorway = (door, home) => ({ x: door.x + 0.5, y: home.y, z: door.z - 0.5 });
 
 // An exact lower-floor destination can make generic navigation prefer the
 // roof over an owned doorway. Cross only to the opposite side of the open
@@ -33,6 +34,7 @@ export async function crossDoorway(field, door, home, direction) {
 export async function shelterAccess(field, survival, { door, home, direction }) {
   const cells = shelterDoorCells(door);
   const outside = { x: door.x + 0.5, y: door.y, z: door.z + 1.5 };
+  const inside = insideDoorway(door, home);
   const failure = (reason, extra = {}) => ({ ok: false, goal: 'shelter_access', direction, reason, ...extra });
   const operate = async (cell, state: 'opened' | 'closed') => {
     await field.observe(true);
@@ -69,6 +71,12 @@ export async function shelterAccess(field, survival, { door, home, direction }) 
 
   if (direction === 'enter') {
     const approached = await pass(outside);
+    if (approached) return approached;
+  } else {
+    // A task may finish anywhere in the house. Get within native reach of the
+    // gates before trying to operate them instead of assuming the body is still
+    // at the home anchor beside the doorway.
+    const approached = await pass(inside);
     if (approached) return approached;
   }
   // Open the lower gate first so it cannot hide the upper gate's selection
