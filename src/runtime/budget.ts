@@ -4,6 +4,10 @@ import { type Log, noLog } from './log.ts';
 // What each part of a real-time loop may take. A bot that answers the game late
 // is a bot standing still with the keys held, so going over is news: one line
 // per thing per ten seconds, with how often and how badly, never a flood.
+// TODO: over_budget lines need a consumer (the pace analyzer): walk_iteration,
+// request:control_step and loop_lag violations currently hide until someone digs.
+// loop_lag's seconds-long Node stalls are unexplained; prime suspect is sync
+// parse/merge of large sense pages, to confirm by live profiling.
 export const budgets = {
   // Milliseconds for one round trip to the mod: the per-frame reads and steps, and everything else.
   requestFrame: 100,
