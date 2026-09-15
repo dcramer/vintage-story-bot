@@ -58,6 +58,8 @@ const toolTask = (id: 'knife' | 'axe' | 'shovel' | 'hoe', head: string, blades: 
   // Gather and forming already perform their own bounded threat avoidance.
   // Restarting them for every sighting strands durable work without its tool.
   uncuttable: true,
+  // Starvation still cuts tool-making for food; flint waits, hunger does not.
+  cutFor: ['eat'],
   run: ({ k }) => makeTool(k, id, head, blades(k), output),
   // Flint and knappable stones are picked up in passing while a tool is missing and nothing knappable is carried.
   wants: k => (!k[id] && k.knappables < 2 ? KNAPPABLE_WANTS : []),

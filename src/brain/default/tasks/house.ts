@@ -55,6 +55,9 @@ export const house: Concern = {
   // creature costs more progress than a keep-inventory respawn, so finish the
   // current construction action and let death itself interrupt if necessary.
   uncuttable: true,
+  // Starvation still cuts construction for food: a half-built house waits, a
+  // starved builder respawns away from the work.
+  cutFor: ['eat'],
   run: ctx => {
     const { k, memory } = ctx;
     let plan = memory.notes.construction;

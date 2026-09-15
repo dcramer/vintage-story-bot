@@ -56,6 +56,14 @@ const stormWithCover = (s: Situation) => s.storm && ((s.home && s.atHome) || s.b
 const stormNowhereToDig = (s: Situation, tried: Tried) =>
   s.storm && !(s.home && s.atHome) && !s.burrowed && tried.has('burrow') && !tried.has('shift');
 const stormNoCover = (s: Situation, tried: Tried) => s.storm && !tried.has('burrow');
+// Starving with an empty pack and no cover to keep: the burrow rule (opened
+// whatever stands outside) extended to the open. Storms and active threats
+// still win, short and lethal beats slow starvation; night does not, a night
+// of hunger kills surer than what hunts in it. A dug-in bot opens the burrow
+// first through the rung below. Failed searches cool down through the tried
+// window like every other rung.
+export const snackSearch = (s: Situation) =>
+  !progressThroughRespawn(s) && starving(s) && !(s.reserve > 0) && !s.storm && !s.threat && !s.burrowed;
 // An active threat still wins above and triggers a flight. Once it is gone,
 // historical scares must not replace unfinished durable work with a long
 // relocation on a proven keep-inventory world where death already preserves
@@ -93,6 +101,7 @@ export const LADDER: Rung[] = [
   { job: 'wait', when: stormWithCover },
   { job: 'shift', when: stormNowhereToDig },
   { job: 'burrow', when: stormNoCover },
+  { job: 'eat', when: (s, tried) => snackSearch(s) && !tried.has('eat') },
   { job: 'relocate', when: badGround },
   { job: 'go_home', when: nightAwayFromHome },
   { job: 'wait', when: nightWithCover },

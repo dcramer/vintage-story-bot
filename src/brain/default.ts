@@ -183,7 +183,10 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // Someone else's goal is otherwise left alone.
     if (active.by !== 'brain') return { wait: `letting ${active.kind} finish (${active.by})` };
     const cuts = concern(job).cuts;
-    const pressing = job !== memory.job && !mine?.uncuttable && (typeof cuts === 'function' ? cuts(ctx) : !!cuts);
+    const pressing =
+      job !== memory.job &&
+      (!mine?.uncuttable || mine.cutFor?.includes(job)) &&
+      (typeof cuts === 'function' ? cuts(ctx) : !!cuts);
     if (pressing) return { stop: job };
     return { wait: `letting ${active.kind} finish` };
   }

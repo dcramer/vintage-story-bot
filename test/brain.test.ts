@@ -1189,7 +1189,8 @@ test('brain: stale recovery state cannot restart forage when the pack is empty',
   memory.notes.firepit = { x: 2, y: 100, z: 0 };
   const supplies = kitted();
   supplies.inventories[0].slots.push(slot('game:firestarter'), slot('game:firewood', 8));
-  for (const current of [149, 150, 299, 300, 600, 749]) {
+  // Below 10% the bot genuinely forages (see the starvation test); the stale flag clears everywhere else.
+  for (const current of [150, 299, 300, 600, 749]) {
     memory.notes.foodRecovery = true;
     const choice = decide(reading({ state: state({ vitals: { hunger: { current, max: 1500 } } }), inventory: supplies, now: 20_000 }), memory);
     assert.notEqual(choice.start, 'forage');
@@ -1214,7 +1215,7 @@ test('brain: active recovery forage continues below ten percent instead of uproo
   );
 });
 
-test('brain: starvation with an empty pack keeps making the missing axe', () => {
+test('brain: starvation with an empty pack forages instead of making the missing axe', () => {
   const memory = fresh();
   memory.startupChecked = true;
   memory.notes.firepit = { x: 2, y: 100, z: 0 };
@@ -1227,8 +1228,51 @@ test('brain: starvation with an empty pack keeps making the missing axe', () => 
 
   const choice = decide(reading({ state: state({ vitals: { hunger: { current: 0, max: 1500 } } }), inventory: supplies, now: 2000 }), memory);
 
-  assert.equal(choice.start, 'gather');
-  assert.match(choice.why, /axe/);
+  assert.equal(choice.start, 'forage', 'an empty pack works through hunger but not through starvation');
+  assert.deepEqual(choice.args, { until: 0.5, keep: 400 }, 'away from home carry the day-pack buffer');
+
+  const edge = decide(
+    reading({ state: state({ vitals: { hunger: { current: 149, max: 1500 } } }), inventory: supplies, now: 3000 }),
+    fresh(memory.notes),
+  );
+  assert.equal(edge.start, 'forage', 'just below the line counts too');
+
+  const cutting = fresh(memory.notes);
+  cutting.startupChecked = true;
+  cutting.job = 'axe';
+  const stop = decide(
+    reading({
+      state: state({ vitals: { hunger: { current: 0, max: 1500 } } }),
+      inventory: supplies,
+      active: { id: 'g1', kind: 'gather', state: 'running', by: 'brain' },
+      now: 4000,
+    }),
+    cutting,
+  );
+  assert.deepEqual(stop, { stop: 'eat' }, 'starvation cuts running gathering short');
+});
+
+test('brain: starvation foraging waits out storms and opens the burrow first', () => {
+  assert.equal(
+    pickJob(situation({ hunger: 0.05, reserve: 0, storm: true, home: false })),
+    'burrow',
+    'shelter through the short storm, forage after',
+  );
+  assert.equal(pickJob(situation({ hunger: 0.05, reserve: 0, burrowed: true })), 'unburrow', 'open the exit before looking for food');
+});
+
+test('brain: starvation foraging at home keeps a thinner buffer', () => {
+  const memory = fresh({ home: { x: 0, y: 100, z: 0 } });
+  memory.startupChecked = true;
+  const choice = decide(
+    reading({
+      state: state({ position: { x: 0.2, y: 100, z: 0.2 }, vitals: { hunger: { current: 0, max: 1500 } } }),
+      inventory: kitted(),
+    }),
+    memory,
+  );
+  assert.equal(choice.start, 'forage');
+  assert.deepEqual(choice.args, { until: 0.5, keep: 160 }, 'at home the chest restocks the buffer');
 });
 
 test('brain: digging out of a hole is never interrupted by a threat', () => {
@@ -2387,7 +2431,7 @@ test('brain: a failed shelter relight is set aside instead of relaunched every t
   assert.notEqual(away.start, 'enter_shelter', 'another task is not dragged home to retry the same shelter light');
 });
 
-test('brain: a ready shelter takes precedence over errands and an empty stomach, but not night', () => {
+test('brain: a ready shelter takes precedence over errands, but not starvation or night', () => {
   const supplies = kitted();
   supplies.inventories[0].slots.push(slot('game:rammed-light-plain', 60), slot('game:torch-basic-extinct-up'), slot('game:firestarter'));
   const memory = fresh({ shelter: { x: 20, y: 100, z: 20 } });
@@ -2398,8 +2442,7 @@ test('brain: a ready shelter takes precedence over errands and an empty stomach,
   assert.equal(begin.start, 'travel', 'go to the planned above-ground site before starting another gathering trip');
   assert.equal(begin.args.y, 100);
   const starving = decide({ ...ready, state: state({ vitals: { hunger: { current: 0, max: 1500 } } }) }, fresh(memory.notes));
-  assert.equal(starving.start, 'travel');
-  assert.equal(starving.why, begin.why);
+  assert.equal(starving.start, 'forage', 'starvation forages before the long shelter trip');
   const dark = decide({ ...ready, environment: night }, fresh(memory.notes));
   assert.notEqual(dark.why, begin.why, 'do not travel to a new construction site at night');
 });

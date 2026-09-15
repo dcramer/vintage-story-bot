@@ -171,6 +171,10 @@ export type Concern = {
   after?: Job[];
   // A reflex the ladder turns to cuts a lesser running job short (a function: only sometimes).
   cuts?: boolean | ((ctx: Context) => boolean);
+  // Uncuttable work still yields to the listed jobs: starvation cuts durable
+  // work for food the way hurt cuts everything, while threats still do not
+  // strand it. Survival reflexes list nothing and always finish.
+  cutFor?: Job[];
   // Its goal is never cut short, not by danger and not by a pressing job.
   uncuttable?: boolean;
   // The goal (or wait) that works on it, or a handoff to another concern's work.

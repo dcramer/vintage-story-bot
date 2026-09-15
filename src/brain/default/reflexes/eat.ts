@@ -1,8 +1,11 @@
 // Food recovery starts below 20% and continues to half. Eat carried food
-// first, then seek renewable forage. The brain never acquires or cooks roots.
+// first, then seek renewable forage. With an empty pack the bot works through
+// hunger but not through starvation: below 10% it forages unless a storm, a
+// threat or a burrow says otherwise. The brain never acquires or cooks roots.
 
 import { HUNGRY } from '../../../support/food.ts';
 import type { Concern } from '../concern.ts';
+import { snackSearch } from '../ladder.ts';
 
 import { food, foodEnded, foodSetAside } from '../food.ts';
 import type { Situation } from '../situation.ts';
@@ -14,13 +17,19 @@ export const hungry = (s: Situation) => s.hunger !== null && s.hunger < HUNGRY;
 export const eat: Concern = {
   id: 'eat',
   // Peckish is not an interruption, and an empty pack never interrupts useful
-  // work for a speculative food search. Food already carried is still eaten.
-  cuts: ({ s }) => (hungry(s) || !!s.foodRecovery) && s.reserve > 0,
+  // work for a speculative food search, but starvation does. Food already
+  // carried is still eaten first. A running forage is never restarted, and
+  // cover-establishing goals (digging in, opening out, sealing the shelter)
+  // run to completion; the snack fires right after them.
+  cuts: ({ s, active }) =>
+    ((hungry(s) || !!s.foodRecovery) && s.reserve > 0) ||
+    (snackSearch(s) && !['forage', 'burrow', 'unburrow', 'enter_shelter'].includes(active?.kind ?? '')),
   run: ctx => {
     const { k, satiety } = ctx;
     const percent = Math.round((satiety ?? 0) * 100);
     if (k.reserve > 0) return { start: 'eat', args: {}, why: `satiety ${percent}%, eat carried food` };
-    return food(ctx, 160);
+    // Away from the chest carry a day-pack buffer; at home the chest restocks it.
+    return food(ctx, ctx.s.atHome ? 160 : 400);
   },
   ended: foodEnded,
   setAside: foodSetAside,
