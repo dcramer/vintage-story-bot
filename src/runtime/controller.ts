@@ -614,6 +614,13 @@ export class Controller {
     const walkStartedAt = Date.now();
     let walkFrom = initial.position,
       walkDistance = 0;
+    // A renewal later than the previous hold means the mod already dropped
+    // the keys: the body coasted. Counted per walk so slowdowns land in the
+    // log as lapses, not just as slow iterations.
+    let movingAt = 0,
+      movingHoldMs = 0,
+      lapses = 0,
+      lapsedMs = 0;
     try {
       if (started) {
         nav.id = record.id;
@@ -640,6 +647,10 @@ export class Controller {
         // lags the camera by a frame, rocks the head from side to side.
         const iterationAt = Date.now();
         if (lastIterationAt) this.budget.walkIteration(iterationAt - lastIterationAt);
+        if (movingAt && input?.forward && iterationAt - movingAt > movingHoldMs) {
+          lapses++;
+          lapsedMs += iterationAt - movingAt - movingHoldMs;
+        }
         lastIterationAt = iterationAt;
         const frame = terrainMore ? null : nav.tick(state, iterationAt, stepView);
         this.budget.planning(Date.now() - iterationAt);
@@ -665,6 +676,10 @@ export class Controller {
               }
             : {}),
         };
+        if (input.forward) {
+          movingAt = iterationAt;
+          movingHoldMs = input.durationMs;
+        } else movingAt = 0;
         this.telemetry?.publish('navigation', nav.observe(), { coalesce: true });
         if (nav.route !== route) {
           route = nav.route;
@@ -767,6 +782,8 @@ export class Controller {
       ms: Date.now() - record.startedAt,
       walkMs: Date.now() - walkStartedAt,
       distance: +walkDistance.toFixed(1),
+      lapses,
+      lapsedMs: Math.round(lapsedMs),
       ...(nav.diagnostics ? { diagnostics: nav.diagnostics } : {}),
     });
     return nav.observe();
