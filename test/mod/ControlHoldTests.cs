@@ -13,8 +13,10 @@ static class ControlHoldTests
         Check(!hold.Frame("b", 1, 101, 101, 400), "foreign frame");
         Check(hold.Frame("a", 1, 101, 101, 400), "owned frame");
         Check(!hold.Frame("a", 1, 102, 102, 400), "duplicate frame");
-        Check(!hold.Frame("a", 2, 5101, 5101, 400), "late frame cannot resurrect owner");
-        Check(hold.Frame("a", 2, 2100, 2200, 180), "timely short frame survives a delayed replan");
+        Check(hold.Frame("a", 2, 102, 102, 2000), "advertised long frame");
+        Check(!hold.Frame("a", 3, 103, 103, 2001), "long frame cap");
+        Check(!hold.Frame("a", 3, 5102, 5102, 400), "late frame cannot resurrect owner");
+        Check(hold.Frame("a", 3, 2100, 2200, 180), "timely short frame survives a delayed replan");
         Check(hold.Expire(7200) && !hold.Active, "tick releases expired owner");
         Check(!hold.Begin("b", 0, 1001), "stale acquisition epoch");
         Check(hold.Begin("b", hold.Epoch, 1001, true) && hold.StarvingRecovery, "scoped starving recovery acquisition");

@@ -20,11 +20,11 @@ public sealed class ControlHold
     }
     public bool Frame(string owner, long sequence, long receivedAt, long now, int duration)
     {
-        if (!Active || owner != Owner || sequence <= Sequence || receivedAt >= Until || duration is < 1 or > 500) return false;
+        if (!Active || owner != Owner || sequence <= Sequence || receivedAt >= Until || duration is < 1 or > 2000) return false;
         // The authorization heartbeat is independent of how briefly this
         // particular input should be held. Tight 180 ms steering frames still
         // need enough time for a bounded terrain replan before the next queued
-        // refresh arrives; held keys retain their separate <=500 ms deadline.
+        // refresh arrives; held keys retain their separate <=2000 ms deadline.
         Sequence = sequence; Until = now + HeartbeatMs;
         return true;
     }
@@ -46,7 +46,7 @@ public sealed class ControlHold
         if (owner != Owner) return "Control frame refused: another owner holds the inputs.";
         if (sequence <= Sequence) return $"Control frame refused: duplicate sequence {sequence} (at {Sequence}).";
         if (receivedAt >= Until) return $"Control frame refused: hold expired {receivedAt - Until} ms before it arrived.";
-        return $"Control frame refused: duration {duration} ms is outside 1-500.";
+        return $"Control frame refused: duration {duration} ms is outside 1-2000.";
     }
     public void Release(string reason) { Owner = null; Until = 0; Epoch++; Reason = reason; StarvingRecovery = false; }
     public bool Expire(long now)
