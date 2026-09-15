@@ -10,6 +10,7 @@ import {
   type Concern,
   type Context,
   failedOnItsOwn,
+  insideHome,
   type Job,
   type Memory,
   type Notes,
@@ -183,10 +184,7 @@ export function decide(reading: Reading, memory: Memory): Decision {
     // Someone else's goal is otherwise left alone.
     if (active.by !== 'brain') return { wait: `letting ${active.kind} finish (${active.by})` };
     const cuts = concern(job).cuts;
-    const pressing =
-      job !== memory.job &&
-      (!mine?.uncuttable || mine.cutFor?.includes(job)) &&
-      (typeof cuts === 'function' ? cuts(ctx) : !!cuts);
+    const pressing = job !== memory.job && (!mine?.uncuttable || mine.cutFor?.includes(job)) && (typeof cuts === 'function' ? cuts(ctx) : !!cuts);
     if (pressing) return { stop: job };
     return { wait: `letting ${active.kind} finish` };
   }
@@ -196,10 +194,19 @@ export function decide(reading: Reading, memory: Memory): Decision {
   let decision: Decision | undefined;
   if (dwelling && inside && job !== 'wait' && job !== 'go_home') {
     decision = workOn(job, ctx, concern);
+    const indoorTravel =
+      'start' in decision &&
+      decision.start === 'travel' &&
+      insideHome(memory.notes, {
+        x: Number(decision.args.x),
+        y: Number(decision.args.y),
+        z: Number(decision.args.z),
+      });
     const indoors =
       ('start' in decision &&
         (['craft_item', 'light_shelter', 'eat', 'inspect_container', 'store_items', 'take_items'].includes(decision.start) ||
-          (decision.start === 'build' && job === 'storage'))) ||
+          (decision.start === 'build' && job === 'storage') ||
+          indoorTravel)) ||
       'wait' in decision;
     if (!indoors && !('act' in decision)) {
       memory.job = 'leave_shelter';

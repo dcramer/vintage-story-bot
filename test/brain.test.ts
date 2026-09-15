@@ -2176,6 +2176,35 @@ test('brain: shared supplies are approached from inside the owned home', () => {
     slot(null, 0),
     slot(null, 0),
   );
+  const settling = fresh(inside.notes);
+  settling.startupChecked = true;
+  settling.notes.stash!.seen = { at: 0, items: { 'game:knife-generic-flint': 1 } };
+  settling.notes.farm!.checkedAt = 300_001;
+  const settleFromDoor = decide(
+    reading({
+      now: 300_001,
+      state: state({ position: { x: 14.5, y: 99, z: 25.5 } }),
+      inventory: supplies,
+      terrain: {
+        get: (x, _y, z) => ({
+          hazard: null,
+          boxes: [{}],
+          code:
+            x === 14 && z === 26
+              ? 'game:wattlegate-sticks-n-closed-left-free'
+              : (x === 11 || x === 18) && z === 23
+                ? 'game:torch-basic-lit-up'
+                : 'game:rammed-light-plain',
+        }),
+      },
+    }),
+    settling,
+  );
+  assert.deepEqual(
+    [settleFromDoor.start, settleFromDoor.args.x, settleFromDoor.args.y, settleFromDoor.args.z],
+    ['travel', home.x, home.y, home.z],
+    'a short indoor walk toward storage does not open the gates and leave the shelter',
+  );
   const inspect = decide(
     reading({
       state: state({ position: home }),
