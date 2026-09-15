@@ -11,7 +11,7 @@ import { type Log, noLog } from './log.ts';
 import { Knowledge } from './navigation/knowledge.ts';
 import { Navigation } from './navigation/navigator.ts';
 import { findTool, goals, tools } from './registry.ts';
-import { RunMetrics } from './run-metrics.ts';
+import { activeMetricGoal, RunMetrics } from './run-metrics.ts';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 // A promise settled once, from wherever settles it first.
@@ -146,7 +146,7 @@ export class Controller {
       if (action === 'sense' || action === 'control_step') metricState(result.state);
       else if (action === 'observe') metricState(result);
       else if (action === 'inventory') {
-        const metric = this.metrics.observeInventory(result, this.active?.kind ?? null);
+        const metric = this.metrics.observeInventory(result, activeMetricGoal(this.active));
         if (metric) this.telemetry?.publish('run', metric, { coalesce: true });
       }
     }

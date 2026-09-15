@@ -1,8 +1,16 @@
 const movementEpsilon = 0.05;
 const discontinuityDistance = 32;
 const stepLength = 0.75;
-const gatheredGoals = new Set(['collect_item', 'forage', 'gather', 'harvest']);
+const gatheredGoals = new Set(['collect_item', 'farm', 'forage', 'gather', 'harvest']);
 const craftedGoals = new Set(['clayform', 'craft', 'knap']);
+
+// A goal script is only the operator-facing wrapper. Inventory changes happen
+// inside its currently reported subgoal, so attribute them to that work rather
+// than losing every composed harvest/craft in the generic "other" bucket.
+export function activeMetricGoal(active) {
+  const subgoal = active?.kind === 'goal_script' ? active.progress?.subgoal?.kind : null;
+  return typeof subgoal === 'string' && subgoal ? subgoal : (active?.kind ?? null);
+}
 
 const finitePoint = point =>
   point && Number.isFinite(point.x) && Number.isFinite(point.y) && Number.isFinite(point.z) && Number.isFinite(point.dimension);

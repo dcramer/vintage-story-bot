@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ingestRunMetrics, mergeRunMetric, publicBot } from '../report/runs.mjs';
-import { RunMetrics } from '../src/runtime/run-metrics.ts';
+import { activeMetricGoal, RunMetrics } from '../src/runtime/run-metrics.ts';
 
 const state = (lifeId, observedAt, x, z, alive = true) => ({
   observedAt,
@@ -75,6 +75,35 @@ test('run metrics classify owned inventory gains by the work in progress', () =>
       { code: 'game:stick', gained: 6, gathered: 3, crafted: 0, recovered: 3, other: 0 },
       { code: 'game:fruit-blueberry', gained: 4, gathered: 0, crafted: 0, recovered: 4, other: 0 },
       { code: 'game:axe-granite', gained: 1, gathered: 0, crafted: 1, recovered: 0, other: 0 },
+    ],
+  });
+});
+
+test('run metrics attribute a composed farm harvest to its active subgoal', () => {
+  const metrics = new RunMetrics('controller-1');
+  metrics.observeState(state('life-1', 1000, 0, 0));
+  metrics.observeInventory(inventory([]));
+  const goal = activeMetricGoal({
+    kind: 'goal_script',
+    progress: { phase: 'running_goal', subgoal: { kind: 'farm' } },
+  });
+  metrics.observeInventory(
+    inventory([
+      ['game:vegetable-turnip', 8],
+      ['game:seeds-turnip', 2],
+    ]),
+    goal,
+  );
+  assert.equal(goal, 'farm');
+  assert.deepEqual(metrics.view().items, {
+    gained: 10,
+    gathered: 10,
+    crafted: 0,
+    recovered: 0,
+    other: 0,
+    byCode: [
+      { code: 'game:vegetable-turnip', gained: 8, gathered: 8, crafted: 0, recovered: 0, other: 0 },
+      { code: 'game:seeds-turnip', gained: 2, gathered: 2, crafted: 0, recovered: 0, other: 0 },
     ],
   });
 });
