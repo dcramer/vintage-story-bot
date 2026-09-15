@@ -41,8 +41,10 @@ export const TRAITS = {
   // Creatures.
   hostile: 'a creature that hunts the player; prior knowledge, never inferred',
   young: 'the young of a species; not a hunter',
+  huntable: 'an entity the game explicitly tags as huntable',
+  dead: 'a dead creature that can be approached and inspected for harvesting',
   player: 'another player',
-  creature: 'a living thing that is neither',
+  creature: 'a non-player creature not currently known to be hostile',
 };
 
 // The game's block materials, as what works them.
@@ -89,7 +91,7 @@ const clayformable = code => /^game:clay-/.test(code);
 
 // The traits of one object: a sighting, a scanned object, an inventory slot or
 // a bare code. kind is block|item|entity; facts are the eye's (growth).
-export function traitsOf(object: { kind?: string; code?: string; facts?: any } | null | undefined): string[] {
+export function traitsOf(object: { kind?: string; code?: string; facts?: any; alive?: boolean | null } | null | undefined): string[] {
   const code = object?.code;
   if (typeof code !== 'string' || !code) return [];
   const page = known(code);
@@ -97,8 +99,12 @@ export function traitsOf(object: { kind?: string; code?: string; facts?: any } |
   const set = new Set<string>();
   if (kind === 'entity') {
     if (code === 'game:player') set.add('player');
-    else if (hostileEntity({ code })) set.add('hostile');
+    else if (object.alive === false) {
+      set.add('creature');
+      set.add('dead');
+    } else if (hostileEntity({ code })) set.add('hostile');
     else set.add('creature');
+    if (page?.tags?.includes('huntable')) set.add('huntable');
     if (youngEntity({ code })) set.add('young');
     if ((page?.drops ?? []).some(drop => edible(known(drop.code)?.nutrition))) set.add('food');
     return [...set].sort();

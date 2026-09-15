@@ -3,12 +3,13 @@ using System.Text.Json;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.Client.NoObf;
+using Vintagestory.GameContent;
 
 namespace VintageStoryAI;
 
-// Native world-container access: open by right-clicking the aimed block for
-// real, move through the game's transfer path, close with the manager's own
-// sync packet. Only inventories the player legitimately opened are touched.
+// Native world/entity-container access: open by right-clicking the aimed target
+// for real, move through the game's transfer path, close with the dialog's own
+// path. Only inventories the player legitimately opened are touched.
 public sealed class ContainerAdapter(ICoreClientAPI api)
 {
     private static readonly string[] Own = ["hotbar", "backpack", "craftinggrid", "mouse"];
@@ -46,17 +47,31 @@ public sealed class ContainerAdapter(ICoreClientAPI api)
     private bool OwnInventory(IInventory inventory) =>
         Own.Select(name => Manager.GetOwnInventory(name)).Any(own => own != null && own == inventory);
 
-    private IInventory? Candidate() => api.Gui.OpenedGuis.OfType<GuiDialogBlockEntity>()
-        .Where(dialog => dialog.IsOpened())
-        .Select(dialog => dialog.Inventory)
-        .Where(inventory => inventory != null && !OwnInventory(inventory) && inventory.HasOpened(api.World.Player))
-        .FirstOrDefault();
+    private IInventory? Candidate()
+    {
+        var block = api.Gui.OpenedGuis.OfType<GuiDialogBlockEntity>()
+            .Where(dialog => dialog.IsOpened())
+            .Select(dialog => dialog.Inventory)
+            .Where(inventory => inventory != null && !OwnInventory(inventory) && inventory.HasOpened(api.World.Player))
+            .FirstOrDefault();
+        if (block != null) return block;
+        // Creature contents do not expose their inventory on the dialog. The
+        // player's native open flag identifies the one nearby carcass inventory
+        // whose UI is actually open; no unopened entity contents are read.
+        return api.World.GetEntitiesAround(api.World.Player.Entity.Pos.XYZ, 8, 8)
+            .Select(entity => entity.GetBehavior<EntityBehaviorHarvestable>()?.Inventory)
+            .Where(inventory => inventory != null && !OwnInventory(inventory) && inventory.HasOpened(api.World.Player))
+            .FirstOrDefault();
+    }
 
     private void CloseSession()
     {
         // The dialog's own close (the X icon, Escape) sends the close packets itself; closing only the
         // inventory would leave the dialog on screen, and open dialogs block control.
-        var dialog = open == null ? null : api.Gui.OpenedGuis.OfType<GuiDialogBlockEntity>().FirstOrDefault(d => d.Inventory == open && d.IsOpened());
+        GuiDialog? dialog = open == null ? null : api.Gui.OpenedGuis.OfType<GuiDialogBlockEntity>().FirstOrDefault(d => d.Inventory == open && d.IsOpened());
+        dialog ??= open == null || !open.HasOpened(api.World.Player)
+            ? null
+            : api.Gui.OpenedGuis.OfType<GuiDialogCreatureContents>().FirstOrDefault(d => d.IsOpened());
         if (dialog != null) dialog.TryClose();
         else if (open != null) Manager.CloseInventoryAndSync(open);
         open = null;

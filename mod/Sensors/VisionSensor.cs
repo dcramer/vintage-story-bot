@@ -297,10 +297,18 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
         foreach (var entity in api.World.GetEntitiesAround(origin, Math.Max(radius, (float)HearingRange), Math.Max(radius, (float)HearingRange)))
         {
             if (entity.EntityId == player.EntityId || entity.Pos.Dimension != 0) continue;
-            bool item = entity is EntityItem;
-            if (!item && (!entity.Alive || entity.Code == null)) continue;
-            var stack = (entity as EntityItem)?.Itemstack;
-            string? code = item ? stack?.Collectible?.Code?.ToString() : entity.Code!.ToString();
+            var projectile = entity as IProjectile;
+            // Stuck and ProjectileStack are not reliably synchronized to a
+            // multiplayer client. The engine's projectile type is the stable fact
+            // that this entity represents a thrown inventory item.
+            bool projectileItem = projectile != null;
+            bool item = entity is EntityItem || projectileItem;
+            if (!item && entity.Code == null) continue;
+            var stack = (entity as EntityItem)?.Itemstack ?? (projectileItem ? projectile?.ProjectileStack : null);
+            // ProjectileStack may arrive a tick after the entity on a remote
+            // client. Its entity code is the same concrete weapon and keeps the
+            // sighting identifiable until the stack payload is synchronized.
+            string? code = item ? stack?.Collectible?.Code?.ToString() ?? entity.Code?.ToString() : entity.Code!.ToString();
             if (code == null) continue;
             var box = entity.SelectionBox ?? entity.CollisionBox;
             var point = new Point3(entity.Pos.X, entity.Pos.Y + (box == null ? 0.1 : (box.Y1 + box.Y2) / 2), entity.Pos.Z);
@@ -320,11 +328,17 @@ internal sealed class VisionSensor(ICoreClientAPI api, SurfaceMap map, Sightings
                         (at, b) => Sight.Occludes(api.World.BlockAccessor, at, b), _ => false);
                     if (blockHit == null) how = "seen";
                 }
-                if (how == null && !item && distance <= HearingRange) how = "heard";
+                if (how == null && !item && entity.Alive && distance <= HearingRange) how = "heard";
             }
             if (how == null) continue;
             sightings.Put($"entity:{entity.EntityId}", item ? "item" : "entity", code, point, how,
-                item ? new { quantity = stack?.StackSize } : null, now);
+                item ? new
+                {
+                    quantity = stack?.StackSize ?? (projectileItem ? 1 : (int?)null),
+                    projectile = projectileItem,
+                    stuck = projectileItem ? projectile!.Stuck : (bool?)null,
+                    speed = projectileItem ? Math.Round(entity.Pos.Motion.Length(), 3) : (double?)null,
+                } : new { alive = entity.Alive }, now);
         }
     }
 }

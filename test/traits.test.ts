@@ -58,8 +58,11 @@ test('prior knowledge fills in only what no page says', () => {
 
 test('creatures: hostility is prior knowledge, the young are not hunters', () => {
   assert.deepEqual(traitsOf({ kind: 'entity', code: 'game:wolf-male' }), ['hostile']);
+  assert.deepEqual(traitsOf({ kind: 'entity', code: 'game:wolf-male', alive: false }), ['creature', 'dead']);
   assert.deepEqual(traitsOf({ kind: 'entity', code: 'game:wolf-pup' }), ['creature', 'young']);
   assert.deepEqual(traitsOf({ kind: 'entity', code: 'game:player' }), ['player']);
+  page('game:hare-european-adult-male', { type: 'entity', tags: ['animal', 'huntable'] });
+  assert.deepEqual(traitsOf({ kind: 'entity', code: 'game:hare-european-adult-male' }), ['creature', 'huntable']);
   page('game:meat-raw', { type: 'item', nutrition: food });
   remember('game:hare-male', { ok: true, code: 'game:hare-male', type: 'entity', drops: [{ code: 'game:meat-raw' }] });
   assert.deepEqual(traitsOf({ kind: 'entity', code: 'game:hare-male' }), ['creature', 'food']);

@@ -133,12 +133,14 @@ internal sealed class HandbookSensor(ICoreClientAPI api)
 
     // One creature as the game types it: its class, what it drops when killed.
     // Nothing about temperament; hostility is prior knowledge Node keeps.
-    private static Dictionary<string, object?> Entry(EntityProperties type) => new()
+    private Dictionary<string, object?> Entry(EntityProperties type) => new()
     {
         ["code"] = type.Code.ToString(),
         ["type"] = "entity",
         ["name"] = ContextSensor.Clip(CreatureName(type), 96),
         ["class"] = type.Class,
+        ["tags"] = api.EntityTagRegistry.SlowEnumerateTagNames(type.Tags)
+            .Take(32).OrderBy(tag => tag, StringComparer.Ordinal).ToArray(),
         ["drops"] = Drops(type.Drops),
     };
 

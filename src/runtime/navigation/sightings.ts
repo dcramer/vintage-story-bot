@@ -27,8 +27,8 @@ export class SightingsMemory {
   now = 0;
   wall = 0;
   // What a sighting affords, read from its code and facts; injected so memory stays pure.
-  traits: (object: { kind: string; code: string; facts?: any }) => string[];
-  constructor(traits: (object: { kind: string; code: string; facts?: any }) => string[] = () => []) {
+  traits: (object: { kind: string; code: string; facts?: any; alive?: boolean | null }) => string[];
+  constructor(traits: (object: { kind: string; code: string; facts?: any; alive?: boolean | null }) => string[] = () => []) {
     this.traits = traits;
   }
   apply(snapshot, wall = Date.now()) {
@@ -72,7 +72,7 @@ export class SightingsMemory {
         how: entity.how ?? 'seen',
         at,
         seenAt: wall,
-        extra: null,
+        extra: { alive: entity.alive ?? null },
         visible: true,
       });
     }
@@ -127,7 +127,8 @@ export class SightingsMemory {
         key: record.key,
         code: record.code,
         point: record.point,
-        traits: this.traits({ kind: 'entity', code: record.code }),
+        alive: record.extra?.alive ?? null,
+        traits: this.traits({ kind: 'entity', code: record.code, alive: record.extra?.alive ?? null }),
         how: record.how,
         seenAt: record.at,
         visible: record.visible,
@@ -159,9 +160,13 @@ export class SightingsMemory {
       point: record.point,
       distance: +far.toFixed(2),
       quantity: record.extra?.quantity ?? null,
+      projectile: record.extra?.projectile ?? false,
+      stuck: record.extra?.stuck ?? null,
+      speed: record.extra?.speed ?? null,
       access: record.extra?.access ?? null,
       facts: record.extra?.facts ?? null,
-      traits: this.traits({ kind: record.kind, code: record.code, facts: record.extra?.facts }),
+      alive: record.kind === 'entity' ? (record.extra?.alive ?? null) : undefined,
+      traits: this.traits({ kind: record.kind, code: record.code, facts: record.extra?.facts, alive: record.extra?.alive ?? null }),
       how: record.how,
       source: far <= 8 ? 'nearby' : 'sight',
       visible: record.visible,

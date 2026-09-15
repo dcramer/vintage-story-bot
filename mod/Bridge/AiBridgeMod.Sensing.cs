@@ -264,7 +264,8 @@ public sealed partial class AiBridgeMod
             .Select(pair => new { key = pair.Key, code = pair.Value.Code,
                 point = new { x = pair.Value.Point.X, y = pair.Value.Point.Y, z = pair.Value.Point.Z },
                 distance = Math.Round(SceneGeometry.Distance(origin, pair.Value.Point), 2),
-                how = pair.Value.How, seenAt = pair.Value.At, visible = true })
+                how = pair.Value.How, seenAt = pair.Value.At, visible = true,
+                alive = long.TryParse(pair.Key.AsSpan("entity:".Length), out long id) ? api.World.GetEntityById(id)?.Alive : null })
             .OrderBy(sighting => sighting.distance).ToArray();
         return (all.Take(limit).Cast<object>().ToArray(), all.Length > limit);
     }
