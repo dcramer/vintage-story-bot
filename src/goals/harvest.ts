@@ -32,7 +32,12 @@ export const matchesHarvestBlock = (object, match, item) => {
   // The reed handbook combines both states' drops. Cut stems only yield
   // roots; their visible harvested state cannot satisfy a tops-only request.
   const cutReed = /:tallplant-coopersreed-(land|water)-harvested-/.test(object.code);
-  return !(cutReed && includes('game:cattailtops', item) && !includes('game:cattailroot', item));
+  if (cutReed && includes('game:cattailtops', item) && !includes('game:cattailroot', item)) return false;
+  // Cut grass becomes the eaten state, which drops nothing even with a knife
+  // and regrows on its own; digging it destroys the regrowth for no gain.
+  // Clearing (aiming, building, tilling) still breaks it when in the way.
+  if (/:tallgrass-eaten-/.test(object.code)) return false;
+  return true;
 };
 export const harvestBlockReady = (object, state, lowest = false) =>
   object.withinPickingRange &&

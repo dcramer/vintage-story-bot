@@ -11,6 +11,14 @@ test('top gathering leaves harvested cattail stems for a root request', () => {
   assert.equal(matchesHarvestBlock({ ...cut, code: 'game:tallplant-coopersreed-water-normal-free' }, 'coopersreed', 'cattailtops'), true);
 });
 
+test('dry-grass harvest leaves eaten stubble to regrow', () => {
+  const eaten = { kind: 'block', code: 'game:tallgrass-eaten-free' };
+  assert.equal(matchesHarvestBlock(eaten, 'tallgrass', 'drygrass'), false);
+  assert.equal(matchesHarvestBlock({ ...eaten, code: 'game:tallgrass-eaten-snow' }, 'tallgrass', 'drygrass'), false);
+  assert.equal(matchesHarvestBlock({ ...eaten, code: 'game:tallgrass-short-free' }, 'tallgrass', 'drygrass'), true);
+  assert.equal(matchesHarvestBlock({ ...eaten, code: 'game:tallgrass-verytall-free' }, 'tallgrass', 'drygrass'), true);
+});
+
 test('a harvest does not count an uncollectable drop as productive or retry it immediately', async () => {
   const drop = { key: 'entity:9', kind: 'item', code: 'game:cattailroot' };
   const reports = [];
