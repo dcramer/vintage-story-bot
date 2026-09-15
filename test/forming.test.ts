@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import {
   finishedFormOnGround,
   formingGround,
+  formingRecipeMatches,
+  formingSurfaceCandidates,
   hasFormingOutputRoom,
   inspectKnownFormingSurface,
   needsOpenRecipeSelection,
@@ -41,12 +43,25 @@ test('forming resumes a selected clay recipe without submitting it again', () =>
   assert.equal(needsOpenRecipeSelection({ controlReady: false }, { forming: { recipe: null } }), true);
 });
 
+test('single-item forming does not resume an oversized batch recipe', () => {
+  assert.equal(formingRecipeMatches({ output: 'game:claypot-red-raw', quantity: 1 }, 'game:claypot-red-raw'), true);
+  assert.equal(formingRecipeMatches({ output: 'game:claypot-red-raw', quantity: 4 }, 'game:claypot-red-raw'), false);
+});
+
 test('finished pottery is recognized in ground storage on its former forming cell', () => {
   const detail = { key: 'block:0:1:2:3:game:groundstorage', code: 'game:groundstorage' };
 
   assert.equal(finishedFormOnGround('clayforming', detail), true);
   assert.equal(finishedFormOnGround('knapping', detail), false);
   assert.equal(finishedFormOnGround('clayforming', { ...detail, code: 'game:air' }), false);
+});
+
+test('forming considers nearby unfinished surfaces outside immediate picking range', () => {
+  const nearby = { key: 'block:0:1:2:3:game:clayform', code: 'game:clayform', distance: 4.5, withinPickingRange: false };
+  const close = { key: 'block:0:4:2:3:game:clayform', code: 'game:clayform', distance: 2, withinPickingRange: true };
+  const other = { key: 'block:0:7:2:3:game:knappingsurface', code: 'game:knappingsurface', distance: 1, withinPickingRange: true };
+
+  assert.deepEqual(formingSurfaceCandidates([nearby, other, close], 'game:clayform'), [close, nearby]);
 });
 
 test('forming retries a known surface after clearing a leaf obstruction', async () => {

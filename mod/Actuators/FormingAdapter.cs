@@ -124,15 +124,15 @@ public sealed class FormingAdapter(ICoreClientAPI api)
         var be = api.World.BlockAccessor.GetBlockEntity(pos);
         ItemStack? material;
         bool selected;
-        IEnumerable<(int id, string? output)> allowed;
+        IEnumerable<(int id, string? output, int quantity)> allowed;
         switch (be)
         {
             case BlockEntityKnappingSurface knapping:
                 material = knapping.BaseMaterial; selected = knapping.SelectedRecipe != null;
-                allowed = KnappingRecipes(material).Select(r => (r.RecipeId, r.Output?.ResolvedItemstack?.Collectible?.Code?.ToString())); break;
+                allowed = KnappingRecipes(material).Select(r => (r.RecipeId, r.Output?.ResolvedItemstack?.Collectible?.Code?.ToString(), RecipeQuantity(r.Output))); break;
             case BlockEntityClayForm clay:
                 material = clay.BaseMaterial; selected = clay.SelectedRecipe != null;
-                allowed = ClayRecipes(material).Select(r => (r.RecipeId, r.Output?.ResolvedItemstack?.Collectible?.Code?.ToString())); break;
+                allowed = ClayRecipes(material).Select(r => (r.RecipeId, r.Output?.ResolvedItemstack?.Collectible?.Code?.ToString(), RecipeQuantity(r.Output))); break;
             default:
                 return WireError.Fail("invalid_request", "Target is not a knapping surface or clay form.");
         }
@@ -141,7 +141,7 @@ public sealed class FormingAdapter(ICoreClientAPI api)
         if (material == null || held == null || held.Collectible.Code != material.Collectible.Code)
             return WireError.Fail("held_item_changed", "Hold the surface's base material.", true);
         var candidates = allowed.ToArray();
-        if (recipeId < 0) recipeId = candidates.FirstOrDefault(c => c.output == output, (-1, null)).id;
+        if (recipeId < 0) recipeId = RecipeSelection.SmallestBatch(candidates, output!);
         if (!candidates.Any(c => c.id == recipeId)) return WireError.Fail("unknown_recipe", "Recipe not available for this material; target lists recipes.");
         foreach (var dialog in api.Gui.OpenedGuis.OfType<GuiDialogBlockEntityRecipeSelector>().ToArray())
         {
@@ -175,6 +175,8 @@ public sealed class FormingAdapter(ICoreClientAPI api)
             return WireError.Fail("recipe_failed", "Recipe did not apply to the surface; it may be out of reach or protected by a land claim.", true);
         return new { ok = true, status = "selected", recipe = recipeId, target = targetField.GetString() };
     }
+
+    private static int RecipeQuantity(JsonItemStack output) => output?.ResolvedItemstack?.StackSize ?? output?.Quantity ?? 1;
 
     private static void SetPrivateField(object target, string name, object value)
     {

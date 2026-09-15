@@ -22,6 +22,10 @@ export const hasFormingOutputRoom = (inventory, output, maxStackSize = 1) =>
 export const needsOpenRecipeSelection = (state, detail) => !state.controlReady && !detail?.forming?.recipe;
 export const finishedFormOnGround = (kind, detail) =>
   kind === 'clayforming' && detail?.code === 'game:groundstorage' && detail.key?.startsWith('block:');
+export const formingRecipeMatches = (recipe, output, quantity = 1) => recipe?.output === output && (recipe.quantity ?? 1) === quantity;
+
+export const formingSurfaceCandidates = (objects, surfaceCode) =>
+  objects.filter(object => object.code === surfaceCode).sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
 
 const voxelPoint = (cell, [vx, vy, vz], top = true) => ({
   x: cell.x + (vx + 0.5) / 16,
@@ -134,14 +138,19 @@ export async function form(field, { kind, output, material }) {
   // Reuse an unfinished own surface in reach, else sneak-place one on the ground ahead.
   let cell = null;
   let detail = null;
-  for (const object of await field.scan(6, spec.surface, 'blocks')) {
-    if (object.code !== surfaceCode || !object.withinPickingRange) continue;
+  for (const object of formingSurfaceCandidates(await field.scan(6, spec.surface, 'blocks'), surfaceCode)) {
+    if (!object.withinPickingRange) {
+      const destination = field.approach(object);
+      if (!destination) continue;
+      field.report('approaching_surface', summary({ target: object.key }));
+      await field.walk(destination);
+    }
     const candidate = parseBlockKey(object.key);
     const candidateDetail = await inspectKnownFormingSurface(field, candidate, surfaceCode);
     if (
       candidateDetail?.forming &&
       candidateDetail.forming.material === material &&
-      (!candidateDetail.forming.recipe || candidateDetail.forming.recipe.output === output)
+      (!candidateDetail.forming.recipe || formingRecipeMatches(candidateDetail.forming.recipe, output))
     ) {
       cell = candidate;
       detail = candidateDetail;
@@ -201,12 +210,12 @@ export async function form(field, { kind, output, material }) {
     detail = await inspectKnownFormingSurface(field, cell, surfaceCode);
     if (!detail?.forming) return bail({ ok: false, reason: 'surface_missing', ...summary() });
     if (!detail.forming.recipe) {
-      if (!detail.forming.recipes?.some(r => r.output === output))
-        return bail({ ok: false, reason: 'recipe_unavailable', ...summary(), recipes: detail.forming.recipes?.map(r => r.output) });
-      await field.send({ action: 'select_recipe', target: key, output });
+      const recipe = detail.forming.recipes?.find(r => formingRecipeMatches(r, output));
+      if (!recipe) return bail({ ok: false, reason: 'recipe_unavailable', ...summary(), recipes: detail.forming.recipes?.map(r => r.output) });
+      await field.send({ action: 'select_recipe', target: key, recipe: recipe.id });
       detail = (await field.until((_, seen) => !!seen?.forming?.recipe, { timeoutMs: 3000, everyMs: 200, read: () => inspectSurface(field, cell) }))
         .read;
-      if (detail?.forming?.recipe?.output !== output) return bail({ ok: false, reason: 'recipe_not_selected', ...summary() });
+      if (!formingRecipeMatches(detail?.forming?.recipe, output)) return bail({ ok: false, reason: 'recipe_not_selected', ...summary() });
     }
   } catch (error) {
     await bail(null);
