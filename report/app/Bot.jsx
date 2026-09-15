@@ -27,7 +27,7 @@ function Mission({ g }) {
 }
 
 function Live({ stream, state }) {
-  const valid = typeof stream === 'string' && /^https?:\/\/[^/?#]+$/.test(stream), player = valid ? `${stream}/bot/` : null;
+  const valid = typeof stream === 'string' && /^https?:\/\/[^/?#]+$/.test(stream), player = valid ? `${stream}/bot/?muted=true&autoplay=true` : null;
   return <section class="live-console">
     <div class="live-bar"><span>Live view</span>{player && <a href={player} target="_blank" rel="noopener">Open stream ↗</a>}</div>
     {player ? <div class="live-frame"><iframe src={player} title="Bot display" allow="autoplay; fullscreen" referrerpolicy="no-referrer" /></div>
