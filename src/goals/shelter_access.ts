@@ -9,6 +9,27 @@ import { useOnBlock } from './use_block.ts';
 
 const cell = z.object({ x: z.number().int(), y: z.number().int(), z: z.number().int() }).strict();
 
+// An exact lower-floor destination can make generic navigation prefer the
+// roof over an owned doorway. Cross only to the opposite side of the open
+// threshold and ignore elevation; the navigator then takes the observed
+// one-block drop instead of searching for an exact-height route from outside.
+export async function crossDoorway(field, door, home, direction) {
+  const target = {
+    x: door.x + 0.5,
+    y: home.y,
+    z: direction === 'enter' ? door.z - 0.5 : door.z + 1.5,
+    horizontalOnly: true,
+    arrivalRadius: 0.3,
+  };
+  const crossed = position =>
+    direction === 'enter' ? position.z < door.z - 0.1 && position.y <= door.y : position.z > door.z + 0.75 && position.y <= door.y + 1.1;
+  const before = await field.observe(true);
+  if (crossed(before.position)) return true;
+  field.report('crossing_doorway', { direction, target });
+  await field.walk(target);
+  return crossed(field.latest.position);
+}
+
 export async function shelterAccess(field, survival, { door, home, direction }) {
   const cells = shelterDoorCells(door);
   const outside = { x: door.x + 0.5, y: door.y, z: door.z + 1.5 };
@@ -37,6 +58,14 @@ export async function shelterAccess(field, survival, { door, home, direction }) 
     const moved = await travel(field, survival, { ...target, arrivalRadius: 0.35 });
     return moved.ok ? null : failure(('reason' in moved ? moved.reason : null) ?? 'threshold_unreachable', { phase: direction, target });
   };
+  const close = async () => {
+    for (const gate of [...cells].reverse()) {
+      const code = field.env.map.get(gate.x, gate.y, gate.z)?.code;
+      const failed = shelterGate(code) ? await operate(gate, 'closed') : null;
+      if (failed) return failed;
+    }
+    return null;
+  };
 
   if (direction === 'enter') {
     const approached = await pass(outside);
@@ -48,13 +77,13 @@ export async function shelterAccess(field, survival, { door, home, direction }) 
     const failed = await operate(gate, 'opened');
     if (failed) return failed;
   }
-  const crossed = await pass(direction === 'enter' ? home : outside);
-  if (crossed) return crossed;
-  for (const gate of [...cells].reverse()) {
-    const code = field.env.map.get(gate.x, gate.y, gate.z)?.code;
-    const failed = shelterGate(code) ? await operate(gate, 'closed') : null;
-    if (failed) return failed;
+  const crossed = await crossDoorway(field, door, home, direction);
+  if (!crossed) {
+    await close();
+    return failure('threshold_unreachable', { phase: direction, target: direction === 'enter' ? home : outside });
   }
+  const closeFailed = await close();
+  if (closeFailed) return closeFailed;
   await field.observe(true);
   const closed = cells.every(gate => {
     const code = field.env.map.get(gate.x, gate.y, gate.z)?.code;
