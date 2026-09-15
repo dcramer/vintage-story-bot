@@ -437,7 +437,13 @@ export class Search {
       ) {
         const elevated = Math.abs((target.point.y ?? before.y) - before.y) > 2;
         for (const object of elevated ? this.targets().filter(candidate => samePatch(target, candidate)) : [target]) field.skip(object, 120000);
-        if (progress.misses >= 4) field.report('lead_stalled', { target: target.key, remaining: +remaining.toFixed(1), attempts: progress.misses });
+        if (progress.misses >= 4) {
+          // The temporary skip is shared across goals, but it expires after two
+          // minutes. Remember the failed approach area too so a restarted goal
+          // does not immediately spend another full orbit on the same ledge.
+          field.places.fail(target.point);
+          field.report('lead_stalled', { target: target.key, remaining: +remaining.toFixed(1), attempts: progress.misses });
+        }
         this.approachProgress.delete(target.key);
         await clearLeafPath(field, target.point);
       }

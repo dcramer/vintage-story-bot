@@ -1672,4 +1672,5 @@ test('completed detours that orbit a lead eventually skip it', async () => {
   assert.equal(field.skipped.has(target.key), false, 'a few detours are allowed to route around the obstacle');
   await search.approach(target, null);
   assert.equal(field.skipped.has(target.key), true, 'four completed detours without material progress quarantine the lead');
+  assert.equal(field.places.failed(target.point), 1, 'the failed approach survives a goal restart after the temporary skip expires');
 });
